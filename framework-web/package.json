@@ -18,7 +18,7 @@
     "directory": "web"
   },
   "publishConfig": {
-    "registry": "https://npm.pkg.github.com"
+    "access": "public"
   },
   "peerDependencies": {
     "@mui/material": ">=7.0.0",
