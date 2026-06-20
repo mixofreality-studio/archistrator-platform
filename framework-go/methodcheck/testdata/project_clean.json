@@ -1,0 +1,99 @@
+{
+  "id": "demo",
+  "version": 9,
+  "phase": 0,
+  "owner": "owner@x",
+  "name": "Demo",
+  "slots": {
+    "0": {
+      "status": 2,
+      "kind": 0,
+      "model": {
+        "vision": "v",
+        "objectives": [ { "number": 1, "statement": "fast" } ],
+        "mission": "components"
+      }
+    },
+    "1": {
+      "status": 2,
+      "kind": 1,
+      "model": { "items": [ { "term": "Scheduling", "definition": "d" }, { "term": "Pricing", "definition": "p" } ] }
+    },
+    "2": {
+      "status": 2,
+      "kind": 2,
+      "model": { "items": [ { "id": "R1", "statement": "scheduling pricing adapts across customers" } ] }
+    },
+    "3": {
+      "status": 2,
+      "kind": 3,
+      "model": {
+        "items": [
+          { "name": "Scheduling policy", "rationale": "scheduling changes over time", "axis": "sameCustomerOverTime" },
+          { "name": "Pricing model", "rationale": "pricing differs across customers", "axis": "allCustomersAtOneTime" }
+        ]
+      }
+    },
+    "4": {
+      "status": 2,
+      "kind": 4,
+      "model": {
+        "decisions": [
+          { "useCase": { "id": "decide", "name": "Decide", "classification": "core" }, "rejectionReason": "" },
+          { "useCase": { "id": "other", "name": "Other", "classification": "core" }, "rejectionReason": "" }
+        ]
+      }
+    },
+    "5": {
+      "status": 2,
+      "kind": 5,
+      "model": {
+        "components": [
+          { "id": "appclient", "name": "AppClient", "kind": "client", "layer": "client" },
+          { "id": "designmanager", "name": "DesignManager", "kind": "manager", "layer": "manager" },
+          { "id": "validatingengine", "name": "ValidatingEngine", "kind": "engine", "layer": "engine" },
+          { "id": "stateaccess", "name": "StateAccess", "kind": "resourceAccess", "layer": "resourceAccess" },
+          { "id": "statedb", "name": "StateDB", "kind": "resource", "layer": "resource" }
+        ],
+        "relationships": [
+          { "from": "appclient", "to": "designmanager", "mode": "sync" },
+          { "from": "designmanager", "to": "validatingengine", "mode": "sync" },
+          { "from": "designmanager", "to": "stateaccess", "mode": "sync" },
+          { "from": "stateaccess", "to": "statedb", "mode": "sync" }
+        ],
+        "dynamicViews": [
+          { "useCaseId": "decide", "key": "uc1", "title": "Core",
+            "participants": [ "appclient", "designmanager" ],
+            "edges": [ { "from": "appclient", "to": "designmanager", "mode": "sync" } ] },
+          { "useCaseId": "other", "key": "uc2", "title": "Other" }
+        ]
+      }
+    },
+    "6": {
+      "status": 2,
+      "kind": 6,
+      "model": {
+        "decisions": [ { "topic": "sync vs queued", "decision": "queued", "justifyingObjective": 1 } ],
+        "deployment": {
+          "deliveryStyle": "both",
+          "environments": [
+            { "profile": "cloud", "title": "Cloud", "nodes": [ { "name": "cluster", "instances": [
+              { "componentId": "appclient" }, { "componentId": "designmanager" }, { "componentId": "validatingengine" },
+              { "componentId": "stateaccess" }, { "componentId": "statedb" } ] } ] },
+            { "profile": "local", "title": "Local", "nodes": [ { "name": "cluster", "instances": [
+              { "componentId": "appclient" }, { "componentId": "designmanager" }, { "componentId": "validatingengine" },
+              { "componentId": "stateaccess" }, { "componentId": "statedb" } ] } ] },
+            { "profile": "test", "title": "Test", "nodes": [ { "name": "cluster", "instances": [
+              { "componentId": "appclient" }, { "componentId": "designmanager" }, { "componentId": "validatingengine" },
+              { "componentId": "stateaccess" }, { "componentId": "statedb" } ] } ] }
+          ]
+        }
+      }
+    },
+    "7": {
+      "status": 2,
+      "kind": 7,
+      "model": { "items": [ { "section": "§3.1", "guideline": "g", "status": "pass", "justification": "" } ] }
+    }
+  }
+}

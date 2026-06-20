@@ -1,0 +1,14 @@
+go 1.25.4
+
+use (
+	./framework-go
+	./framework-go-infrastructure-github
+	./framework-go-infrastructure-keycloak
+	./framework-go-infrastructure-llm
+	./framework-go-infrastructure-otel
+	./framework-go-infrastructure-postgres
+	./framework-go-infrastructure-temporal
+)
+
+
+replace github.com/davidmarne/archistrator-platform/framework-go v0.1.0 => ./framework-go

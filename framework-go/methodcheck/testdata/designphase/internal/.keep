@@ -1,0 +1,6 @@
+This module has a go.mod and an internal/ tree but NO Go code: it models the pure
+DESIGN phase of a Method project (committed design JSON, no implementation yet). The
+methodcheck.Check design-only test points its arch.Spec at it so the load yields zero
+classified packages — exercising the "skip arch layer rules + alignment when no code"
+branch (arch.Check must NOT be called on a zero-package set). A real consuming repo at
+the design phase has exactly this shape.

@@ -1,0 +1,164 @@
+{
+  "id": "demo",
+  "version": 7,
+  "phase": 0,
+  "owner": "owner@x",
+  "name": "Demo",
+  "research": {
+    "Sources": null
+  },
+  "slots": {
+    "0": {
+      "status": 2,
+      "kind": 0,
+      "model": {
+        "vision": "v",
+        "objectives": [
+          { "number": 1, "statement": "fast" },
+          { "number": 2, "statement": "cheap" }
+        ],
+        "mission": "components"
+      }
+    },
+    "1": {
+      "status": 2,
+      "kind": 1,
+      "model": {
+        "items": [
+          { "term": "Scheduling", "definition": "d", "category": "What" }
+        ]
+      }
+    },
+    "2": {
+      "status": 2,
+      "kind": 2,
+      "model": {
+        "items": [
+          { "id": "R1", "statement": "scheduling adapts" }
+        ]
+      }
+    },
+    "3": {
+      "status": 2,
+      "kind": 3,
+      "model": {
+        "items": [
+          { "name": "Scheduling policy", "rationale": "scheduling changes over time", "axis": "sameCustomerOverTime" },
+          { "name": "Pricing model", "rationale": "pricing differs across customers", "axis": "allCustomersAtOneTime" }
+        ]
+      }
+    },
+    "4": {
+      "status": 2,
+      "kind": 4,
+      "model": {
+        "decisions": [
+          {
+            "useCase": {
+              "id": "decide",
+              "name": "Decide",
+              "actors": [ { "id": "architect", "role": "Architect" } ],
+              "trigger": "clientAction",
+              "classification": "core",
+              "variationOf": null,
+              "activity": {
+                "nodes": [
+                  { "id": "d", "kind": "decision", "label": "ok?", "roleName": "", "linkedActorId": null, "linkedCompId": null },
+                  { "id": "a1", "kind": "action", "label": "yes", "roleName": "", "linkedActorId": null, "linkedCompId": null },
+                  { "id": "a2", "kind": "action", "label": "no", "roleName": "", "linkedActorId": null, "linkedCompId": null },
+                  { "id": "m", "kind": "merge", "label": "", "roleName": "", "linkedActorId": null, "linkedCompId": null }
+                ],
+                "edges": [
+                  { "from": "d", "to": "a1", "kind": "guardedFlow", "guard": "[ok]" },
+                  { "from": "d", "to": "a2", "kind": "guardedFlow", "guard": "[else]" },
+                  { "from": "a1", "to": "m", "kind": "controlFlow", "guard": "" },
+                  { "from": "a2", "to": "m", "kind": "controlFlow", "guard": "" }
+                ]
+              }
+            },
+            "rejectionReason": ""
+          },
+          {
+            "useCase": {
+              "id": "other",
+              "name": "Other",
+              "actors": null,
+              "trigger": "clientAction",
+              "classification": "core",
+              "variationOf": null,
+              "activity": null
+            },
+            "rejectionReason": ""
+          }
+        ]
+      }
+    },
+    "5": {
+      "status": 2,
+      "kind": 5,
+      "model": {
+        "components": [
+          { "id": "appclient", "name": "AppClient", "kind": "client", "layer": "client", "encapsulates": "", "atomicBusinessVerbs": null },
+          { "id": "designmanager", "name": "DesignManager", "kind": "manager", "layer": "manager", "encapsulates": "design", "atomicBusinessVerbs": null },
+          { "id": "validatingengine", "name": "ValidatingEngine", "kind": "engine", "layer": "engine", "encapsulates": "validate", "atomicBusinessVerbs": null },
+          { "id": "stateaccess", "name": "StateAccess", "kind": "resourceAccess", "layer": "resourceAccess", "encapsulates": "", "atomicBusinessVerbs": [ "read" ] },
+          { "id": "statedb", "name": "StateDB", "kind": "resource", "layer": "resource", "encapsulates": "", "atomicBusinessVerbs": null }
+        ],
+        "relationships": [
+          { "from": "appclient", "to": "designmanager", "mode": "sync", "label": "uses" },
+          { "from": "designmanager", "to": "validatingengine", "mode": "sync", "label": "" },
+          { "from": "designmanager", "to": "stateaccess", "mode": "sync", "label": "" },
+          { "from": "stateaccess", "to": "statedb", "mode": "sync", "label": "" }
+        ],
+        "dynamicViews": [
+          {
+            "useCaseId": "decide",
+            "key": "uc1",
+            "title": "Core",
+            "participants": [ "appclient", "designmanager" ],
+            "edges": [ { "from": "appclient", "to": "designmanager", "mode": "sync", "label": "" } ]
+          },
+          { "useCaseId": "other", "key": "uc2", "title": "Other", "participants": null, "edges": null }
+        ]
+      }
+    },
+    "6": {
+      "status": 2,
+      "kind": 6,
+      "model": {
+        "decisions": [
+          { "topic": "sync vs queued", "decision": "queued", "justifyingObjective": 1 }
+        ],
+        "deployment": {
+          "deliveryStyle": "both",
+          "environments": [
+            {
+              "profile": "cloud",
+              "title": "Cloud",
+              "nodes": [
+                {
+                  "name": "cluster",
+                  "technology": "k8s",
+                  "children": [
+                    { "name": "ns", "technology": "", "children": null, "instances": null }
+                  ],
+                  "instances": [ { "componentId": "appclient", "note": "n" } ]
+                }
+              ]
+            }
+          ]
+        }
+      }
+    },
+    "7": {
+      "status": 2,
+      "kind": 7,
+      "model": {
+        "items": [
+          { "section": "§3.1", "guideline": "g", "status": "pass", "justification": "" },
+          { "section": "§3.2", "guideline": "h", "status": "waived", "justification": "documented" }
+        ]
+      }
+    }
+  }
+}

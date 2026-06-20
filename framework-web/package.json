@@ -1,0 +1,53 @@
+{
+  "name": "@davidmarne/archistrator-platform-framework-web",
+  "version": "0.1.0",
+  "type": "module",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/davidmarne/archistrator-platform.git",
+    "directory": "web"
+  },
+  "publishConfig": {
+    "registry": "https://npm.pkg.github.com"
+  },
+  "peerDependencies": {
+    "@mui/material": ">=7.0.0",
+    "@mui/icons-material": ">=7.0.0",
+    "@emotion/react": ">=11.0.0",
+    "@emotion/styled": ">=11.0.0",
+    "react": ">=19.0.0",
+    "react-dom": ">=19.0.0"
+  },
+  "dependencies": {
+    "@opentelemetry/exporter-logs-otlp-http": "^0.212.0",
+    "@opentelemetry/exporter-trace-otlp-http": "^0.212.0",
+    "@opentelemetry/instrumentation": "^0.212.0",
+    "@opentelemetry/instrumentation-document-load": "^0.56.0",
+    "@opentelemetry/instrumentation-fetch": "^0.212.0",
+    "@opentelemetry/resources": "^2.5.1",
+    "@opentelemetry/sdk-logs": "^0.212.0",
+    "@opentelemetry/sdk-trace-web": "^2.5.1",
+    "@opentelemetry/semantic-conventions": "^1.39.0"
+  },
+  "devDependencies": {
+    "typescript": "~5.9.3",
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "@mui/material": "^7.3.6",
+    "@mui/icons-material": "^7.3.6",
+    "@emotion/react": "^11.14.0",
+    "@emotion/styled": "^11.14.1",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  }
+}
