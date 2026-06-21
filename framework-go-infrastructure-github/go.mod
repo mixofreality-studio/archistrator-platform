@@ -3,9 +3,9 @@ module github.com/mixofreality-studio/archistrator-platform/framework-go-infrast
 go 1.25.4
 
 require (
-	github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0
 	github.com/go-git/go-billy/v5 v5.9.0
 	github.com/go-git/go-git/v5 v5.19.1
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0
 	golang.org/x/crypto v0.50.0
 )
 
