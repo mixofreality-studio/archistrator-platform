@@ -1,4 +1,4 @@
-module github.com/davidmarne/archistrator-platform/framework-go
+module github.com/mixofreality-studio/archistrator-platform/framework-go
 
 go 1.25.0
 

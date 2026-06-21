@@ -1,9 +1,9 @@
-module github.com/davidmarne/archistrator-platform/framework-go-infrastructure-otel
+module github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-otel
 
 go 1.25.4
 
 require (
-	github.com/davidmarne/archistrator-platform/framework-go v0.1.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc v0.19.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v1.43.0

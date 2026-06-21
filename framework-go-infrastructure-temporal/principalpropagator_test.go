@@ -4,8 +4,8 @@ import (
 	"context"
 	"testing"
 
-	temporalprop "github.com/davidmarne/archistrator-platform/framework-go-infrastructure-temporal"
-	"github.com/davidmarne/archistrator-platform/framework-go/utilities/security"
+	temporalprop "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-temporal"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 	commonpb "go.temporal.io/api/common/v1"
 	"go.temporal.io/sdk/converter"
 )

@@ -33,7 +33,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/davidmarne/archistrator-platform/framework-go/utilities/telemetry"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/telemetry"
 	"go.opentelemetry.io/otel/exporters/otlp/otlplog/otlploggrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"

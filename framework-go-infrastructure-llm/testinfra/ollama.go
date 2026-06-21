@@ -14,7 +14,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/wait"
 
-	fwllm "github.com/davidmarne/archistrator-platform/framework-go-infrastructure-llm"
+	fwllm "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-llm"
 )
 
 // ollamaImage pins the Ollama image used for workerAccess integration tests. It

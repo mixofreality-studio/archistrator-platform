@@ -4,9 +4,9 @@ import (
 	"errors"
 	"testing"
 
-	eng "github.com/davidmarne/archistrator-platform/framework-go/engine"
-	mgr "github.com/davidmarne/archistrator-platform/framework-go/manager"
-	ra "github.com/davidmarne/archistrator-platform/framework-go/resourceaccess"
+	eng "github.com/mixofreality-studio/archistrator-platform/framework-go/engine"
+	mgr "github.com/mixofreality-studio/archistrator-platform/framework-go/manager"
+	ra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 	"go.temporal.io/sdk/temporal"
 )
 

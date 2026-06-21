@@ -43,7 +43,7 @@ import (
 	"strings"
 	"time"
 
-	fwra "github.com/davidmarne/archistrator-platform/framework-go/resourceaccess"
+	fwra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 )
 
 // defaultAPIBaseURL is github.com's REST root. An empty base URL (GHE / a test

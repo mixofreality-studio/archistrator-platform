@@ -45,7 +45,7 @@ import (
 	"net/url"
 	"strings"
 
-	fwra "github.com/davidmarne/archistrator-platform/framework-go/resourceaccess"
+	fwra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 )
 
 // DispatchInputKeyIdempotencyToken is the workflow_dispatch input key the RA fills

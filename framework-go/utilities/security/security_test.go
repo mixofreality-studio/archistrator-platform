@@ -11,7 +11,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davidmarne/archistrator-platform/framework-go/utilities/security"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 )
 
 // stubValidator is a test-only Validator: it returns a fixed principal for a

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	mgr "github.com/davidmarne/archistrator-platform/framework-go/manager"
+	mgr "github.com/mixofreality-studio/archistrator-platform/framework-go/manager"
 )
 
 func TestManagerDefaultRetryable(t *testing.T) {

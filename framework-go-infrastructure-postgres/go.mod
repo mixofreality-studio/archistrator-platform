@@ -1,9 +1,9 @@
-module github.com/davidmarne/archistrator-platform/framework-go-infrastructure-postgres
+module github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres
 
 go 1.25.4
 
 require (
-	github.com/davidmarne/archistrator-platform/framework-go v0.1.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0
 	github.com/jackc/pgx/v5 v5.9.2
 	github.com/testcontainers/testcontainers-go v0.42.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0

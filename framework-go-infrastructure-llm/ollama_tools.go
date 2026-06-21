@@ -7,7 +7,7 @@ import (
 	"errors"
 	"net/http"
 
-	fwra "github.com/davidmarne/archistrator-platform/framework-go/resourceaccess"
+	fwra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 )
 
 // This file adds the TOOL-CALLING transport to the Ollama *Client via /api/chat —

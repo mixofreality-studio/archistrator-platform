@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/davidmarne/archistrator-platform/framework-go/arch"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 )
 
 // statePath is the committed typed-state document, relative to the repo root, that

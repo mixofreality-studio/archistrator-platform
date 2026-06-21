@@ -1,6 +1,6 @@
 // Package keycloak is the concrete token [security.Validator] for systems whose
 // edge IdP is Keycloak. It is an infrastructure SATELLITE of
-// github.com/davidmarne/archistrator-platform/framework-go: it implements the framework's
+// github.com/mixofreality-studio/archistrator-platform/framework-go: it implements the framework's
 // mechanism-neutral [security.Validator] port using the heavy verification
 // dependencies (a JWKS client and a JWT parser) so those dependencies never
 // enter the framework core or a deployment that authenticates differently.

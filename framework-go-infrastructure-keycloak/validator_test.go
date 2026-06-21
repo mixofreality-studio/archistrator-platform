@@ -13,8 +13,8 @@ import (
 	"testing"
 	"time"
 
-	keycloak "github.com/davidmarne/archistrator-platform/framework-go-infrastructure-keycloak"
-	"github.com/davidmarne/archistrator-platform/framework-go/utilities/security"
+	keycloak "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-keycloak"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 	"github.com/golang-jwt/jwt/v5"
 )
 

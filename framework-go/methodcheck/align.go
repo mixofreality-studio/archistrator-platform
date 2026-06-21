@@ -7,7 +7,7 @@ import (
 
 	"golang.org/x/tools/go/packages"
 
-	"github.com/davidmarne/archistrator-platform/framework-go/arch"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 )
 
 // align.go is the design↔code alignment check: it cross-references the committed

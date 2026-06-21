@@ -3,8 +3,8 @@ package manager
 import (
 	"errors"
 
-	eng "github.com/davidmarne/archistrator-platform/framework-go/engine"
-	ra "github.com/davidmarne/archistrator-platform/framework-go/resourceaccess"
+	eng "github.com/mixofreality-studio/archistrator-platform/framework-go/engine"
+	ra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 	"go.temporal.io/sdk/temporal"
 )
 

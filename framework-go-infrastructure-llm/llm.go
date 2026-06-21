@@ -36,7 +36,7 @@ import (
 	"strings"
 	"time"
 
-	fwra "github.com/davidmarne/archistrator-platform/framework-go/resourceaccess"
+	fwra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 )
 
 // pullTimeout bounds a model pull. The first pull of a model is a slow,

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	eng "github.com/davidmarne/archistrator-platform/framework-go/engine"
+	eng "github.com/mixofreality-studio/archistrator-platform/framework-go/engine"
 )
 
 func TestEngineErrorsAlwaysNonRetryable(t *testing.T) {

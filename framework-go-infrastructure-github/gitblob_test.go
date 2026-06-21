@@ -10,9 +10,9 @@ import (
 	"context"
 	"testing"
 
-	fwgithub "github.com/davidmarne/archistrator-platform/framework-go-infrastructure-github"
-	gh "github.com/davidmarne/archistrator-platform/framework-go-infrastructure-github/testinfra"
-	fwra "github.com/davidmarne/archistrator-platform/framework-go/resourceaccess"
+	fwgithub "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github"
+	gh "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github/testinfra"
+	fwra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 )
 
 func localBlobStore(t *testing.T) (*fwgithub.GitBlobStore, fwgithub.GitAuth, context.Context) {

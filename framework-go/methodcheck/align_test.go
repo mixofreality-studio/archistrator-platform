@@ -3,7 +3,7 @@ package methodcheck
 import (
 	"testing"
 
-	"github.com/davidmarne/archistrator-platform/framework-go/arch"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 )
 
 // align_test.go exercises the design↔code alignment check against the testdata

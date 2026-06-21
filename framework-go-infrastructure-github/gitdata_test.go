@@ -11,9 +11,9 @@ import (
 	"errors"
 	"testing"
 
-	fwgithub "github.com/davidmarne/archistrator-platform/framework-go-infrastructure-github"
-	gh "github.com/davidmarne/archistrator-platform/framework-go-infrastructure-github/testinfra"
-	fwra "github.com/davidmarne/archistrator-platform/framework-go/resourceaccess"
+	fwgithub "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github"
+	gh "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github/testinfra"
+	fwra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 )
 
 const statePrefix = ".aiarch/state"

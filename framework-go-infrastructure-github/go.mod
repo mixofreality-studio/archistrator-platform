@@ -1,9 +1,9 @@
-module github.com/davidmarne/archistrator-platform/framework-go-infrastructure-github
+module github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github
 
 go 1.25.4
 
 require (
-	github.com/davidmarne/archistrator-platform/framework-go v0.1.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0
 	github.com/go-git/go-billy/v5 v5.9.0
 	github.com/go-git/go-git/v5 v5.19.1
 	golang.org/x/crypto v0.50.0

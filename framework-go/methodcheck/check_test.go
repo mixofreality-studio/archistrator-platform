@@ -5,7 +5,7 @@ import (
 	"path/filepath"
 	"testing"
 
-	"github.com/davidmarne/archistrator-platform/framework-go/arch"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 )
 
 // check_test.go exercises the Check entry point end-to-end: it materializes a repo

@@ -1,10 +1,10 @@
-module github.com/davidmarne/archistrator-platform/framework-go-infrastructure-llm
+module github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-llm
 
 go 1.25.4
 
 require (
 	github.com/anthropics/anthropic-sdk-go v1.46.0
-	github.com/davidmarne/archistrator-platform/framework-go v0.1.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0
 	github.com/testcontainers/testcontainers-go v0.42.0
 )
 

@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	ra "github.com/davidmarne/archistrator-platform/framework-go/resourceaccess"
+	ra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 )
 
 func TestDefaultRetryable(t *testing.T) {

@@ -1,9 +1,9 @@
-module github.com/davidmarne/archistrator-platform/framework-go-infrastructure-temporal
+module github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-temporal
 
 go 1.25.4
 
 require (
-	github.com/davidmarne/archistrator-platform/framework-go v0.1.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0
 	go.temporal.io/api v1.62.12
 	go.temporal.io/sdk v1.44.0
 	google.golang.org/protobuf v1.36.11

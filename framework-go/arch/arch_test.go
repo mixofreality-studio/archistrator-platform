@@ -3,7 +3,7 @@ package arch_test
 import (
 	"testing"
 
-	"github.com/davidmarne/archistrator-platform/framework-go/arch"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 )
 
 // framework-go has no internal/ tree; its layer packages live at the module root.
@@ -14,7 +14,7 @@ import (
 func TestFrameworkGoObeysItsOwnLayerRules(t *testing.T) {
 	spec := arch.Spec{
 		ModuleRoot:   "..",
-		ModulePrefix: "github.com/davidmarne/archistrator-platform/framework-go/",
+		ModulePrefix: "github.com/mixofreality-studio/archistrator-platform/framework-go/",
 		Patterns:     []string{"./manager/...", "./engine/...", "./resourceaccess/..."},
 		Layers: []arch.Layer{
 			{Name: "Manager", DirPrefix: "manager"},

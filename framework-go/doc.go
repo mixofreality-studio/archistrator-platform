@@ -1,4 +1,4 @@
-// Package frameworkgo is the root of github.com/davidmarne/archistrator-platform/framework-go, the
+// Package frameworkgo is the root of github.com/mixofreality-studio/archistrator-platform/framework-go, the
 // shared Go library for systems constructed and operated by aiarch following
 // Juval Löwy's The Method. It has no code of its own; the layer packages are:
 //

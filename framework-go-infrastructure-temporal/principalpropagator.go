@@ -15,7 +15,7 @@ package temporal
 import (
 	"context"
 
-	"github.com/davidmarne/archistrator-platform/framework-go/utilities/security"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 	"go.temporal.io/sdk/converter"
 	"go.temporal.io/sdk/workflow"
 )

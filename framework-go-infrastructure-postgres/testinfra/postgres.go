@@ -13,7 +13,7 @@ import (
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
 
-	fwpg "github.com/davidmarne/archistrator-platform/framework-go-infrastructure-postgres"
+	fwpg "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres"
 )
 
 // postgresImage pins the Postgres image used for integration tests. It matches
