@@ -14,89 +14,130 @@ import "fmt"
 // without its prerequisite), exactly as the CLI's validateProject returns.
 func ValidateProject(p Project) ([]Finding, error) {
 	var all []Finding
-
-	// ValidateVolatilities(volatilities, glossary, scrubbedRequirements).
-	if v, ok, err := p.volatilities(); err != nil {
-		return nil, err
-	} else if ok {
-		g, gok, gerr := p.glossary()
-		if gerr != nil {
-			return nil, gerr
+	for _, run := range []func(Project) ([]Finding, error){
+		volatilitiesFindings,
+		coreUseCasesFindings,
+		architectureFindings,
+		operationalConceptsFindings,
+		standardCheckFindings,
+		appCFindings,
+	} {
+		f, err := run(p)
+		if err != nil {
+			return nil, err
 		}
-		sr, srok, srerr := p.scrubbedRequirements()
-		if srerr != nil {
-			return nil, srerr
-		}
-		if gok && srok {
-			res, verr := validateVolatilities(v, g, sr)
-			if verr != nil {
-				return nil, fmt.Errorf("ValidateVolatilities: %w", verr)
-			}
-			all = append(all, res.Findings...)
-		}
+		all = append(all, f...)
 	}
-
-	// ValidateCoreUseCases(coreUseCases).
-	if c, ok, err := p.coreUseCases(); err != nil {
-		return nil, err
-	} else if ok {
-		res, verr := validateCoreUseCases(c)
-		if verr != nil {
-			return nil, fmt.Errorf("ValidateCoreUseCases: %w", verr)
-		}
-		all = append(all, res.Findings...)
-	}
-
-	// ValidateArchitecture(system, coreUseCases).
-	if s, ok, err := p.system(); err != nil {
-		return nil, err
-	} else if ok {
-		c, cok, cerr := p.coreUseCases()
-		if cerr != nil {
-			return nil, cerr
-		}
-		if cok {
-			res, verr := validateArchitecture(s, c)
-			if verr != nil {
-				return nil, fmt.Errorf("ValidateArchitecture: %w", verr)
-			}
-			all = append(all, res.Findings...)
-		}
-	}
-
-	// ValidateOperationalConcepts(operationalConcepts, mission, system).
-	if o, ok, err := p.operationalConcepts(); err != nil {
-		return nil, err
-	} else if ok {
-		m, mok, merr := p.mission()
-		if merr != nil {
-			return nil, merr
-		}
-		s, sok, serr := p.system()
-		if serr != nil {
-			return nil, serr
-		}
-		if mok && sok {
-			res, verr := validateOperationalConcepts(o, m, s)
-			if verr != nil {
-				return nil, fmt.Errorf("ValidateOperationalConcepts: %w", verr)
-			}
-			all = append(all, res.Findings...)
-		}
-	}
-
-	// ValidateStandardCheck(standardCheck).
-	if sc, ok, err := p.standardCheck(); err != nil {
-		return nil, err
-	} else if ok {
-		res, verr := validateStandardCheck(sc)
-		if verr != nil {
-			return nil, fmt.Errorf("ValidateStandardCheck: %w", verr)
-		}
-		all = append(all, res.Findings...)
-	}
-
 	return all, nil
+}
+
+func volatilitiesFindings(p Project) ([]Finding, error) {
+	v, ok, err := p.volatilities()
+	if err != nil || !ok {
+		return nil, err
+	}
+	g, gok, gerr := p.glossary()
+	if gerr != nil {
+		return nil, gerr
+	}
+	sr, srok, srerr := p.scrubbedRequirements()
+	if srerr != nil {
+		return nil, srerr
+	}
+	if !gok || !srok {
+		return nil, nil
+	}
+	res, verr := validateVolatilities(v, g, sr)
+	if verr != nil {
+		return nil, fmt.Errorf("ValidateVolatilities: %w", verr)
+	}
+	return res.Findings, nil
+}
+
+func coreUseCasesFindings(p Project) ([]Finding, error) {
+	c, ok, err := p.coreUseCases()
+	if err != nil || !ok {
+		return nil, err
+	}
+	res, verr := validateCoreUseCases(c)
+	if verr != nil {
+		return nil, fmt.Errorf("ValidateCoreUseCases: %w", verr)
+	}
+	return res.Findings, nil
+}
+
+func architectureFindings(p Project) ([]Finding, error) {
+	s, ok, err := p.system()
+	if err != nil || !ok {
+		return nil, err
+	}
+	c, cok, cerr := p.coreUseCases()
+	if cerr != nil {
+		return nil, cerr
+	}
+	if !cok {
+		return nil, nil
+	}
+	res, verr := validateArchitecture(s, c)
+	if verr != nil {
+		return nil, fmt.Errorf("ValidateArchitecture: %w", verr)
+	}
+	return res.Findings, nil
+}
+
+func operationalConceptsFindings(p Project) ([]Finding, error) {
+	o, ok, err := p.operationalConcepts()
+	if err != nil || !ok {
+		return nil, err
+	}
+	m, mok, merr := p.mission()
+	if merr != nil {
+		return nil, merr
+	}
+	s, sok, serr := p.system()
+	if serr != nil {
+		return nil, serr
+	}
+	if !mok || !sok {
+		return nil, nil
+	}
+	res, verr := validateOperationalConcepts(o, m, s)
+	if verr != nil {
+		return nil, fmt.Errorf("ValidateOperationalConcepts: %w", verr)
+	}
+	return res.Findings, nil
+}
+
+func standardCheckFindings(p Project) ([]Finding, error) {
+	sc, ok, err := p.standardCheck()
+	if err != nil || !ok {
+		return nil, err
+	}
+	res, verr := validateStandardCheck(sc)
+	if verr != nil {
+		return nil, fmt.Errorf("ValidateStandardCheck: %w", verr)
+	}
+	return res.Findings, nil
+}
+
+func appCFindings(p Project) ([]Finding, error) {
+	s, sOK, sErr := p.system()
+	if sErr != nil || !sOK {
+		return nil, sErr
+	}
+	sc, scOK, scErr := p.standardCheck()
+	if scErr != nil {
+		return nil, scErr
+	}
+	var findings []Finding
+	findings = append(findings, appCInteractionDonts(s)...)
+	findings = append(findings, appCClosedArch(s)...)
+	findings = append(findings, appCCardinality(s)...)
+	findings = append(findings, appCServiceContract(s)...)
+	if scOK {
+		findings = applyWaivers(findings, sc)
+	}
+	return findings, nil
 }
 
 // ValidateProjectJSON is the pure, non-test seam: decode a raw
