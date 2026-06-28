@@ -129,7 +129,7 @@ func ordinalOf(f Finding) int {
 
 func tokenize(s string) []string {
 	return strings.FieldsFunc(strings.ToLower(s), func(r rune) bool {
-		return !(r >= 'a' && r <= 'z') && !(r >= '0' && r <= '9')
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
 	})
 }
 
@@ -154,14 +154,7 @@ func volTrace(v Volatilities, sr ScrubbedRequirements) []Finding {
 	}
 	var out []Finding
 	for i, vol := range v.Items {
-		traced := false
-		for _, t := range significantTerms(vol.Name + " " + vol.Rationale) {
-			if reqTerms[t] {
-				traced = true
-				break
-			}
-		}
-		if !traced {
+		if !isVolatilityTraced(vol, reqTerms) {
 			section := fmt.Sprintf("volatility %d (%s)", i+1, vol.Name)
 			out = append(out, Finding{
 				RuleID:   ruleVolTrace,
@@ -174,6 +167,15 @@ func volTrace(v Volatilities, sr ScrubbedRequirements) []Finding {
 	return out
 }
 
+func isVolatilityTraced(vol Volatility, reqTerms map[string]bool) bool {
+	for _, t := range significantTerms(vol.Name + " " + vol.Rationale) {
+		if reqTerms[t] {
+			return true
+		}
+	}
+	return false
+}
+
 func volGloss(v Volatilities, g Glossary) []Finding {
 	glossTerms := make(map[string]bool)
 	for _, item := range g.Items {
@@ -183,18 +185,7 @@ func volGloss(v Volatilities, g Glossary) []Finding {
 	}
 	var out []Finding
 	for i, vol := range v.Items {
-		nameTerms := significantTerms(vol.Name)
-		if len(nameTerms) == 0 {
-			continue
-		}
-		resolved := false
-		for _, t := range nameTerms {
-			if glossTerms[t] {
-				resolved = true
-				break
-			}
-		}
-		if !resolved {
+		if !isVolatilityInGlossary(vol, glossTerms) {
 			section := fmt.Sprintf("volatility %d (%s)", i+1, vol.Name)
 			out = append(out, Finding{
 				RuleID:   ruleVolGloss,
@@ -205,6 +196,19 @@ func volGloss(v Volatilities, g Glossary) []Finding {
 		}
 	}
 	return out
+}
+
+func isVolatilityInGlossary(vol Volatility, glossTerms map[string]bool) bool {
+	nameTerms := significantTerms(vol.Name)
+	if len(nameTerms) == 0 {
+		return true // no significant terms → nothing to look up; don't penalize
+	}
+	for _, t := range nameTerms {
+		if glossTerms[t] {
+			return true
+		}
+	}
+	return false
 }
 
 func volAxis(v Volatilities) []Finding {
@@ -338,29 +342,35 @@ func activityNodeIDsUnique(c CoreUseCases) []Finding {
 			continue
 		}
 		seen := make(map[string]bool, len(uc.Activity.Nodes))
+		section := fmt.Sprintf("core use case %d (%s)", i+1, uc.Name)
 		for _, n := range uc.Activity.Nodes {
-			section := fmt.Sprintf("core use case %d (%s)", i+1, uc.Name)
-			if n.ID == "" {
-				out = append(out, Finding{
-					RuleID:   ruleUcNodeIDUniq,
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("%s: an activity node has an empty id; every node needs a unique identity", section),
-					Location: loc(i+1, section),
-				})
-				continue
+			out = append(out, checkNodeUniqueness(n, seen, section, i+1)...)
+			if n.ID != "" {
+				seen[n.ID] = true
 			}
-			if seen[n.ID] {
-				out = append(out, Finding{
-					RuleID:   ruleUcNodeIDUniq,
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("%s: activity node id %q is not unique within the diagram", section, n.ID),
-					Location: loc(i+1, section),
-				})
-			}
-			seen[n.ID] = true
 		}
 	}
 	return out
+}
+
+func checkNodeUniqueness(n ActivityNode, seen map[string]bool, section string, ucOrdinal int) []Finding {
+	if n.ID == "" {
+		return []Finding{{
+			RuleID:   ruleUcNodeIDUniq,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("%s: an activity node has an empty id; every node needs a unique identity", section),
+			Location: loc(ucOrdinal, section),
+		}}
+	}
+	if seen[n.ID] {
+		return []Finding{{
+			RuleID:   ruleUcNodeIDUniq,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("%s: activity node id %q is not unique within the diagram", section, n.ID),
+			Location: loc(ucOrdinal, section),
+		}}
+	}
+	return nil
 }
 
 func ucActivityDiagram(c CoreUseCases) []Finding {
@@ -379,65 +389,90 @@ func ucActivityDiagram(c CoreUseCases) []Finding {
 				Location: loc(i+1, section),
 			})
 		}
-
-		kindByID := make(map[string]string, len(uc.Activity.Nodes))
-		for _, n := range uc.Activity.Nodes {
-			kindByID[n.ID] = n.Kind
-		}
-
-		inCount := make(map[string]int)
-		outCount := make(map[string]int)
-		guardedOut := make(map[string]int)
-		unguardedOut := make(map[string]int)
-
-		edges := append([]ActivityEdge(nil), uc.Activity.Edges...)
-		sort.Slice(edges, func(a, b int) bool {
-			if edges[a].From != edges[b].From {
-				return edges[a].From < edges[b].From
-			}
-			return edges[a].To < edges[b].To
-		})
-		for _, e := range edges {
-			from := e.From
-			inCount[e.To]++
-			outCount[from]++
-			if e.Kind == edgeGuardedFlow {
-				guardedOut[from]++
-				if kindByID[from] != nodeDecision {
-					add(fmt.Sprintf("has a guarded edge from non-decision node %s; only a decision node may carry guarded outgoing edges", from))
-				}
-			} else {
-				unguardedOut[from]++
-			}
-		}
-
-		ids := make([]string, 0, len(kindByID))
-		for id := range kindByID {
-			ids = append(ids, id)
-		}
-		sort.Strings(ids)
-		for _, id := range ids {
-			switch kindByID[id] {
-			case nodeDecision:
-				if guardedOut[id] < 2 || unguardedOut[id] > 0 {
-					add(fmt.Sprintf("decision node %s must have >=2 guarded outgoing edges (a choice) and no unguarded outgoing edge; its branches reconverge at a merge", id))
-				}
-			case nodeFork:
-				if outCount[id] < 2 || guardedOut[id] > 0 {
-					add(fmt.Sprintf("fork node %s must have >=2 unguarded (controlFlow) outgoing edges — concurrency, not a guarded choice", id))
-				}
-			case nodeMerge:
-				if inCount[id] < 2 {
-					add(fmt.Sprintf("merge node %s must have >=2 incoming edges (it rejoins a decision's alternative branches)", id))
-				}
-			case nodeJoin:
-				if inCount[id] < 2 {
-					add(fmt.Sprintf("join node %s must have >=2 incoming edges (it synchronizes a fork's concurrent paths)", id))
-				}
-			}
-		}
+		kindByID, inCount, outCount, guardedOut, unguardedOut := checkActivityEdges(uc.Activity, add)
+		checkActivityNodes(sortedKeys(kindByID), kindByID, inCount, outCount, guardedOut, unguardedOut, add)
 	}
 	return out
+}
+
+func checkActivityEdges(activity *ActivityDiagram, add func(string)) (kindByID map[string]string, inCount, outCount, guardedOut, unguardedOut map[string]int) {
+	kindByID = make(map[string]string, len(activity.Nodes))
+	for _, n := range activity.Nodes {
+		kindByID[n.ID] = n.Kind
+	}
+	inCount = make(map[string]int)
+	outCount = make(map[string]int)
+	guardedOut = make(map[string]int)
+	unguardedOut = make(map[string]int)
+	edges := append([]ActivityEdge(nil), activity.Edges...)
+	sort.Slice(edges, func(a, b int) bool {
+		if edges[a].From != edges[b].From {
+			return edges[a].From < edges[b].From
+		}
+		return edges[a].To < edges[b].To
+	})
+	for _, e := range edges {
+		from := e.From
+		inCount[e.To]++
+		outCount[from]++
+		if e.Kind == edgeGuardedFlow {
+			guardedOut[from]++
+			if kindByID[from] != nodeDecision {
+				add(fmt.Sprintf("has a guarded edge from non-decision node %s; only a decision node may carry guarded outgoing edges", from))
+			}
+		} else {
+			unguardedOut[from]++
+		}
+	}
+	return
+}
+
+func checkActivityNodes(ids []string, kindByID map[string]string, inCount, outCount, guardedOut, unguardedOut map[string]int, add func(string)) {
+	for _, id := range ids {
+		switch kindByID[id] {
+		case nodeDecision:
+			checkDecisionNode(id, guardedOut, unguardedOut, add)
+		case nodeFork:
+			checkForkNode(id, outCount, guardedOut, add)
+		case nodeMerge:
+			checkMergeNode(id, inCount, add)
+		case nodeJoin:
+			checkJoinNode(id, inCount, add)
+		}
+	}
+}
+
+func checkDecisionNode(id string, guardedOut, unguardedOut map[string]int, add func(string)) {
+	if guardedOut[id] < 2 || unguardedOut[id] > 0 {
+		add(fmt.Sprintf("decision node %s must have >=2 guarded outgoing edges (a choice) and no unguarded outgoing edge; its branches reconverge at a merge", id))
+	}
+}
+
+func checkForkNode(id string, outCount, guardedOut map[string]int, add func(string)) {
+	if outCount[id] < 2 || guardedOut[id] > 0 {
+		add(fmt.Sprintf("fork node %s must have >=2 unguarded (controlFlow) outgoing edges — concurrency, not a guarded choice", id))
+	}
+}
+
+func checkMergeNode(id string, inCount map[string]int, add func(string)) {
+	if inCount[id] < 2 {
+		add(fmt.Sprintf("merge node %s must have >=2 incoming edges (it rejoins a decision's alternative branches)", id))
+	}
+}
+
+func checkJoinNode(id string, inCount map[string]int, add func(string)) {
+	if inCount[id] < 2 {
+		add(fmt.Sprintf("join node %s must have >=2 incoming edges (it synchronizes a fork's concurrent paths)", id))
+	}
+}
+
+func sortedKeys(m map[string]string) []string {
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // ---- ValidateOperationalConcepts predicate ----

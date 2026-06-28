@@ -163,9 +163,11 @@ func (c *Client) Pull(ctx context.Context, model string) error {
 		return fmt.Errorf("llm.Pull: returned %d: %s", resp.StatusCode, string(out))
 	}
 
-	// Drain the streamed status objects to completion, watching for an explicit
-	// error line.
-	dec := json.NewDecoder(resp.Body)
+	return drainPullStream(resp.Body)
+}
+
+func drainPullStream(body io.Reader) error {
+	dec := json.NewDecoder(body)
 	for {
 		var status struct {
 			Status string `json:"status"`

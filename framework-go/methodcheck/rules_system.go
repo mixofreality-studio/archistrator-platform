@@ -95,90 +95,117 @@ func sysLegality(s System) []Finding {
 // edgeLegality runs the layering + pub/sub + Design-Don't predicates for ONE
 // directed edge. Ported verbatim, shared by sysLegality + dynamicViewConsistency.
 func edgeLegality(from, to Component, mode string, location *Location) []Finding {
-	var out []Finding
 	section := ""
 	if location != nil {
 		section = location.Section
 	}
-
 	fromRank := layerRank(from.Layer)
 	toRank := layerRank(to.Layer)
 	utilityInvolved := from.Kind == kindUtility || to.Kind == kindUtility
 
-	// SYS-NOUP — no calling up. Utility is rank-less (-1) and excluded.
+	var out []Finding
+	for _, f := range []*Finding{
+		checkNoUp(utilityInvolved, fromRank, toRank, section, location),
+		checkNoSide(from, to, utilityInvolved, mode, section, fromRank, toRank, location),
+		checkNoSkip(utilityInvolved, fromRank, toRank, section, location),
+		checkPubOrig(from, mode, section, location),
+		checkPubDest(to, mode, section, location),
+		checkNoMgrSyncMgr(from, to, mode, section, location),
+		checkNoClientSkip(from, to, section, location),
+	} {
+		if f != nil {
+			out = append(out, *f)
+		}
+	}
+	return out
+}
+
+func checkNoUp(utilityInvolved bool, fromRank, toRank int, section string, location *Location) *Finding {
 	if !utilityInvolved && fromRank > toRank {
-		out = append(out, Finding{
+		return &Finding{
 			RuleID:   ruleSysNoUp,
 			Severity: SeverityError,
 			Message:  fmt.Sprintf("%s calls UP the layer stack (rank %d → rank %d); calls must flow down or M→E equal-rank", section, fromRank, toRank),
 			Location: location,
-		})
+		}
 	}
+	return nil
+}
 
-	// SYS-NOSIDE — no sideways except queued M→M.
+func checkNoSide(from, to Component, utilityInvolved bool, mode, section string, fromRank, toRank int, location *Location) *Finding {
 	if !utilityInvolved && fromRank == toRank && fromRank >= 0 {
 		equalKind := from.Kind == to.Kind
 		legalQueuedMtoM := from.Kind == kindManager && to.Kind == kindManager && mode == modeQueued
 		if equalKind && !legalQueuedMtoM {
-			out = append(out, Finding{
+			return &Finding{
 				RuleID:   ruleSysNoSide,
 				Severity: SeverityError,
 				Message:  fmt.Sprintf("%s is a sideways call between equal-rank peers; only queued Manager→Manager is permitted", section),
 				Location: location,
-			})
+			}
 		}
 	}
+	return nil
+}
 
-	// SYS-NOSKIP — adjacent-rank only; Utility exempt.
+func checkNoSkip(utilityInvolved bool, fromRank, toRank int, section string, location *Location) *Finding {
 	if !utilityInvolved && toRank > fromRank && (toRank-fromRank) > 1 {
-		out = append(out, Finding{
+		return &Finding{
 			RuleID:   ruleSysNoSkip,
 			Severity: SeverityError,
 			Message:  fmt.Sprintf("%s skips a layer (rank %d → rank %d); calls must be to the adjacent layer", section, fromRank, toRank),
 			Location: location,
-		})
+		}
 	}
+	return nil
+}
 
-	// SYS-PUBORIG — only Clients & Managers may publish.
+func checkPubOrig(from Component, mode, section string, location *Location) *Finding {
 	if mode == modeEventPubSub && from.Kind != kindClient && from.Kind != kindManager {
-		out = append(out, Finding{
+		return &Finding{
 			RuleID:   ruleSysPubOrig,
 			Severity: SeverityError,
 			Message:  fmt.Sprintf("%s publishes an event but only Clients and Managers may publish", section),
 			Location: location,
-		})
+		}
 	}
+	return nil
+}
 
-	// SYS-PUBDEST — only Clients & Managers may subscribe.
+func checkPubDest(to Component, mode, section string, location *Location) *Finding {
 	if mode == modeEventPubSub && to.Kind != kindClient && to.Kind != kindManager {
-		out = append(out, Finding{
+		return &Finding{
 			RuleID:   ruleSysPubDest,
 			Severity: SeverityError,
 			Message:  fmt.Sprintf("%s delivers an event to a non-subscriber; only Clients and Managers may subscribe", section),
 			Location: location,
-		})
+		}
 	}
+	return nil
+}
 
-	// SYS-DONT-MGR-SYNC-MGR — Manager must not call another Manager synchronously.
+func checkNoMgrSyncMgr(from, to Component, mode, section string, location *Location) *Finding {
 	if from.Kind == kindManager && to.Kind == kindManager && mode == modeSync {
-		out = append(out, Finding{
+		return &Finding{
 			RuleID:   ruleSysDontMtoM,
 			Severity: SeverityError,
 			Message:  fmt.Sprintf("%s: a Manager must not call another Manager synchronously (use a queued call)", section),
 			Location: location,
-		})
+		}
 	}
-	// SYS-DONT-CLIENT-SKIP — Client must enter through a Manager (or Utility).
+	return nil
+}
+
+func checkNoClientSkip(from, to Component, section string, location *Location) *Finding {
 	if from.Kind == kindClient && to.Kind != kindManager && to.Kind != kindUtility {
-		out = append(out, Finding{
+		return &Finding{
 			RuleID:   ruleSysDontCli,
 			Severity: SeverityError,
 			Message:  fmt.Sprintf("%s: a Client must enter through a Manager (or a Utility), never an Engine/ResourceAccess/Resource directly", section),
 			Location: location,
-		})
+		}
 	}
-
-	return out
+	return nil
 }
 
 func sysCardinality(s System) []Finding {

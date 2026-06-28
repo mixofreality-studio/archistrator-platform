@@ -60,87 +60,93 @@ type ProjectSpec struct {
 // may legitimately not exist yet).
 func Check(t *testing.T, spec ProjectSpec) {
 	t.Helper()
+	proj, ok := readAndDecodeProject(t, spec)
+	if !ok {
+		return
+	}
+	findings, runErr := ValidateProject(proj)
+	handleValidationError(t, runErr)
+	reportFindings(t, findings)
+	committedSlots := proj.committedSlotCount()
+	loadedPkgs := runArchPhase(t, spec, proj)
+	if committedSlots == 0 && loadedPkgs == 0 {
+		t.Logf("methodcheck: project.json decoded but has zero committed slots and no code packages were loaded — nothing was validated")
+	}
+}
 
+func readAndDecodeProject(t *testing.T, spec ProjectSpec) (Project, bool) {
+	t.Helper()
 	path := filepath.Join(spec.RepoRoot, statePath)
 	raw, err := os.ReadFile(path) //nolint:gosec // path is RepoRoot-joined to a constant
 	if err != nil {
 		if os.IsNotExist(err) {
 			t.Logf("methodcheck: no %s under %s — nothing to validate (clean pass)", statePath, spec.RepoRoot)
-			return
+			return Project{}, false
 		}
 		t.Fatalf("methodcheck: cannot read %s: %v", path, err)
 	}
-
 	proj, ok, err := DecodeProject(raw)
 	if err != nil {
 		t.Fatalf("methodcheck: cannot decode %s: %v", statePath, err)
 	}
 	if !ok {
 		t.Logf("methodcheck: %s is empty — nothing to validate (clean pass)", statePath)
+	}
+	return proj, ok
+}
+
+func handleValidationError(t *testing.T, runErr error) {
+	t.Helper()
+	if runErr == nil {
 		return
 	}
-
-	// ---- design rules ----
-	findings, runErr := ValidateProject(proj)
-	if runErr != nil {
-		// A coherence fault (a dependent artifact committed without its prerequisite)
-		// is a validation FAILURE in CI terms — the committed JSON is not a coherent
-		// Method artifact set. Surface it as a failure with the engine message.
-		var cm *ContractMisuseError
-		if errors.As(runErr, &cm) {
-			t.Errorf("methodcheck: committed state is not a coherent artifact set: %v", runErr)
-		} else {
-			t.Fatalf("methodcheck: %v", runErr)
-		}
+	// A coherence fault (a dependent artifact committed without its prerequisite)
+	// is a validation FAILURE in CI terms — surface it as t.Errorf so the run
+	// continues and reports all findings; everything else is t.Fatalf.
+	var cm *ContractMisuseError
+	if errors.As(runErr, &cm) {
+		t.Errorf("methodcheck: committed state is not a coherent artifact set: %v", runErr)
+	} else {
+		t.Fatalf("methodcheck: %v", runErr)
 	}
-	reportFindings(t, findings)
+}
 
-	// ---- arch layer rules + design↔code alignment (only when code is present) ----
-	//
-	// One Check call covers everything: the design-JSON rules above always run;
-	// when the consuming module supplies an arch.Spec AND has actual Go code, this
-	// block ALSO runs (a) the full arch LAYER rules (downward-only imports, no
-	// sideways, Temporal isolation, interface naming/returns, dependency allowlist —
-	// via arch.Check) and (b) the design↔code alignment pass. In the pure design
-	// phase (no code yet) the package set is empty, so BOTH are skipped — the design
-	// rules already ran, and arch.Check must NOT be called on a zero-package set (it
-	// t.Fatalf's, treating an empty load as a vacuous-pass bug).
-	committedSlots := proj.committedSlotCount()
-	loadedPkgs := 0
-	if len(spec.Arch.Patterns) > 0 {
-		pkgs, lErr := loadClassifiedPackages(spec.Arch)
-		if lErr != nil {
-			t.Fatalf("methodcheck: load packages for alignment: %v", lErr)
-		}
-		loadedPkgs = len(pkgs)
-
-		// Only run the layer + alignment checks when the module actually has code.
-		// An empty classified-package set IS the pure design phase; skip both.
-		if loadedPkgs > 0 {
-			// (a) Full arch layer rules. arch.Check re-loads the module itself and
-			// runs the structural suite; it is the authority on layering/naming/
-			// Temporal/allowlist and reports its own violations via t.Errorf.
-			arch.Check(t, spec.Arch)
-
-			// (b) Design↔code alignment — only when a System is committed to align
-			// against. With code but no committed System the layer rules above still
-			// ran; the alignment pass simply has nothing to cross-reference.
-			if sys, sysOK, sErr := proj.system(); sErr != nil {
-				t.Fatalf("methodcheck: decode System for alignment: %v", sErr)
-			} else if sysOK {
-				alignFindings := alignSystemToCode(sys, pkgs, spec.NameNormalizer)
-				reportFindings(t, alignFindings)
-			}
-		}
+// runArchPhase runs (a) the arch LAYER rules and (b) the design↔code alignment
+// when the module has Go code. Returns the number of classified packages loaded
+// (0 = pure design phase, both passes skipped).
+func runArchPhase(t *testing.T, spec ProjectSpec, proj Project) int {
+	t.Helper()
+	if len(spec.Arch.Patterns) == 0 {
+		return 0
 	}
+	pkgs, lErr := loadClassifiedPackages(spec.Arch)
+	if lErr != nil {
+		t.Fatalf("methodcheck: load packages for alignment: %v", lErr)
+	}
+	if len(pkgs) > 0 {
+		runLayerAndAlignmentChecks(t, spec, proj, pkgs)
+	}
+	return len(pkgs)
+}
 
-	// ---- vacuous-pass guard ----
-	// If the JSON decoded but carries zero committed slots AND no code packages were
-	// loaded, nothing was actually checked. Don't fail (a clean empty repo is a legit
-	// pass), but log a clear note so a vacuous run is never mistaken for a real one —
-	// matching the CLI's clean-pass-on-empty while staying loud about it.
-	if committedSlots == 0 && loadedPkgs == 0 {
-		t.Logf("methodcheck: project.json decoded but has zero committed slots and no code packages were loaded — nothing was validated")
+// runLayerAndAlignmentChecks runs (a) the full arch layer rules and (b) the
+// design↔code alignment pass when the module has Go code. Separated from Check
+// to reduce nesting depth.
+func runLayerAndAlignmentChecks(t *testing.T, spec ProjectSpec, proj Project, pkgs []classifiedPackage) {
+	t.Helper()
+	// (a) Full arch layer rules. arch.Check re-loads the module itself and
+	// runs the structural suite; it is the authority on layering/naming/
+	// Temporal/allowlist and reports its own violations via t.Errorf.
+	arch.Check(t, spec.Arch)
+	// (b) Design↔code alignment — only when a System is committed to align
+	// against. With code but no committed System the layer rules above still
+	// ran; the alignment pass simply has nothing to cross-reference.
+	sys, sysOK, sErr := proj.system()
+	if sErr != nil {
+		t.Fatalf("methodcheck: decode System for alignment: %v", sErr)
+	}
+	if sysOK {
+		reportFindings(t, alignSystemToCode(sys, pkgs, spec.NameNormalizer))
 	}
 }
 

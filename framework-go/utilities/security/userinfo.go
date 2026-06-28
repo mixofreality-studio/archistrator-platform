@@ -52,7 +52,7 @@ func UserInfoHandler(w http.ResponseWriter, r *http.Request) {
 		Roles:             principal.Roles,
 	}
 	for _, o := range principal.Organizations {
-		resp.Organizations = append(resp.Organizations, UserInfoOrganization{ID: o.ID, Name: o.Name})
+		resp.Organizations = append(resp.Organizations, UserInfoOrganization(o))
 	}
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)

@@ -21,8 +21,8 @@ if ! gh repo view "$ORG/$REPO" >/dev/null 2>&1; then
   # Creates the repo PUBLIC, sets origin, and pushes the current branch as default.
   gh repo create "$ORG/$REPO" --public --source=. --remote=origin --push
 else
-  git remote set-url origin "git@github.com:$ORG/$REPO.git" 2>/dev/null \
-    || git remote add origin "git@github.com:$ORG/$REPO.git"
+  git remote set-url origin "https://github.com/$ORG/$REPO.git" 2>/dev/null \
+    || git remote add origin "https://github.com/$ORG/$REPO.git"
   git push -u origin HEAD:main
 fi
 # Repo is created PUBLIC up front, so no visibility-change step is needed.
@@ -49,7 +49,10 @@ if ! npm whoami --registry=https://registry.npmjs.org/ >/dev/null 2>&1; then
   echo "   You're not logged into npmjs.org. Run:  npm login   (then re-run this script)"
   exit 1
 fi
-npm publish --access public   # publishConfig.access=public is set in package.json
+: "${NPM_TOKEN:?set NPM_TOKEN to an npmjs Automation/Granular write token (bypasses 2FA; no authenticator needed)}"
+echo "//registry.npmjs.org/:_authToken=${NPM_TOKEN}" > .npmrc
+npm publish --access public
+rm -f .npmrc   # publishConfig.access=public is set in package.json
 
 echo "==> DONE: $ORG/$REPO is PUBLIC + @$ORG/archistrator-platform-framework-web on npmjs.org"
 echo "    NOTE: if the @$ORG scope isn't yours on npmjs.org, publish will 403 —"

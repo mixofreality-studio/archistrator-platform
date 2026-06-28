@@ -17,6 +17,11 @@ const (
 	ruleDepNodeWellformed RuleID = "DEP-NODE-WELLFORMED"
 )
 
+type envSet struct {
+	ordinal int
+	set     map[string]bool
+}
+
 func profileName(p string) string {
 	switch p {
 	case profileCloud:
@@ -83,72 +88,71 @@ func sortedComponentIDs(set map[string]bool) []string {
 
 func deploymentConsistency(op OperationalConcepts, s System) []Finding {
 	topo := op.Deployment
-
 	if len(topo.Environments) == 0 {
 		return nil
 	}
-
 	idx := componentIndex(s)
-
 	var out []Finding
-
-	type envSet struct {
-		ordinal int
-		set     map[string]bool
-	}
 	byProfile := make(map[string]envSet)
 	presentProfiles := make(map[string]bool)
-
 	for i, env := range topo.Environments {
 		ordinal := i + 1
-		section := fmt.Sprintf("deployment environment %q", profileName(env.Profile))
 		presentProfiles[env.Profile] = true
-
-		instances, emptyNodeName := flattenInstances(env.Nodes)
-
-		if emptyNodeName {
-			out = append(out, Finding{
-				RuleID:   ruleDepNodeWellformed,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: a deployment node has an empty Name", section),
-				Location: loc(ordinal, section),
-			})
-		}
-
-		if len(instances) == 0 {
-			out = append(out, Finding{
-				RuleID:   ruleDepNodeWellformed,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: environment instances no components", section),
-				Location: loc(ordinal, section),
-			})
-		}
-
-		set := make(map[string]bool, len(instances))
-		for _, inst := range instances {
-			if _, ok := idx[inst.ComponentID]; !ok {
-				out = append(out, Finding{
-					RuleID:   ruleDepInstanceExist,
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("%s: instance %s does not reference a System Component", section, inst.ComponentID),
-					Location: loc(ordinal, section),
-				})
-			}
-			if set[inst.ComponentID] {
-				out = append(out, Finding{
-					RuleID:   ruleDepNodeWellformed,
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("%s: component %s is instanced more than once within the environment", section, inst.ComponentID),
-					Location: loc(ordinal, section),
-				})
-			}
-			set[inst.ComponentID] = true
-		}
-
+		set, envFindings := checkDeploymentEnvironment(env, ordinal, idx)
+		out = append(out, envFindings...)
 		byProfile[env.Profile] = envSet{ordinal: ordinal, set: set}
 	}
+	out = append(out, checkProfileSets(presentProfiles, expectedProfiles(topo.DeliveryStyle))...)
+	internal := internalComponents(s)
+	out = append(out, checkCrossProfileCoverage(byProfile, internal)...)
+	return out
+}
 
-	expected := expectedProfiles(topo.DeliveryStyle)
+func checkDeploymentEnvironment(env DeploymentEnvironment, ordinal int, idx map[string]Component) (map[string]bool, []Finding) {
+	section := fmt.Sprintf("deployment environment %q", profileName(env.Profile))
+	var out []Finding
+	instances, emptyNodeName := flattenInstances(env.Nodes)
+	if emptyNodeName {
+		out = append(out, Finding{
+			RuleID:   ruleDepNodeWellformed,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("%s: a deployment node has an empty Name", section),
+			Location: loc(ordinal, section),
+		})
+	}
+	if len(instances) == 0 {
+		out = append(out, Finding{
+			RuleID:   ruleDepNodeWellformed,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("%s: environment instances no components", section),
+			Location: loc(ordinal, section),
+		})
+	}
+	set := make(map[string]bool, len(instances))
+	for _, inst := range instances {
+		if _, ok := idx[inst.ComponentID]; !ok {
+			out = append(out, Finding{
+				RuleID:   ruleDepInstanceExist,
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("%s: instance %s does not reference a System Component", section, inst.ComponentID),
+				Location: loc(ordinal, section),
+			})
+		}
+		if set[inst.ComponentID] {
+			out = append(out, Finding{
+				RuleID:   ruleDepNodeWellformed,
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("%s: component %s is instanced more than once within the environment", section, inst.ComponentID),
+				Location: loc(ordinal, section),
+			})
+		}
+		set[inst.ComponentID] = true
+	}
+	return set, out
+}
+
+func checkProfileSets(presentProfiles, expected map[string]bool) []Finding {
+	var out []Finding
 	for p := range expected {
 		if !presentProfiles[p] {
 			out = append(out, Finding{
@@ -169,18 +173,24 @@ func deploymentConsistency(op OperationalConcepts, s System) []Finding {
 			})
 		}
 	}
+	return out
+}
 
+func internalComponents(s System) map[string]bool {
 	internal := make(map[string]bool)
 	for _, c := range s.Components {
 		if isRunningComponent(c.Kind) {
 			internal[c.ID] = true
 		}
 	}
+	return internal
+}
 
+func checkCrossProfileCoverage(byProfile map[string]envSet, internal map[string]bool) []Finding {
+	var out []Finding
 	cloud, hasCloud := byProfile[profileCloud]
 	local, hasLocal := byProfile[profileLocal]
 	test, hasTest := byProfile[profileTest]
-
 	if hasCloud && hasLocal && !sameSet(cloud.set, local.set) {
 		out = append(out, Finding{
 			RuleID:   ruleDepGraphIdentity,
@@ -189,48 +199,55 @@ func deploymentConsistency(op OperationalConcepts, s System) []Finding {
 			Location: loc(0, "deployment topology"),
 		})
 	}
-
 	if hasTest {
-		var missing []string
-		for id := range internal {
-			if !test.set[id] {
-				missing = append(missing, id)
-			}
-		}
-		if len(missing) > 0 {
-			sort.Strings(missing)
-			out = append(out, Finding{
-				RuleID:   ruleDepGraphIdentity,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("the test environment does not instance every internal component; test must be a superset of the internal set (missing=%v)", missing),
-				Location: loc(test.ordinal, fmt.Sprintf("deployment environment %q", profileName(profileTest))),
-			})
-		}
+		out = append(out, checkTestEnvCoverage(test, internal)...)
 	}
-
 	for _, p := range []string{profileCloud, profileLocal} {
 		env, ok := byProfile[p]
 		if !ok {
 			continue
 		}
-		var missing []string
-		for id := range internal {
-			if !env.set[id] {
-				missing = append(missing, id)
-			}
-		}
-		if len(missing) > 0 {
-			sort.Strings(missing)
-			out = append(out, Finding{
-				RuleID:   ruleDepCoverage,
-				Severity: SeverityWarning,
-				Message:  fmt.Sprintf("deployment environment %q does not instance every running component (missing=%v)", profileName(p), missing),
-				Location: loc(env.ordinal, fmt.Sprintf("deployment environment %q", profileName(p))),
-			})
+		out = append(out, checkProfileEnvCoverage(p, env, internal)...)
+	}
+	return out
+}
+
+func checkTestEnvCoverage(test envSet, internal map[string]bool) []Finding {
+	var missing []string
+	for id := range internal {
+		if !test.set[id] {
+			missing = append(missing, id)
 		}
 	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	return []Finding{{
+		RuleID:   ruleDepGraphIdentity,
+		Severity: SeverityError,
+		Message:  fmt.Sprintf("the test environment does not instance every internal component; test must be a superset of the internal set (missing=%v)", missing),
+		Location: loc(test.ordinal, fmt.Sprintf("deployment environment %q", profileName(profileTest))),
+	}}
+}
 
-	return out
+func checkProfileEnvCoverage(p string, env envSet, internal map[string]bool) []Finding {
+	var missing []string
+	for id := range internal {
+		if !env.set[id] {
+			missing = append(missing, id)
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	return []Finding{{
+		RuleID:   ruleDepCoverage,
+		Severity: SeverityWarning,
+		Message:  fmt.Sprintf("deployment environment %q does not instance every running component (missing=%v)", profileName(p), missing),
+		Location: loc(env.ordinal, fmt.Sprintf("deployment environment %q", profileName(p))),
+	}}
 }
 
 func sameSet(a, b map[string]bool) bool {

@@ -74,19 +74,7 @@ func loadClassifiedPackages(spec arch.Spec) ([]classifiedPackage, error) {
 		return nil, fmt.Errorf("methodcheck: %d package load error(s); fix the build before checking alignment", n)
 	}
 
-	classify := func(pkgPath string) (string, bool) {
-		rel := strings.TrimPrefix(pkgPath, spec.ModulePrefix)
-		if rel == pkgPath {
-			return "", false // not an internal package of this module
-		}
-		for _, l := range spec.Layers {
-			if rel == l.DirPrefix || strings.HasPrefix(rel, l.DirPrefix+"/") {
-				return l.Name, true
-			}
-		}
-		return "", false
-	}
-
+	classify := makeSpecClassifier(spec)
 	var out []classifiedPackage
 	for _, pkg := range pkgs {
 		// A package contributing no Go files compiles to nothing — skip (mirrors
@@ -142,11 +130,66 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 	if normalize == nil {
 		normalize = defaultNormalizer
 	}
+	pkgLayers, pkgOrder := indexPackagesByLeaf(pkgs, normalize)
 
-	// Index code packages by (normalized leaf name) → set of layers it appears in.
-	// A normalized name can in principle appear in more than one layer; track all.
-	pkgLayers := make(map[string]map[string]bool)
-	pkgOrder := make(map[string]string) // normalized → a representative full path (for messages)
+	matchedPkgKeys := make(map[string]bool)
+	var out []Finding
+	for i, c := range s.Components {
+		if c.Kind == kindResource {
+			continue
+		}
+		key := normalize(c.Name)
+		section := fmt.Sprintf("component %d (%s)", i+1, c.Name)
+		if key == "" {
+			continue
+		}
+		out = append(out, checkComponentLayerAlignment(key, componentLayerName(c.Layer), section, i, pkgLayers, pkgOrder, matchedPkgKeys)...)
+	}
+
+	out = append(out, checkOrphanedPackages(pkgLayers, pkgOrder, matchedPkgKeys)...)
+	return out
+}
+
+func makeSpecClassifier(spec arch.Spec) func(string) (string, bool) {
+	return func(pkgPath string) (string, bool) {
+		rel := strings.TrimPrefix(pkgPath, spec.ModulePrefix)
+		if rel == pkgPath {
+			return "", false
+		}
+		for _, l := range spec.Layers {
+			if rel == l.DirPrefix || strings.HasPrefix(rel, l.DirPrefix+"/") {
+				return l.Name, true
+			}
+		}
+		return "", false
+	}
+}
+
+func checkComponentLayerAlignment(key, declaredLayer, section string, i int, pkgLayers map[string]map[string]bool, pkgOrder map[string]string, matchedPkgKeys map[string]bool) []Finding {
+	layers, exists := pkgLayers[key]
+	if !exists {
+		return []Finding{{
+			RuleID:   ruleAlignMissingPkg,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("%s declares a %s but no code package matches it in any layer; the design declares a component with no implementation", section, declaredLayer),
+			Location: loc(i+1, section),
+		}}
+	}
+	matchedPkgKeys[key] = true
+	if !layers[declaredLayer] {
+		return []Finding{{
+			RuleID:   ruleAlignLayerMismate,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("%s is declared in the %s layer but its code package %s is in the %s layer; design and code disagree on the component's layer", section, declaredLayer, pkgOrder[key], sortedLayers(layers)),
+			Location: loc(i+1, section),
+		}}
+	}
+	return nil
+}
+
+func indexPackagesByLeaf(pkgs []classifiedPackage, normalize func(string) string) (pkgLayers map[string]map[string]bool, pkgOrder map[string]string) {
+	pkgLayers = make(map[string]map[string]bool)
+	pkgOrder = make(map[string]string)
 	for _, p := range pkgs {
 		key := normalize(p.leaf)
 		if key == "" {
@@ -160,51 +203,10 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 			pkgOrder[key] = p.pkgPath
 		}
 	}
+	return
+}
 
-	// Index design components by normalized name → declared layer name. Resources are
-	// excluded (no own-code package expected).
-	compLayer := make(map[string]string)
-	compName := make(map[string]string)
-	matchedPkgKeys := make(map[string]bool)
-
-	var out []Finding
-	for i, c := range s.Components {
-		if c.Kind == kindResource {
-			continue
-		}
-		declaredLayer := componentLayerName(c.Layer)
-		key := normalize(c.Name)
-		section := fmt.Sprintf("component %d (%s)", i+1, c.Name)
-		if key == "" {
-			// An un-normalizable name can't be matched; SYS-NAME-UNIQUE already flags
-			// the empty-slug case, so skip here rather than double-report.
-			continue
-		}
-		compLayer[key] = declaredLayer
-		compName[key] = c.Name
-
-		layers, exists := pkgLayers[key]
-		if !exists {
-			out = append(out, Finding{
-				RuleID:   ruleAlignMissingPkg,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s declares a %s but no code package matches it in any layer; the design declares a component with no implementation", section, declaredLayer),
-				Location: loc(i+1, section),
-			})
-			continue
-		}
-		matchedPkgKeys[key] = true
-		if !layers[declaredLayer] {
-			out = append(out, Finding{
-				RuleID:   ruleAlignLayerMismate,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s is declared in the %s layer but its code package %s is in the %s layer; design and code disagree on the component's layer", section, declaredLayer, pkgOrder[key], sortedLayers(layers)),
-				Location: loc(i+1, section),
-			})
-		}
-	}
-
-	// ALIGN-EXTRA-PKG — a classified business package matching no design component.
+func checkOrphanedPackages(pkgLayers map[string]map[string]bool, pkgOrder map[string]string, matchedPkgKeys map[string]bool) []Finding {
 	var extraKeys []string
 	for key := range pkgLayers {
 		if !matchedPkgKeys[key] {
@@ -212,6 +214,7 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 		}
 	}
 	sort.Strings(extraKeys)
+	var out []Finding
 	for _, key := range extraKeys {
 		out = append(out, Finding{
 			RuleID:   ruleAlignExtraPkg,
@@ -220,7 +223,6 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 			Location: loc(0, "alignment"),
 		})
 	}
-
 	return out
 }
 

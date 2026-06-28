@@ -94,30 +94,38 @@ func (c *AppClient) PutRepoContentsFile(ctx context.Context, fullName, path stri
 		return tip, false, nil
 	}
 
+	commitRef, putErr := c.sendContentsFilePut(ctx, fullName, path, existingSHA, content, message, instToken)
+	if putErr != nil {
+		return "", false, putErr
+	}
+	return commitRef, true, nil
+}
+
+func (c *AppClient) sendContentsFilePut(ctx context.Context, fullName, path, existingSHA string, content []byte, message, instToken string) (string, error) {
 	payload := map[string]any{
 		"message": message,
 		"content": base64.StdEncoding.EncodeToString(content),
 	}
-	if found && existingSHA != "" {
+	if existingSHA != "" {
 		payload["sha"] = existingSHA
 	}
 	pb, mErr := json.Marshal(payload)
 	if mErr != nil {
-		return "", false, fwra.Wrap(fwra.ContractMisuse, mErr, "PutRepoContentsFile: marshal")
+		return "", fwra.Wrap(fwra.ContractMisuse, mErr, "PutRepoContentsFile: marshal")
 	}
 	url := fmt.Sprintf("%s/repos/%s/contents/%s", c.baseURL, fullName, path)
 	status, respBody, dErr := c.do(ctx, http.MethodPut, url, pb, "", instToken)
 	if dErr != nil {
-		return "", false, dErr
+		return "", dErr
 	}
 	if status < 200 || status >= 300 {
-		return "", false, ClassifyStatus(status, "PutRepoContentsFile")
+		return "", ClassifyStatus(status, "PutRepoContentsFile")
 	}
 	var res contentsPutResultDTO
 	if uerr := json.Unmarshal(respBody, &res); uerr != nil {
-		return "", false, fwra.Wrap(fwra.Infrastructure, uerr, "PutRepoContentsFile: decode")
+		return "", fwra.Wrap(fwra.Infrastructure, uerr, "PutRepoContentsFile: decode")
 	}
-	return res.Commit.SHA, true, nil
+	return res.Commit.SHA, nil
 }
 
 // getRepoContentsFile reads the existing blob sha + decoded content at `path`. A
@@ -222,7 +230,7 @@ func (c *AppClient) GetRepoMetadata(ctx context.Context, fullName, instToken str
 	if uerr := json.Unmarshal(body, &dto); uerr != nil {
 		return RepoMetadata{}, fwra.Wrap(fwra.Infrastructure, uerr, "GetRepoMetadata: decode")
 	}
-	return RepoMetadata{FullName: dto.FullName, DefaultBranch: dto.DefaultBranch, Size: dto.Size, Topics: dto.Topics}, nil
+	return RepoMetadata(dto), nil
 }
 
 // ListRepoBranches lists the repo's branch names (GET /repos/{fullName}/branches).

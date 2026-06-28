@@ -109,9 +109,7 @@ type ollamaChatResp struct {
 	EvalCount       int           `json:"eval_count"`
 }
 
-// Chat performs the blocking /api/chat call and maps transport/HTTP faults onto
-// the framework error model exactly as Generate does.
-func (c *Client) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+func buildOllamaChatReq(req ChatRequest) ollamaChatReq {
 	wire := ollamaChatReq{
 		Model:   req.Model,
 		Stream:  false,
@@ -121,16 +119,23 @@ func (c *Client) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error
 	for _, m := range req.Messages {
 		wm := ollamaChatMsg{Role: m.Role, Content: m.Content, ToolName: m.ToolName}
 		for _, tc := range m.ToolCalls {
-			wm.ToolCalls = append(wm.ToolCalls, ollamaChatToolCall{Function: ollamaChatFn{Name: tc.Name, Arguments: tc.Arguments}})
+			wm.ToolCalls = append(wm.ToolCalls, ollamaChatToolCall{Function: ollamaChatFn(tc)})
 		}
 		wire.Messages = append(wire.Messages, wm)
 	}
 	for _, t := range req.Tools {
 		wire.Tools = append(wire.Tools, ollamaChatTool{
 			Type:     "function",
-			Function: ollamaChatToolSchema{Name: t.Name, Description: t.Description, Parameters: t.Parameters},
+			Function: ollamaChatToolSchema(t),
 		})
 	}
+	return wire
+}
+
+// Chat performs the blocking /api/chat call and maps transport/HTTP faults onto
+// the framework error model exactly as Generate does.
+func (c *Client) Chat(ctx context.Context, req ChatRequest) (ChatResponse, error) {
+	wire := buildOllamaChatReq(req)
 
 	body, err := json.Marshal(wire)
 	if err != nil {

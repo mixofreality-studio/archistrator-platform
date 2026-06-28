@@ -309,16 +309,14 @@ func (c *AppClient) CreateOrgRepo(ctx context.Context, account, name, instToken 
 	if dErr != nil {
 		return "", false, dErr
 	}
+	return c.processCreateOrgRepoResponse(ctx, account, name, instToken, status, respBody, opts)
+}
+
+func (c *AppClient) processCreateOrgRepoResponse(ctx context.Context, account, name, instToken string, status int, respBody []byte, opts CreateRepoOptions) (string, bool, error) {
 	if status == http.StatusUnprocessableEntity || status == http.StatusConflict {
-		// Already exists — fetch the existing repo and report idempotent success.
-		full, fErr := c.getRepoFullName(ctx, account, name, instToken)
-		if fErr != nil {
-			return "", false, fErr
-		}
-		if len(opts.Topics) > 0 {
-			if tErr := c.SetRepoTopics(ctx, full, instToken, opts.Topics); tErr != nil {
-				return "", false, tErr
-			}
+		full, err := c.handleExistingOrgRepo(ctx, account, name, instToken, opts)
+		if err != nil {
+			return "", false, err
 		}
 		return full, true, nil
 	}
@@ -329,12 +327,25 @@ func (c *AppClient) CreateOrgRepo(ctx context.Context, account, name, instToken 
 	if uerr := json.Unmarshal(respBody, &repo); uerr != nil {
 		return "", false, fwra.Wrap(fwra.Infrastructure, uerr, "CreateOrgRepo: decode")
 	}
-	if len(opts.Topics) > 0 {
-		if tErr := c.SetRepoTopics(ctx, repo.FullName, instToken, opts.Topics); tErr != nil {
-			return "", false, tErr
-		}
+	if err := c.setTopicsIfNeeded(ctx, repo.FullName, instToken, opts.Topics); err != nil {
+		return "", false, err
 	}
 	return repo.FullName, false, nil
+}
+
+func (c *AppClient) handleExistingOrgRepo(ctx context.Context, account, name, instToken string, opts CreateRepoOptions) (string, error) {
+	full, fErr := c.getRepoFullName(ctx, account, name, instToken)
+	if fErr != nil {
+		return "", fErr
+	}
+	return full, c.setTopicsIfNeeded(ctx, full, instToken, opts.Topics)
+}
+
+func (c *AppClient) setTopicsIfNeeded(ctx context.Context, fullName, instToken string, topics []string) error {
+	if len(topics) == 0 {
+		return nil
+	}
+	return c.SetRepoTopics(ctx, fullName, instToken, topics)
 }
 
 // SetRepoTopics replaces the topic set on `fullName` (owner/repo) with `topics` via
@@ -370,36 +381,45 @@ func (c *AppClient) SetRepoTopics(ctx context.Context, fullName, instToken strin
 func (c *AppClient) ListInstallationRepos(ctx context.Context, instToken string) ([]RepoInfo, error) {
 	var out []RepoInfo
 	for page := 1; ; page++ {
-		url := fmt.Sprintf("%s/installation/repositories?per_page=100&page=%d", c.baseURL, page)
-		status, body, err := c.do(ctx, http.MethodGet, url, nil, "", instToken)
+		repos, done, err := c.fetchOneRepoPage(ctx, page, len(out), instToken)
 		if err != nil {
 			return nil, err
 		}
-		if status < 200 || status >= 300 {
-			return nil, ClassifyStatus(status, "ListInstallationRepos")
-		}
-		var env installationReposDTO
-		if uerr := json.Unmarshal(body, &env); uerr != nil {
-			return nil, fwra.Wrap(fwra.Infrastructure, uerr, "ListInstallationRepos: decode")
-		}
-		for _, r := range env.Repositories {
-			out = append(out, RepoInfo{
-				Name:        r.Name,
-				FullName:    r.FullName,
-				Description: r.Description,
-				Topics:      r.Topics,
-				Private:     r.Private,
-				CreatedAt:   r.CreatedAt,
-				PushedAt:    r.PushedAt,
-			})
-		}
-		// Exhausted once a short page (fewer than per_page) is returned, or once the
-		// accumulated count reaches the reported total_count.
-		if len(env.Repositories) < 100 || (env.TotalCount > 0 && len(out) >= env.TotalCount) {
+		out = append(out, repos...)
+		if done {
 			break
 		}
 	}
 	return out, nil
+}
+
+func (c *AppClient) fetchOneRepoPage(ctx context.Context, page, totalSoFar int, instToken string) ([]RepoInfo, bool, error) {
+	url := fmt.Sprintf("%s/installation/repositories?per_page=100&page=%d", c.baseURL, page)
+	status, body, err := c.do(ctx, http.MethodGet, url, nil, "", instToken)
+	if err != nil {
+		return nil, false, err
+	}
+	if status < 200 || status >= 300 {
+		return nil, false, ClassifyStatus(status, "ListInstallationRepos")
+	}
+	var env installationReposDTO
+	if uerr := json.Unmarshal(body, &env); uerr != nil {
+		return nil, false, fwra.Wrap(fwra.Infrastructure, uerr, "ListInstallationRepos: decode")
+	}
+	repos := make([]RepoInfo, 0, len(env.Repositories))
+	for _, r := range env.Repositories {
+		repos = append(repos, RepoInfo{
+			Name:        r.Name,
+			FullName:    r.FullName,
+			Description: r.Description,
+			Topics:      r.Topics,
+			Private:     r.Private,
+			CreatedAt:   r.CreatedAt,
+			PushedAt:    r.PushedAt,
+		})
+	}
+	done := len(repos) < 100 || (env.TotalCount > 0 && totalSoFar+len(repos) >= env.TotalCount)
+	return repos, done, nil
 }
 
 // getRepoFullName fetches owner/repo to confirm an existing repo on the
@@ -455,7 +475,7 @@ func (c *AppClient) do(ctx context.Context, method, url string, body []byte, app
 		}
 		return 0, nil, fwra.Wrap(fwra.Transient, err, "github client: transport error")
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {

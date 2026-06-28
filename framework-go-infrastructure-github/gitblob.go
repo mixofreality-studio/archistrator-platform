@@ -136,19 +136,14 @@ func (s *GitBlobStore) StoreOutput(
 		return "", fwra.Wrap(fwra.Infrastructure, coErr, "github.GitBlobStore.StoreOutput: checkout branch")
 	}
 
-	billyFS := wt.Filesystem
-	// Deterministic write order keeps the tree (and thus the commit hash) stable.
-	ordered := append([]GitObjectFile(nil), files...)
-	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Path < ordered[j].Path })
-	for _, f := range ordered {
-		if werr := writeBillyFile(billyFS, f.Path, f.Bytes); werr != nil {
-			return "", fwra.Wrap(fwra.Infrastructure, werr, "github.GitBlobStore.StoreOutput: write "+f.Path)
-		}
-		if _, aerr := wt.Add(f.Path); aerr != nil {
-			return "", fwra.Wrap(fwra.Infrastructure, aerr, "github.GitBlobStore.StoreOutput: stage "+f.Path)
-		}
+	if err := writeAndStageFiles(wt, files); err != nil {
+		return "", err
 	}
 
+	return commitAndPushBlobContent(ctx, repo, wt, message, branchRef, priorTip, branchExists, auth)
+}
+
+func commitAndPushBlobContent(ctx context.Context, repo *gogit.Repository, wt *gogit.Worktree, message string, branchRef plumbing.ReferenceName, priorTip plumbing.Hash, branchExists bool, auth GitAuth) (string, error) {
 	sig := &object.Signature{Name: gitBlobAuthorName, Email: gitBlobAuthorEmail, When: gitBlobCommitTime}
 	hash, cerr := wt.Commit(message, &gogit.CommitOptions{Author: sig, Committer: sig})
 	if cerr != nil {
@@ -159,7 +154,6 @@ func (s *GitBlobStore) StoreOutput(
 		}
 		return "", fwra.Wrap(fwra.Infrastructure, cerr, "github.GitBlobStore.StoreOutput: commit")
 	}
-
 	pushErr := repo.PushContext(ctx, &gogit.PushOptions{
 		Auth:     auth.authMethod(),
 		RefSpecs: []config.RefSpec{config.RefSpec(string(branchRef) + ":" + string(branchRef))},
@@ -171,8 +165,23 @@ func (s *GitBlobStore) StoreOutput(
 		}
 		return "", ClassifyGitError(pushErr, "github.GitBlobStore.StoreOutput: push")
 	}
-
 	return hash.String(), nil
+}
+
+func writeAndStageFiles(wt *gogit.Worktree, files []GitObjectFile) error {
+	billyFS := wt.Filesystem
+	// Deterministic write order keeps the tree (and thus the commit hash) stable.
+	ordered := append([]GitObjectFile(nil), files...)
+	sort.Slice(ordered, func(i, j int) bool { return ordered[i].Path < ordered[j].Path })
+	for _, f := range ordered {
+		if werr := writeBillyFile(billyFS, f.Path, f.Bytes); werr != nil {
+			return fwra.Wrap(fwra.Infrastructure, werr, "github.GitBlobStore.StoreOutput: write "+f.Path)
+		}
+		if _, aerr := wt.Add(f.Path); aerr != nil {
+			return fwra.Wrap(fwra.Infrastructure, aerr, "github.GitBlobStore.StoreOutput: stage "+f.Path)
+		}
+	}
+	return nil
 }
 
 // ReadFileAtCommit reads one file's bytes from the tree of the commit at
@@ -311,7 +320,7 @@ func readFileFromCommitObj(commit *object.Commit, p string) ([]byte, error) {
 	if err != nil {
 		return nil, fwra.Wrap(fwra.Infrastructure, err, "github.GitBlobStore: open file")
 	}
-	defer reader.Close()
+	defer func() { _ = reader.Close() }()
 	contents, err := io.ReadAll(reader)
 	if err != nil {
 		return nil, fwra.Wrap(fwra.Infrastructure, err, "github.GitBlobStore: read contents")

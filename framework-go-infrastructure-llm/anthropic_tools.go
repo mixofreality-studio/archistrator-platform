@@ -76,21 +76,13 @@ type AnthropicToolResponse struct {
 	OutputTokens int
 }
 
-// GenerateWithTools performs one blocking tool-calling Messages-API turn. Faults
-// are mapped onto the framework error model by HTTP status code exactly as
-// Generate does (mapAnthropicError).
-func (c *AnthropicClient) GenerateWithTools(ctx context.Context, req AnthropicToolRequest) (AnthropicToolResponse, error) {
-	maxTokens := req.MaxTokens
-	if maxTokens <= 0 {
-		maxTokens = c.maxTokens
-	}
-
-	tools := make([]anthropic.ToolUnionParam, 0, len(req.Tools))
-	for _, t := range req.Tools {
+func buildAnthropicTools(tools []AnthropicTool) ([]anthropic.ToolUnionParam, error) {
+	result := make([]anthropic.ToolUnionParam, 0, len(tools))
+	for _, t := range tools {
 		var schema anthropic.ToolInputSchemaParam
 		if len(t.InputSchema) > 0 {
 			if err := json.Unmarshal(t.InputSchema, &schema); err != nil {
-				return AnthropicToolResponse{}, fwra.Wrap(fwra.ContractMisuse, err, "anthropic.GenerateWithTools: tool input schema")
+				return nil, fwra.Wrap(fwra.ContractMisuse, err, "anthropic.GenerateWithTools: tool input schema")
 			}
 		}
 		tp := anthropic.ToolParam{Name: t.Name, InputSchema: schema}
@@ -100,11 +92,14 @@ func (c *AnthropicClient) GenerateWithTools(ctx context.Context, req AnthropicTo
 		if t.Strict {
 			tp.Strict = anthropic.Bool(true)
 		}
-		tools = append(tools, anthropic.ToolUnionParam{OfTool: &tp})
+		result = append(result, anthropic.ToolUnionParam{OfTool: &tp})
 	}
+	return result, nil
+}
 
-	msgs := make([]anthropic.MessageParam, 0, len(req.Messages))
-	for _, m := range req.Messages {
+func buildAnthropicMessages(reqs []AnthropicMessage) []anthropic.MessageParam {
+	msgs := make([]anthropic.MessageParam, 0, len(reqs))
+	for _, m := range reqs {
 		var blocks []anthropic.ContentBlockParamUnion
 		if m.Text != "" {
 			blocks = append(blocks, anthropic.NewTextBlock(m.Text))
@@ -122,12 +117,30 @@ func (c *AnthropicClient) GenerateWithTools(ctx context.Context, req AnthropicTo
 			msgs = append(msgs, anthropic.NewUserMessage(blocks...))
 		}
 	}
+	return msgs
+}
+
+// GenerateWithTools performs one blocking tool-calling Messages-API turn. Faults
+// are mapped onto the framework error model by HTTP status code exactly as
+// Generate does (mapAnthropicError).
+func (c *AnthropicClient) GenerateWithTools(ctx context.Context, req AnthropicToolRequest) (AnthropicToolResponse, error) {
+	maxTokens := req.MaxTokens
+	if maxTokens <= 0 {
+		maxTokens = c.maxTokens
+	}
+
+	apiTools, err := buildAnthropicTools(req.Tools)
+	if err != nil {
+		return AnthropicToolResponse{}, err
+	}
+
+	msgs := buildAnthropicMessages(req.Messages)
 
 	params := anthropic.MessageNewParams{
 		Model:     anthropic.Model(req.Model),
 		MaxTokens: int64(maxTokens),
 		Messages:  msgs,
-		Tools:     tools,
+		Tools:     apiTools,
 	}
 	if req.System != "" {
 		params.System = []anthropic.TextBlockParam{{Text: req.System}}

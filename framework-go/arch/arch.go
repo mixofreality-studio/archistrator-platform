@@ -150,10 +150,18 @@ func Check(t *testing.T, spec Spec) {
 		checkAllowlist(t, pkgs, spec.AllowedImportPrefixes)
 	}
 
-	layerIndex := func(pkgPath string) (int, bool) {
+	layerIndex := makeLayerIndex(spec)
+	permitted := makePermitted(spec)
+	for _, pkg := range pkgs {
+		checkPackage(t, pkg, spec, layerIndex, permitted)
+	}
+}
+
+func makeLayerIndex(spec Spec) func(string) (int, bool) {
+	return func(pkgPath string) (int, bool) {
 		rel := strings.TrimPrefix(pkgPath, spec.ModulePrefix)
 		if rel == pkgPath {
-			return 0, false // not an internal package of this module
+			return 0, false
 		}
 		for i, l := range spec.Layers {
 			if rel == l.DirPrefix || strings.HasPrefix(rel, l.DirPrefix+"/") {
@@ -162,95 +170,109 @@ func Check(t *testing.T, spec Spec) {
 		}
 		return 0, false
 	}
+}
 
-	// Permitted directory prefixes, for the classification-failure message.
+func makePermitted(spec Spec) string {
 	dirs := make([]string, len(spec.Layers))
 	for i, l := range spec.Layers {
 		dirs[i] = l.DirPrefix + "/"
 	}
-	permitted := strings.Join(dirs, ", ")
+	return strings.Join(dirs, ", ")
+}
 
-	for _, pkg := range pkgs {
-		// A directory that contributes no production Go files (e.g. one holding
-		// only an external _test.go package) compiles to nothing and cannot smuggle
-		// logic — Check loads with Tests:false, so test code is never importable by
-		// production. Skip it; a rogue package hiding real code still has parsed
-		// syntax and is caught below.
-		if len(pkg.Syntax) == 0 {
+func checkPackage(t *testing.T, pkg *packages.Package, spec Spec, layerIndex func(string) (int, bool), permitted string) {
+	t.Helper()
+	// A directory that contributes no production Go files (e.g. one holding
+	// only an external _test.go package) compiles to nothing and cannot smuggle
+	// logic — Check loads with Tests:false, so test code is never importable by
+	// production. Skip it; a rogue package hiding real code still has parsed
+	// syntax and is caught below.
+	if len(pkg.Syntax) == 0 {
+		return
+	}
+	pkgIdx, ok := layerIndex(pkg.PkgPath)
+	if !ok {
+		// Rule 0: every loaded internal package MUST classify into a declared
+		// layer. There is no "unclassified" escape — a rogue package invented
+		// to sit outside the layer model (a "domain", "shared", or "common"
+		// dir) lands here and fails the build. Method has only Clients /
+		// Managers / Engines / ResourceAccess / Resources / Utilities; shared
+		// typed models belong to the ResourceAccess that fronts them.
+		t.Errorf("arch: %s is not part of any Method layer — it sits outside the layer model; the only permitted internal package roots are: %s. Move it into the layer that owns it (shared typed models belong to their fronting ResourceAccess), do not create an out-of-band package.",
+			pkg.PkgPath, permitted)
+		return
+	}
+	layer := spec.Layers[pkgIdx]
+	checkPackageImports(t, pkg, spec, pkgIdx, layer, layerIndex)
+	checkPackageInterfaces(t, pkg, layer)
+}
+
+func checkPackageImports(t *testing.T, pkg *packages.Package, spec Spec, pkgIdx int, layer Layer, layerIndex func(string) (int, bool)) {
+	t.Helper()
+	// Rule 1 & 2: import edges.
+	importPaths := make([]string, 0, len(pkg.Imports))
+	for ip := range pkg.Imports {
+		importPaths = append(importPaths, ip)
+	}
+	sort.Strings(importPaths)
+	isExempt := temporalExempt(pkg.PkgPath, spec.TemporalExemptPackages)
+	for _, ip := range importPaths {
+		checkImport(t, ip, pkg.PkgPath, spec, pkgIdx, layer, isExempt, layerIndex)
+	}
+}
+
+func checkImport(t *testing.T, ip, pkgPath string, spec Spec, pkgIdx int, layer Layer, isExempt bool, layerIndex func(string) (int, bool)) {
+	t.Helper()
+	if strings.Contains(ip, "go.temporal.io") {
+		if layer.Name != spec.TemporalLayer && !isExempt {
+			t.Errorf("arch: %s (%s layer) imports Temporal %q; only the %s layer may (or a package explicitly listed in Spec.TemporalExemptPackages)",
+				pkgPath, layer.Name, ip, spec.TemporalLayer)
+		}
+		return
+	}
+	j, ok := layerIndex(ip)
+	if !ok {
+		return
+	}
+	switch {
+	case j < pkgIdx:
+		t.Errorf("arch: %s (%s) imports %s (%s) — upward import forbidden",
+			pkgPath, layer.Name, ip, spec.Layers[j].Name)
+	case j == pkgIdx:
+		t.Errorf("arch: %s imports sibling %s in the same %s layer — sideways import forbidden; Method components do not call peers in their own layer",
+			pkgPath, ip, layer.Name)
+	}
+}
+
+func checkPackageInterfaces(t *testing.T, pkg *packages.Package, layer Layer) {
+	t.Helper()
+	if layer.IfaceSuffix == nil {
+		return
+	}
+	ifaces := exportedInterfaces(pkg)
+	matched := false
+	for name, iface := range ifaces {
+		if !layer.IfaceSuffix.MatchString(name) {
 			continue
 		}
-		idx, ok := layerIndex(pkg.PkgPath)
-		if !ok {
-			// Rule 0: every loaded internal package MUST classify into a declared
-			// layer. There is no "unclassified" escape — a rogue package invented
-			// to sit outside the layer model (a "domain", "shared", or "common"
-			// dir) lands here and fails the build. Method has only Clients /
-			// Managers / Engines / ResourceAccess / Resources / Utilities; shared
-			// typed models belong to the ResourceAccess that fronts them.
-			t.Errorf("arch: %s is not part of any Method layer — it sits outside the layer model; the only permitted internal package roots are: %s. Move it into the layer that owns it (shared typed models belong to their fronting ResourceAccess), do not create an out-of-band package.",
-				pkg.PkgPath, permitted)
-			continue
-		}
-		layer := spec.Layers[idx]
+		matched = true
+		checkInterfaceMethodReturns(t, pkg, name, iface)
+	}
+	if !matched {
+		t.Errorf("arch: %s (%s) exposes no exported interface matching %q",
+			pkg.PkgPath, layer.Name, layer.IfaceSuffix.String())
+	}
+}
 
-		// Rule 1 & 2: import edges.
-		importPaths := make([]string, 0, len(pkg.Imports))
-		for ip := range pkg.Imports {
-			importPaths = append(importPaths, ip)
-		}
-		sort.Strings(importPaths)
-		temporalExempt := temporalExempt(pkg.PkgPath, spec.TemporalExemptPackages)
-		for _, ip := range importPaths {
-			if strings.Contains(ip, "go.temporal.io") {
-				// Temporal is permitted only in the designated layer, OR in a package
-				// on the explicit TemporalExemptPackages allowlist (the durable-execution
-				// RA that fronts Temporal itself). The exemption relaxes ONLY this rule;
-				// every other rule below still applies to the package.
-				if layer.Name != spec.TemporalLayer && !temporalExempt {
-					t.Errorf("arch: %s (%s layer) imports Temporal %q; only the %s layer may (or a package explicitly listed in Spec.TemporalExemptPackages)",
-						pkg.PkgPath, layer.Name, ip, spec.TemporalLayer)
-				}
-				continue
-			}
-			j, ok := layerIndex(ip)
-			if !ok {
-				continue
-			}
-			switch {
-			case j < idx:
-				t.Errorf("arch: %s (%s) imports %s (%s) — upward import forbidden",
-					pkg.PkgPath, layer.Name, ip, spec.Layers[j].Name)
-			case j == idx:
-				t.Errorf("arch: %s imports sibling %s in the same %s layer — sideways import forbidden; Method components do not call peers in their own layer",
-					pkg.PkgPath, ip, layer.Name)
-			}
-		}
-
-		// Rules 3 & 4: interface naming + return types (skipped only when the
-		// layer declares no interface suffix, e.g. Client/Manager façades).
-		if layer.IfaceSuffix == nil {
-			continue
-		}
-		ifaces := exportedInterfaces(pkg)
-		matched := false
-		for name, iface := range ifaces {
-			if !layer.IfaceSuffix.MatchString(name) {
-				continue
-			}
-			matched = true
-			for i := 0; i < iface.NumMethods(); i++ {
-				m := iface.Method(i)
-				sig := m.Type().(*types.Signature)
-				res := sig.Results()
-				if res.Len() == 0 || res.At(res.Len()-1).Type().String() != "error" {
-					t.Errorf("arch: %s.%s.%s last result is not error",
-						pkg.PkgPath, name, m.Name())
-				}
-			}
-		}
-		if !matched {
-			t.Errorf("arch: %s (%s) exposes no exported interface matching %q",
-				pkg.PkgPath, layer.Name, layer.IfaceSuffix.String())
+func checkInterfaceMethodReturns(t *testing.T, pkg *packages.Package, name string, iface *types.Interface) {
+	t.Helper()
+	for i := 0; i < iface.NumMethods(); i++ {
+		m := iface.Method(i)
+		sig := m.Type().(*types.Signature)
+		res := sig.Results()
+		if res.Len() == 0 || res.At(res.Len()-1).Type().String() != "error" {
+			t.Errorf("arch: %s.%s.%s last result is not error",
+				pkg.PkgPath, name, m.Name())
 		}
 	}
 }
@@ -261,28 +283,35 @@ func Check(t *testing.T, spec Spec) {
 func checkAllowlist(t *testing.T, pkgs []*packages.Package, allowed []string) {
 	t.Helper()
 	for _, pkg := range pkgs {
-		importPaths := make([]string, 0, len(pkg.Imports))
-		for ip := range pkg.Imports {
-			importPaths = append(importPaths, ip)
+		checkPackageAllowlist(t, pkg, allowed)
+	}
+}
+
+func checkPackageAllowlist(t *testing.T, pkg *packages.Package, allowed []string) {
+	t.Helper()
+	importPaths := make([]string, 0, len(pkg.Imports))
+	for ip := range pkg.Imports {
+		importPaths = append(importPaths, ip)
+	}
+	sort.Strings(importPaths)
+	for _, ip := range importPaths {
+		if isStdlibImport(ip) {
+			continue
 		}
-		sort.Strings(importPaths)
-		for _, ip := range importPaths {
-			if isStdlibImport(ip) {
-				continue
-			}
-			ok := false
-			for _, prefix := range allowed {
-				if strings.HasPrefix(ip, prefix) {
-					ok = true
-					break
-				}
-			}
-			if !ok {
-				t.Errorf("arch: %s imports %q — disallowed dependency (not on the sanctioned allowlist; an aiarch operator must add it before it may be used)",
-					pkg.PkgPath, ip)
-			}
+		if !isAllowedImport(ip, allowed) {
+			t.Errorf("arch: %s imports %q — disallowed dependency (not on the sanctioned allowlist; an aiarch operator must add it before it may be used)",
+				pkg.PkgPath, ip)
 		}
 	}
+}
+
+func isAllowedImport(ip string, allowed []string) bool {
+	for _, prefix := range allowed {
+		if strings.HasPrefix(ip, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 // temporalExempt reports whether pkgPath is on the Temporal-isolation allowlist,

@@ -212,19 +212,9 @@ func (s *GitStore) CommitSubtree(
 		tip, exists = s.remoteTip(repo)
 	}
 
-	// CAS pre-check against the observed tip. The push below is the AUTHORITATIVE
-	// gate (it races other writers); this pre-check fails fast on an obviously
-	// stale base without a wasted push.
-	if expectedBase == "" {
-		if exists {
-			return GitCommitResult{}, fwra.Wrap(fwra.Conflict, ErrRefCASLost,
-				"github.CommitSubtree: open-aggregate write but branch already exists")
-		}
-	} else {
-		if !exists || tip.String() != expectedBase {
-			return GitCommitResult{}, fwra.Wrap(fwra.Conflict, ErrRefCASLost,
-				"github.CommitSubtree: stale base (branch advanced since read)")
-		}
+	// CAS pre-check: fails fast on obviously stale base without a wasted push.
+	if err := checkCASPrecondition(expectedBase, exists, tip); err != nil {
+		return GitCommitResult{}, err
 	}
 
 	// Build the worktree for the commit. On a fresh repo we init in memory; on an
@@ -244,21 +234,40 @@ func (s *GitStore) CommitSubtree(
 		return GitCommitResult{}, err
 	}
 
-	// Plain (non-force) push. A non-fast-forward rejection means a concurrent
-	// writer advanced the branch between our clone and this push — the CAS loss.
-	pushErr := repo.PushContext(ctx, &gogit.PushOptions{
+	// Plain (non-force) push. Non-fast-forward rejection = CAS loss.
+	if err := handleSubtreePushError(repo.PushContext(ctx, &gogit.PushOptions{
 		Auth:     auth.authMethod(),
 		RefSpecs: []config.RefSpec{config.RefSpec(fmt.Sprintf("%s:%s", branchRef, branchRef))},
-	})
-	if pushErr != nil && !errors.Is(pushErr, gogit.NoErrAlreadyUpToDate) {
-		if isNonFastForward(pushErr) {
-			return GitCommitResult{}, fwra.Wrap(fwra.Conflict, ErrRefCASLost,
-				"github.CommitSubtree: concurrent ref advance (non-fast-forward)")
-		}
-		return GitCommitResult{}, ClassifyGitError(pushErr, "github.CommitSubtree: push")
+	})); err != nil {
+		return GitCommitResult{}, err
 	}
-
 	return GitCommitResult{Base: commitHash.String()}, nil
+}
+
+func checkCASPrecondition(expectedBase string, exists bool, tip plumbing.Hash) error {
+	if expectedBase == "" {
+		if exists {
+			return fwra.Wrap(fwra.Conflict, ErrRefCASLost,
+				"github.CommitSubtree: open-aggregate write but branch already exists")
+		}
+		return nil
+	}
+	if !exists || tip.String() != expectedBase {
+		return fwra.Wrap(fwra.Conflict, ErrRefCASLost,
+			"github.CommitSubtree: stale base (branch advanced since read)")
+	}
+	return nil
+}
+
+func handleSubtreePushError(err error) error {
+	if err == nil || errors.Is(err, gogit.NoErrAlreadyUpToDate) {
+		return nil
+	}
+	if isNonFastForward(err) {
+		return fwra.Wrap(fwra.Conflict, ErrRefCASLost,
+			"github.CommitSubtree: concurrent ref advance (non-fast-forward)")
+	}
+	return ClassifyGitError(err, "github.CommitSubtree: push")
 }
 
 // clone fetches the full repo into in-memory storage (no on-disk worktree). A
@@ -305,23 +314,7 @@ func (s *GitStore) worktreeFor(
 	auth GitAuth,
 ) (*gogit.Worktree, *gogit.Repository, error) {
 	if repo == nil {
-		// Empty remote: init a fresh in-memory repo wired to the remote so the
-		// first commit can be pushed to create the branch.
-		fresh, err := gogit.Init(memory.NewStorage(), memfs.New())
-		if err != nil {
-			return nil, nil, fwra.Wrap(fwra.Infrastructure, err, "github.GitStore: init fresh repo")
-		}
-		if _, err := fresh.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{s.repoURL}}); err != nil {
-			return nil, nil, fwra.Wrap(fwra.Infrastructure, err, "github.GitStore: wire remote")
-		}
-		wt, err := fresh.Worktree()
-		if err != nil {
-			return nil, nil, fwra.Wrap(fwra.Infrastructure, err, "github.GitStore: fresh worktree")
-		}
-		if err := wt.Checkout(&gogit.CheckoutOptions{Branch: branchRef, Create: true}); err != nil {
-			return nil, nil, fwra.Wrap(fwra.Infrastructure, err, "github.GitStore: checkout fresh branch")
-		}
-		return wt, fresh, nil
+		return s.initFreshRepoWorktree(branchRef)
 	}
 
 	wt, err := repo.Worktree()
@@ -351,6 +344,24 @@ func (s *GitStore) worktreeFor(
 		}
 	}
 	return wt, repo, nil
+}
+
+func (s *GitStore) initFreshRepoWorktree(branchRef plumbing.ReferenceName) (*gogit.Worktree, *gogit.Repository, error) {
+	fresh, err := gogit.Init(memory.NewStorage(), memfs.New())
+	if err != nil {
+		return nil, nil, fwra.Wrap(fwra.Infrastructure, err, "github.GitStore: init fresh repo")
+	}
+	if _, err := fresh.CreateRemote(&config.RemoteConfig{Name: "origin", URLs: []string{s.repoURL}}); err != nil {
+		return nil, nil, fwra.Wrap(fwra.Infrastructure, err, "github.GitStore: wire remote")
+	}
+	wt, err := fresh.Worktree()
+	if err != nil {
+		return nil, nil, fwra.Wrap(fwra.Infrastructure, err, "github.GitStore: fresh worktree")
+	}
+	if err := wt.Checkout(&gogit.CheckoutOptions{Branch: branchRef, Create: true}); err != nil {
+		return nil, nil, fwra.Wrap(fwra.Infrastructure, err, "github.GitStore: checkout fresh branch")
+	}
+	return wt, fresh, nil
 }
 
 // replaceSubtree makes the worktree's pathPrefix subtree exactly equal `files`:
@@ -387,6 +398,10 @@ func replaceSubtree(wt *gogit.Worktree, pathPrefix string, files map[string][]by
 	if err != nil {
 		return fwra.Wrap(fwra.Infrastructure, err, "github.GitStore: status")
 	}
+	return stageDeletions(wt, status)
+}
+
+func stageDeletions(wt *gogit.Worktree, status gogit.Status) error {
 	for path, st := range status {
 		if st.Worktree == gogit.Deleted || st.Staging == gogit.Deleted {
 			if _, err := wt.Add(path); err != nil {
@@ -527,19 +542,23 @@ func removeDirAll(fs billy.Filesystem, dir string) error {
 		return nil
 	}
 	for _, e := range entries {
-		full := dir + "/" + e.Name()
-		if e.IsDir() {
-			if err := removeDirAll(fs, full); err != nil {
-				return err
-			}
-			_ = fs.Remove(full) // best-effort dir removal (memfs is lenient)
-			continue
-		}
-		if err := fs.Remove(full); err != nil {
+		if err := removeEntry(fs, dir, e.Name(), e.IsDir()); err != nil {
 			return err
 		}
 	}
 	return nil
+}
+
+func removeEntry(fs billy.Filesystem, dir, name string, isDir bool) error {
+	full := dir + "/" + name
+	if isDir {
+		if err := removeDirAll(fs, full); err != nil {
+			return err
+		}
+		_ = fs.Remove(full)
+		return nil
+	}
+	return fs.Remove(full)
 }
 
 // pathDir returns the directory portion of a slash path ("" when none).
