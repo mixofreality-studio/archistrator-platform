@@ -1,0 +1,800 @@
+components:
+  schemas:
+    AutoscaleAction:
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+      type: integer
+      x-enum-varnames:
+        - AutoscaleNoChange
+        - AutoscaleScaleUp
+        - AutoscaleScaleDown
+        - AutoscalePause
+        - AutoscaleResume
+      x-go-base: int
+    AutoscaleDecisionView:
+      additionalProperties: false
+      properties:
+        Action:
+          $ref: '#/components/schemas/AutoscaleAction'
+        At:
+          format: date-time
+          type: string
+          x-go-import: time
+          x-go-type: time.Time
+        Published:
+          type: boolean
+        Reason:
+          type: string
+      required:
+        - At
+        - Action
+        - Reason
+        - Published
+      type: object
+    AutoscalerMode:
+      enum:
+        - 0
+        - 1
+        - 2
+      type: integer
+      x-enum-varnames:
+        - AutoscalerModeUnknown
+        - AutoscalerModeAuto
+        - AutoscalerModeManual
+      x-go-base: int
+    AutoscalerView:
+      additionalProperties: false
+      properties:
+        Decisions:
+          items:
+            $ref: '#/components/schemas/AutoscaleDecisionView'
+          type:
+            - "null"
+            - array
+        Mode:
+          $ref: '#/components/schemas/AutoscalerMode'
+      required:
+        - Mode
+        - Decisions
+      type: object
+    CostProjectionSeam:
+      additionalProperties: false
+      properties:
+        CurrentRunRate:
+          $ref: '#/components/schemas/Money'
+        ProjectedMonthlyCost:
+          $ref: '#/components/schemas/Money'
+        ScaleWhatIfCurve:
+          $ref: '#/components/schemas/WhatIfCurve'
+      required:
+        - CurrentRunRate
+        - ProjectedMonthlyCost
+        - ScaleWhatIfCurve
+      type: object
+    DelinquencyContext:
+      additionalProperties: false
+      properties:
+        pauseNotWithdraw:
+          type: boolean
+      required:
+        - pauseNotWithdraw
+      type: object
+    DeployResult:
+      additionalProperties: false
+      properties:
+        published:
+          type: boolean
+        revision:
+          type:
+            - "null"
+            - string
+      required:
+        - published
+      type: object
+    DesiredStateChange:
+      additionalProperties: false
+      properties:
+        changeId:
+          type: string
+          x-go-name: ChangeID
+        patchKind:
+          $ref: '#/components/schemas/PatchKind'
+        reason:
+          $ref: '#/components/schemas/DesiredStateReason'
+        renderedDesiredState:
+          contentEncoding: base64
+          type: string
+          x-go-type: '[]byte'
+      required:
+        - reason
+        - patchKind
+        - changeId
+      type: object
+    DesiredStateReason:
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+      type: integer
+      x-enum-varnames:
+        - ReasonUnknown
+        - ReasonDeployAfterConstruction
+        - ReasonOperator
+        - ReasonAutoscale
+        - ReasonDelinquency
+      x-go-base: int
+    ErrorResponse:
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+        error:
+          type: string
+      required:
+        - error
+        - code
+      type: object
+    HealthSnapshotView:
+      additionalProperties: false
+      properties:
+        Detail:
+          type: string
+        Phase:
+          $ref: '#/components/schemas/RuntimeStatusSeam'
+        SloMet:
+          type: boolean
+      required:
+        - SloMet
+        - Detail
+        - Phase
+      type: object
+    Money:
+      additionalProperties: false
+      properties:
+        Currency:
+          type: string
+        MinorUnits:
+          type: integer
+      required:
+        - MinorUnits
+        - Currency
+      type: object
+    OperatedSystemView:
+      additionalProperties: false
+      properties:
+        Autoscaler:
+          $ref: '#/components/schemas/AutoscalerView'
+        CurrentRunRate:
+          $ref: '#/components/schemas/Money'
+        Health:
+          $ref: '#/components/schemas/HealthSnapshotView'
+        InFlight:
+          type: boolean
+        OperatedAppID:
+          format: uuid
+          type: string
+          x-go-import: github.com/google/uuid
+          x-go-type: uuid.UUID
+        Phase:
+          $ref: '#/components/schemas/RuntimeStatusSeam'
+        RecentEvents:
+          items:
+            $ref: '#/components/schemas/RuntimeStatusEventView'
+          type:
+            - "null"
+            - array
+        Slos:
+          items:
+            $ref: '#/components/schemas/SloRowView'
+          type:
+            - "null"
+            - array
+      required:
+        - OperatedAppID
+        - Phase
+        - InFlight
+        - Health
+        - Slos
+        - RecentEvents
+        - Autoscaler
+        - CurrentRunRate
+      type: object
+    PatchKind:
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+      type: integer
+      x-enum-varnames:
+        - PatchKindUnknown
+        - PatchFullBundle
+        - PatchScale
+        - PatchPolicy
+      x-go-base: int
+    ReconcileResult:
+      additionalProperties: false
+      properties:
+        observed:
+          type: integer
+        republished:
+          type: integer
+        transitions:
+          type: integer
+      required:
+        - observed
+        - transitions
+        - republished
+      type: object
+    ReconcileScope:
+      additionalProperties: false
+      properties:
+        appIds:
+          items:
+            format: uuid
+            type: string
+            x-go-import: github.com/google/uuid
+            x-go-type: uuid.UUID
+          type:
+            - "null"
+            - array
+          x-go-name: AppIDs
+      type: object
+    RuntimeStatusEventView:
+      additionalProperties: false
+      properties:
+        At:
+          format: date-time
+          type: string
+          x-go-import: time
+          x-go-type: time.Time
+        From:
+          $ref: '#/components/schemas/RuntimeStatusSeam'
+        Note:
+          type: string
+        To:
+          $ref: '#/components/schemas/RuntimeStatusSeam'
+      required:
+        - At
+        - From
+        - To
+        - Note
+      type: object
+    RuntimeStatusSeam:
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+      type: integer
+      x-enum-varnames:
+        - RuntimeStatusUnknown
+        - RuntimeStatusPending
+        - RuntimeStatusHealthy
+        - RuntimeStatusDegraded
+        - RuntimeStatusWithdrawn
+      x-go-base: int
+    ScalePoint:
+      additionalProperties: false
+      properties:
+        replicas:
+          type: integer
+      required:
+        - replicas
+      type: object
+    ScaleWhatIfPoints:
+      additionalProperties: false
+      properties:
+        points:
+          items:
+            $ref: '#/components/schemas/ScalePoint'
+          type:
+            - "null"
+            - array
+      type: object
+    SloRowView:
+      additionalProperties: false
+      properties:
+        Component:
+          type: string
+        Healthy:
+          type: boolean
+        Objective:
+          type: string
+        SloMet:
+          type: boolean
+      required:
+        - Component
+        - Objective
+        - SloMet
+        - Healthy
+      type: object
+    WhatIfCurve:
+      additionalProperties: false
+      properties:
+        Points:
+          items:
+            $ref: '#/components/schemas/WhatIfPoint'
+          type:
+            - "null"
+            - array
+      required:
+        - Points
+      type: object
+    WhatIfPoint:
+      additionalProperties: false
+      properties:
+        ProjectedMonthlyCost:
+          $ref: '#/components/schemas/Money'
+        Replicas:
+          type: integer
+      required:
+        - Replicas
+        - ProjectedMonthlyCost
+      type: object
+    WithdrawReason:
+      additionalProperties: false
+      properties:
+        notes:
+          type: string
+      required:
+        - notes
+      type: object
+    WithdrawResult:
+      additionalProperties: false
+      properties:
+        withdrawn:
+          type: boolean
+      required:
+        - withdrawn
+      type: object
+  securitySchemes:
+    bearerAuth:
+      scheme: bearer
+      type: http
+info:
+  title: Operations API
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /api/v1/operations/apply-delinquency-policy/{customerID}:
+    post:
+      operationId: ApplyDelinquencyPolicy
+      parameters:
+        - in: path
+          name: customerID
+          required: true
+          schema:
+            format: uuid
+            type: string
+            x-go-import: github.com/google/uuid
+            x-go-type: uuid.UUID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                delinquencyContext:
+                  $ref: '#/components/schemas/DelinquencyContext'
+              required:
+                - delinquencyContext
+              type: object
+        required: true
+      responses:
+        "204":
+          description: no content
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: contract misuse
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: failed precondition
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: internal error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: infrastructure unavailable
+      security:
+        - bearerAuth: []
+  /api/v1/operations/deploy-after-construction/{operatedAppID}:
+    post:
+      operationId: DeployAfterConstruction
+      parameters:
+        - in: path
+          name: operatedAppID
+          required: true
+          schema:
+            format: uuid
+            type: string
+            x-go-import: github.com/google/uuid
+            x-go-type: uuid.UUID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                change:
+                  $ref: '#/components/schemas/DesiredStateChange'
+              required:
+                - change
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeployResult'
+          description: success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: contract misuse
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: failed precondition
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: internal error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: infrastructure unavailable
+      security:
+        - bearerAuth: []
+  /api/v1/operations/query-cost-projection/{operatedAppID}:
+    post:
+      operationId: QueryCostProjection
+      parameters:
+        - in: path
+          name: operatedAppID
+          required: true
+          schema:
+            format: uuid
+            type: string
+            x-go-import: github.com/google/uuid
+            x-go-type: uuid.UUID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                points:
+                  $ref: '#/components/schemas/ScaleWhatIfPoints'
+                requestID:
+                  type: string
+              required:
+                - requestID
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CostProjectionSeam'
+          description: success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: contract misuse
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: failed precondition
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: internal error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: infrastructure unavailable
+      security:
+        - bearerAuth: []
+  /api/v1/operations/query-operated-system-view/{operatedAppID}:
+    get:
+      operationId: QueryOperatedSystemView
+      parameters:
+        - in: path
+          name: operatedAppID
+          required: true
+          schema:
+            format: uuid
+            type: string
+            x-go-import: github.com/google/uuid
+            x-go-type: uuid.UUID
+        - in: query
+          name: requestID
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/OperatedSystemView'
+          description: success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: contract misuse
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: failed precondition
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: internal error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: infrastructure unavailable
+      security:
+        - bearerAuth: []
+  /api/v1/operations/reconcile-operated-state:
+    post:
+      operationId: ReconcileOperatedState
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                scope:
+                  $ref: '#/components/schemas/ReconcileScope'
+                tickID:
+                  type: string
+              required:
+                - tickID
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReconcileResult'
+          description: success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: contract misuse
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: failed precondition
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: internal error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: infrastructure unavailable
+      security:
+        - bearerAuth: []
+  /api/v1/operations/withdraw-system/{operatedAppID}:
+    post:
+      operationId: WithdrawSystem
+      parameters:
+        - in: path
+          name: operatedAppID
+          required: true
+          schema:
+            format: uuid
+            type: string
+            x-go-import: github.com/google/uuid
+            x-go-type: uuid.UUID
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                changeID:
+                  type: string
+                reason:
+                  $ref: '#/components/schemas/WithdrawReason'
+              required:
+                - changeID
+                - reason
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/WithdrawResult'
+          description: success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: contract misuse
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: failed precondition
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: internal error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: infrastructure unavailable
+      security:
+        - bearerAuth: []
+security:
+  - bearerAuth: []

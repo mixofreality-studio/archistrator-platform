@@ -1,0 +1,41 @@
+version: "2"
+
+run:
+  go: "1.25"
+
+linters:
+  enable:
+    - gocyclo
+    - gocognit
+    - nestif
+    - funlen
+    - maintidx
+    - interfacebloat
+  settings:
+    gocyclo:
+      min-complexity: 10      # book: "strive for cyclomatic complexity as low as 10 to 12"
+    gocognit:
+      min-complexity: 10
+    nestif:
+      min-complexity: 4
+    funlen:
+      lines: 60
+      statements: 40
+    maintidx:
+      under: 20
+    interfacebloat:
+      max: 12                 # book: 12+ ops "very likely poor design"; 20+ "must reject"
+  exclusions:
+    rules:
+      - path: "_test\\.go"
+        linters:
+          - funlen
+          - gocognit
+          - gocyclo
+      - path: "testinfra/"
+        linters:
+          - gocognit
+          - gocyclo
+          - funlen
+          - nestif
+          - maintidx

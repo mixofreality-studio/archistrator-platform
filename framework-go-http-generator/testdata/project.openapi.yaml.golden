@@ -1,0 +1,773 @@
+components:
+  schemas:
+    ActivityBuildStatus:
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+      type: integer
+      x-enum-varnames:
+        - BuildInConstruction
+        - BuildInReview
+        - BuildIntegrated
+        - BuildFailed
+      x-go-base: int
+    ActivityConstructionPhase:
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+      type: integer
+      x-enum-varnames:
+        - ActivityConstructionNotStarted
+        - ActivityConstructionRunning
+        - ActivityConstructionDone
+        - ActivityConstructionFailed
+      x-go-base: int
+    ActivityConstructionStatus:
+      additionalProperties: false
+      properties:
+        ActivityID:
+          type: string
+        BuildStatus:
+          $ref: '#/components/schemas/ActivityBuildStatus'
+        CurrentPhase:
+          $ref: '#/components/schemas/ActivityMethodPhase'
+        FailureDetail:
+          type: string
+        FailureReason:
+          $ref: '#/components/schemas/FailureReason'
+        Kind:
+          $ref: '#/components/schemas/ActivityType'
+        Phase:
+          $ref: '#/components/schemas/ActivityConstructionPhase'
+        Phases:
+          items:
+            $ref: '#/components/schemas/PhaseCompletion'
+          type:
+            - "null"
+            - array
+        Produced:
+          items:
+            $ref: '#/components/schemas/ProducedArtifact'
+          type:
+            - "null"
+            - array
+        Type:
+          $ref: '#/components/schemas/ActivityType'
+        Variant:
+          $ref: '#/components/schemas/TestingVariant'
+        completedAt:
+          format: date-time
+          type:
+            - "null"
+            - string
+          x-go-import: time
+          x-go-type: time.Time
+        startedAt:
+          format: date-time
+          type:
+            - "null"
+            - string
+          x-go-import: time
+          x-go-type: time.Time
+      required:
+        - ActivityID
+        - Type
+        - Kind
+        - Variant
+        - Phase
+        - Phases
+        - CurrentPhase
+        - BuildStatus
+        - Produced
+        - FailureReason
+        - FailureDetail
+      type: object
+    ActivityGitStatus:
+      additionalProperties: false
+      properties:
+        ActivityID:
+          type: string
+        ArchApproved:
+          type: boolean
+        BranchName:
+          type: string
+        BranchRef:
+          type: string
+        CICheck:
+          $ref: '#/components/schemas/CICheckState'
+        CRLabel:
+          type: string
+        IsRevert:
+          type: boolean
+        Merged:
+          type: boolean
+        PullRequestRef:
+          type: string
+        UpdatedAt:
+          format: date-time
+          type: string
+          x-go-import: time
+          x-go-type: time.Time
+      required:
+        - ActivityID
+        - BranchName
+        - BranchRef
+        - PullRequestRef
+        - CICheck
+        - ArchApproved
+        - Merged
+        - CRLabel
+        - IsRevert
+        - UpdatedAt
+      type: object
+    ActivityMethodPhase:
+      type: string
+    ActivityType:
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+      type: integer
+      x-enum-varnames:
+        - ActivityTypeService
+        - ActivityTypeFrontend
+        - ActivityTypeTesting
+        - ActivityTypeDeployment
+        - ActivityTypeDocumentation
+      x-go-base: int
+    ArtifactSlotModel:
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+        model:
+          type:
+            - "null"
+          x-go-import: encoding/json
+          x-go-type: json.RawMessage
+      required:
+        - kind
+      type: object
+    ArtifactSlotView:
+      additionalProperties: false
+      properties:
+        kind:
+          type: string
+        model:
+          $ref: '#/components/schemas/ArtifactSlotModel'
+        notes:
+          type:
+            - "null"
+            - string
+        stage:
+          $ref: '#/components/schemas/ArtifactStage'
+      required:
+        - kind
+        - stage
+        - model
+      type: object
+    ArtifactStage:
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+      type: integer
+      x-enum-varnames:
+        - StageEmpty
+        - StageAwaitingReview
+        - StageCommitted
+        - StageRejected
+        - StageWithdrawn
+      x-go-base: int
+    CICheckState:
+      enum:
+        - 0
+        - 1
+        - 2
+      type: integer
+      x-enum-varnames:
+        - CICheckPending
+        - CICheckSuccess
+        - CICheckFailure
+      x-go-base: int
+    ConstructionProgress:
+      additionalProperties: false
+      properties:
+        HandOffModel:
+          type: string
+        SupervisionCap:
+          type: integer
+        TotalWeeks:
+          type: integer
+        Week:
+          type: integer
+      required:
+        - Week
+        - TotalWeeks
+        - HandOffModel
+        - SupervisionCap
+      type: object
+    ContractOp:
+      additionalProperties: false
+      properties:
+        Inputs:
+          items:
+            $ref: '#/components/schemas/ContractStruct'
+          type:
+            - "null"
+            - array
+        Note:
+          type: string
+        Outputs:
+          items:
+            $ref: '#/components/schemas/ContractStruct'
+          type:
+            - "null"
+            - array
+        Signature:
+          type: string
+        Stereotype:
+          type: string
+      required:
+        - Signature
+        - Stereotype
+        - Note
+        - Inputs
+        - Outputs
+      type: object
+    ContractParty:
+      additionalProperties: false
+      properties:
+        How:
+          type: string
+        Layer:
+          type: string
+        Name:
+          type: string
+      required:
+        - Name
+        - Layer
+        - How
+      type: object
+    ContractRevision:
+      additionalProperties: false
+      properties:
+        At:
+          type: string
+        By:
+          type: string
+        ByActivity:
+          type: string
+        Rev:
+          type: string
+        Summary:
+          type: string
+      required:
+        - Rev
+        - At
+        - By
+        - ByActivity
+        - Summary
+      type: object
+    ContractStruct:
+      additionalProperties: false
+      properties:
+        Fields:
+          items:
+            $ref: '#/components/schemas/GoField'
+          type:
+            - "null"
+            - array
+        Name:
+          type: string
+      required:
+        - Name
+        - Fields
+      type: object
+    ErrorResponse:
+      additionalProperties: false
+      properties:
+        code:
+          type: string
+        error:
+          type: string
+      required:
+        - error
+        - code
+      type: object
+    FailureReason:
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+        - 5
+      type: integer
+      x-enum-varnames:
+        - FailureReasonUnknown
+        - PipelineFailed
+        - PipelineCancelled
+        - PipelineTimedOut
+        - VarianceExhausted
+        - EscalationTimedOut
+      x-go-base: int
+    GoField:
+      additionalProperties: false
+      properties:
+        Name:
+          type: string
+        Note:
+          type: string
+        Type:
+          type: string
+      required:
+        - Name
+        - Type
+        - Note
+      type: object
+    OwnerScope:
+      type: string
+    Phase:
+      enum:
+        - 0
+        - 1
+        - 2
+      type: integer
+      x-enum-varnames:
+        - PhaseSystemDesign
+        - PhaseProjectDesign
+        - PhaseConstruction
+      x-go-base: int
+    PhaseCompletion:
+      additionalProperties: false
+      properties:
+        ArtifactRef:
+          type: string
+        Completed:
+          type: boolean
+        Phase:
+          $ref: '#/components/schemas/ActivityMethodPhase'
+        Weight:
+          type: integer
+        completedAt:
+          format: date-time
+          type:
+            - "null"
+            - string
+          x-go-import: time
+          x-go-type: time.Time
+      required:
+        - Phase
+        - Weight
+        - Completed
+        - ArtifactRef
+      type: object
+    ProducedArtifact:
+      additionalProperties: false
+      properties:
+        Kind:
+          type: string
+        Note:
+          type: string
+        Produced:
+          type: boolean
+        Source:
+          type: string
+        Title:
+          type: string
+      required:
+        - Kind
+        - Title
+        - Source
+        - Produced
+        - Note
+      type: object
+    ProjectID:
+      type: string
+    ProjectState:
+      additionalProperties: false
+      properties:
+        ActivityConstruction:
+          additionalProperties:
+            $ref: '#/components/schemas/ActivityConstructionStatus'
+          type: object
+        GitRows:
+          additionalProperties:
+            $ref: '#/components/schemas/ActivityGitStatus'
+          type: object
+        Name:
+          type: string
+        Owner:
+          $ref: '#/components/schemas/OwnerScope'
+        Phase:
+          $ref: '#/components/schemas/Phase'
+        ProjectID:
+          $ref: '#/components/schemas/ProjectID'
+        Research:
+          $ref: '#/components/schemas/ResearchInput'
+        ServiceContracts:
+          additionalProperties:
+            $ref: '#/components/schemas/ServiceContract'
+          type: object
+        Slots:
+          items:
+            $ref: '#/components/schemas/ArtifactSlotView'
+          type:
+            - "null"
+            - array
+        Version:
+          type: integer
+        constructionProgress:
+          $ref: '#/components/schemas/ConstructionProgress'
+          type:
+            - "null"
+      required:
+        - ProjectID
+        - Name
+        - Owner
+        - Phase
+        - Version
+        - Research
+        - Slots
+        - GitRows
+        - ActivityConstruction
+        - ServiceContracts
+      type: object
+    ProjectSummary:
+      additionalProperties: false
+      properties:
+        CommittedCount:
+          type: integer
+        Name:
+          type: string
+        Owner:
+          $ref: '#/components/schemas/OwnerScope'
+        Phase:
+          $ref: '#/components/schemas/Phase'
+        ProjectID:
+          $ref: '#/components/schemas/ProjectID'
+        TotalCount:
+          type: integer
+        UpdatedAt:
+          format: date-time
+          type: string
+          x-go-import: time
+          x-go-type: time.Time
+      required:
+        - ProjectID
+        - Name
+        - Owner
+        - Phase
+        - CommittedCount
+        - TotalCount
+        - UpdatedAt
+      type: object
+    ResearchInput:
+      additionalProperties: false
+      properties:
+        Sources:
+          items:
+            $ref: '#/components/schemas/ResearchSource'
+          type:
+            - "null"
+            - array
+      required:
+        - Sources
+      type: object
+    ResearchSource:
+      additionalProperties: false
+      properties:
+        Content:
+          type: string
+        Title:
+          type: string
+      required:
+        - Title
+        - Content
+      type: object
+    ServiceContract:
+      additionalProperties: false
+      properties:
+        Component:
+          type: string
+        DataContracts:
+          items:
+            type: string
+          type:
+            - "null"
+            - array
+        ErrorModel:
+          type: string
+        Idempotency:
+          type: string
+        Inbound:
+          items:
+            $ref: '#/components/schemas/ContractParty'
+          type:
+            - "null"
+            - array
+        Layer:
+          type: string
+        Ops:
+          items:
+            $ref: '#/components/schemas/ContractOp'
+          type:
+            - "null"
+            - array
+        Outbound:
+          items:
+            $ref: '#/components/schemas/ContractParty'
+          type:
+            - "null"
+            - array
+        Revisions:
+          items:
+            $ref: '#/components/schemas/ContractRevision'
+          type:
+            - "null"
+            - array
+        Status:
+          type: string
+        Stereotype:
+          type: string
+        Volatility:
+          type: string
+      required:
+        - Component
+        - Layer
+        - Stereotype
+        - Volatility
+        - Status
+        - Inbound
+        - Outbound
+        - Ops
+        - DataContracts
+        - ErrorModel
+        - Idempotency
+        - Revisions
+      type: object
+    TestingVariant:
+      enum:
+        - 0
+        - 1
+        - 2
+        - 3
+        - 4
+      type: integer
+      x-enum-varnames:
+        - TestVariantPlan
+        - TestVariantHarness
+        - TestVariantPerf
+        - TestVariantSystemTest
+        - TestVariantQAProcess
+      x-go-base: int
+  securitySchemes:
+    bearerAuth:
+      scheme: bearer
+      type: http
+info:
+  title: Project API
+  version: 1.0.0
+openapi: 3.1.0
+paths:
+  /api/v1/project/create-project:
+    post:
+      operationId: CreateProject
+      requestBody:
+        content:
+          application/json:
+            schema:
+              properties:
+                name:
+                  type: string
+                owner:
+                  $ref: '#/components/schemas/OwnerScope'
+              required:
+                - owner
+                - name
+              type: object
+        required: true
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectID'
+          description: success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: contract misuse
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: failed precondition
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: internal error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: infrastructure unavailable
+      security:
+        - bearerAuth: []
+  /api/v1/project/get-project/{projectID}:
+    get:
+      operationId: GetProject
+      parameters:
+        - in: path
+          name: projectID
+          required: true
+          schema:
+            $ref: '#/components/schemas/ProjectID'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ProjectState'
+          description: success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: contract misuse
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: failed precondition
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: internal error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: infrastructure unavailable
+      security:
+        - bearerAuth: []
+  /api/v1/project/list-projects:
+    get:
+      operationId: ListProjects
+      parameters:
+        - in: query
+          name: owner
+          required: true
+          schema:
+            $ref: '#/components/schemas/OwnerScope'
+      responses:
+        "200":
+          content:
+            application/json:
+              schema:
+                items:
+                  $ref: '#/components/schemas/ProjectSummary'
+                type: array
+          description: success
+        "400":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: contract misuse
+        "401":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: unauthenticated
+        "403":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: forbidden
+        "404":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: not found
+        "409":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: failed precondition
+        "500":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: internal error
+        "503":
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+          description: infrastructure unavailable
+      security:
+        - bearerAuth: []
+security:
+  - bearerAuth: []
