@@ -80,7 +80,7 @@ func TestDevModeInjectsPrincipal(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("/api/v1/ping in dev mode = %d, want 200", resp.StatusCode)
 	}
@@ -101,7 +101,7 @@ func TestValidatedTokenAdmitsAPI(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("/api/v1/ping with valid token = %d, want 200", resp.StatusCode)
 	}

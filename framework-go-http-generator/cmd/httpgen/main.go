@@ -53,37 +53,52 @@ func main() {
 		fatal(err)
 	}
 	base := contract.Kebab(doc.ManagerBase())
-	if err := os.MkdirAll(*outDir, 0o755); err != nil {
+	writeOutputs(*outDir, base, res)
+
+	if *wiring {
+		emitWiring(*outDir, *wiringPkg, *securityImport)
+	}
+}
+
+// writeOutputs creates outDir and writes the generated handlers (.go) and the
+// OpenAPI document (.yaml).
+func writeOutputs(outDir, base string, res httpgen.Result) {
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
 		fatal(err)
 	}
-	goPath := filepath.Join(*outDir, base+"_handlers.gen.go")
-	yamlPath := filepath.Join(*outDir, base+".openapi.gen.yaml")
-	if err := os.WriteFile(goPath, res.HandlersGo, 0o644); err != nil {
+	// base derives from the contract document; pin it to a single path element so
+	// a malformed manager name can never escape outDir.
+	base = filepath.Base(base)
+	goPath := filepath.Join(outDir, base+"_handlers.gen.go")
+	yamlPath := filepath.Join(outDir, base+".openapi.gen.yaml")
+	if err := os.WriteFile(goPath, res.HandlersGo, 0o600); err != nil {
 		fatal(err)
 	}
-	if err := os.WriteFile(yamlPath, res.OpenAPIYAML, 0o644); err != nil {
+	if err := os.WriteFile(yamlPath, res.OpenAPIYAML, 0o600); err != nil {
 		fatal(err)
 	}
 	fmt.Printf("wrote %s\nwrote %s\n", goPath, yamlPath)
+}
 
-	if *wiring {
-		wres, werr := httpgen.GenerateWiring(httpgen.WiringOptions{
-			Package:        *wiringPkg,
-			SecurityImport: *securityImport,
-		})
-		if werr != nil {
-			fatal(werr)
-		}
-		mwPath := filepath.Join(*outDir, "middleware.gen.go")
-		srvPath := filepath.Join(*outDir, "server.gen.go")
-		if err := os.WriteFile(mwPath, wres.MiddlewareGo, 0o644); err != nil {
-			fatal(err)
-		}
-		if err := os.WriteFile(srvPath, wres.ServerGo, 0o644); err != nil {
-			fatal(err)
-		}
-		fmt.Printf("wrote %s\nwrote %s\n", mwPath, srvPath)
+// emitWiring generates and writes the component-agnostic wiring layer
+// (middleware.gen.go + server.gen.go) into outDir.
+func emitWiring(outDir, wiringPkg, securityImport string) {
+	wres, err := httpgen.GenerateWiring(httpgen.WiringOptions{
+		Package:        wiringPkg,
+		SecurityImport: securityImport,
+	})
+	if err != nil {
+		fatal(err)
 	}
+	mwPath := filepath.Join(outDir, "middleware.gen.go")
+	srvPath := filepath.Join(outDir, "server.gen.go")
+	if err := os.WriteFile(mwPath, wres.MiddlewareGo, 0o600); err != nil {
+		fatal(err)
+	}
+	if err := os.WriteFile(srvPath, wres.ServerGo, 0o600); err != nil {
+		fatal(err)
+	}
+	fmt.Printf("wrote %s\nwrote %s\n", mwPath, srvPath)
 }
 
 func fatal(err error) {

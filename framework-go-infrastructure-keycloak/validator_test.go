@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/golang-jwt/jwt/v5"
 	keycloak "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-keycloak"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
-	"github.com/golang-jwt/jwt/v5"
 )
 
 const (

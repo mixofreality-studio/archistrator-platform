@@ -62,43 +62,61 @@ func planOps(doc *contract.Doc) []opPlan {
 	mgrKebab := contract.Kebab(doc.ManagerBase())
 	plans := make([]opPlan, 0, len(doc.Interface.Operations))
 	for _, op := range doc.Interface.Operations {
-		var pathParams, rest []contract.Param
-		for _, param := range op.Params {
-			if isIDPathParam(doc, param) {
-				pathParams = append(pathParams, param)
-			} else {
-				rest = append(rest, param)
-			}
-		}
-
-		method := "POST"
-		if methodFor(op.Name) == "GET" && allScalar(doc, rest) {
-			method = "GET"
-		}
-
-		p := opPlan{op: op, method: method, verb: contract.Kebab(op.Name)}
-		path := "/api/v1/" + mgrKebab + "/" + contract.Kebab(op.Name)
-		for _, param := range pathParams {
-			p.pathParams = append(p.pathParams, paramPlan{param, placePath})
-			path += "/{" + param.Name + "}"
-		}
-		for _, param := range rest {
-			if method == "GET" {
-				p.queryParams = append(p.queryParams, paramPlan{param, placeQuery})
-			} else {
-				p.bodyParams = append(p.bodyParams, paramPlan{param, placeBody})
-			}
-		}
-		p.path = path
-		if len(p.pathParams) > 0 {
-			p.resourceKind = resourceKindFor(p.pathParams[0].param)
-		} else {
-			p.catalog = true
-			p.resourceKind = contract.LowerFirst(doc.ManagerBase()) + "Catalog"
-		}
-		plans = append(plans, p)
+		plans = append(plans, planOp(doc, op, mgrKebab))
 	}
 	return plans
+}
+
+// planOp resolves the HTTP binding for a single operation per the convention
+// documented on planOps.
+func planOp(doc *contract.Doc, op contract.Operation, mgrKebab string) opPlan {
+	pathParams, rest := splitParams(doc, op.Params)
+
+	method := "POST"
+	if methodFor(op.Name) == "GET" && allScalar(doc, rest) {
+		method = "GET"
+	}
+
+	p := opPlan{op: op, method: method, verb: contract.Kebab(op.Name)}
+	path := "/api/v1/" + mgrKebab + "/" + contract.Kebab(op.Name)
+	for _, param := range pathParams {
+		p.pathParams = append(p.pathParams, paramPlan{param, placePath})
+		path += "/{" + param.Name + "}"
+	}
+	assignRest(&p, rest, method)
+	p.path = path
+	if len(p.pathParams) > 0 {
+		p.resourceKind = resourceKindFor(p.pathParams[0].param)
+	} else {
+		p.catalog = true
+		p.resourceKind = contract.LowerFirst(doc.ManagerBase()) + "Catalog"
+	}
+	return p
+}
+
+// splitParams partitions an op's params into ID path params and the rest, in
+// declared order.
+func splitParams(doc *contract.Doc, params []contract.Param) (pathParams, rest []contract.Param) {
+	for _, param := range params {
+		if isIDPathParam(doc, param) {
+			pathParams = append(pathParams, param)
+		} else {
+			rest = append(rest, param)
+		}
+	}
+	return pathParams, rest
+}
+
+// assignRest places each non-path param onto the wire: query for a GET, JSON body
+// otherwise.
+func assignRest(p *opPlan, rest []contract.Param, method string) {
+	for _, param := range rest {
+		if method == "GET" {
+			p.queryParams = append(p.queryParams, paramPlan{param, placeQuery})
+		} else {
+			p.bodyParams = append(p.bodyParams, paramPlan{param, placeBody})
+		}
+	}
 }
 
 func methodFor(opName string) string {

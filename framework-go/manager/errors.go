@@ -17,7 +17,7 @@ const (
 	NotFound                // the addressed entity/session does not exist
 	Unauthorized            // caller failed authorization
 	FailedPrecondition      // a workflow/state gate was not satisfied
-	Infrastructure               // retryable: durable-execution infrastructure unavailable
+	Infrastructure          // retryable: durable-execution infrastructure unavailable
 )
 
 var kindNames = map[Kind]string{

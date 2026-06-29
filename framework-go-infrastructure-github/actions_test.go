@@ -34,7 +34,7 @@ func TestDispatchCreatesQueryableRun(t *testing.T) {
 	c := actionsClient(t, fake.BaseURL())
 	ctx := context.Background()
 
-	inputs := map[string]string{fwgithub.DispatchInputKeyIdempotencyToken: "abc123"}
+	inputs := map[string]string{fwgithub.DispatchInputKeyIdempotency: "abc123"}
 	if err := c.DispatchWorkflow(ctx, "acme", "proj", "construct.yml", "main", inputs, "ghs_tok"); err != nil {
 		t.Fatalf("DispatchWorkflow: %v", err)
 	}
@@ -60,7 +60,7 @@ func TestDispatchIsNotDeduped(t *testing.T) {
 	defer fake.Close()
 	c := actionsClient(t, fake.BaseURL())
 	ctx := context.Background()
-	inputs := map[string]string{fwgithub.DispatchInputKeyIdempotencyToken: "dup"}
+	inputs := map[string]string{fwgithub.DispatchInputKeyIdempotency: "dup"}
 	for i := 0; i < 2; i++ {
 		if err := c.DispatchWorkflow(ctx, "acme", "proj", "construct.yml", "main", inputs, "t"); err != nil {
 			t.Fatalf("dispatch %d: %v", i, err)
@@ -81,7 +81,7 @@ func TestGetRunAndTerminalMapping(t *testing.T) {
 	c := actionsClient(t, fake.BaseURL())
 	ctx := context.Background()
 	_ = c.DispatchWorkflow(ctx, "acme", "proj", "construct.yml", "main",
-		map[string]string{fwgithub.DispatchInputKeyIdempotencyToken: "k"}, "t")
+		map[string]string{fwgithub.DispatchInputKeyIdempotency: "k"}, "t")
 	runs, _ := c.ListRunsByName(ctx, "acme", "proj", "construct.yml", fwgithub.RunNamePrefix+"k", "t")
 	id := runs[0].ID
 	fake.SetRunTerminal(id, "failure")
@@ -110,7 +110,7 @@ func TestCancelRunIdempotent(t *testing.T) {
 	c := actionsClient(t, fake.BaseURL())
 	ctx := context.Background()
 	_ = c.DispatchWorkflow(ctx, "acme", "proj", "construct.yml", "main",
-		map[string]string{fwgithub.DispatchInputKeyIdempotencyToken: "k"}, "t")
+		map[string]string{fwgithub.DispatchInputKeyIdempotency: "k"}, "t")
 	runs, _ := c.ListRunsByName(ctx, "acme", "proj", "construct.yml", fwgithub.RunNamePrefix+"k", "t")
 	id := runs[0].ID
 
@@ -132,7 +132,7 @@ func TestDispatchErrorKindMapping(t *testing.T) {
 	defer fake.Close()
 	c := actionsClient(t, fake.BaseURL())
 	ctx := context.Background()
-	inputs := map[string]string{fwgithub.DispatchInputKeyIdempotencyToken: "k"}
+	inputs := map[string]string{fwgithub.DispatchInputKeyIdempotency: "k"}
 
 	fake.ForceNext("dispatch", 403)
 	if err := c.DispatchWorkflow(ctx, "acme", "proj", "construct.yml", "main", inputs, "t"); kindOf(err) != fwra.Auth {
@@ -152,7 +152,7 @@ func TestDispatchRace(t *testing.T) {
 	defer fake.Close()
 	c := actionsClient(t, fake.BaseURL())
 	ctx := context.Background()
-	inputs := map[string]string{fwgithub.DispatchInputKeyIdempotencyToken: "race"}
+	inputs := map[string]string{fwgithub.DispatchInputKeyIdempotency: "race"}
 
 	var wg sync.WaitGroup
 	for i := 0; i < 5; i++ {

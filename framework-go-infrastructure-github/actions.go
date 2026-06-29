@@ -28,7 +28,7 @@ package github
 // id — a total order both racers compute identically) and cancels the non-canonical
 // siblings. That makes two concurrent submits with the same key CONVERGE on one
 // handle and one effective run without any atomic dedup primitive. The token<->name
-// stamping convention is documented on DispatchInputKeyIdempotencyToken below.
+// stamping convention is documented on DispatchInputKeyIdempotency below.
 //
 // PROVIDER-OPACITY: the value types this file exposes (WorkflowRun, RunStatus,
 // RunConclusion, the dispatch/list/cancel methods) carry GitHub-Actions vocabulary
@@ -48,7 +48,7 @@ import (
 	fwra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 )
 
-// DispatchInputKeyIdempotencyToken is the workflow_dispatch input key the RA fills
+// DispatchInputKeyIdempotency is the workflow_dispatch input key the RA fills
 // with the deterministic dedup token derived from the caller-supplied
 // idempotencyKey. The aiarch construction workflow file is authored to declare this
 // input and to stamp it into its run name via
@@ -57,7 +57,7 @@ import (
 //
 // so the launched run's queryable `name` carries the token (RunNamePrefix+token).
 // This is the load-bearing idempotency anchor (see file header).
-const DispatchInputKeyIdempotencyToken = "idempotency_token"
+const DispatchInputKeyIdempotency = "idempotency_token"
 
 // RunNamePrefix prefixes the deterministic run name the dispatched workflow stamps
 // from the idempotency token. ListRunsByName matches on RunNamePrefix+token.
@@ -147,12 +147,12 @@ func (d workflowRunDTO) toWorkflowRun() WorkflowRun {
 // ---------------------------------------------------------------------------
 
 // DispatchWorkflow triggers a workflow_dispatch event for the named workflow file
-// on `ref`, passing `inputs` (which MUST include DispatchInputKeyIdempotencyToken
+// on `ref`, passing `inputs` (which MUST include DispatchInputKeyIdempotency
 // so the launched run carries the deterministic dedup name). GitHub creates the run
 // ASYNCHRONOUSLY and the dispatch response carries no reliable run id, so the caller
 // resolves the run afterward via ListRunsByName. A non-2xx maps via ClassifyStatus.
 //
-//   POST /repos/{owner}/{repo}/actions/workflows/{workflowFile}/dispatches
+//	POST /repos/{owner}/{repo}/actions/workflows/{workflowFile}/dispatches
 func (c *AppClient) DispatchWorkflow(ctx context.Context, owner, repo, workflowFile, ref string, inputs map[string]string, instToken string) error {
 	if strings.TrimSpace(workflowFile) == "" {
 		return fwra.New(fwra.ContractMisuse, "DispatchWorkflow: empty workflow file")
@@ -186,7 +186,7 @@ func (c *AppClient) DispatchWorkflow(ctx context.Context, owner, repo, workflowF
 // empty result is not an error (no run yet exists for the key). A non-2xx maps via
 // ClassifyStatus.
 //
-//   GET /repos/{owner}/{repo}/actions/workflows/{workflowFile}/runs?event=workflow_dispatch&per_page=100
+//	GET /repos/{owner}/{repo}/actions/workflows/{workflowFile}/runs?event=workflow_dispatch&per_page=100
 //
 // Scoping the list to the workflow file + the workflow_dispatch event keeps the
 // scan bounded; matching on the exact run name is the deterministic selector.
@@ -219,7 +219,7 @@ func (c *AppClient) ListRunsByName(ctx context.Context, owner, repo, workflowFil
 // GetRun fetches one workflow run by id. A missing run surfaces as fwra.NotFound
 // (via ClassifyStatus's 404 mapping). A non-2xx maps via ClassifyStatus.
 //
-//   GET /repos/{owner}/{repo}/actions/runs/{runID}
+//	GET /repos/{owner}/{repo}/actions/runs/{runID}
 func (c *AppClient) GetRun(ctx context.Context, owner, repo string, runID int64, instToken string) (WorkflowRun, error) {
 	u := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%d", c.baseURL, owner, repo, runID)
 	status, respBody, err := c.do(ctx, http.MethodGet, u, nil, "", instToken)
@@ -243,7 +243,7 @@ func (c *AppClient) GetRun(ctx context.Context, owner, repo string, runID int64,
 // cancel verb is idempotent-on-intent). A 404 (run already gone) likewise maps to
 // SUCCESS. Other non-2xx map via ClassifyStatus.
 //
-//   POST /repos/{owner}/{repo}/actions/runs/{runID}/cancel
+//	POST /repos/{owner}/{repo}/actions/runs/{runID}/cancel
 func (c *AppClient) CancelRun(ctx context.Context, owner, repo string, runID int64, instToken string) error {
 	u := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%d/cancel", c.baseURL, owner, repo, runID)
 	status, _, err := c.do(ctx, http.MethodPost, u, []byte("{}"), "", instToken)

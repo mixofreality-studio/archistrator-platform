@@ -12,13 +12,13 @@ const (
 	// §3.6 Interaction don'ts (directives → SeverityError)
 	ruleAppcDontClientMultiMgr RuleID = "APPC-INT-CLIENT-MULTI-MGR" // SYS-6a
 	ruleAppcDontMgrMultiQueue  RuleID = "APPC-INT-MGR-MULTI-QUEUE"  // SYS-6b
-	ruleAppcDontEngineQueue    RuleID = "APPC-INT-ENGINE-NO-QUEUE"   // SYS-6c
-	ruleAppcDontRAQueue        RuleID = "APPC-INT-RA-NO-QUEUE"       // SYS-6d
-	ruleAppcDontClientPub      RuleID = "APPC-INT-CLIENT-NO-PUB"     // SYS-6e
-	ruleAppcDontEnginePub      RuleID = "APPC-INT-ENGINE-NO-PUB"     // SYS-6f
-	ruleAppcDontRAPub          RuleID = "APPC-INT-RA-NO-PUB"         // SYS-6g
-	ruleAppcDontResourcePub    RuleID = "APPC-INT-RESOURCE-NO-PUB"   // SYS-6h
-	ruleAppcDontNonMgrSub      RuleID = "APPC-INT-NONMGR-NO-SUB"     // SYS-6i
+	ruleAppcDontEngineQueue    RuleID = "APPC-INT-ENGINE-NO-QUEUE"  // SYS-6c
+	ruleAppcDontRAQueue        RuleID = "APPC-INT-RA-NO-QUEUE"      // SYS-6d
+	ruleAppcDontClientPub      RuleID = "APPC-INT-CLIENT-NO-PUB"    // SYS-6e
+	ruleAppcDontEnginePub      RuleID = "APPC-INT-ENGINE-NO-PUB"    // SYS-6f
+	ruleAppcDontRAPub          RuleID = "APPC-INT-RA-NO-PUB"        // SYS-6g
+	ruleAppcDontResourcePub    RuleID = "APPC-INT-RESOURCE-NO-PUB"  // SYS-6h
+	ruleAppcDontNonMgrSub      RuleID = "APPC-INT-NONMGR-NO-SUB"    // SYS-6i
 
 	// §3.4 Closed architecture (guidelines → SeverityWarning)
 	ruleAppcArchOpen     RuleID = "APPC-ARCH-OPEN"      // SYS-4a
@@ -46,22 +46,17 @@ const (
 func appCInteractionDonts(s System) []Finding {
 	idx := componentIndex(s)
 	var out []Finding
+	out = append(out, clientMultiMgrDonts(s, idx)...)
+	out = append(out, relationshipDonts(s, idx)...)
+	return out
+}
 
-	// Track client→manager calls per dynamic-view to detect multi-manager violations (SYS-6a).
+// clientMultiMgrDonts detects SYS-6a — a Client calling more than one Manager
+// within a single dynamic-view (use case).
+func clientMultiMgrDonts(s System, idx map[string]Component) []Finding {
+	var out []Finding
 	for i, dv := range s.DynamicViews {
-		mgrsCalled := make(map[string]bool)
-		var clientID string
-		for _, e := range dv.Edges {
-			from, fromOK := idx[e.From]
-			to, toOK := idx[e.To]
-			if !fromOK || !toOK {
-				continue
-			}
-			if from.Kind == kindClient && to.Kind == kindManager {
-				clientID = e.From
-				mgrsCalled[e.To] = true
-			}
-		}
+		clientID, mgrsCalled := clientManagerCalls(dv, idx)
 		if clientID != "" && len(mgrsCalled) > 1 {
 			section := fmt.Sprintf("dynamic view %d (%s)", i+1, dv.Key)
 			out = append(out, Finding{
@@ -72,8 +67,31 @@ func appCInteractionDonts(s System) []Finding {
 			})
 		}
 	}
+	return out
+}
 
-	// Relationship-level don'ts
+// clientManagerCalls returns the calling Client's ID (if any) and the set of
+// Managers it calls within one dynamic-view.
+func clientManagerCalls(dv DynamicView, idx map[string]Component) (string, map[string]bool) {
+	mgrsCalled := make(map[string]bool)
+	var clientID string
+	for _, e := range dv.Edges {
+		from, fromOK := idx[e.From]
+		to, toOK := idx[e.To]
+		if !fromOK || !toOK {
+			continue
+		}
+		if from.Kind == kindClient && to.Kind == kindManager {
+			clientID = e.From
+			mgrsCalled[e.To] = true
+		}
+	}
+	return clientID, mgrsCalled
+}
+
+// relationshipDonts checks the relationship-level §3.6 don'ts (SYS-6c..6i).
+func relationshipDonts(s System, idx map[string]Component) []Finding {
+	var out []Finding
 	for i, rel := range s.Relationships {
 		from, fromOK := idx[rel.From]
 		to, toOK := idx[rel.To]
@@ -81,69 +99,75 @@ func appCInteractionDonts(s System) []Finding {
 			continue
 		}
 		section := fmt.Sprintf("Relationship %s→%s", from.Name, to.Name)
-		l := loc(i+1, section)
+		out = append(out, relationshipDontFindings(from, to, rel, section, loc(i+1, section))...)
+	}
+	return out
+}
 
-		// SYS-6c: Engines do not receive queued calls
-		if to.Kind == kindEngine && rel.Mode == modeQueued {
+// relDontRule is one table-driven §3.6 relationship don't: a predicate plus the
+// rule ID and message text (the message is prefixed with the relationship locus).
+type relDontRule struct {
+	ruleID RuleID
+	text   string
+	match  func(from, to Component, rel Relationship) bool
+}
+
+// relDontRules enumerates SYS-6c..6i in their original evaluation order.
+var relDontRules = []relDontRule{
+	{ // SYS-6c: Engines do not receive queued calls
+		ruleAppcDontEngineQueue, "an Engine must not receive a queued call (App-C §3.6c)",
+		func(from, to Component, rel Relationship) bool {
+			return to.Kind == kindEngine && rel.Mode == modeQueued
+		},
+	},
+	{ // SYS-6d: ResourceAccess do not receive queued calls
+		ruleAppcDontRAQueue, "a ResourceAccess must not receive a queued call (App-C §3.6d)",
+		func(from, to Component, rel Relationship) bool {
+			return to.Kind == kindResourceAccess && rel.Mode == modeQueued
+		},
+	},
+	{ // SYS-6e: Clients do not publish events
+		ruleAppcDontClientPub, "a Client must not publish events (App-C §3.6e)",
+		func(from, to Component, rel Relationship) bool {
+			return from.Kind == kindClient && rel.Mode == modeEventPubSub
+		},
+	},
+	{ // SYS-6f: Engines do not publish events
+		ruleAppcDontEnginePub, "an Engine must not publish events (App-C §3.6f)",
+		func(from, to Component, rel Relationship) bool {
+			return from.Kind == kindEngine && rel.Mode == modeEventPubSub
+		},
+	},
+	{ // SYS-6g: ResourceAccess do not publish events
+		ruleAppcDontRAPub, "a ResourceAccess must not publish events (App-C §3.6g)",
+		func(from, to Component, rel Relationship) bool {
+			return from.Kind == kindResourceAccess && rel.Mode == modeEventPubSub
+		},
+	},
+	{ // SYS-6h: Resources do not publish events
+		ruleAppcDontResourcePub, "a Resource must not publish events (App-C §3.6h)",
+		func(from, to Component, rel Relationship) bool {
+			return from.Kind == kindResource && rel.Mode == modeEventPubSub
+		},
+	},
+	{ // SYS-6i: Engines, ResourceAccess, Resources do not subscribe to events
+		ruleAppcDontNonMgrSub, "Engines, ResourceAccess, and Resources must not subscribe to events (App-C §3.6i)",
+		func(from, to Component, rel Relationship) bool {
+			subscriberKinds := map[string]bool{kindEngine: true, kindResourceAccess: true, kindResource: true}
+			return rel.Mode == modeEventPubSub && subscriberKinds[to.Kind]
+		},
+	},
+}
+
+// relationshipDontFindings evaluates every §3.6 relationship rule against one edge.
+func relationshipDontFindings(from, to Component, rel Relationship, section string, l *Location) []Finding {
+	var out []Finding
+	for _, r := range relDontRules {
+		if r.match(from, to, rel) {
 			out = append(out, Finding{
-				RuleID:   ruleAppcDontEngineQueue,
+				RuleID:   r.ruleID,
 				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: an Engine must not receive a queued call (App-C §3.6c)", section),
-				Location: l,
-			})
-		}
-		// SYS-6d: ResourceAccess do not receive queued calls
-		if to.Kind == kindResourceAccess && rel.Mode == modeQueued {
-			out = append(out, Finding{
-				RuleID:   ruleAppcDontRAQueue,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: a ResourceAccess must not receive a queued call (App-C §3.6d)", section),
-				Location: l,
-			})
-		}
-		// SYS-6e: Clients do not publish events
-		if from.Kind == kindClient && rel.Mode == modeEventPubSub {
-			out = append(out, Finding{
-				RuleID:   ruleAppcDontClientPub,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: a Client must not publish events (App-C §3.6e)", section),
-				Location: l,
-			})
-		}
-		// SYS-6f: Engines do not publish events
-		if from.Kind == kindEngine && rel.Mode == modeEventPubSub {
-			out = append(out, Finding{
-				RuleID:   ruleAppcDontEnginePub,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: an Engine must not publish events (App-C §3.6f)", section),
-				Location: l,
-			})
-		}
-		// SYS-6g: ResourceAccess do not publish events
-		if from.Kind == kindResourceAccess && rel.Mode == modeEventPubSub {
-			out = append(out, Finding{
-				RuleID:   ruleAppcDontRAPub,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: a ResourceAccess must not publish events (App-C §3.6g)", section),
-				Location: l,
-			})
-		}
-		// SYS-6h: Resources do not publish events
-		if from.Kind == kindResource && rel.Mode == modeEventPubSub {
-			out = append(out, Finding{
-				RuleID:   ruleAppcDontResourcePub,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: a Resource must not publish events (App-C §3.6h)", section),
-				Location: l,
-			})
-		}
-		// SYS-6i: Engines, ResourceAccess, Resources do not subscribe to events
-		subscriberKinds := map[string]bool{kindEngine: true, kindResourceAccess: true, kindResource: true}
-		if rel.Mode == modeEventPubSub && subscriberKinds[to.Kind] {
-			out = append(out, Finding{
-				RuleID:   ruleAppcDontNonMgrSub,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: Engines, ResourceAccess, and Resources must not subscribe to events (App-C §3.6i)", section),
+				Message:  fmt.Sprintf("%s: %s", section, r.text),
 				Location: l,
 			})
 		}
@@ -163,31 +187,38 @@ func appCClosedArch(s System) []Finding {
 		if !fromOK || !toOK {
 			continue
 		}
-		if from.Kind == kindUtility || to.Kind == kindUtility {
-			continue // utility edges are rank-exempt
-		}
-		fromRank := layerRank(from.Layer)
-		toRank := layerRank(to.Layer)
-		// Semi-open: same-rank non-Manager peers (sideways)
-		if fromRank == toRank && fromRank >= 0 && from.Kind != kindManager && to.Kind != kindManager {
-			section := fmt.Sprintf("Relationship %s→%s", from.Name, to.Name)
-			out = append(out, Finding{
-				RuleID:   ruleAppcArchSemiOpen,
-				Severity: SeverityWarning,
-				Message:  fmt.Sprintf("%s: sideways call between same-rank non-Manager peers indicates semi-open architecture (App-C §3.4b); prefer closed", section),
-				Location: loc(i+1, section),
-			})
-		}
-		// Open: skip-layer (already an Error via SYS-NOSKIP, but also surface as arch signal)
-		if toRank > fromRank && (toRank-fromRank) > 1 {
-			section := fmt.Sprintf("Relationship %s→%s", from.Name, to.Name)
-			out = append(out, Finding{
-				RuleID:   ruleAppcArchOpen,
-				Severity: SeverityWarning,
-				Message:  fmt.Sprintf("%s: layer-skipping call indicates open architecture (App-C §3.4a); prefer closed", section),
-				Location: loc(i+1, section),
-			})
-		}
+		out = append(out, closedArchFindings(from, to, i)...)
+	}
+	return out
+}
+
+// closedArchFindings evaluates the §3.4a/3.4b open-architecture signals for one
+// edge (i is the relationship ordinal, used for the finding location).
+func closedArchFindings(from, to Component, i int) []Finding {
+	if from.Kind == kindUtility || to.Kind == kindUtility {
+		return nil // utility edges are rank-exempt
+	}
+	fromRank := layerRank(from.Layer)
+	toRank := layerRank(to.Layer)
+	section := fmt.Sprintf("Relationship %s→%s", from.Name, to.Name)
+	var out []Finding
+	// Semi-open: same-rank non-Manager peers (sideways)
+	if fromRank == toRank && fromRank >= 0 && from.Kind != kindManager && to.Kind != kindManager {
+		out = append(out, Finding{
+			RuleID:   ruleAppcArchSemiOpen,
+			Severity: SeverityWarning,
+			Message:  fmt.Sprintf("%s: sideways call between same-rank non-Manager peers indicates semi-open architecture (App-C §3.4b); prefer closed", section),
+			Location: loc(i+1, section),
+		})
+	}
+	// Open: skip-layer (already an Error via SYS-NOSKIP, but also surface as arch signal)
+	if toRank > fromRank && (toRank-fromRank) > 1 {
+		out = append(out, Finding{
+			RuleID:   ruleAppcArchOpen,
+			Severity: SeverityWarning,
+			Message:  fmt.Sprintf("%s: layer-skipping call indicates open architecture (App-C §3.4a); prefer closed", section),
+			Location: loc(i+1, section),
+		})
 	}
 	return out
 }
@@ -258,20 +289,7 @@ func appCServiceContract(s System) []Finding {
 // is matched by a waived+justified StandardCheck entry to SeverityInfo.
 // Directive findings (SeverityError with a directive rule ID) are never downgraded.
 func applyWaivers(findings []Finding, sc StandardCheck) []Finding {
-	// Build waiver set: any CheckItem with status==checkWaived and non-empty justification.
-	waivedRules := make(map[RuleID]bool)
-	for _, item := range sc.Items {
-		if item.Status == checkWaived && len(item.Justification) > 0 {
-			for _, cov := range DefaultCoverage() {
-				if cov.Kind == AppCDirective {
-					continue // directives never waived
-				}
-				if cov.RuleID != "" && (item.Section == string(cov.AppcRef) || item.Section == string(cov.RuleID) || item.Guideline == string(cov.RuleID)) {
-					waivedRules[cov.RuleID] = true
-				}
-			}
-		}
-	}
+	waivedRules := waivedRuleSet(sc)
 	if len(waivedRules) == 0 {
 		return findings
 	}
@@ -283,4 +301,38 @@ func applyWaivers(findings []Finding, sc StandardCheck) []Finding {
 		}
 	}
 	return out
+}
+
+// waivedRuleSet builds the set of guideline rule IDs covered by a waived+justified
+// StandardCheck entry. Directives are never included.
+func waivedRuleSet(sc StandardCheck) map[RuleID]bool {
+	waivedRules := make(map[RuleID]bool)
+	for _, item := range sc.Items {
+		// Only CheckItems with status==checkWaived and a non-empty justification waive.
+		if item.Status != checkWaived || len(item.Justification) == 0 {
+			continue
+		}
+		addWaivedRules(item, waivedRules)
+	}
+	return waivedRules
+}
+
+// addWaivedRules adds every guideline rule the waived item covers into waivedRules.
+func addWaivedRules(item CheckItem, waivedRules map[RuleID]bool) {
+	for _, cov := range DefaultCoverage() {
+		if cov.Kind == AppCDirective {
+			continue // directives never waived
+		}
+		if cov.RuleID != "" && waiverMatchesCoverage(item, cov) {
+			waivedRules[cov.RuleID] = true
+		}
+	}
+}
+
+// waiverMatchesCoverage reports whether a StandardCheck item references the given
+// coverage entry by its App-C ref or rule ID.
+func waiverMatchesCoverage(item CheckItem, cov AppCItem) bool {
+	return item.Section == string(cov.AppcRef) ||
+		item.Section == string(cov.RuleID) ||
+		item.Guideline == string(cov.RuleID)
 }

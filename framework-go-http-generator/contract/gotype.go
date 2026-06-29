@@ -28,6 +28,12 @@ func goTypeInner(n *SchemaNode, managerAlias string) string {
 		}
 		return managerAlias + "." + name
 	}
+	return primitiveGoType(n, managerAlias)
+}
+
+// primitiveGoType maps an inline (non-$ref, non-x-go-type) schema node to its Go
+// type, recursing on array items.
+func primitiveGoType(n *SchemaNode, managerAlias string) string {
 	switch n.Type.Primary() {
 	case "string":
 		return "string"

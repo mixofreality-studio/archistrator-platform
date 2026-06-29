@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/MicahParks/keyfunc/v3"
-	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 )
 
 // Config parameterizes the Keycloak [security.Validator].

@@ -101,28 +101,35 @@ func operationObject(p opPlan) map[string]any {
 	}
 
 	if len(p.bodyParams) > 0 {
-		props := map[string]any{}
-		var required []any
-		for _, bp := range p.bodyParams {
-			props[bp.param.Name] = nodeToOAS(bp.param.Schema)
-			if !bp.param.Pointer {
-				required = append(required, bp.param.Name)
-			}
-		}
-		schema := map[string]any{"type": "object", "properties": props}
-		if len(required) > 0 {
-			schema["required"] = required
-		}
-		obj["requestBody"] = map[string]any{
-			"required": true,
-			"content": map[string]any{
-				"application/json": map[string]any{"schema": schema},
-			},
-		}
+		obj["requestBody"] = requestBodyObject(p)
 	}
 
 	obj["responses"] = responsesObject(p)
 	return obj
+}
+
+// requestBodyObject builds the OAS requestBody object for a POST op: a wrapper
+// object schema with one property per body param, required unless the param is a
+// pointer (optional).
+func requestBodyObject(p opPlan) map[string]any {
+	props := map[string]any{}
+	var required []any
+	for _, bp := range p.bodyParams {
+		props[bp.param.Name] = nodeToOAS(bp.param.Schema)
+		if !bp.param.Pointer {
+			required = append(required, bp.param.Name)
+		}
+	}
+	schema := map[string]any{"type": "object", "properties": props}
+	if len(required) > 0 {
+		schema["required"] = required
+	}
+	return map[string]any{
+		"required": true,
+		"content": map[string]any{
+			"application/json": map[string]any{"schema": schema},
+		},
+	}
 }
 
 func responsesObject(p opPlan) map[string]any {
@@ -196,16 +203,7 @@ func nodeToOAS(n *contract.SchemaNode) map[string]any {
 func rewriteRefs(v any) any {
 	switch t := v.(type) {
 	case map[string]any:
-		for k, val := range t {
-			if k == "$ref" {
-				if s, ok := val.(string); ok {
-					t[k] = strings.Replace(s, "#/$defs/", "#/components/schemas/", 1)
-					continue
-				}
-			}
-			t[k] = rewriteRefs(val)
-		}
-		return t
+		return rewriteRefMap(t)
 	case []any:
 		for i, val := range t {
 			t[i] = rewriteRefs(val)
@@ -214,4 +212,19 @@ func rewriteRefs(v any) any {
 	default:
 		return v
 	}
+}
+
+// rewriteRefMap rewrites $ref strings in an object node and recurses into the
+// rest of its values.
+func rewriteRefMap(m map[string]any) map[string]any {
+	for k, val := range m {
+		if k == "$ref" {
+			if s, ok := val.(string); ok {
+				m[k] = strings.Replace(s, "#/$defs/", "#/components/schemas/", 1)
+				continue
+			}
+		}
+		m[k] = rewriteRefs(val)
+	}
+	return m
 }

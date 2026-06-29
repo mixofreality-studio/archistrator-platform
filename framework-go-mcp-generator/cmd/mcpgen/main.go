@@ -53,11 +53,19 @@ func main() {
 		fatal(err)
 	}
 	base := contract.Kebab(doc.ManagerBase())
-	if err := os.MkdirAll(*outDir, 0o755); err != nil {
+	writeOutput(*outDir, base, res)
+}
+
+// writeOutput creates outDir and writes the generated MCP tool registration source.
+func writeOutput(outDir, base string, res mcpgen.Result) {
+	if err := os.MkdirAll(outDir, 0o750); err != nil {
 		fatal(err)
 	}
-	goPath := filepath.Join(*outDir, base+"_tools.gen.go")
-	if err := os.WriteFile(goPath, res.ToolsGo, 0o644); err != nil {
+	// base derives from the contract document; pin it to a single path element so
+	// a malformed manager name can never escape outDir.
+	base = filepath.Base(base)
+	goPath := filepath.Join(outDir, base+"_tools.gen.go")
+	if err := os.WriteFile(goPath, res.ToolsGo, 0o600); err != nil {
 		fatal(err)
 	}
 	fmt.Printf("wrote %s\n", goPath)

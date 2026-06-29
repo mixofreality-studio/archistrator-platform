@@ -11,16 +11,16 @@ package resourceaccess
 type Kind int
 
 const (
-	Unknown Kind = iota
-	Transient      // retryable: a transient infra blip
-	RateLimited    // retryable: an external resource throttled the caller
+	Unknown        Kind = iota
+	Transient           // retryable: a transient infra blip
+	RateLimited         // retryable: an external resource throttled the caller
 	Infrastructure      // retryable: the backing store/infrastructure is temporarily down
-	Auth           // terminal: credential/permission failure
-	NotFound       // terminal: the addressed resource does not exist
-	Conflict       // terminal: uniqueness or optimistic-concurrency (version) conflict
-	QuotaExhausted // terminal: a hard quota was hit
-	ContentPolicy  // terminal: content rejected by policy
-	ContractMisuse // terminal: programmer error (bad arguments)
+	Auth                // terminal: credential/permission failure
+	NotFound            // terminal: the addressed resource does not exist
+	Conflict            // terminal: uniqueness or optimistic-concurrency (version) conflict
+	QuotaExhausted      // terminal: a hard quota was hit
+	ContentPolicy       // terminal: content rejected by policy
+	ContractMisuse      // terminal: programmer error (bad arguments)
 )
 
 var kindNames = map[Kind]string{

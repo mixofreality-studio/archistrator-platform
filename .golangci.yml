@@ -4,7 +4,15 @@ run:
   go: "1.25"
 
 linters:
+  # Baseline gate (shared across archistrator-platform, server, systemtests):
+  #   default "standard" set = errcheck, govet, ineffassign, staticcheck, unused
+  #   + gochecksumtype + gosec. Standard gofmt only (see formatters below).
+  # Generated code (// Code generated ... DO NOT EDIT.) is auto-excluded by v2.
+  # The complexity gates below are platform-specific "by the book" extras.
+  default: standard
   enable:
+    - gochecksumtype
+    - gosec
     - gocyclo
     - gocognit
     - nestif
@@ -12,6 +20,9 @@ linters:
     - maintidx
     - interfacebloat
   settings:
+    gochecksumtype:
+      # Treat a missing case as an error (the whole point of a sealed sum).
+      default-signifies-exhaustive: false
     gocyclo:
       min-complexity: 10      # book: "strive for cyclomatic complexity as low as 10 to 12"
     gocognit:
@@ -27,11 +38,14 @@ linters:
       max: 12                 # book: 12+ ops "very likely poor design"; 20+ "must reject"
   exclusions:
     rules:
+      # gosec is a production-security linter; test files and the testinfra
+      # harness legitimately use fake creds, loose perms, and subprocess/git.
       - path: "_test\\.go"
         linters:
           - funlen
           - gocognit
           - gocyclo
+          - gosec
       - path: "testinfra/"
         linters:
           - gocognit
@@ -39,3 +53,8 @@ linters:
           - funlen
           - nestif
           - maintidx
+          - gosec
+
+formatters:
+  enable:
+    - gofmt
