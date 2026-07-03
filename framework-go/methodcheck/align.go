@@ -206,6 +206,7 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 		normalize = defaultNormalizer
 	}
 	byNameLayer, layersByName, pkgByName := indexPackages(pkgs, normalize)
+	compKeys := componentKeysByLayer(s, normalize)
 
 	matched := make(map[compKey]bool)
 	var out []Finding
@@ -218,7 +219,7 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 			continue
 		}
 		section := fmt.Sprintf("component %d (%s)", i+1, c.Name)
-		out = append(out, alignComponent(c, key, section, i, pkgs, byNameLayer, layersByName, pkgByName, matched, normalize)...)
+		out = append(out, alignComponent(c, key, section, i, pkgs, layersByName, pkgByName, matched, normalize, compKeys)...)
 	}
 
 	out = append(out, checkOrphanedPackages(byNameLayer, matched)...)
@@ -226,24 +227,25 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 }
 
 // alignComponent dispatches a single component to the build-status–appropriate check.
-func alignComponent(c Component, key, section string, i int, pkgs []classifiedPackage, byNameLayer map[compKey]string, layersByName map[string]map[string]bool, pkgByName map[string]string, matched map[compKey]bool, normalize func(string) string) []Finding {
+func alignComponent(c Component, key, section string, i int, pkgs []classifiedPackage, layersByName map[string]map[string]bool, pkgByName map[string]string, matched map[compKey]bool, normalize func(string) string, compKeys map[string]map[string]bool) []Finding {
 	declaredLayer := componentLayerName(c.Layer)
 	switch c.BuildStatus {
 	case buildStatusPlanned:
-		return alignPlannedComponent(key, declaredLayer, section, i, pkgs, byNameLayer, matched, normalize)
+		return alignPlannedComponent(key, declaredLayer, section, i, pkgs, matched, normalize, compKeys)
 	case buildStatusExternal:
 		return alignExternalComponent(c, key, section, i, pkgs, normalize)
 	default:
-		return alignBuiltComponent(key, declaredLayer, section, i, byNameLayer, layersByName, pkgByName, matched)
+		return alignBuiltComponent(key, declaredLayer, section, i, pkgs, layersByName, pkgByName, matched, normalize, compKeys)
 	}
 }
 
-// alignBuiltComponent is the ordinary reconciliation for a to-be-built component: an
-// exact (name, layer) package match passes; the name present only in ANOTHER layer is
-// ALIGN-LAYER-MISMATCH; absence is ALIGN-MISSING-PKG.
-func alignBuiltComponent(key, declaredLayer, section string, i int, byNameLayer map[compKey]string, layersByName map[string]map[string]bool, pkgByName map[string]string, matched map[compKey]bool) []Finding {
-	if _, ok := byNameLayer[compKey{name: key, layer: declaredLayer}]; ok {
-		matched[compKey{name: key, layer: declaredLayer}] = true
+// alignBuiltComponent is the ordinary reconciliation for a to-be-built component: it
+// PASSES when the component OWNS at least one package in its declared layer (its
+// exact-leaf package, or the subpackages beneath its mapped directory that no deeper
+// component owns: the MCPClient client/mcp/* shape with no root package). The name
+// present only in ANOTHER layer is ALIGN-LAYER-MISMATCH; absence is ALIGN-MISSING-PKG.
+func alignBuiltComponent(key, declaredLayer, section string, i int, pkgs []classifiedPackage, layersByName map[string]map[string]bool, pkgByName map[string]string, matched map[compKey]bool, normalize func(string) string, compKeys map[string]map[string]bool) []Finding {
+	if _, ok := absorbOwnedPackages(key, declaredLayer, pkgs, matched, normalize, compKeys); ok {
 		return nil
 	}
 	if layers, exists := layersByName[key]; exists && len(layers) > 0 {
@@ -269,29 +271,18 @@ func alignBuiltComponent(key, declaredLayer, section string, i int, byNameLayer 
 
 // alignPlannedComponent skips the missing-package failure (a planned component has no
 // code yet by definition) but flags the STALE case: a planned component that already
-// HAS a package. "Has a package" is matched as any package under the component's mapped
-// directory in its layer — an exact (name, layer) leaf OR any ancestor directory
-// segment normalizing to the component name — so the MCPClient shape (generated
-// subpackages under client/mcp/* with NO root package) is detected too.
-func alignPlannedComponent(key, declaredLayer, section string, i int, pkgs []classifiedPackage, byNameLayer map[compKey]string, matched map[compKey]bool, normalize func(string) string) []Finding {
-	impl, hasImpl := packageUnderComponent(pkgs, key, declaredLayer, normalize)
-	if !hasImpl {
+// OWNS a package. Ownership is DEEPEST-segment and layer-scoped (see absorbOwnedPackages),
+// so the MCPClient shape (generated subpackages under client/mcp/* with NO root package)
+// is detected, while a nested/neighboring component's packages are not misattributed here.
+func alignPlannedComponent(key, declaredLayer, section string, i int, pkgs []classifiedPackage, matched map[compKey]bool, normalize func(string) string, compKeys map[string]map[string]bool) []Finding {
+	impl, ok := absorbOwnedPackages(key, declaredLayer, pkgs, matched, normalize, compKeys)
+	if !ok {
 		return nil
-	}
-	// Account every under-directory package (and the exact leaf) so a stale-but-present
-	// package is not ALSO reported as orphaned — it does map to this (planned) component.
-	if _, ok := byNameLayer[compKey{name: key, layer: declaredLayer}]; ok {
-		matched[compKey{name: key, layer: declaredLayer}] = true
-	}
-	for _, p := range pkgs {
-		if p.layer == declaredLayer && pathHasSegmentKey(p.pkgPath, key, normalize) {
-			matched[compKey{name: normalize(p.leaf), layer: p.layer}] = true
-		}
 	}
 	return []Finding{{
 		RuleID:   ruleAlignStalePlanned,
 		Severity: SeverityError,
-		Message:  fmt.Sprintf("%s is marked buildStatus=planned but a code package (%s) already implements it; a planned component that has a package is stale — drop the planned marker so the list self-expires", section, impl),
+		Message:  fmt.Sprintf("%s is marked buildStatus=planned but a code package (%s) already implements it; a planned component that has a package is stale - drop the planned marker so the list self-expires", section, impl),
 		Location: loc(i+1, section),
 	}}
 }
@@ -321,34 +312,72 @@ func alignExternalComponent(c Component, key, section string, i int, pkgs []clas
 	}}
 }
 
-// packageUnderComponent reports whether any classified package in declaredLayer sits
-// under the component's mapped directory — either its leaf normalizes to the component
-// key (the ordinary single-package case) OR some ancestor path segment does (the
-// MCPClient shape: subpackages under client/mcp/* with no root package). Returns the
-// lexicographically first such package path for deterministic messages.
-func packageUnderComponent(pkgs []classifiedPackage, key, declaredLayer string, normalize func(string) string) (string, bool) {
-	best := ""
-	for _, p := range pkgs {
-		if p.layer != declaredLayer || !pathHasSegmentKey(p.pkgPath, key, normalize) {
+// componentKeysByLayer indexes the design's non-Resource component name-keys by their
+// declared Method layer. It is the lookup ownerKeyForPackage consults to decide whether
+// a given path segment names a real component in that layer.
+func componentKeysByLayer(s System, normalize func(string) string) map[string]map[string]bool {
+	out := make(map[string]map[string]bool)
+	for _, c := range s.Components {
+		if c.Kind == kindResource {
 			continue
 		}
-		if best == "" || p.pkgPath < best {
-			best = p.pkgPath
+		key := normalize(c.Name)
+		if key == "" {
+			continue
 		}
+		layer := componentLayerName(c.Layer)
+		if out[layer] == nil {
+			out[layer] = make(map[string]bool)
+		}
+		out[layer][key] = true
 	}
-	return best, best != ""
+	return out
 }
 
-// pathHasSegmentKey reports whether any '/'-separated segment of pkgPath normalizes to
-// key — so a component "MCPClient" (key "mcp") matches …/client/mcp/designtools on its
-// "mcp" ancestor segment, not just an exact leaf.
-func pathHasSegmentKey(pkgPath, key string, normalize func(string) string) bool {
-	for _, seg := range strings.Split(pkgPath, "/") {
-		if normalize(seg) == key {
-			return true
+// ownerKeyForPackage resolves the component key that OWNS a package: the DEEPEST
+// '/'-separated path segment (leaf first) that normalizes to a component key present in
+// the package's layer. The leaf is the deepest segment, so an exact-leaf match wins;
+// otherwise the NEAREST ancestor directory that names a component claims the package.
+// Because the deepest match wins, a nested/neighboring component keeps its own packages
+// and no ancestor swallows them. ok=false when no segment names any component in the
+// layer (a true orphan).
+func ownerKeyForPackage(p classifiedPackage, layerKeys map[string]bool, normalize func(string) string) (string, bool) {
+	if len(layerKeys) == 0 {
+		return "", false
+	}
+	segs := strings.Split(p.pkgPath, "/")
+	for j := len(segs) - 1; j >= 0; j-- {
+		if k := normalize(segs[j]); layerKeys[k] {
+			return k, true
 		}
 	}
-	return false
+	return "", false
+}
+
+// absorbOwnedPackages marks (leaf, layer) matched for every classified package in
+// declaredLayer that THIS component (key) owns by deepest-segment attribution, and
+// returns the lexicographically-first owned package path (for messages) plus whether any
+// package was owned. Marking every owned subpackage as matched keeps it from ALSO reading
+// as an orphaned ALIGN-EXTRA-PKG. Ownership by the deepest matching segment means an
+// ancestor component absorbs only the subpackages no deeper component owns, so neighboring
+// and nested components never swallow one another (layer-scoped).
+func absorbOwnedPackages(key, declaredLayer string, pkgs []classifiedPackage, matched map[compKey]bool, normalize func(string) string, compKeys map[string]map[string]bool) (string, bool) {
+	layerKeys := compKeys[declaredLayer]
+	rep := ""
+	for _, p := range pkgs {
+		if p.layer != declaredLayer {
+			continue
+		}
+		owner, ok := ownerKeyForPackage(p, layerKeys, normalize)
+		if !ok || owner != key {
+			continue
+		}
+		matched[compKey{name: normalize(p.leaf), layer: p.layer}] = true
+		if rep == "" || p.pkgPath < rep {
+			rep = p.pkgPath
+		}
+	}
+	return rep, rep != ""
 }
 
 // importsFrameworkUtility reports whether any loaded package imports a

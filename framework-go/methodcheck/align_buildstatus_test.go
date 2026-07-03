@@ -264,3 +264,81 @@ func TestDeploymentCoverage_BuiltUncoveredStillFlagged(t *testing.T) {
 		t.Fatalf("no planned components → no DEP-PLANNED-SKIPPED, got %+v", got)
 	}
 }
+
+// ---- ancestor-absorb for BUILT components (subpackage-only shape) ----
+
+// TestAlign_Built_MCPSubpackageShape: a BUILT MCPClient whose code is ONLY generated
+// subpackages under client/mcp/* (no root client/mcp package) is cleanly matched by
+// ancestor-absorb: no ALIGN-MISSING-PKG, and its subpackages are not ALIGN-EXTRA-PKG.
+func TestAlign_Built_MCPSubpackageShape(t *testing.T) {
+	mcp := comp(t, "MCPClient", kindClient) // built (absent buildStatus)
+	s := System{Components: []Component{mcp}}
+	pkgs := []classifiedPackage{
+		cpkg("ex/client/mcp/designtools", "designtools", "Client"),
+		cpkg("ex/client/mcp/statetools", "statetools", "Client"),
+	}
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	if len(got) != 0 {
+		t.Fatalf("a built subpackage-only MCPClient must absorb client/mcp/* cleanly, got %+v", got)
+	}
+}
+
+// TestAlign_Built_NeighborClients_NoSwallow: two NEIGHBORING Client components (WebClient
+// with a root package + subpackages, MCPClient with subpackages only) each absorb their
+// OWN client/<name>/* subtree. Both matched, no missing, no extra; the identically-named
+// subsystem leaves (client/web/tools and client/mcp/tools) do not cross-attribute.
+func TestAlign_Built_NeighborClients_NoSwallow(t *testing.T) {
+	web := comp(t, "WebClient", kindClient)
+	mcp := comp(t, "MCPClient", kindClient)
+	s := System{Components: []Component{web, mcp}}
+	pkgs := []classifiedPackage{
+		cpkg("ex/client/web", "web", "Client"),
+		cpkg("ex/client/web/tools", "tools", "Client"),
+		cpkg("ex/client/mcp/tools", "tools", "Client"),
+	}
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	if len(got) != 0 {
+		t.Fatalf("neighboring web/mcp clients must each absorb their own subtree cleanly, got %+v", got)
+	}
+}
+
+// TestAlign_Built_NestedComponent_DeepestOwnerWins: when one component's directory NESTS
+// inside another's (ToolsClient at client/mcp/tools inside MCPClient at client/mcp), the
+// DEEPEST matching segment owns the package. A planned MCPClient whose only nested content
+// belongs to the built ToolsClient is therefore NOT stale, and ToolsClient is matched: the
+// outer component does not swallow the inner component's package.
+func TestAlign_Built_NestedComponent_DeepestOwnerWins(t *testing.T) {
+	mcp := comp(t, "MCPClient", kindClient)
+	mcp.BuildStatus = buildStatusPlanned        // planned: owns nothing of its own
+	tools := comp(t, "ToolsClient", kindClient) // built, dir nests under client/mcp/tools
+	s := System{Components: []Component{mcp, tools}}
+	pkgs := []classifiedPackage{
+		cpkg("ex/client/mcp/tools/render", "render", "Client"),
+	}
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	if hasRuleFindings(got, ruleAlignStalePlanned) {
+		t.Fatalf("outer planned MCPClient must not be flagged stale by a nested component's package, got %+v", got)
+	}
+	if hasRuleFindings(got, ruleAlignMissingPkg) {
+		t.Fatalf("nested built ToolsClient must be matched via ancestor-absorb, got %+v", got)
+	}
+	if len(got) != 0 {
+		t.Fatalf("nested/neighbor deepest-owner resolution must be clean, got %+v", got)
+	}
+}
+
+// TestAlign_Built_OrphanSubpackage_StillExtra: a subpackage under NO design component's
+// directory is still ALIGN-EXTRA-PKG. Ancestor-absorb must claim only packages a
+// component actually owns, never blanket-suppress genuinely orphaned code.
+func TestAlign_Built_OrphanSubpackage_StillExtra(t *testing.T) {
+	mcp := comp(t, "MCPClient", kindClient)
+	s := System{Components: []Component{mcp}}
+	pkgs := []classifiedPackage{
+		cpkg("ex/client/mcp/designtools", "designtools", "Client"), // owned by MCPClient
+		cpkg("ex/client/ghost/orphaned", "orphaned", "Client"),     // under no component dir
+	}
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	if !hasRuleFindings(got, ruleAlignExtraPkg) {
+		t.Fatalf("a subpackage under no component directory must still be ALIGN-EXTRA-PKG, got %+v", got)
+	}
+}
