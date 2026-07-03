@@ -56,8 +56,8 @@ func emittedRuleIDs() map[RuleID]bool {
 
 		// ---- System-test-plan (rules_testplan.go) ----
 		ruleSTPOpExists, ruleSTPStaleContract, ruleSTPArgName, ruleSTPArgType,
-		ruleSTPExpectShape, ruleSTPWalkLegal, ruleSTPWalkMode, ruleSTPUCTrace,
-		ruleSTPCaseKind,
+		ruleSTPExpectShape, ruleSTPChainCover, ruleSTPWalkLegal, ruleSTPWalkParticipant,
+		ruleSTPWalkMode, ruleSTPUCTrace, ruleSTPCaseKind,
 	}
 	set := make(map[RuleID]bool, len(ids))
 	for _, id := range ids {

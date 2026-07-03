@@ -248,12 +248,115 @@ func TestSTP_ExpectShape_VoidOpWithAssertedResult(t *testing.T) {
 	}
 }
 
-func TestSTP_WalkLegal_UnnamedByView(t *testing.T) {
+// ---- STP-CHAIN-COVER + the entry-edge walk model ----
+
+// twoOpChainView rewires the baseline view to a two-entry-op chain: the scheduler
+// client drives closeSettlementCycle THEN runShortfallSweep on the settlement manager.
+func twoOpChainView(s *System) {
+	s.DynamicViews[0].Edges = []Relationship{
+		{From: "scheduler-client", To: "settlement-manager", Mode: modeSync, Label: "closeSettlementCycle()"},
+		{From: "scheduler-client", To: "settlement-manager", Mode: modeSync, Label: "runShortfallSweep()"},
+	}
+}
+
+func closeInputs() []TestArg {
+	return []TestArg{{Name: "customerID", Value: "c"}, {Name: "cycleID", Value: "y"}}
+}
+
+func TestSTP_ChainCover_FullChainInOrderClean(t *testing.T) {
 	c, s, u, p := stpParts(t)
-	// The view edge no longer names the operation → the step is not a legal walk.
-	s.DynamicViews[0].Edges[0].Label = "someUnrelatedThing()"
-	if !hasRuleFindings(runSTP(t, c, s, u, p), ruleSTPWalkLegal) {
-		t.Fatalf("expected STP-WALK-LEGAL when no view edge names the operation")
+	twoOpChainView(&s)
+	p.Scenarios[0].Cases[0].Steps = []TestStep{
+		{Seq: 1, Component: "settlementManager", Operation: "CloseSettlementCycle", Inputs: closeInputs()},
+		{Seq: 2, Component: "settlementManager", Operation: "RunShortfallSweep", Inputs: []TestArg{{Name: "tickID", Value: "t"}}},
+	}
+	p.Scenarios[0].Cases[1].Steps = []TestStep{
+		{Seq: 1, Component: "settlementManager", Operation: "CloseSettlementCycle", Inputs: closeInputs(), Expect: TestExpect{ErrorExpected: true}},
+	}
+	if f := runSTP(t, c, s, u, p); len(f) != 0 {
+		t.Fatalf("a happy case walking the full entry chain in order must be clean, got %+v", f)
+	}
+}
+
+func TestSTP_ChainCover_MissingEntryOp(t *testing.T) {
+	c, s, u, p := stpParts(t)
+	twoOpChainView(&s)
+	// The happy case covers only the first entry op; runShortfallSweep is never exercised.
+	p.Scenarios[0].Cases[0].Steps = []TestStep{
+		{Seq: 1, Component: "settlementManager", Operation: "CloseSettlementCycle", Inputs: closeInputs()},
+	}
+	if !hasRuleFindings(runSTP(t, c, s, u, p), ruleSTPChainCover) {
+		t.Fatalf("expected STP-CHAIN-COVER when a happy case omits an entry operation")
+	}
+}
+
+func TestSTP_ChainCover_NoHappyCaseIsError(t *testing.T) {
+	c, s, u, p := stpParts(t)
+	p.Scenarios[0].Cases = p.Scenarios[0].Cases[1:] // boundary only — no happy case
+	sev, ok := findingSeverity(runSTP(t, c, s, u, p), ruleSTPChainCover)
+	if !ok || sev != SeverityError {
+		t.Fatalf("a scenario with a view but no happy case must be a STP-CHAIN-COVER Error, got sev=%v ok=%v", sev, ok)
+	}
+}
+
+// TestSTP_ChainCover_R4WebMcpDedupe proves web+mcp entry edges naming the SAME manager
+// operation collapse to one entry op — a single close step then covers the whole chain.
+func TestSTP_ChainCover_R4WebMcpDedupe(t *testing.T) {
+	c, s, u, p := stpParts(t)
+	s.Components = []Component{
+		{ID: "web-client", Name: "WebClient", Kind: kindClient, Layer: layerClient},
+		{ID: "mcp-client", Name: "McpClient", Kind: kindClient, Layer: layerClient},
+		{ID: "settlement-manager", Name: "SettlementManager", Kind: kindManager, Layer: layerManager},
+	}
+	s.DynamicViews[0].Participants = []string{"web-client", "mcp-client", "settlement-manager"}
+	s.DynamicViews[0].Edges = []Relationship{
+		{From: "web-client", To: "settlement-manager", Mode: modeSync, Label: "closeSettlementCycle(customerId, cycleId)"},
+		{From: "mcp-client", To: "settlement-manager", Mode: modeSync, Label: "closeSettlementCycle(customerId, cycleId)"},
+	}
+	if f := runSTP(t, c, s, u, p); hasRuleFindings(f, ruleSTPChainCover) {
+		t.Fatalf("web+mcp entry edges naming the same op must dedupe to one; a single close step covers it, got %+v", f)
+	}
+}
+
+// TestSTP_WalkLegal_NonEntryContractOpNoFinding is the regression for the 24 historical
+// false positives: an interior contract op (GetSessionState) that no ENTRY edge names
+// must raise NO walk finding — it is the contract family's jurisdiction, not the walk's.
+func TestSTP_WalkLegal_NonEntryContractOpNoFinding(t *testing.T) {
+	c, s, u, p := stpParts(t)
+	sc := c["settlementManager"]
+	sc.Interface.Operations = append(sc.Interface.Operations, ContractOperation{
+		Name: "GetSessionState", Params: []ContractParam{}, Result: raw(`{"type":"object"}`),
+	})
+	c["settlementManager"] = sc
+	// Drive the entry op, then assert against the interior op in the same happy case.
+	p.Scenarios[0].Cases[0].Steps = []TestStep{
+		{Seq: 1, Component: "settlementManager", Operation: "CloseSettlementCycle", Inputs: closeInputs()},
+		{Seq: 2, Component: "settlementManager", Operation: "GetSessionState", Expect: TestExpect{Result: `{"ok":true}`}},
+	}
+	if f := runSTP(t, c, s, u, p); hasRuleFindings(f, ruleSTPWalkLegal) {
+		t.Fatalf("an interior (non-entry) contract op must NOT raise STP-WALK-LEGAL, got %+v", f)
+	}
+}
+
+// TestSTP_WalkParticipant_ForeignComponentWarns stages an off-footprint step (a
+// component that is committed + contracted but not a view participant) and expects the
+// Warning-severity drift signal.
+func TestSTP_WalkParticipant_ForeignComponentWarns(t *testing.T) {
+	c, s, u, p := stpParts(t)
+	s.Components = append(s.Components, Component{ID: "audit-engine", Name: "AuditEngine", Kind: kindEngine, Layer: layerEngine})
+	c["auditEngine"] = ServiceContract{
+		Component: "auditEngine", Layer: "Engine",
+		Interface: ContractInterface{Name: "AuditEngine", Layer: "Engine", Operations: []ContractOperation{{Name: "RecordAudit", Params: []ContractParam{}}}},
+	}
+	p.Scenarios[0].Cases[1].Steps = append(p.Scenarios[0].Cases[1].Steps, TestStep{
+		Seq: 2, Component: "auditEngine", Operation: "RecordAudit",
+	})
+	sev, ok := findingSeverity(runSTP(t, c, s, u, p), ruleSTPWalkParticipant)
+	if !ok {
+		t.Fatalf("expected STP-WALK-PARTICIPANT for a step on a non-participant component")
+	}
+	if sev != SeverityWarning {
+		t.Fatalf("STP-WALK-PARTICIPANT must be a Warning, got %v", sev)
 	}
 }
 

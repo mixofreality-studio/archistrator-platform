@@ -12,8 +12,28 @@ import (
 // cases (slot 4). A black-box system-test plan is authored at MANAGER-OPERATION
 // granularity ({component, operation} steps); these rules prove each step actually
 // resolves to a real designed operation, that its arguments and expected outcomes are
-// contract-consistent, that its walk is a legal traversal of the use case's dynamic
-// view, and that every scenario traces to a real core use case with adversarial cover.
+// contract-consistent, and that every scenario traces to a real core use case with
+// adversarial cover.
+//
+// ENTRY-EDGE MATCHING MODEL (the walk family). System tests are wire-level black-box
+// tests driven ONLY against the system's Client surfaces — the-method-testing §7
+// R1/R2: "system tests are wire-level black-box against Client surfaces; interior
+// edges are architecture tests they may not drive; call chains are validation
+// artifacts, not operation catalogs." A scenario's dynamic view therefore has an
+// ENTRY SURFACE: the edges whose From component is Kind=Client (under DV-SINGLE-MGR
+// these all target the use case's one Manager). Only those ENTRY EDGES define the
+// operations a system test may drive. The walk family reasons exclusively over entry
+// edges:
+//   - STP-CHAIN-COVER (Error): ≥1 happy case must by itself cover every distinct
+//     entry operation of the view, in view-edge order.
+//   - STP-WALK-LEGAL (Error): a step that DOES match an entry edge must respect
+//     view-edge order; a step matching NO entry edge is silent here (it is exercising
+//     an interior/contract operation — the contract family's jurisdiction, not the
+//     walk's — which is why interior contract ops no longer raise false walk faults).
+//   - STP-WALK-PARTICIPANT (Warning): a step's component should be a declared view
+//     participant; a foreign component is a drift signal, not a hard error (adversarial
+//     staging may legitimately touch outside the footprint).
+//   - STP-WALK-MODE (Error): matching restricted to QUEUED entry edges.
 //
 // The family runs ONLY when the plan is non-empty AND its prerequisites (service
 // contracts + slot 5 + slot 4) are committed; a plan authored without them is a
@@ -27,15 +47,17 @@ import (
 // the walk check matches across the two vocabularies.
 
 const (
-	ruleSTPOpExists      RuleID = "STP-OP-EXISTS"
-	ruleSTPStaleContract RuleID = "STP-STALE-CONTRACT"
-	ruleSTPArgName       RuleID = "STP-ARG-NAME"
-	ruleSTPArgType       RuleID = "STP-ARG-TYPE"
-	ruleSTPExpectShape   RuleID = "STP-EXPECT-SHAPE"
-	ruleSTPWalkLegal     RuleID = "STP-WALK-LEGAL" //nolint:gosec // G101 false positive: a rule identifier, not a credential
-	ruleSTPWalkMode      RuleID = "STP-WALK-MODE"  //nolint:gosec // G101 false positive: a rule identifier, not a credential
-	ruleSTPUCTrace       RuleID = "STP-UC-TRACE"
-	ruleSTPCaseKind      RuleID = "STP-CASE-KIND"
+	ruleSTPOpExists        RuleID = "STP-OP-EXISTS"
+	ruleSTPStaleContract   RuleID = "STP-STALE-CONTRACT"
+	ruleSTPArgName         RuleID = "STP-ARG-NAME"
+	ruleSTPArgType         RuleID = "STP-ARG-TYPE"
+	ruleSTPExpectShape     RuleID = "STP-EXPECT-SHAPE"
+	ruleSTPChainCover      RuleID = "STP-CHAIN-COVER"
+	ruleSTPWalkLegal       RuleID = "STP-WALK-LEGAL"       //nolint:gosec // G101 false positive: a rule identifier, not a credential
+	ruleSTPWalkParticipant RuleID = "STP-WALK-PARTICIPANT" //nolint:gosec // G101 false positive: a rule identifier, not a credential
+	ruleSTPWalkMode        RuleID = "STP-WALK-MODE"        //nolint:gosec // G101 false positive: a rule identifier, not a credential
+	ruleSTPUCTrace         RuleID = "STP-UC-TRACE"
+	ruleSTPCaseKind        RuleID = "STP-CASE-KIND"
 )
 
 // stpContext carries the resolved, indexed inputs one validateSystemTestPlan run
@@ -45,9 +67,20 @@ type stpContext struct {
 	normalize     func(string) string
 	contractByKey map[string]ServiceContract // normalize(component key) → contract
 	coreUCIDs     map[string]bool            // normalize(core use-case id) → true
-	dvByUC        map[string]DynamicView     // normalize(dynamic-view UseCaseID) → view
+	viewByUC      map[string]stpViewIndex    // normalize(dynamic-view UseCaseID) → precomputed view index
 	compIDByKey   map[string]string          // normalize(component id or name) → canonical id
+	kindByComp    map[string]string          // normalize(component id or name) → Kind
 	seenStale     map[string]bool            // stale-contract keys already reported (dedup)
+}
+
+// stpViewIndex is the per-dynamic-view precompute the walk family reasons over: the
+// ENTRY EDGES (edges whose From is a Client component) in view-edge order, the set of
+// declared participants, and the ordered list of distinct entry OPERATIONS named by
+// those entry edges (R4 web/mcp duplicates of the same op collapse to one).
+type stpViewIndex struct {
+	entryEdges   []Relationship  // entry edges (From is Kind=Client), in view-edge order
+	participants map[string]bool // normalize(participant id/name) → true
+	entryOps     []string        // ordered distinct normalized entry-op keys
 }
 
 // validateSystemTestPlan is the STP-* family orchestration. It returns findings for a
@@ -74,9 +107,12 @@ func validateSystemTestPlan(p Project, normalize func(string) string) ([]Finding
 	for si, scn := range stp.Scenarios {
 		out = append(out, stpUCTrace(scn, ctx, si)...)
 		out = append(out, stpCaseKind(scn, si)...)
-		dv, hasDV := ctx.dvByUC[normalize(scn.UseCase)]
+		vi, hasDV := ctx.viewByUC[normalize(scn.UseCase)]
+		if hasDV {
+			out = append(out, stpChainCover(scn, vi, ctx, si)...)
+		}
 		for _, cs := range scn.Cases {
-			out = append(out, stpValidateCase(scn, cs, dv, hasDV, ctx, si)...)
+			out = append(out, stpValidateCase(scn, cs, vi, hasDV, ctx, si)...)
 		}
 	}
 	sortFindings(out)
@@ -114,16 +150,18 @@ func buildSTPContext(p Project, sys System, cuc CoreUseCases, normalize func(str
 		normalize:     normalize,
 		contractByKey: make(map[string]ServiceContract, len(p.ServiceContracts)),
 		coreUCIDs:     make(map[string]bool),
-		dvByUC:        make(map[string]DynamicView, len(sys.DynamicViews)),
+		viewByUC:      make(map[string]stpViewIndex, len(sys.DynamicViews)),
 		compIDByKey:   make(map[string]string, len(sys.Components)*2),
+		kindByComp:    make(map[string]string, len(sys.Components)*2),
 		seenStale:     make(map[string]bool),
 	}
 	for key, c := range p.ServiceContracts {
 		ctx.contractByKey[normalize(key)] = c
 	}
 	indexCoreUseCases(&ctx, cuc)
-	indexDynamicViews(&ctx, sys)
 	indexComponents(&ctx, sys)
+	indexComponentKinds(&ctx, sys)
+	indexDynamicViews(&ctx, sys) // depends on kindByComp — must follow indexComponentKinds
 	return ctx
 }
 
@@ -136,13 +174,67 @@ func indexCoreUseCases(ctx *stpContext, cuc CoreUseCases) {
 	}
 }
 
-// indexDynamicViews maps each dynamic view by its normalized UseCaseID for the walk.
+// indexComponentKinds maps each component's normalized id AND name to its Kind, so the
+// entry-edge computation can classify an edge's From component as Client. The id wins
+// when both are present.
+func indexComponentKinds(ctx *stpContext, sys System) {
+	for _, c := range sys.Components {
+		if c.Kind == "" {
+			continue
+		}
+		if c.ID != "" {
+			ctx.kindByComp[ctx.normalize(c.ID)] = c.Kind
+		}
+		if c.Name == "" {
+			continue
+		}
+		if _, ok := ctx.kindByComp[ctx.normalize(c.Name)]; !ok {
+			ctx.kindByComp[ctx.normalize(c.Name)] = c.Kind
+		}
+	}
+}
+
+// indexDynamicViews precomputes each dynamic view's stpViewIndex, keyed by normalized
+// UseCaseID. Depends on ctx.kindByComp being populated first.
 func indexDynamicViews(ctx *stpContext, sys System) {
 	for _, dv := range sys.DynamicViews {
 		if dv.UseCaseID != "" {
-			ctx.dvByUC[ctx.normalize(dv.UseCaseID)] = dv
+			ctx.viewByUC[ctx.normalize(dv.UseCaseID)] = buildViewIndex(dv, *ctx)
 		}
 	}
+}
+
+// buildViewIndex derives the entry surface of one dynamic view: its entry edges (From
+// is Kind=Client), participant set, and ordered distinct entry-op list.
+func buildViewIndex(dv DynamicView, ctx stpContext) stpViewIndex {
+	vi := stpViewIndex{participants: make(map[string]bool, len(dv.Participants))}
+	for _, p := range dv.Participants {
+		vi.participants[ctx.normalize(p)] = true
+	}
+	seen := make(map[string]bool)
+	for _, e := range dv.Edges {
+		if ctx.kindByComp[ctx.normalize(e.From)] != kindClient {
+			continue
+		}
+		vi.entryEdges = append(vi.entryEdges, e)
+		opKey := entryOpKey(e.Label, ctx.normalize)
+		if opKey == "" || seen[opKey] {
+			continue
+		}
+		seen[opKey] = true
+		vi.entryOps = append(vi.entryOps, opKey)
+	}
+	return vi
+}
+
+// entryOpKey reduces an edge label ("closeSettlementCycle(customerId, cycleId)") to the
+// normalized operation name it carries — the label text before the argument gloss.
+func entryOpKey(label string, normalize func(string) string) string {
+	tok := label
+	if i := strings.IndexByte(tok, '('); i >= 0 {
+		tok = tok[:i]
+	}
+	return normalize(strings.TrimSpace(tok))
 }
 
 // indexComponents maps each component's normalized id AND name to its canonical id, so
@@ -223,39 +315,138 @@ func stpCaseKind(scn TestScenario, si int) []Finding {
 	return out
 }
 
+// ---- STP-CHAIN-COVER ----
+
+// stpChainCover emits STP-CHAIN-COVER (Error) per scenario with a dynamic view: at
+// least one kind=happy case must BY ITSELF contain entry-matched steps covering every
+// distinct entry operation of the view, in view-edge order. A scenario with no happy
+// case fails outright. When the view exposes no entry operations (no Client-surface
+// edges) there is nothing a black-box test can drive and the rule is a no-op.
+func stpChainCover(scn TestScenario, vi stpViewIndex, ctx stpContext, si int) []Finding {
+	section := fmt.Sprintf("scenario %s", scn.ID)
+	if len(vi.entryOps) == 0 {
+		return nil
+	}
+	happy := happyCases(scn)
+	if len(happy) == 0 {
+		return []Finding{chainCoverFinding(section, si,
+			fmt.Sprintf("scenario has no happy case; a happy case must by itself walk the full entry chain (%s)", strings.Join(vi.entryOps, " → ")))}
+	}
+	coveredAnywhere := make(map[string]bool)
+	for _, c := range happy {
+		seq := caseEntryOpSequence(c, vi, ctx)
+		for _, k := range seq {
+			coveredAnywhere[k] = true
+		}
+		if isSubsequence(vi.entryOps, seq) {
+			return nil // this happy case walks the full chain in order — scenario is covered
+		}
+	}
+	return []Finding{chainCoverFinding(section, si, chainCoverGapMessage(vi.entryOps, coveredAnywhere))}
+}
+
+// happyCases returns the scenario's kind=happy cases.
+func happyCases(scn TestScenario) []TestCase {
+	var out []TestCase
+	for _, c := range scn.Cases {
+		if strings.ToLower(c.Kind) == "happy" {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// caseEntryOpSequence returns, in step order, the entry-op key each entry-matched step
+// of the case covers (steps that match no entry edge contribute nothing).
+func caseEntryOpSequence(cs TestCase, vi stpViewIndex, ctx stpContext) []string {
+	var seq []string
+	for _, step := range cs.Steps {
+		firstMatch, _ := scanEntryEdges(step, vi.entryEdges, ctx, 0)
+		if firstMatch == -1 {
+			continue
+		}
+		if k := entryOpKey(vi.entryEdges[firstMatch].Label, ctx.normalize); k != "" {
+			seq = append(seq, k)
+		}
+	}
+	return seq
+}
+
+// chainCoverFinding builds a scenario-level STP-CHAIN-COVER Error.
+func chainCoverFinding(section string, si int, msg string) Finding {
+	return Finding{
+		RuleID:   ruleSTPChainCover,
+		Severity: SeverityError,
+		Message:  fmt.Sprintf("%s: %s", section, msg),
+		Location: loc(si+1, section),
+	}
+}
+
+// chainCoverGapMessage names the entry ops no happy case covers, or (when every op is
+// covered somewhere but no single case walks them in order) the required order.
+func chainCoverGapMessage(entryOps []string, covered map[string]bool) string {
+	var missing []string
+	for _, k := range entryOps {
+		if !covered[k] {
+			missing = append(missing, k)
+		}
+	}
+	order := strings.Join(entryOps, " → ")
+	if len(missing) > 0 {
+		return fmt.Sprintf("no happy case walks the full entry chain by itself; entry operation(s) [%s] are never exercised by a happy case (required order: %s)", strings.Join(missing, ", "), order)
+	}
+	return fmt.Sprintf("no single happy case walks the entry chain in view-edge order (required order: %s)", order)
+}
+
+// isSubsequence reports whether need appears, in order, as a subsequence of seq.
+func isSubsequence(need, seq []string) bool {
+	i := 0
+	for _, s := range seq {
+		if i < len(need) && s == need[i] {
+			i++
+		}
+	}
+	return i == len(need)
+}
+
 // ---- per-case step validation ----
 
-// stpValidateCase runs the per-step contract + walk predicates for one case, then the
-// walk mode/order predicates that need the whole step sequence.
-func stpValidateCase(scn TestScenario, cs TestCase, dv DynamicView, hasDV bool, ctx stpContext, si int) []Finding {
+// stpValidateCase runs the per-step contract predicates for one case, then the walk
+// family (entry-edge order, participant, queued-mode) over the same step sequence.
+func stpValidateCase(scn TestScenario, cs TestCase, vi stpViewIndex, hasDV bool, ctx stpContext, si int) []Finding {
 	var out []Finding
-	lastEdge := -1 // highest matched dynamic-view edge index (walk order monotonicity)
+	lastEntry := -1 // highest matched ENTRY-edge index (walk order monotonicity)
 	for _, step := range cs.Steps {
 		section := fmt.Sprintf("scenario %s case %s step %d (%s.%s)", scn.ID, cs.ID, step.Seq, step.Component, step.Operation)
 		l := loc(si+1, section)
+		out = append(out, stpContractChecks(step, ctx, section, l)...)
+		out = append(out, stpWalkLegal(step, vi, hasDV, ctx, section, l, &lastEntry)...)
+		out = append(out, stpWalkParticipant(step, vi, hasDV, ctx, section, l)...)
+		out = append(out, stpWalkMode(step, cs, vi, hasDV, ctx, section, l)...)
+	}
+	return out
+}
 
-		contract, cOK := ctx.contractByKey[ctx.normalize(step.Component)]
-		if !cOK {
-			out = append(out, opNotFoundFinding(step, section, l, "no service contract is committed for that component"))
-			out = append(out, stpWalk(step, dv, hasDV, ctx, section, l, &lastEdge)...)
-			continue
-		}
-		op, opOK := findOperation(contract, step.Operation)
-		if !opOK {
-			out = append(out, opNotFoundFinding(step, section, l, fmt.Sprintf("its contract %q declares no operation with that exact (case-sensitive) name", contract.Component)))
-		}
-		// A never-detailed-designed stub (ALL ops params:null) gets a dedicated
-		// diagnostic and SUPPRESSES the STP-ARG-* checks for that component (they would
-		// only restate the stub's incompleteness). STP-OP-EXISTS still runs above.
-		if contractAllParamsNull(contract) {
-			out = append(out, staleFinding(contract, section, l, ctx)...)
-		} else if opOK {
-			out = append(out, stpArgName(step, op, section, l)...)
-			out = append(out, stpArgType(step, op, contract, section, l)...)
-			out = append(out, stpExpectShape(step, op, contract, section, l)...)
-		}
-		out = append(out, stpWalk(step, dv, hasDV, ctx, section, l, &lastEdge)...)
-		out = append(out, stpWalkMode(step, cs, dv, hasDV, ctx, section, l)...)
+// stpContractChecks resolves a step against its committed contract: STP-OP-EXISTS when
+// the component/operation does not resolve, STP-STALE-CONTRACT for a never-detailed-
+// designed stub (which suppresses the STP-ARG-* checks), else the arg/expect predicates.
+func stpContractChecks(step TestStep, ctx stpContext, section string, l *Location) []Finding {
+	contract, cOK := ctx.contractByKey[ctx.normalize(step.Component)]
+	if !cOK {
+		return []Finding{opNotFoundFinding(step, section, l, "no service contract is committed for that component")}
+	}
+	var out []Finding
+	op, opOK := findOperation(contract, step.Operation)
+	if !opOK {
+		out = append(out, opNotFoundFinding(step, section, l, fmt.Sprintf("its contract %q declares no operation with that exact (case-sensitive) name", contract.Component)))
+	}
+	if contractAllParamsNull(contract) {
+		return append(out, staleFinding(contract, section, l, ctx)...)
+	}
+	if opOK {
+		out = append(out, stpArgName(step, op, section, l)...)
+		out = append(out, stpArgType(step, op, contract, section, l)...)
+		out = append(out, stpExpectShape(step, op, contract, section, l)...)
 	}
 	return out
 }
@@ -461,56 +652,73 @@ func stpExpectShape(step TestStep, op ContractOperation, contract ServiceContrac
 
 // ---- STP-WALK-LEGAL ----
 
-// stpWalk emits STP-WALK-LEGAL (Error) when a step is not a legal step of the
-// scenario's use-case dynamic view: no view edge whose target IS the step's component
-// AND whose label NAMES the step's operation, or such an edge exists only earlier than
-// the last matched edge (the walk must respect the view's edge ordering). When the
-// use case has no dynamic view the walk cannot be checked and the step is skipped.
-func stpWalk(step TestStep, dv DynamicView, hasDV bool, ctx stpContext, section string, l *Location, lastEdge *int) []Finding {
+// stpWalkLegal emits STP-WALK-LEGAL (Error) only when a step that DOES match an ENTRY
+// edge violates view-edge order relative to earlier entry-matched steps in the same
+// case. A step matching NO entry edge is silent here — it exercises an interior /
+// contract operation the black-box plan may legitimately assert against, which is the
+// contract family's jurisdiction, not the walk's. When the use case has no dynamic
+// view the walk cannot be checked and the step is skipped.
+func stpWalkLegal(step TestStep, vi stpViewIndex, hasDV bool, ctx stpContext, section string, l *Location, lastEntry *int) []Finding {
 	if !hasDV {
 		return nil
 	}
-	firstMatch, orderedMatch := scanWalkEdges(step, dv, ctx, *lastEdge)
+	firstMatch, orderedMatch := scanEntryEdges(step, vi.entryEdges, ctx, *lastEntry)
 	if firstMatch == -1 {
-		return []Finding{{
-			RuleID:   ruleSTPWalkLegal,
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: no edge of the use-case dynamic view targets this component with a label naming the operation; the step is not a legal walk of the call chain", section),
-			Location: l,
-		}}
+		return nil // matches no entry edge — nothing for the walk to say
 	}
 	if orderedMatch == -1 {
-		// A match exists, but only before an already-consumed edge — out of order.
+		// A match exists, but only before an already-consumed entry edge — out of order.
 		return []Finding{{
 			RuleID:   ruleSTPWalkLegal,
 			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: the matching dynamic-view edge precedes an earlier step's edge; the case does not walk the call chain in view-edge order", section),
+			Message:  fmt.Sprintf("%s: the matching entry edge precedes an earlier step's entry edge; the case does not walk the entry chain in view-edge order", section),
 			Location: l,
 		}}
 	}
-	*lastEdge = orderedMatch
+	*lastEntry = orderedMatch
 	return nil
 }
 
-// scanWalkEdges finds, among the view's edges that target the step's component and
-// name its operation, the index of the FIRST such edge and the first such edge at or
-// after lastEdge (the order-respecting match). Either is -1 when none qualifies.
-func scanWalkEdges(step TestStep, dv DynamicView, ctx stpContext, lastEdge int) (firstMatch, orderedMatch int) {
+// scanEntryEdges finds, among the view's ENTRY edges that target the step's component
+// and name its operation, the index of the FIRST such edge and the first such edge at
+// or after lastEntry (the order-respecting match). Either is -1 when none qualifies.
+func scanEntryEdges(step TestStep, entryEdges []Relationship, ctx stpContext, lastEntry int) (firstMatch, orderedMatch int) {
 	compKeyN := ctx.normalize(step.Component)
 	opN := ctx.normalize(step.Operation)
 	firstMatch, orderedMatch = -1, -1
-	for ei, e := range dv.Edges {
+	for ei, e := range entryEdges {
 		if ctx.normalize(e.To) != compKeyN || !labelNamesOp(e.Label, opN, ctx.normalize) {
 			continue
 		}
 		if firstMatch == -1 {
 			firstMatch = ei
 		}
-		if ei >= lastEdge && orderedMatch == -1 {
+		if ei >= lastEntry && orderedMatch == -1 {
 			orderedMatch = ei
 		}
 	}
 	return firstMatch, orderedMatch
+}
+
+// ---- STP-WALK-PARTICIPANT ----
+
+// stpWalkParticipant emits STP-WALK-PARTICIPANT (Warning) when a step's component is not
+// a declared participant of the scenario's dynamic view. Adversarial staging may
+// legitimately touch outside the view footprint, so a foreign component is a drift
+// SIGNAL (Warning), not a hard error.
+func stpWalkParticipant(step TestStep, vi stpViewIndex, hasDV bool, ctx stpContext, section string, l *Location) []Finding {
+	if !hasDV {
+		return nil
+	}
+	if vi.participants[ctx.normalize(step.Component)] {
+		return nil
+	}
+	return []Finding{{
+		RuleID:   ruleSTPWalkParticipant,
+		Severity: SeverityWarning,
+		Message:  fmt.Sprintf("%s: step component %q is not a declared participant of the use-case dynamic view; a step outside the view footprint is a drift signal (adversarial staging may legitimately touch outside it)", section, step.Component),
+		Location: l,
+	}}
 }
 
 // labelNamesOp reports whether a dynamic-view edge label names the operation: the
@@ -530,11 +738,11 @@ func labelNamesOp(label, opN string, normalize func(string) string) bool {
 // error inline) without any later poll/observe step in the case — mirroring ruleDVMode
 // granularity: queued work is fire-and-forget, so its outcome must be observed, not
 // asserted synchronously. All-sync plans never trip this.
-func stpWalkMode(step TestStep, cs TestCase, dv DynamicView, hasDV bool, ctx stpContext, section string, l *Location) []Finding {
+func stpWalkMode(step TestStep, cs TestCase, vi stpViewIndex, hasDV bool, ctx stpContext, section string, l *Location) []Finding {
 	if !hasDV {
 		return nil
 	}
-	if !stepMapsToQueuedEdge(step, dv, ctx) {
+	if !stepMapsToQueuedEntryEdge(step, vi.entryEdges, ctx) {
 		return nil
 	}
 	// A synchronous assertion = the step asserts a concrete result or an inline error.
@@ -553,12 +761,12 @@ func stpWalkMode(step TestStep, cs TestCase, dv DynamicView, hasDV bool, ctx stp
 	}}
 }
 
-// stepMapsToQueuedEdge reports whether some queued dynamic-view edge targets the step's
+// stepMapsToQueuedEntryEdge reports whether some queued ENTRY edge targets the step's
 // component with a label naming its operation.
-func stepMapsToQueuedEdge(step TestStep, dv DynamicView, ctx stpContext) bool {
+func stepMapsToQueuedEntryEdge(step TestStep, entryEdges []Relationship, ctx stpContext) bool {
 	compKeyN := ctx.normalize(step.Component)
 	opN := ctx.normalize(step.Operation)
-	for _, e := range dv.Edges {
+	for _, e := range entryEdges {
 		if e.Mode != modeQueued {
 			continue
 		}
