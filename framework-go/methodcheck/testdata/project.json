@@ -131,6 +131,9 @@
         ],
         "deployment": {
           "deliveryStyle": "both",
+          "containers": [
+            { "key": "appclient", "name": "AppClient", "components": [ "AppClient" ] }
+          ],
           "environments": [
             {
               "profile": "cloud",
@@ -140,9 +143,9 @@
                   "name": "cluster",
                   "technology": "k8s",
                   "children": [
-                    { "name": "ns", "technology": "", "children": null, "instances": null }
+                    { "name": "ns", "technology": "", "children": null, "containerInstances": null }
                   ],
-                  "instances": [ { "componentId": "appclient", "note": "n" } ]
+                  "containerInstances": [ { "containerKey": "appclient", "note": "n" } ]
                 }
               ]
             }

@@ -10,7 +10,8 @@ import (
 // / severities / messages are byte-identical.
 
 const (
-	ruleDepInstanceExist  RuleID = "DEP-INSTANCE-EXIST"
+	ruleDepContainerRef   RuleID = "DEP-CONTAINER-REF"
+	ruleDepMemberExist    RuleID = "DEP-MEMBER-EXIST"
 	ruleDepProfileSet     RuleID = "DEP-PROFILE-SET"
 	ruleDepGraphIdentity  RuleID = "DEP-GRAPH-IDENTITY"
 	ruleDepCoverage       RuleID = "DEP-COVERAGE"
@@ -51,19 +52,32 @@ func expectedProfiles(style string) map[string]bool {
 	return set
 }
 
-func flattenInstances(nodes []DeploymentNode) (instances []ContainerInstance, emptyNodeName bool) {
+// componentNameIndex maps System component NAME → Component (deployment refs by name).
+func componentNameIndex(s System) map[string]Component {
+	idx := make(map[string]Component, len(s.Components))
+	for _, c := range s.Components {
+		idx[c.Name] = c
+	}
+	return idx
+}
+
+// flattenContainerKeys collects every containerInstance key in an env's node tree,
+// and reports whether any deployment node has an empty Name.
+func flattenContainerKeys(nodes []DeploymentNode) (keys []string, emptyNodeName bool) {
 	for _, n := range nodes {
 		if n.Name == "" {
 			emptyNodeName = true
 		}
-		instances = append(instances, n.Instances...)
-		childInst, childEmpty := flattenInstances(n.Children)
-		instances = append(instances, childInst...)
+		for _, ci := range n.ContainerInstances {
+			keys = append(keys, ci.ContainerKey)
+		}
+		childKeys, childEmpty := flattenContainerKeys(n.Children)
+		keys = append(keys, childKeys...)
 		if childEmpty {
 			emptyNodeName = true
 		}
 	}
-	return instances, emptyNodeName
+	return keys, emptyNodeName
 }
 
 // isRunningComponent reports whether a component kind runs as a deployed container
@@ -91,64 +105,66 @@ func deploymentConsistency(op OperationalConcepts, s System) []Finding {
 	if len(topo.Environments) == 0 {
 		return nil
 	}
-	idx := componentIndex(s)
+	nameIdx := componentNameIndex(s)
 	var out []Finding
+
+	// DEP-MEMBER-EXIST: every container member resolves to a System component.
+	containersByKey := make(map[string]DeployContainer, len(topo.Containers))
+	for _, c := range topo.Containers {
+		containersByKey[c.Key] = c
+		for _, member := range c.Components {
+			if _, ok := nameIdx[member]; !ok {
+				out = append(out, Finding{
+					RuleID:   ruleDepMemberExist,
+					Severity: SeverityError,
+					Message:  fmt.Sprintf("container %q packages %q, which is not a System component", c.Key, member),
+					Location: loc(0, "deployment topology"),
+				})
+			}
+		}
+	}
+
 	byProfile := make(map[string]envSet)
 	presentProfiles := make(map[string]bool)
 	for i, env := range topo.Environments {
 		ordinal := i + 1
 		presentProfiles[env.Profile] = true
-		set, envFindings := checkDeploymentEnvironment(env, ordinal, idx)
+		covered, envFindings := checkDeploymentEnvironment(env, ordinal, containersByKey)
 		out = append(out, envFindings...)
-		byProfile[env.Profile] = envSet{ordinal: ordinal, set: set}
+		byProfile[env.Profile] = envSet{ordinal: ordinal, set: covered}
 	}
 	out = append(out, checkProfileSets(presentProfiles, expectedProfiles(topo.DeliveryStyle))...)
-	internal := internalComponents(s)
-	out = append(out, checkCrossProfileCoverage(byProfile, internal)...)
+	out = append(out, checkCrossProfileCoverage(byProfile, internalComponentNames(s))...)
 	return out
 }
 
-func checkDeploymentEnvironment(env DeploymentEnvironment, ordinal int, idx map[string]Component) (map[string]bool, []Finding) {
+// checkDeploymentEnvironment validates container-key refs and returns the SET of
+// System component NAMES covered by the containers instanced in this env.
+func checkDeploymentEnvironment(env DeploymentEnvironment, ordinal int, containersByKey map[string]DeployContainer) (map[string]bool, []Finding) {
 	section := fmt.Sprintf("deployment environment %q", profileName(env.Profile))
 	var out []Finding
-	instances, emptyNodeName := flattenInstances(env.Nodes)
+	keys, emptyNodeName := flattenContainerKeys(env.Nodes)
 	if emptyNodeName {
-		out = append(out, Finding{
-			RuleID:   ruleDepNodeWellformed,
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: a deployment node has an empty Name", section),
-			Location: loc(ordinal, section),
-		})
+		out = append(out, Finding{RuleID: ruleDepNodeWellformed, Severity: SeverityError,
+			Message: fmt.Sprintf("%s: a deployment node has an empty Name", section), Location: loc(ordinal, section)})
 	}
-	if len(instances) == 0 {
-		out = append(out, Finding{
-			RuleID:   ruleDepNodeWellformed,
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: environment instances no components", section),
-			Location: loc(ordinal, section),
-		})
+	if len(keys) == 0 {
+		out = append(out, Finding{RuleID: ruleDepNodeWellformed, Severity: SeverityError,
+			Message: fmt.Sprintf("%s: environment instances no containers", section), Location: loc(ordinal, section)})
 	}
-	set := make(map[string]bool, len(instances))
-	for _, inst := range instances {
-		if _, ok := idx[inst.ComponentID]; !ok {
-			out = append(out, Finding{
-				RuleID:   ruleDepInstanceExist,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: instance %s does not reference a System Component", section, inst.ComponentID),
-				Location: loc(ordinal, section),
-			})
+	covered := make(map[string]bool)
+	for _, key := range keys {
+		c, ok := containersByKey[key]
+		if !ok {
+			out = append(out, Finding{RuleID: ruleDepContainerRef, Severity: SeverityError,
+				Message: fmt.Sprintf("%s: containerInstance %q does not reference a declared container", section, key), Location: loc(ordinal, section)})
+			continue
 		}
-		if set[inst.ComponentID] {
-			out = append(out, Finding{
-				RuleID:   ruleDepNodeWellformed,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: component %s is instanced more than once within the environment", section, inst.ComponentID),
-				Location: loc(ordinal, section),
-			})
+		for _, member := range c.Components {
+			covered[member] = true
 		}
-		set[inst.ComponentID] = true
 	}
-	return set, out
+	return covered, out
 }
 
 func checkProfileSets(presentProfiles, expected map[string]bool) []Finding {
@@ -176,11 +192,11 @@ func checkProfileSets(presentProfiles, expected map[string]bool) []Finding {
 	return out
 }
 
-func internalComponents(s System) map[string]bool {
+func internalComponentNames(s System) map[string]bool {
 	internal := make(map[string]bool)
 	for _, c := range s.Components {
 		if isRunningComponent(c.Kind) {
-			internal[c.ID] = true
+			internal[c.Name] = true
 		}
 	}
 	return internal

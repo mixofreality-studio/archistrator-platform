@@ -76,16 +76,23 @@
         "decisions": [ { "topic": "sync vs queued", "decision": "queued", "justifyingObjective": 1 } ],
         "deployment": {
           "deliveryStyle": "both",
+          "containers": [
+            { "key": "appclient", "name": "AppClient", "components": [ "AppClient" ] },
+            { "key": "designmanager", "name": "DesignManager", "components": [ "DesignManager" ] },
+            { "key": "validatingengine", "name": "ValidatingEngine", "components": [ "ValidatingEngine" ] },
+            { "key": "stateaccess", "name": "StateAccess", "components": [ "StateAccess" ] },
+            { "key": "statedb", "name": "StateDB", "components": [ "StateDB" ] }
+          ],
           "environments": [
-            { "profile": "cloud", "title": "Cloud", "nodes": [ { "name": "cluster", "instances": [
-              { "componentId": "appclient" }, { "componentId": "designmanager" }, { "componentId": "validatingengine" },
-              { "componentId": "stateaccess" }, { "componentId": "statedb" } ] } ] },
-            { "profile": "local", "title": "Local", "nodes": [ { "name": "cluster", "instances": [
-              { "componentId": "appclient" }, { "componentId": "designmanager" }, { "componentId": "validatingengine" },
-              { "componentId": "stateaccess" }, { "componentId": "statedb" } ] } ] },
-            { "profile": "test", "title": "Test", "nodes": [ { "name": "cluster", "instances": [
-              { "componentId": "appclient" }, { "componentId": "designmanager" }, { "componentId": "validatingengine" },
-              { "componentId": "stateaccess" }, { "componentId": "statedb" } ] } ] }
+            { "profile": "cloud", "title": "Cloud", "nodes": [ { "name": "cluster", "containerInstances": [
+              { "containerKey": "appclient" }, { "containerKey": "designmanager" }, { "containerKey": "validatingengine" },
+              { "containerKey": "stateaccess" }, { "containerKey": "statedb" } ] } ] },
+            { "profile": "local", "title": "Local", "nodes": [ { "name": "cluster", "containerInstances": [
+              { "containerKey": "appclient" }, { "containerKey": "designmanager" }, { "containerKey": "validatingengine" },
+              { "containerKey": "stateaccess" }, { "containerKey": "statedb" } ] } ] },
+            { "profile": "test", "title": "Test", "nodes": [ { "name": "cluster", "containerInstances": [
+              { "containerKey": "appclient" }, { "containerKey": "designmanager" }, { "containerKey": "validatingengine" },
+              { "containerKey": "stateaccess" }, { "containerKey": "statedb" } ] } ] }
           ]
         }
       }

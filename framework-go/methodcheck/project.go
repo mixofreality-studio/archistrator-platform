@@ -244,11 +244,11 @@ type DeploymentTopology struct {
 
 // DeployContainer is a deployable unit (C4 Container) packaging System components by name.
 type DeployContainer struct {
-	Key        string   `json:"key"`
-	Name       string   `json:"name"`
-	Technology string   `json:"technology"`
+	Key         string   `json:"key"`
+	Name        string   `json:"name"`
+	Technology  string   `json:"technology"`
 	Description string   `json:"description"`
-	Components []string `json:"components"` // System component NAMES
+	Components  []string `json:"components"` // System component NAMES
 }
 
 // DeploymentEnvironment is the set of nodes for one profile.
