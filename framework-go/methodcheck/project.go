@@ -44,6 +44,13 @@ const (
 	modeEventPubSub = "eventPubSub"
 )
 
+// Component build-status wire names (the optional `buildStatus` field). Absent (the
+// empty string) means BUILT — a component expected to carry code.
+const (
+	buildStatusPlanned  = "planned"  // designed but not yet constructed; no code expected yet
+	buildStatusExternal = "external" // framework-provided (Utility only); no app code of its own
+)
+
 // EdgeKind wire names.
 const (
 	edgeControlFlow = "controlFlow"
@@ -203,6 +210,14 @@ type Component struct {
 	Layer               string   `json:"layer"`
 	Encapsulates        string   `json:"encapsulates"`
 	AtomicBusinessVerbs []string `json:"atomicBusinessVerbs"`
+
+	// BuildStatus is an OPTIONAL per-component lifecycle marker the design carries so
+	// UIs can render a "planned"/"external" badge and the alignment rules can honor
+	// the component's intended state. It lives in STATE (slot-5 component JSON), not in
+	// the consuming module's test config, so the same value drives both the rendered
+	// badge and the gate. Empty (absent) means BUILT — the component is expected to
+	// have code. See buildStatus* constants.
+	BuildStatus string `json:"buildStatus,omitempty"`
 }
 
 // Relationship is a directed edge between two Components.

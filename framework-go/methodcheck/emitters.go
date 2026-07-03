@@ -32,11 +32,13 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleDVPartExist, ruleDVEdgeEnds, ruleDVEdgeInModel, ruleDVSingleMgr,
 		ruleDVMode, ruleDVKeyUnique,
 		ruleDVStaticCoverage, ruleDVRelCoverage, ruleDVPartUsed,
+		ruleDVPlannedSkipped,
 
 		// ---- Deployment (rules_deployment.go) ----
 		ruleDepContainerRef, ruleDepMemberExist, ruleDepProfileSet,
 		ruleDepGraphIdentity, ruleDepCoverage, ruleDepNodeWellformed,
 		ruleDepContainerUsed, ruleDepMemberExclusive, ruleDepResourcePresent,
+		ruleDepPlannedSkipped,
 
 		// ---- Appendix-C (rules_appc.go) ----
 		ruleAppcDontClientMultiMgr, ruleAppcDontMgrMultiQueue, ruleAppcDontEngineQueue,
@@ -47,6 +49,7 @@ func emittedRuleIDs() map[RuleID]bool {
 
 		// ---- Design↔code alignment (align.go) ----
 		ruleAlignMissingPkg, ruleAlignExtraPkg, ruleAlignLayerMismate,
+		ruleAlignStalePlanned, ruleAlignExternalNonUtility, ruleAlignExternalUnwired,
 
 		// ---- Code↔model conformance (rules_conformance.go) ----
 		ruleCodeEdgeNotInModel, ruleModelEdgeNotInCode,

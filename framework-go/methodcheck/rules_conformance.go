@@ -54,22 +54,26 @@ func conformanceCheck(s System, pkgs []classifiedPackage, normalize func(string)
 
 // matchPackagesToComponents pairs each design-matched package to its component
 // (pkgPath → Component) and records which components have a code package
-// (componentID → true).
+// (componentID → true). Matching is LAYER-SCOPED — keyed on (normalized name, layer),
+// NOT leaf alone — so manager/settlement and engine/settlement resolve to their OWN
+// components instead of collapsing into one key (which would misattribute imports and
+// drop the cross-layer edge between them).
 func matchPackagesToComponents(s System, pkgs []classifiedPackage, normalize func(string) string) (map[string]Component, map[string]bool) {
-	componentByKey := make(map[string]Component, len(s.Components))
+	componentByKey := make(map[compKey]Component, len(s.Components))
 	for _, c := range s.Components {
 		key := normalize(c.Name)
 		if key == "" {
 			continue
 		}
-		if _, seen := componentByKey[key]; !seen {
-			componentByKey[key] = c
+		ck := compKey{name: key, layer: componentLayerName(c.Layer)}
+		if _, seen := componentByKey[ck]; !seen {
+			componentByKey[ck] = c
 		}
 	}
 	pkgComponent := make(map[string]Component, len(pkgs))
 	implemented := make(map[string]bool, len(pkgs))
 	for _, p := range pkgs {
-		if c, ok := componentByKey[normalize(p.leaf)]; ok {
+		if c, ok := componentByKey[compKey{name: normalize(p.leaf), layer: p.layer}]; ok {
 			pkgComponent[p.pkgPath] = c
 			implemented[c.ID] = true
 		}

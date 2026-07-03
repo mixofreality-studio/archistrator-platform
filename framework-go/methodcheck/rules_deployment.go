@@ -19,6 +19,10 @@ const (
 	ruleDepContainerUsed   RuleID = "DEP-CONTAINER-USED"
 	ruleDepMemberExclusive RuleID = "DEP-MEMBER-EXCLUSIVE"
 	ruleDepResourcePresent RuleID = "DEP-RESOURCE-PRESENT"
+	// ruleDepPlannedSkipped (Info) lists the planned components DEP-COVERAGE skipped —
+	// a planned component cannot yet be packaged into a container, so it is exempt from
+	// the per-profile coverage requirement, but the exemption is surfaced (not silent).
+	ruleDepPlannedSkipped RuleID = "DEP-PLANNED-SKIPPED"
 )
 
 type envSet struct {
@@ -134,8 +138,22 @@ func deploymentConsistency(op OperationalConcepts, s System) []Finding {
 	out = append(out, checkContainersUsed(topo.Containers, instancedKeys)...)
 	out = append(out, checkProfileSets(presentProfiles, expectedProfiles(topo.DeliveryStyle))...)
 	out = append(out, checkCrossProfileCoverage(byProfile, internalComponentNames(s))...)
+	out = append(out, plannedSkippedInfo(ruleDepPlannedSkipped, "deployment container coverage", plannedContainerComponents(s))...)
 	out = append(out, checkResourcesPresent(topo, s)...)
 	return out
+}
+
+// plannedContainerComponents lists the names of container-eligible components marked
+// planned — the set DEP-COVERAGE excludes from its per-profile coverage requirement
+// (they cannot be packaged into a container until they are built).
+func plannedContainerComponents(s System) []string {
+	var planned []string
+	for _, c := range s.Components {
+		if isContainerComponent(c.Kind) && c.BuildStatus == buildStatusPlanned {
+			planned = append(planned, c.Name)
+		}
+	}
+	return planned
 }
 
 // checkContainerMembership indexes containers by key and emits DEP-MEMBER-EXIST
@@ -344,7 +362,9 @@ func checkProfileSets(presentProfiles, expected map[string]bool) []Finding {
 func internalComponentNames(s System) map[string]bool {
 	internal := make(map[string]bool)
 	for _, c := range s.Components {
-		if isContainerComponent(c.Kind) {
+		// Planned components are not yet packaged into a container — exclude them from
+		// the coverage-required internal set (surfaced via DEP-PLANNED-SKIPPED).
+		if isContainerComponent(c.Kind) && c.BuildStatus != buildStatusPlanned {
 			internal[c.Name] = true
 		}
 	}

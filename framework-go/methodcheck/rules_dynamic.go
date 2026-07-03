@@ -1,6 +1,9 @@
 package methodcheck
 
-import "fmt"
+import (
+	"fmt"
+	"sort"
+)
 
 // rules_dynamic.go ports the dynamic-view consistency suite owned by
 // ValidateArchitecture, FAITHFULLY from predicates_dynamic.go. Rule IDs /
@@ -17,6 +20,10 @@ const (
 	ruleDVStaticCoverage RuleID = "DV-STATIC-COVERAGE"
 	ruleDVRelCoverage    RuleID = "DV-REL-COVERAGE"
 	ruleDVPartUsed       RuleID = "DV-PART-USED"
+	// ruleDVPlannedSkipped (Info) lists the planned components DV-STATIC-COVERAGE
+	// deliberately skipped — a planned component cannot yet appear in a call chain, so
+	// it is exempt, but the exemption is surfaced (not silent) so it stays visible.
+	ruleDVPlannedSkipped RuleID = "DV-PLANNED-SKIPPED"
 )
 
 type relPairKey struct {
@@ -101,8 +108,14 @@ func checkStaticParticipationCoverage(s System) []Finding {
 		}
 	}
 	var out []Finding
+	var planned []string
 	for i, c := range s.Components {
 		if !isCoreComponentKind(c.Kind) || participating[c.ID] {
+			continue
+		}
+		// A planned component cannot yet be in a call chain — exempt it (surfaced below).
+		if c.BuildStatus == buildStatusPlanned {
+			planned = append(planned, c.Name)
 			continue
 		}
 		section := fmt.Sprintf("component %d (%s)", i+1, c.Name)
@@ -113,7 +126,24 @@ func checkStaticParticipationCoverage(s System) []Finding {
 			Location: loc(i+1, section),
 		})
 	}
+	out = append(out, plannedSkippedInfo(ruleDVPlannedSkipped, "dynamic-view participation coverage", planned)...)
 	return out
+}
+
+// plannedSkippedInfo returns a single Info finding listing the planned components a
+// coverage rule skipped, or nil when none were skipped — the shared visibility emitter
+// for the planned exemptions in DV-STATIC-COVERAGE and DEP-COVERAGE.
+func plannedSkippedInfo(id RuleID, what string, planned []string) []Finding {
+	if len(planned) == 0 {
+		return nil
+	}
+	sort.Strings(planned)
+	return []Finding{{
+		RuleID:   id,
+		Severity: SeverityInfo,
+		Message:  fmt.Sprintf("%s skipped %d planned component(s) not yet expected in the architecture: %v", what, len(planned), planned),
+		Location: loc(0, what),
+	}}
 }
 
 // checkRelationshipCoverage emits DV-REL-COVERAGE (Warning) for every static
