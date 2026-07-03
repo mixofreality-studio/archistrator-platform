@@ -133,18 +133,41 @@ func TestDeploymentConsistency_GraphIdentity_TestMissingInternal(t *testing.T) {
 	s := deploymentBaseSystem(t)
 	op := deploymentBaseOC(t, s)
 	insts := op.Deployment.Environments[2].Nodes[0].ContainerInstances
-	op.Deployment.Environments[2].Nodes[0].ContainerInstances = insts[:len(insts)-1]
+	// Drop the FIRST instance (AppClient, a CODE component) rather than the last
+	// (StateDB, a Resource) — Resources are no longer container-coverage-required,
+	// so dropping one must not (and, per the sibling test below, does not) trip
+	// DEP-GRAPH-IDENTITY. A missing CODE component still must.
+	op.Deployment.Environments[2].Nodes[0].ContainerInstances = insts[1:]
 	if !hasRuleFindings(deploymentConsistency(op, s), ruleDepGraphIdentity) {
-		t.Fatalf("expected DEP-GRAPH-IDENTITY for test missing an internal component")
+		t.Fatalf("expected DEP-GRAPH-IDENTITY for test missing an internal (code) component")
+	}
+}
+
+// TestDeploymentConsistency_TestMissingResourceOnly_NotFlagged proves the coverage
+// relaxation: Resources are deployment infrastructure (a CNPG cluster in cloud, a
+// docker container locally) that deploy separately from the server code, so a test
+// environment missing only a Resource container must NOT trip DEP-GRAPH-IDENTITY or
+// DEP-COVERAGE — only missing CODE components (Client/Manager/Engine/ResourceAccess)
+// are coverage-required.
+func TestDeploymentConsistency_TestMissingResourceOnly_NotFlagged(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := deploymentBaseOC(t, s)
+	insts := op.Deployment.Environments[2].Nodes[0].ContainerInstances
+	op.Deployment.Environments[2].Nodes[0].ContainerInstances = insts[:len(insts)-1] // drop StateDB (Resource)
+	if f := deploymentConsistency(op, s); len(f) != 0 {
+		t.Fatalf("a test env missing only a Resource must produce zero findings, got %+v", f)
 	}
 }
 
 func TestDeploymentConsistency_Coverage_IsWarning(t *testing.T) {
 	s := deploymentBaseSystem(t)
 	op := deploymentBaseOC(t, s)
+	// Drop the FIRST instance (AppClient, a CODE component) in every env, not the
+	// last (StateDB, a Resource) — Resources are no longer container-coverage-
+	// required, so dropping one would no longer trip DEP-COVERAGE.
 	drop := func(env *DeploymentEnvironment) {
 		insts := env.Nodes[0].ContainerInstances
-		env.Nodes[0].ContainerInstances = insts[:len(insts)-1]
+		env.Nodes[0].ContainerInstances = insts[1:]
 	}
 	drop(&op.Deployment.Environments[0])
 	drop(&op.Deployment.Environments[1])
@@ -156,6 +179,26 @@ func TestDeploymentConsistency_Coverage_IsWarning(t *testing.T) {
 	}
 	if sev != SeverityWarning {
 		t.Fatalf("DEP-COVERAGE must be Warning, got %v", sev)
+	}
+}
+
+// TestDeploymentConsistency_Coverage_MissingResourceOnly_NotFlagged proves a
+// Resource missing from a cloud/local deployment environment does NOT trip
+// DEP-COVERAGE — Resources deploy separately as infrastructure (e.g. a CNPG
+// cluster in cloud, a docker container locally), not packaged inside a server
+// deployment container.
+func TestDeploymentConsistency_Coverage_MissingResourceOnly_NotFlagged(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := deploymentBaseOC(t, s)
+	drop := func(env *DeploymentEnvironment) {
+		insts := env.Nodes[0].ContainerInstances
+		env.Nodes[0].ContainerInstances = insts[:len(insts)-1] // drop StateDB (Resource)
+	}
+	drop(&op.Deployment.Environments[0])
+	drop(&op.Deployment.Environments[1])
+	drop(&op.Deployment.Environments[2])
+	if f := deploymentConsistency(op, s); len(f) != 0 {
+		t.Fatalf("a Resource missing across all envs must produce zero findings, got %+v", f)
 	}
 }
 

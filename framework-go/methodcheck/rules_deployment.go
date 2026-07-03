@@ -62,7 +62,10 @@ func componentNameIndex(s System) map[string]Component {
 }
 
 // flattenContainerKeys collects every containerInstance key in an env's node tree,
-// and reports whether any deployment node has an empty Name.
+// and reports whether any deployment node has an empty Name. Note: a container
+// legitimately instanced in more than one node/env represents horizontal
+// replicas and is intentionally NOT flagged — this was dropped on purpose
+// from the old per-component model (see checkDeploymentEnvironment below).
 func flattenContainerKeys(nodes []DeploymentNode) (keys []string, emptyNodeName bool) {
 	for _, n := range nodes {
 		if n.Name == "" {
@@ -80,11 +83,13 @@ func flattenContainerKeys(nodes []DeploymentNode) (keys []string, emptyNodeName 
 	return keys, emptyNodeName
 }
 
-// isRunningComponent reports whether a component kind runs as a deployed container
-// (everything except Utility). Ported verbatim.
-func isRunningComponent(k string) bool {
+// isContainerComponent reports whether a component must be packaged inside a
+// deployment container (the server-side code components). Resources are
+// deployment infrastructure and Utilities are ambient — both are excluded
+// from container coverage.
+func isContainerComponent(k string) bool {
 	switch k {
-	case kindClient, kindManager, kindEngine, kindResourceAccess, kindResource:
+	case kindClient, kindManager, kindEngine, kindResourceAccess:
 		return true
 	default:
 		return false
@@ -195,7 +200,7 @@ func checkProfileSets(presentProfiles, expected map[string]bool) []Finding {
 func internalComponentNames(s System) map[string]bool {
 	internal := make(map[string]bool)
 	for _, c := range s.Components {
-		if isRunningComponent(c.Kind) {
+		if isContainerComponent(c.Kind) {
 			internal[c.Name] = true
 		}
 	}
