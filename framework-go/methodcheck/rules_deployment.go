@@ -10,12 +10,15 @@ import (
 // / severities / messages are byte-identical.
 
 const (
-	ruleDepContainerRef   RuleID = "DEP-CONTAINER-REF"
-	ruleDepMemberExist    RuleID = "DEP-MEMBER-EXIST"
-	ruleDepProfileSet     RuleID = "DEP-PROFILE-SET"
-	ruleDepGraphIdentity  RuleID = "DEP-GRAPH-IDENTITY"
-	ruleDepCoverage       RuleID = "DEP-COVERAGE"
-	ruleDepNodeWellformed RuleID = "DEP-NODE-WELLFORMED"
+	ruleDepContainerRef    RuleID = "DEP-CONTAINER-REF"
+	ruleDepMemberExist     RuleID = "DEP-MEMBER-EXIST"
+	ruleDepProfileSet      RuleID = "DEP-PROFILE-SET"
+	ruleDepGraphIdentity   RuleID = "DEP-GRAPH-IDENTITY"
+	ruleDepCoverage        RuleID = "DEP-COVERAGE"
+	ruleDepNodeWellformed  RuleID = "DEP-NODE-WELLFORMED"
+	ruleDepContainerUsed   RuleID = "DEP-CONTAINER-USED"
+	ruleDepMemberExclusive RuleID = "DEP-MEMBER-EXCLUSIVE"
+	ruleDepResourcePresent RuleID = "DEP-RESOURCE-PRESENT"
 )
 
 type envSet struct {
@@ -83,11 +86,14 @@ func flattenContainerKeys(nodes []DeploymentNode) (keys []string, emptyNodeName 
 	return keys, emptyNodeName
 }
 
-// isContainerComponent reports whether a component must be packaged inside a
-// deployment container (the server-side code components). Resources are
-// deployment infrastructure and Utilities are ambient — both are excluded
-// from container coverage.
-func isContainerComponent(k string) bool {
+// isCoreComponentKind reports whether a component kind is a first-class,
+// code-implemented runtime component — Client, Manager, Engine, ResourceAccess.
+// Resources (physical stores / external systems) and Utilities (ambient
+// cross-cutting infrastructure) are the two exempt kinds. This is the SINGLE
+// Resources/Utilities-exemption predicate reused across the deployment,
+// dynamic-view, and conformance suites so the exemption rationale lives in one
+// place and cannot drift between them.
+func isCoreComponentKind(k string) bool {
 	switch k {
 	case kindClient, kindManager, kindEngine, kindResourceAccess:
 		return true
@@ -95,6 +101,12 @@ func isContainerComponent(k string) bool {
 		return false
 	}
 }
+
+// isContainerComponent reports whether a component must be packaged inside a
+// deployment container (the server-side code components). It is exactly the
+// core-component set: Resources are deployment infrastructure and Utilities are
+// ambient — both are excluded from container coverage.
+func isContainerComponent(k string) bool { return isCoreComponentKind(k) }
 
 func sortedComponentIDs(set map[string]bool) []string {
 	ids := make([]string, 0, len(set))
@@ -113,9 +125,27 @@ func deploymentConsistency(op OperationalConcepts, s System) []Finding {
 	nameIdx := componentNameIndex(s)
 	var out []Finding
 
-	// DEP-MEMBER-EXIST: every container member resolves to a System component.
-	containersByKey := make(map[string]DeployContainer, len(topo.Containers))
-	for _, c := range topo.Containers {
+	containersByKey, memberFindings := checkContainerMembership(topo.Containers, nameIdx)
+	out = append(out, memberFindings...)
+
+	byProfile, presentProfiles, instancedKeys, envFindings := checkEnvironments(topo.Environments, containersByKey)
+	out = append(out, envFindings...)
+
+	out = append(out, checkContainersUsed(topo.Containers, instancedKeys)...)
+	out = append(out, checkProfileSets(presentProfiles, expectedProfiles(topo.DeliveryStyle))...)
+	out = append(out, checkCrossProfileCoverage(byProfile, internalComponentNames(s))...)
+	out = append(out, checkResourcesPresent(topo, s)...)
+	return out
+}
+
+// checkContainerMembership indexes containers by key and emits DEP-MEMBER-EXIST
+// (a member that is not a System component) + DEP-MEMBER-EXCLUSIVE (a component
+// packaged by two distinct containers).
+func checkContainerMembership(containers []DeployContainer, nameIdx map[string]Component) (map[string]DeployContainer, []Finding) {
+	containersByKey := make(map[string]DeployContainer, len(containers))
+	memberOwner := make(map[string]string, len(nameIdx)) // component name → owning container key
+	var out []Finding
+	for _, c := range containers {
 		containersByKey[c.Key] = c
 		for _, member := range c.Components {
 			if _, ok := nameIdx[member]; !ok {
@@ -126,21 +156,135 @@ func deploymentConsistency(op OperationalConcepts, s System) []Finding {
 					Location: loc(0, "deployment topology"),
 				})
 			}
+			owner, dup := memberOwner[member]
+			switch {
+			case dup && owner != c.Key:
+				out = append(out, Finding{
+					RuleID:   ruleDepMemberExclusive,
+					Severity: SeverityError,
+					Message:  fmt.Sprintf("component %q is packaged by two containers (%q and %q); a component must belong to exactly one container (horizontal replicas are expressed by instancing ONE container in multiple nodes, not by duplicating membership)", member, owner, c.Key),
+					Location: loc(0, "deployment topology"),
+				})
+			case !dup:
+				memberOwner[member] = c.Key
+			}
 		}
 	}
+	return containersByKey, out
+}
 
+// checkEnvironments walks every environment, collecting the per-profile covered
+// component sets, the present profiles, and the union of instanced container keys,
+// plus each environment's own findings.
+func checkEnvironments(environments []DeploymentEnvironment, containersByKey map[string]DeployContainer) (map[string]envSet, map[string]bool, map[string]bool, []Finding) {
 	byProfile := make(map[string]envSet)
 	presentProfiles := make(map[string]bool)
-	for i, env := range topo.Environments {
+	instancedKeys := make(map[string]bool)
+	var out []Finding
+	for i, env := range environments {
 		ordinal := i + 1
 		presentProfiles[env.Profile] = true
+		keys, _ := flattenContainerKeys(env.Nodes)
+		for _, k := range keys {
+			instancedKeys[k] = true
+		}
 		covered, envFindings := checkDeploymentEnvironment(env, ordinal, containersByKey)
 		out = append(out, envFindings...)
 		byProfile[env.Profile] = envSet{ordinal: ordinal, set: covered}
 	}
-	out = append(out, checkProfileSets(presentProfiles, expectedProfiles(topo.DeliveryStyle))...)
-	out = append(out, checkCrossProfileCoverage(byProfile, internalComponentNames(s))...)
+	return byProfile, presentProfiles, instancedKeys, out
+}
+
+// checkContainersUsed emits DEP-CONTAINER-USED for every declared container that
+// no environment instances — a container defined but never deployed is dead
+// topology (the reverse of DEP-CONTAINER-REF, which flags an instance of a
+// container that was never declared).
+func checkContainersUsed(containers []DeployContainer, instancedKeys map[string]bool) []Finding {
+	var out []Finding
+	for _, c := range containers {
+		if !instancedKeys[c.Key] {
+			out = append(out, Finding{
+				RuleID:   ruleDepContainerUsed,
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("container %q is declared but instanced in no environment; every declared container must be deployed in ≥1 environment", c.Key),
+				Location: loc(0, "deployment topology"),
+			})
+		}
+	}
 	return out
+}
+
+// checkResourcesPresent emits DEP-RESOURCE-PRESENT (Warning) for every Resource
+// component that no InfrastructureNode or SoftwareSystemInstance names (slug-
+// matched, like DEP-MEMBER-EXIST) in a required deployment profile. Resources
+// deploy as infrastructure (a Postgres cluster, an external SaaS), NOT inside a
+// container, so their presence is asserted against the infra/software-system
+// nodes of each required, present profile rather than against container members.
+func checkResourcesPresent(topo DeploymentTopology, s System) []Finding {
+	var resources []Component
+	for _, c := range s.Components {
+		if c.Kind == kindResource {
+			resources = append(resources, c)
+		}
+	}
+	if len(resources) == 0 {
+		return nil
+	}
+	expected := expectedProfiles(topo.DeliveryStyle)
+	envByProfile := make(map[string]DeploymentEnvironment, len(topo.Environments))
+	ordByProfile := make(map[string]int, len(topo.Environments))
+	for i, env := range topo.Environments {
+		envByProfile[env.Profile] = env
+		ordByProfile[env.Profile] = i + 1
+	}
+	var out []Finding
+	for _, p := range sortedComponentIDs(expected) {
+		env, present := envByProfile[p]
+		if !present {
+			continue // DEP-PROFILE-SET already flags a missing required profile
+		}
+		out = append(out, resourcesMissingFromProfile(p, env, resources, ordByProfile[p])...)
+	}
+	return out
+}
+
+// resourcesMissingFromProfile emits a DEP-RESOURCE-PRESENT warning for every
+// Resource whose slug no infrastructure/software-system node in this profile names.
+func resourcesMissingFromProfile(profile string, env DeploymentEnvironment, resources []Component, ordinal int) []Finding {
+	infraSlugs := infraSlugSet(env.Nodes)
+	section := fmt.Sprintf("deployment environment %q", profileName(profile))
+	var out []Finding
+	for _, r := range resources {
+		if !infraSlugs[Slug(r.Name)] {
+			out = append(out, Finding{
+				RuleID:   ruleDepResourcePresent,
+				Severity: SeverityWarning,
+				Message:  fmt.Sprintf("%s: Resource %q is not named by any infrastructure node or external software system in this profile; a Resource must appear as deployment infrastructure in every required profile", section, r.Name),
+				Location: loc(ordinal, section),
+			})
+		}
+	}
+	return out
+}
+
+// infraSlugSet collects the Slugs of every InfrastructureNode and
+// SoftwareSystemInstance name across a node tree.
+func infraSlugSet(nodes []DeploymentNode) map[string]bool {
+	set := make(map[string]bool)
+	var walk func(ns []DeploymentNode)
+	walk = func(ns []DeploymentNode) {
+		for _, n := range ns {
+			for _, in := range n.InfrastructureNodes {
+				set[Slug(in.Name)] = true
+			}
+			for _, ss := range n.SoftwareSystemInstances {
+				set[Slug(ss.Name)] = true
+			}
+			walk(n.Children)
+		}
+	}
+	walk(nodes)
+	return set
 }
 
 // checkDeploymentEnvironment validates container-key refs and returns the SET of
@@ -265,8 +409,8 @@ func checkProfileEnvCoverage(p string, env envSet, internal map[string]bool) []F
 	sort.Strings(missing)
 	return []Finding{{
 		RuleID:   ruleDepCoverage,
-		Severity: SeverityWarning,
-		Message:  fmt.Sprintf("deployment environment %q does not instance every running component (missing=%v)", profileName(p), missing),
+		Severity: SeverityError,
+		Message:  fmt.Sprintf("deployment environment %q does not instance every container-eligible component; every Client/Manager/Engine/ResourceAccess component must be packaged in a container per required profile (missing=%v)", profileName(p), missing),
 		Location: loc(env.ordinal, fmt.Sprintf("deployment environment %q", profileName(p))),
 	}}
 }

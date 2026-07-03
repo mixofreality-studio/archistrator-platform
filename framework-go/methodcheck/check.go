@@ -36,6 +36,16 @@ type ProjectSpec struct {
 	// NameNormalizer overrides the default component↔package match key derivation
 	// (lowercase + strip non-alphanumeric). Optional.
 	NameNormalizer func(string) string
+
+	// EncapsulationAllowlist opts the consuming module INTO the generated-surface
+	// encapsulation gate (arch.CheckGeneratedSurface): with Go code present, every
+	// exported symbol in a generated-contract package (one carrying a *.gen.go file)
+	// must be part of the generated surface or listed here. The map is keyed by the
+	// package path relative to Arch.ModulePrefix (e.g. "engine/validatingengine")
+	// → its allowed exported identifiers. A NON-NIL value (even an empty map) opts in;
+	// nil (the default) leaves the gate off, so existing consumers are unaffected. The
+	// app keeps its allowlist as data and passes it here.
+	EncapsulationAllowlist map[string][]string
 }
 
 // Check is the all-in-one Method gate a consuming repo runs from one go test. It
@@ -138,6 +148,12 @@ func runLayerAndAlignmentChecks(t *testing.T, spec ProjectSpec, proj Project, pk
 	// runs the structural suite; it is the authority on layering/naming/
 	// Temporal/allowlist and reports its own violations via t.Errorf.
 	arch.Check(t, spec.Arch)
+	// (a′) Encapsulation gate — only when the spec opts in with an allowlist.
+	// arch.CheckGeneratedSurface re-loads the module and fails any exported symbol
+	// outside the generated contract surface + allowlist.
+	if spec.EncapsulationAllowlist != nil {
+		arch.CheckGeneratedSurface(t, spec.Arch, spec.EncapsulationAllowlist)
+	}
 	// (b) Design↔code alignment — only when a System is committed to align
 	// against. With code but no committed System the layer rules above still
 	// ran; the alignment pass simply has nothing to cross-reference.
@@ -147,6 +163,7 @@ func runLayerAndAlignmentChecks(t *testing.T, spec ProjectSpec, proj Project, pk
 	}
 	if sysOK {
 		reportFindings(t, alignSystemToCode(sys, pkgs, spec.NameNormalizer))
+		reportFindings(t, conformanceCheck(sys, pkgs, spec.NameNormalizer))
 	}
 }
 

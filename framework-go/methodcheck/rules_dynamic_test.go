@@ -131,6 +131,74 @@ func TestDynamicViewConsistency_EmptyUseCaseID(t *testing.T) {
 	}
 }
 
+func TestDynamicViewConsistency_StaticCoverage_UnparticipatingCoreComponentFails(t *testing.T) {
+	s := dynamicBaseSystem(t)
+	// Add a core Engine that appears in no dynamic view.
+	orphan := comp(t, "OrphanEngine", kindEngine)
+	s.Components = append(s.Components, orphan)
+	sev, ok := findingSeverity(dynamicViewConsistency(s), ruleDVStaticCoverage)
+	if !ok {
+		t.Fatalf("expected DV-STATIC-COVERAGE for a core component in no dynamic view")
+	}
+	if sev != SeverityError {
+		t.Fatalf("DV-STATIC-COVERAGE must be Error (founder requirement), got %v", sev)
+	}
+}
+
+func TestDynamicViewConsistency_StaticCoverage_ResourceAndUtilityExempt(t *testing.T) {
+	s := dynamicBaseSystem(t)
+	// A Resource and a Utility that appear in no view must NOT trip DV-STATIC-COVERAGE.
+	s.Components = append(s.Components,
+		comp(t, "OrphanStore", kindResource),
+		comp(t, "OrphanUtility", kindUtility))
+	if hasRuleFindings(dynamicViewConsistency(s), ruleDVStaticCoverage) {
+		t.Fatalf("Resources and Utilities are exempt from DV-STATIC-COVERAGE")
+	}
+}
+
+func TestDynamicViewConsistency_StaticCoverage_NoViewsIsNoOp(t *testing.T) {
+	s := dynamicBaseSystem(t)
+	s.DynamicViews = nil
+	if hasRuleFindings(dynamicViewConsistency(s), ruleDVStaticCoverage) {
+		t.Fatalf("with zero dynamic views DV-STATIC-COVERAGE must be a no-op (pre-dynamic-view phase)")
+	}
+}
+
+func TestDynamicViewConsistency_RelCoverage_UncoveredSyncRelWarns(t *testing.T) {
+	s := dynamicBaseSystem(t)
+	// Add a static sync relationship (Manager→Manager queued would be legal; use a
+	// second RA reachable from the Manager) that appears in no view edge.
+	extraRA := comp(t, "AuditAccess", kindResourceAccess)
+	s.Components = append(s.Components, extraRA)
+	mgrID := s.Components[1].ID
+	s.Relationships = append(s.Relationships, Relationship{From: mgrID, To: extraRA.ID, Mode: modeSync})
+	// extraRA must still participate in a view or DV-STATIC-COVERAGE would fire too;
+	// add it as a participant+edge in the existing view so only DV-REL-COVERAGE is
+	// isolated is not required for this assertion — we only assert the rule fires.
+	sev, ok := findingSeverity(dynamicViewConsistency(s), ruleDVRelCoverage)
+	if !ok {
+		t.Fatalf("expected DV-REL-COVERAGE for a sync relationship in no view edge")
+	}
+	if sev != SeverityWarning {
+		t.Fatalf("DV-REL-COVERAGE must be Warning, got %v", sev)
+	}
+}
+
+func TestDynamicViewConsistency_PartUsed_UntouchedParticipantFails(t *testing.T) {
+	s := dynamicBaseSystem(t)
+	// Add an extra component, declare it a participant of the view but wire no edge to it.
+	extra := comp(t, "LonelyEngine", kindEngine)
+	s.Components = append(s.Components, extra)
+	s.DynamicViews[0].Participants = append(s.DynamicViews[0].Participants, extra.ID)
+	sev, ok := findingSeverity(dynamicViewConsistency(s), ruleDVPartUsed)
+	if !ok {
+		t.Fatalf("expected DV-PART-USED for a participant no edge touches")
+	}
+	if sev != SeverityError {
+		t.Fatalf("DV-PART-USED must be Error, got %v", sev)
+	}
+}
+
 func TestEdgeLegality_MatchesSysLegalityForCallingUp(t *testing.T) {
 	mgr := comp(t, "DesignManager", kindManager)
 	ra := comp(t, "StateAccess", kindResourceAccess)

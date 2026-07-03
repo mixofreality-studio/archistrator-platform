@@ -35,27 +35,41 @@ func containerKey(name string) string {
 	return "c-" + name
 }
 
-func envInstancingAll(profile, title string, containers []DeployContainer) DeploymentEnvironment {
+// resourceInfraNodes represents every System Resource as an InfrastructureNode
+// named after the component, so a base deployment satisfies DEP-RESOURCE-PRESENT
+// (Resources deploy as infrastructure, slug-matched to their System component).
+func resourceInfraNodes(s System) []InfrastructureNode {
+	var infra []InfrastructureNode
+	for _, c := range s.Components {
+		if c.Kind == kindResource {
+			infra = append(infra, InfrastructureNode{Name: c.Name})
+		}
+	}
+	return infra
+}
+
+func envInstancingAll(profile, title string, containers []DeployContainer, infra []InfrastructureNode) DeploymentEnvironment {
 	var instances []ContainerInstance
 	for _, c := range containers {
 		instances = append(instances, ContainerInstance{ContainerKey: c.Key})
 	}
 	return DeploymentEnvironment{
 		Profile: profile, Title: title,
-		Nodes: []DeploymentNode{{Name: "cluster", Technology: "k8s", ContainerInstances: instances}},
+		Nodes: []DeploymentNode{{Name: "cluster", Technology: "k8s", ContainerInstances: instances, InfrastructureNodes: infra}},
 	}
 }
 
 func deploymentBaseOC(t *testing.T, s System) OperationalConcepts {
 	t.Helper()
 	containers := deploymentBaseContainers(s)
+	infra := resourceInfraNodes(s)
 	return OperationalConcepts{Deployment: DeploymentTopology{
 		DeliveryStyle: styleBoth,
 		Containers:    containers,
 		Environments: []DeploymentEnvironment{
-			envInstancingAll(profileCloud, "Cloud", containers),
-			envInstancingAll(profileLocal, "Local", containers),
-			envInstancingAll(profileTest, "Test", containers),
+			envInstancingAll(profileCloud, "Cloud", containers, infra),
+			envInstancingAll(profileLocal, "Local", containers, infra),
+			envInstancingAll(profileTest, "Test", containers, infra),
 		},
 	}}
 }
@@ -159,26 +173,112 @@ func TestDeploymentConsistency_TestMissingResourceOnly_NotFlagged(t *testing.T) 
 	}
 }
 
-func TestDeploymentConsistency_Coverage_IsWarning(t *testing.T) {
+func TestDeploymentConsistency_Coverage_IsError(t *testing.T) {
 	s := deploymentBaseSystem(t)
 	op := deploymentBaseOC(t, s)
-	// Drop the FIRST instance (AppClient, a CODE component) in every env, not the
-	// last (StateDB, a Resource) — Resources are no longer container-coverage-
-	// required, so dropping one would no longer trip DEP-COVERAGE.
-	drop := func(env *DeploymentEnvironment) {
-		insts := env.Nodes[0].ContainerInstances
-		env.Nodes[0].ContainerInstances = insts[1:]
-	}
-	drop(&op.Deployment.Environments[0])
-	drop(&op.Deployment.Environments[1])
-	drop(&op.Deployment.Environments[2])
+	// Drop the FIRST instance (AppClient, a CODE component) in the cloud env only —
+	// leaving local+test intact keeps the graph-identity check from also firing so
+	// we observe DEP-COVERAGE in isolation. (Resources are exempt, so dropping the
+	// last (StateDB) would NOT trip DEP-COVERAGE.)
+	insts := op.Deployment.Environments[0].Nodes[0].ContainerInstances
+	op.Deployment.Environments[0].Nodes[0].ContainerInstances = insts[1:]
 	findings := deploymentConsistency(op, s)
 	sev, ok := findingSeverity(findings, ruleDepCoverage)
 	if !ok {
 		t.Fatalf("expected DEP-COVERAGE finding, got %+v", findings)
 	}
+	if sev != SeverityError {
+		t.Fatalf("DEP-COVERAGE must be Error (founder requirement), got %v", sev)
+	}
+}
+
+func TestDeployment_ContainerUsed_DeclaredButNeverInstanced(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := deploymentBaseOC(t, s)
+	// Declare an extra container that no environment instances.
+	op.Deployment.Containers = append(op.Deployment.Containers, DeployContainer{
+		Key: "orphan", Name: "orphan", Components: []string{"DesignManager"},
+	})
+	if !hasRuleFindings(deploymentConsistency(op, s), ruleDepContainerUsed) {
+		t.Fatalf("expected DEP-CONTAINER-USED for a declared-but-never-instanced container")
+	}
+}
+
+func TestDeployment_ContainerUsed_AllInstancedPasses(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := deploymentBaseOC(t, s)
+	if hasRuleFindings(deploymentConsistency(op, s), ruleDepContainerUsed) {
+		t.Fatalf("every base container is instanced; DEP-CONTAINER-USED must not fire")
+	}
+}
+
+func TestDeployment_MemberExclusive_SameComponentInTwoContainers(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := deploymentBaseOC(t, s)
+	// Package DesignManager into a SECOND container in addition to its own.
+	dup := DeployContainer{Key: "extra", Name: "extra", Components: []string{"DesignManager"}}
+	op.Deployment.Containers = append(op.Deployment.Containers, dup)
+	op.Deployment.Environments[0].Nodes[0].ContainerInstances = append(
+		op.Deployment.Environments[0].Nodes[0].ContainerInstances, ContainerInstance{ContainerKey: "extra"})
+	op.Deployment.Environments[1].Nodes[0].ContainerInstances = append(
+		op.Deployment.Environments[1].Nodes[0].ContainerInstances, ContainerInstance{ContainerKey: "extra"})
+	op.Deployment.Environments[2].Nodes[0].ContainerInstances = append(
+		op.Deployment.Environments[2].Nodes[0].ContainerInstances, ContainerInstance{ContainerKey: "extra"})
+	if !hasRuleFindings(deploymentConsistency(op, s), ruleDepMemberExclusive) {
+		t.Fatalf("expected DEP-MEMBER-EXCLUSIVE for a component packaged by two containers")
+	}
+}
+
+func TestDeployment_MemberExclusive_ReplicaInstancingAllowed(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := deploymentBaseOC(t, s)
+	// Instance the SAME container a second time in the cloud env (a horizontal
+	// replica). Membership is unchanged, so DEP-MEMBER-EXCLUSIVE must NOT fire.
+	first := op.Deployment.Environments[0].Nodes[0].ContainerInstances[0]
+	op.Deployment.Environments[0].Nodes[0].ContainerInstances = append(
+		op.Deployment.Environments[0].Nodes[0].ContainerInstances, first)
+	if hasRuleFindings(deploymentConsistency(op, s), ruleDepMemberExclusive) {
+		t.Fatalf("replica instancing of one container is allowed; DEP-MEMBER-EXCLUSIVE must not fire")
+	}
+}
+
+// resourcePresentOC builds a topology whose cloud+test profiles name the StateDB
+// Resource via an infrastructure node (slug-matched), so DEP-RESOURCE-PRESENT is
+// satisfied for the base system.
+func resourcePresentOC(t *testing.T, s System) OperationalConcepts {
+	t.Helper()
+	op := deploymentBaseOC(t, s)
+	op.Deployment.DeliveryStyle = styleCloud // required profiles: {cloud, test}
+	op.Deployment.Environments = []DeploymentEnvironment{
+		op.Deployment.Environments[0], // cloud
+		op.Deployment.Environments[2], // test
+	}
+	for i := range op.Deployment.Environments {
+		op.Deployment.Environments[i].Nodes[0].InfrastructureNodes = []InfrastructureNode{{Name: "StateDB"}}
+	}
+	return op
+}
+
+func TestDeployment_ResourcePresent_NamedInfraPasses(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := resourcePresentOC(t, s)
+	if hasRuleFindings(deploymentConsistency(op, s), ruleDepResourcePresent) {
+		t.Fatalf("a Resource named by an infrastructure node in every required profile must not trip DEP-RESOURCE-PRESENT")
+	}
+}
+
+func TestDeployment_ResourcePresent_MissingInfraWarns(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := resourcePresentOC(t, s)
+	// Remove the infra node naming StateDB from the cloud profile.
+	op.Deployment.Environments[0].Nodes[0].InfrastructureNodes = nil
+	findings := deploymentConsistency(op, s)
+	sev, ok := findingSeverity(findings, ruleDepResourcePresent)
+	if !ok {
+		t.Fatalf("expected DEP-RESOURCE-PRESENT when a Resource is un-named in a required profile, got %+v", findings)
+	}
 	if sev != SeverityWarning {
-		t.Fatalf("DEP-COVERAGE must be Warning, got %v", sev)
+		t.Fatalf("DEP-RESOURCE-PRESENT must be Warning for now, got %v", sev)
 	}
 }
 
@@ -197,6 +297,16 @@ func TestDeploymentConsistency_Coverage_MissingResourceOnly_NotFlagged(t *testin
 	drop(&op.Deployment.Environments[0])
 	drop(&op.Deployment.Environments[1])
 	drop(&op.Deployment.Environments[2])
+	// Removing the Resource's container everywhere means the container is no longer
+	// declared either (else DEP-CONTAINER-USED would rightly flag the orphan) — a
+	// Resource simply is not packaged as a container in this topology.
+	var kept []DeployContainer
+	for _, c := range op.Deployment.Containers {
+		if c.Key != containerKey("StateDB") {
+			kept = append(kept, c)
+		}
+	}
+	op.Deployment.Containers = kept
 	if f := deploymentConsistency(op, s); len(f) != 0 {
 		t.Fatalf("a Resource missing across all envs must produce zero findings, got %+v", f)
 	}
@@ -238,7 +348,8 @@ func TestDeploymentConsistency_FlattensNestedNodes(t *testing.T) {
 			Profile: profile,
 			Nodes: []DeploymentNode{{
 				Name: "cluster", ContainerInstances: parentInst,
-				Children: []DeploymentNode{{Name: "namespace", ContainerInstances: childInst}},
+				InfrastructureNodes: resourceInfraNodes(s),
+				Children:            []DeploymentNode{{Name: "namespace", ContainerInstances: childInst}},
 			}},
 		}
 	}

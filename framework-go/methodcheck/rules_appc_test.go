@@ -86,6 +86,43 @@ func TestAppCDont_EngineSubscribes_Fails(t *testing.T) {
 	}
 }
 
+func TestAppCDont_ManagerQueuesMultipleManagers_Fails(t *testing.T) {
+	m0 := comp(t, "OrchestratorManager", kindManager)
+	m1 := comp(t, "BillingManager", kindManager)
+	m2 := comp(t, "OpsManager", kindManager)
+	dv := DynamicView{
+		UseCaseID:    "uc1",
+		Participants: []string{m0.ID, m1.ID, m2.ID},
+		Edges: []Relationship{
+			{From: m0.ID, To: m1.ID, Mode: modeQueued},
+			{From: m0.ID, To: m2.ID, Mode: modeQueued},
+		},
+	}
+	s := System{Components: []Component{m0, m1, m2}, DynamicViews: []DynamicView{dv}}
+	findings := appCInteractionDonts(s)
+	if !hasRuleFindings(findings, ruleAppcDontMgrMultiQueue) {
+		t.Fatalf("expected APPC-INT-MGR-MULTI-QUEUE, got %+v", findings)
+	}
+	sev, _ := findingSeverity(findings, ruleAppcDontMgrMultiQueue)
+	if sev != SeverityError {
+		t.Fatalf("directive APPC-INT-MGR-MULTI-QUEUE must be SeverityError, got %v", sev)
+	}
+}
+
+func TestAppCDont_ManagerQueuesSingleManager_OK(t *testing.T) {
+	m0 := comp(t, "OrchestratorManager", kindManager)
+	m1 := comp(t, "BillingManager", kindManager)
+	dv := DynamicView{
+		UseCaseID:    "uc1",
+		Participants: []string{m0.ID, m1.ID},
+		Edges:        []Relationship{{From: m0.ID, To: m1.ID, Mode: modeQueued}},
+	}
+	s := System{Components: []Component{m0, m1}, DynamicViews: []DynamicView{dv}}
+	if hasRuleFindings(appCInteractionDonts(s), ruleAppcDontMgrMultiQueue) {
+		t.Fatalf("a single queued Manager→Manager target is legal; APPC-INT-MGR-MULTI-QUEUE must not fire")
+	}
+}
+
 // ---- open/semi-open arch (§3.4) ----
 
 func TestAppCClosedArch_OpenArch_Warned(t *testing.T) {
@@ -199,6 +236,20 @@ func TestAppCSvcContract_FiveOpsNoFinding(t *testing.T) {
 		if f.RuleID == ruleAppcSvcSingle || f.RuleID == ruleAppcSvcAvoid12 || f.RuleID == ruleAppcSvcReject20 {
 			t.Fatalf("5-op contract must not trip §6 count rules, got %+v", findings)
 		}
+	}
+}
+
+func TestAppCSvcContract_StriveIsInfoDefaultArm(t *testing.T) {
+	mgr := comp(t, "DesignManager", kindManager)
+	mgr.AtomicBusinessVerbs = []string{"op1", "op2", "op3", "op4"} // 4 ops → default arm
+	s := System{Components: []Component{mgr}}
+	findings := appCServiceContract(s)
+	sev, ok := findingSeverity(findings, ruleAppcSvcStrive)
+	if !ok {
+		t.Fatalf("expected APPC-SVC-STRIVE (default arm) for an in-range contract, got %+v", findings)
+	}
+	if sev != SeverityInfo {
+		t.Fatalf("APPC-SVC-STRIVE must be Info, got %v", sev)
 	}
 }
 

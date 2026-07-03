@@ -17,7 +17,24 @@ const (
 	AppCAutomatedDesign   AppCClassification = "automated-design"
 	AppCAutomatedContract AppCClassification = "automated-contract"
 	AppCHumanJudgment     AppCClassification = "human-judgment"
+	// AppCPermission marks an App-C item that GRANTS a legal interaction rather than
+	// PROHIBITING one (e.g. "a Manager MAY call an Engine"). There is nothing to
+	// automate — a permission is never violated — so these items carry no RuleID and
+	// no emitter. Distinguished from AppCHumanJudgment (which is a real guideline a
+	// human must weigh) because a permission needs neither automation nor judgment.
+	AppCPermission AppCClassification = "permission"
 )
+
+// isAutomated reports whether a classification is machine-checked and therefore
+// MUST bind to a rule with a registered emitter.
+func (c AppCClassification) isAutomated() bool {
+	switch c {
+	case AppCAutomatedCode, AppCAutomatedDesign, AppCAutomatedContract:
+		return true
+	default:
+		return false
+	}
+}
 
 // AppCItem binds one Appendix-C item to its enforcement classification + rule.
 type AppCItem struct {
@@ -94,9 +111,14 @@ func systemDesignCoverage() []AppCItem {
 		{AppcRef: "SYS-4d", Kind: AppCGuideline, Classification: AppCHumanJudgment},    // Extend via subsystems
 
 		// ---- §5 Interaction rules (4 items) ----
-		{AppcRef: "SYS-5a", Kind: AppCGuideline, Classification: AppCAutomatedDesign, RuleID: ruleAppcIntUtility},
-		{AppcRef: "SYS-5b", Kind: AppCGuideline, Classification: AppCAutomatedDesign, RuleID: ruleAppcIntMgrEngRA},
-		{AppcRef: "SYS-5c", Kind: AppCGuideline, Classification: AppCAutomatedDesign, RuleID: ruleAppcIntMgrEng},
+		// SYS-5a/5b/5c GRANT legal interactions (a Utility may be called by anyone; a
+		// Manager may call Engines/ResourceAccess; a Manager may call an Engine). They
+		// are permissions, not prohibitions — nothing to violate, hence no emitter. The
+		// prohibitions that bound these permissions are the §4c layering rules (SYS-NOUP/
+		// NOSIDE/NOSKIP) and the §6 don'ts, which DO have emitters.
+		{AppcRef: "SYS-5a", Kind: AppCGuideline, Classification: AppCPermission}, // Utility callable by any layer
+		{AppcRef: "SYS-5b", Kind: AppCGuideline, Classification: AppCPermission}, // Manager may call Engines + ResourceAccess
+		{AppcRef: "SYS-5c", Kind: AppCGuideline, Classification: AppCPermission}, // Manager may call an Engine
 		{AppcRef: "SYS-5d", Kind: AppCGuideline, Classification: AppCAutomatedDesign, RuleID: ruleSysNoSide},
 
 		// ---- §6 Interaction don'ts (9 items — directives) ----

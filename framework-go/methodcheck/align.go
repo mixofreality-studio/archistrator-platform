@@ -36,9 +36,10 @@ const (
 
 // classifiedPackage is one loaded internal package matched to a Method layer.
 type classifiedPackage struct {
-	pkgPath string // full import path
-	leaf    string // the last path segment (the component-named package dir)
-	layer   string // the arch.Layer.Name it classified into
+	pkgPath string   // full import path
+	leaf    string   // the last path segment (the component-named package dir)
+	layer   string   // the arch.Layer.Name it classified into
+	imports []string // full import paths this package imports (for conformance)
 }
 
 // defaultNormalizer maps a name to a comparable match key: lowercase + strip every
@@ -62,7 +63,7 @@ func defaultNormalizer(s string) string {
 // FAILS on those; the alignment check only reasons about classified business code).
 func loadClassifiedPackages(spec arch.Spec) ([]classifiedPackage, error) {
 	cfg := &packages.Config{
-		Mode:  packages.NeedName | packages.NeedFiles,
+		Mode:  packages.NeedName | packages.NeedFiles | packages.NeedImports,
 		Dir:   spec.ModuleRoot,
 		Tests: false,
 	}
@@ -77,22 +78,35 @@ func loadClassifiedPackages(spec arch.Spec) ([]classifiedPackage, error) {
 	classify := makeSpecClassifier(spec)
 	var out []classifiedPackage
 	for _, pkg := range pkgs {
-		// A package contributing no Go files compiles to nothing — skip (mirrors
-		// arch.Check's len(pkg.Syntax)==0 guard, using GoFiles since we don't NeedSyntax).
-		if len(pkg.GoFiles) == 0 {
-			continue
+		if cp, ok := classifyLoadedPackage(pkg, classify); ok {
+			out = append(out, cp)
 		}
-		layer, ok := classify(pkg.PkgPath)
-		if !ok {
-			continue
-		}
-		leaf := pkg.PkgPath
-		if i := strings.LastIndexByte(leaf, '/'); i >= 0 {
-			leaf = leaf[i+1:]
-		}
-		out = append(out, classifiedPackage{pkgPath: pkg.PkgPath, leaf: leaf, layer: layer})
 	}
 	return out, nil
+}
+
+// classifyLoadedPackage turns one loaded package into a classifiedPackage, or
+// (_, false) when it contributes no Go files or classifies into no declared layer.
+func classifyLoadedPackage(pkg *packages.Package, classify func(string) (string, bool)) (classifiedPackage, bool) {
+	// A package contributing no Go files compiles to nothing — skip (mirrors
+	// arch.Check's len(pkg.Syntax)==0 guard, using GoFiles since we don't NeedSyntax).
+	if len(pkg.GoFiles) == 0 {
+		return classifiedPackage{}, false
+	}
+	layer, ok := classify(pkg.PkgPath)
+	if !ok {
+		return classifiedPackage{}, false
+	}
+	leaf := pkg.PkgPath
+	if i := strings.LastIndexByte(leaf, '/'); i >= 0 {
+		leaf = leaf[i+1:]
+	}
+	imports := make([]string, 0, len(pkg.Imports))
+	for ip := range pkg.Imports {
+		imports = append(imports, ip)
+	}
+	sort.Strings(imports)
+	return classifiedPackage{pkgPath: pkg.PkgPath, leaf: leaf, layer: layer, imports: imports}, true
 }
 
 // componentLayerName maps a design Component to the arch.Layer.Name its declared

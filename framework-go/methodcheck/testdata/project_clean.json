@@ -10,27 +10,58 @@
       "kind": 0,
       "model": {
         "vision": "v",
-        "objectives": [ { "number": 1, "statement": "fast" } ],
+        "objectives": [
+          {
+            "number": 1,
+            "statement": "fast"
+          }
+        ],
         "mission": "components"
       }
     },
     "1": {
       "status": 2,
       "kind": 1,
-      "model": { "items": [ { "term": "Scheduling", "definition": "d" }, { "term": "Pricing", "definition": "p" } ] }
+      "model": {
+        "items": [
+          {
+            "term": "Scheduling",
+            "definition": "d"
+          },
+          {
+            "term": "Pricing",
+            "definition": "p"
+          }
+        ]
+      }
     },
     "2": {
       "status": 2,
       "kind": 2,
-      "model": { "items": [ { "id": "R1", "statement": "scheduling pricing adapts across customers" } ] }
+      "model": {
+        "items": [
+          {
+            "id": "R1",
+            "statement": "scheduling pricing adapts across customers"
+          }
+        ]
+      }
     },
     "3": {
       "status": 2,
       "kind": 3,
       "model": {
         "items": [
-          { "name": "Scheduling policy", "rationale": "scheduling changes over time", "axis": "sameCustomerOverTime" },
-          { "name": "Pricing model", "rationale": "pricing differs across customers", "axis": "allCustomersAtOneTime" }
+          {
+            "name": "Scheduling policy",
+            "rationale": "scheduling changes over time",
+            "axis": "sameCustomerOverTime"
+          },
+          {
+            "name": "Pricing model",
+            "rationale": "pricing differs across customers",
+            "axis": "allCustomersAtOneTime"
+          }
         ]
       }
     },
@@ -39,8 +70,22 @@
       "kind": 4,
       "model": {
         "decisions": [
-          { "useCase": { "id": "decide", "name": "Decide", "classification": "core" }, "rejectionReason": "" },
-          { "useCase": { "id": "other", "name": "Other", "classification": "core" }, "rejectionReason": "" }
+          {
+            "useCase": {
+              "id": "decide",
+              "name": "Decide",
+              "classification": "core"
+            },
+            "rejectionReason": ""
+          },
+          {
+            "useCase": {
+              "id": "other",
+              "name": "Other",
+              "classification": "core"
+            },
+            "rejectionReason": ""
+          }
         ]
       }
     },
@@ -49,23 +94,105 @@
       "kind": 5,
       "model": {
         "components": [
-          { "id": "appclient", "name": "AppClient", "kind": "client", "layer": "client" },
-          { "id": "designmanager", "name": "DesignManager", "kind": "manager", "layer": "manager" },
-          { "id": "validatingengine", "name": "ValidatingEngine", "kind": "engine", "layer": "engine" },
-          { "id": "stateaccess", "name": "StateAccess", "kind": "resourceAccess", "layer": "resourceAccess" },
-          { "id": "statedb", "name": "StateDB", "kind": "resource", "layer": "resource" }
+          {
+            "id": "appclient",
+            "name": "AppClient",
+            "kind": "client",
+            "layer": "client"
+          },
+          {
+            "id": "designmanager",
+            "name": "DesignManager",
+            "kind": "manager",
+            "layer": "manager"
+          },
+          {
+            "id": "validatingengine",
+            "name": "ValidatingEngine",
+            "kind": "engine",
+            "layer": "engine"
+          },
+          {
+            "id": "stateaccess",
+            "name": "StateAccess",
+            "kind": "resourceAccess",
+            "layer": "resourceAccess"
+          },
+          {
+            "id": "statedb",
+            "name": "StateDB",
+            "kind": "resource",
+            "layer": "resource"
+          }
         ],
         "relationships": [
-          { "from": "appclient", "to": "designmanager", "mode": "sync" },
-          { "from": "designmanager", "to": "validatingengine", "mode": "sync" },
-          { "from": "designmanager", "to": "stateaccess", "mode": "sync" },
-          { "from": "stateaccess", "to": "statedb", "mode": "sync" }
+          {
+            "from": "appclient",
+            "to": "designmanager",
+            "mode": "sync"
+          },
+          {
+            "from": "designmanager",
+            "to": "validatingengine",
+            "mode": "sync"
+          },
+          {
+            "from": "designmanager",
+            "to": "stateaccess",
+            "mode": "sync"
+          },
+          {
+            "from": "stateaccess",
+            "to": "statedb",
+            "mode": "sync"
+          }
         ],
         "dynamicViews": [
-          { "useCaseId": "decide", "key": "uc1", "title": "Core",
-            "participants": [ "appclient", "designmanager" ],
-            "edges": [ { "from": "appclient", "to": "designmanager", "mode": "sync" } ] },
-          { "useCaseId": "other", "key": "uc2", "title": "Other" }
+          {
+            "useCaseId": "decide",
+            "key": "uc1",
+            "title": "Core",
+            "participants": [
+              "appclient",
+              "designmanager",
+              "validatingengine",
+              "stateaccess",
+              "statedb"
+            ],
+            "edges": [
+              {
+                "from": "appclient",
+                "to": "designmanager",
+                "mode": "sync",
+                "label": ""
+              },
+              {
+                "from": "designmanager",
+                "to": "validatingengine",
+                "mode": "sync",
+                "label": ""
+              },
+              {
+                "from": "designmanager",
+                "to": "stateaccess",
+                "mode": "sync",
+                "label": ""
+              },
+              {
+                "from": "stateaccess",
+                "to": "statedb",
+                "mode": "sync",
+                "label": ""
+              }
+            ]
+          },
+          {
+            "useCaseId": "other",
+            "key": "uc2",
+            "title": "Other",
+            "participants": [],
+            "edges": []
+          }
         ]
       }
     },
@@ -73,26 +200,131 @@
       "status": 2,
       "kind": 6,
       "model": {
-        "decisions": [ { "topic": "sync vs queued", "decision": "queued", "justifyingObjective": 1 } ],
+        "decisions": [
+          {
+            "topic": "sync vs queued",
+            "decision": "queued",
+            "justifyingObjective": 1
+          }
+        ],
         "deployment": {
           "deliveryStyle": "both",
           "containers": [
-            { "key": "appclient", "name": "AppClient", "components": [ "AppClient" ] },
-            { "key": "designmanager", "name": "DesignManager", "components": [ "DesignManager" ] },
-            { "key": "validatingengine", "name": "ValidatingEngine", "components": [ "ValidatingEngine" ] },
-            { "key": "stateaccess", "name": "StateAccess", "components": [ "StateAccess" ] },
-            { "key": "statedb", "name": "StateDB", "components": [ "StateDB" ] }
+            {
+              "key": "appclient",
+              "name": "AppClient",
+              "components": [
+                "AppClient"
+              ]
+            },
+            {
+              "key": "designmanager",
+              "name": "DesignManager",
+              "components": [
+                "DesignManager"
+              ]
+            },
+            {
+              "key": "validatingengine",
+              "name": "ValidatingEngine",
+              "components": [
+                "ValidatingEngine"
+              ]
+            },
+            {
+              "key": "stateaccess",
+              "name": "StateAccess",
+              "components": [
+                "StateAccess"
+              ]
+            },
+            {
+              "key": "statedb",
+              "name": "StateDB",
+              "components": [
+                "StateDB"
+              ]
+            }
           ],
           "environments": [
-            { "profile": "cloud", "title": "Cloud", "nodes": [ { "name": "cluster", "containerInstances": [
-              { "containerKey": "appclient" }, { "containerKey": "designmanager" }, { "containerKey": "validatingengine" },
-              { "containerKey": "stateaccess" }, { "containerKey": "statedb" } ] } ] },
-            { "profile": "local", "title": "Local", "nodes": [ { "name": "cluster", "containerInstances": [
-              { "containerKey": "appclient" }, { "containerKey": "designmanager" }, { "containerKey": "validatingengine" },
-              { "containerKey": "stateaccess" }, { "containerKey": "statedb" } ] } ] },
-            { "profile": "test", "title": "Test", "nodes": [ { "name": "cluster", "containerInstances": [
-              { "containerKey": "appclient" }, { "containerKey": "designmanager" }, { "containerKey": "validatingengine" },
-              { "containerKey": "stateaccess" }, { "containerKey": "statedb" } ] } ] }
+            {
+              "profile": "cloud",
+              "title": "Cloud",
+              "nodes": [
+                {
+                  "name": "cluster",
+                  "containerInstances": [
+                    {
+                      "containerKey": "appclient"
+                    },
+                    {
+                      "containerKey": "designmanager"
+                    },
+                    {
+                      "containerKey": "validatingengine"
+                    },
+                    {
+                      "containerKey": "stateaccess"
+                    },
+                    {
+                      "containerKey": "statedb"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "profile": "local",
+              "title": "Local",
+              "nodes": [
+                {
+                  "name": "cluster",
+                  "containerInstances": [
+                    {
+                      "containerKey": "appclient"
+                    },
+                    {
+                      "containerKey": "designmanager"
+                    },
+                    {
+                      "containerKey": "validatingengine"
+                    },
+                    {
+                      "containerKey": "stateaccess"
+                    },
+                    {
+                      "containerKey": "statedb"
+                    }
+                  ]
+                }
+              ]
+            },
+            {
+              "profile": "test",
+              "title": "Test",
+              "nodes": [
+                {
+                  "name": "cluster",
+                  "containerInstances": [
+                    {
+                      "containerKey": "appclient"
+                    },
+                    {
+                      "containerKey": "designmanager"
+                    },
+                    {
+                      "containerKey": "validatingengine"
+                    },
+                    {
+                      "containerKey": "stateaccess"
+                    },
+                    {
+                      "containerKey": "statedb"
+                    }
+                  ]
+                }
+              ]
+            }
           ]
         }
       }
@@ -100,7 +332,16 @@
     "7": {
       "status": 2,
       "kind": 7,
-      "model": { "items": [ { "section": "§3.1", "guideline": "g", "status": "pass", "justification": "" } ] }
+      "model": {
+        "items": [
+          {
+            "section": "\u00a73.1",
+            "guideline": "g",
+            "status": "pass",
+            "justification": ""
+          }
+        ]
+      }
     }
   }
 }

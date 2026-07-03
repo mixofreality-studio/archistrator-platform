@@ -370,7 +370,20 @@ func passingSystem(t *testing.T, ucID string) System {
 		{From: mgr.ID, To: ra.ID, Mode: modeSync},
 		{From: ra.ID, To: res.ID, Mode: modeSync},
 	}
-	dvs := []DynamicView{{UseCaseID: ucID, Key: "uc1", Title: "Core flow"}}
+	// The primary view exercises the full chain so every core component participates
+	// (DV-STATIC-COVERAGE) and every sync relationship is covered (DV-REL-COVERAGE).
+	dvs := []DynamicView{{
+		UseCaseID:    ucID,
+		Key:          "uc1",
+		Title:        "Core flow",
+		Participants: []string{client.ID, mgr.ID, eng.ID, ra.ID, res.ID},
+		Edges: []Relationship{
+			{From: client.ID, To: mgr.ID, Mode: modeSync},
+			{From: mgr.ID, To: eng.ID, Mode: modeSync},
+			{From: mgr.ID, To: ra.ID, Mode: modeSync},
+			{From: ra.ID, To: res.ID, Mode: modeSync},
+		},
+	}}
 	return System{Components: []Component{client, mgr, eng, ra, res}, Relationships: rels, DynamicViews: dvs}
 }
 

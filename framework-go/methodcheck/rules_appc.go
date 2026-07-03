@@ -27,10 +27,10 @@ const (
 	// §3.2 Per-subsystem cardinality (guideline → SeverityWarning)
 	ruleAppcCardSubMgr RuleID = "APPC-CARD-SUB-MGR" // SYS-2c: >3 Managers per subsystem
 
-	// §3.5 Interaction rules (guidelines → SeverityWarning, for completeness in coverage)
-	ruleAppcIntUtility  RuleID = "APPC-INT-UTILITY"    // SYS-5a
-	ruleAppcIntMgrEngRA RuleID = "APPC-INT-MGR-ENG-RA" // SYS-5b
-	ruleAppcIntMgrEng   RuleID = "APPC-INT-MGR-ENG"    // SYS-5c
+	// §3.5 Interaction rules (SYS-5a/b/c) are PERMISSIONS, not prohibitions — a
+	// permission is never violated, so they carry no rule ID and no emitter. They are
+	// classified AppCPermission in the coverage matrix; the prohibitions that bound
+	// them are the §4c layering rules + the §6 don'ts (which do have emitters).
 
 	// §6 Service contract metrics
 	ruleAppcSvcSingle   RuleID = "APPC-SVC-SINGLE"    // SYS-SVC-2a: avoid 1-op (Warning)
@@ -47,8 +47,63 @@ func appCInteractionDonts(s System) []Finding {
 	idx := componentIndex(s)
 	var out []Finding
 	out = append(out, clientMultiMgrDonts(s, idx)...)
+	out = append(out, mgrMultiQueueDonts(s, idx)...)
 	out = append(out, relationshipDonts(s, idx)...)
 	return out
+}
+
+// mgrMultiQueueDonts detects SYS-6b — a Manager issuing queued calls to more than
+// one distinct Manager within a single dynamic-view (use case). Analogous to
+// clientMultiMgrDonts: a use-case call chain must fan a Manager's queued work out
+// to at most one downstream Manager, else the chain couples Managers.
+func mgrMultiQueueDonts(s System, idx map[string]Component) []Finding {
+	var out []Finding
+	for i, dv := range s.DynamicViews {
+		targetsByMgr := managerQueuedManagerCalls(dv, idx)
+		for _, srcID := range sortedComponentIDs(setOfKeys(targetsByMgr)) {
+			targets := targetsByMgr[srcID]
+			if len(targets) <= 1 {
+				continue
+			}
+			section := fmt.Sprintf("dynamic view %d (%s)", i+1, dv.Key)
+			out = append(out, Finding{
+				RuleID:   ruleAppcDontMgrMultiQueue,
+				Severity: SeverityError,
+				Message:  fmt.Sprintf("%s: Manager %s issues queued calls to %d distinct Managers in one use case; a Manager must not fan queued work out to more than one Manager in the same use case (App-C §3.6b)", section, idx[srcID].Name, len(targets)),
+				Location: loc(i+1, section),
+			})
+		}
+	}
+	return out
+}
+
+// managerQueuedManagerCalls maps each calling Manager's ID to the set of distinct
+// Managers it issues queued calls to within one dynamic-view.
+func managerQueuedManagerCalls(dv DynamicView, idx map[string]Component) map[string]map[string]bool {
+	byMgr := make(map[string]map[string]bool)
+	for _, e := range dv.Edges {
+		from, fromOK := idx[e.From]
+		to, toOK := idx[e.To]
+		if !fromOK || !toOK {
+			continue
+		}
+		if from.Kind == kindManager && to.Kind == kindManager && e.Mode == modeQueued {
+			if byMgr[e.From] == nil {
+				byMgr[e.From] = make(map[string]bool)
+			}
+			byMgr[e.From][e.To] = true
+		}
+	}
+	return byMgr
+}
+
+// setOfKeys returns the key set of a map as a bool-set (for deterministic sorting).
+func setOfKeys(m map[string]map[string]bool) map[string]bool {
+	set := make(map[string]bool, len(m))
+	for k := range m {
+		set[k] = true
+	}
+	return set
 }
 
 // clientMultiMgrDonts detects SYS-6a — a Client calling more than one Manager
@@ -278,6 +333,16 @@ func appCServiceContract(s System) []Finding {
 				RuleID:   ruleAppcSvcSingle,
 				Severity: SeverityWarning,
 				Message:  fmt.Sprintf("%s has 1 op; App-C §6.2a advises avoiding contracts with a single operation", section),
+				Location: l,
+			})
+		default:
+			// n == 0 or 2..12: the non-flagged range. SVC-2b (strive for 3–5) is
+			// advisory Info — it confirms the ideal band and nudges contracts at the
+			// edges (2, or 6..12) toward it without ever failing the verdict.
+			out = append(out, Finding{
+				RuleID:   ruleAppcSvcStrive,
+				Severity: SeverityInfo,
+				Message:  fmt.Sprintf("%s has %d ops; App-C §6.2b strives for 3–5 operations per contract", section, n),
 				Location: l,
 			})
 		}
