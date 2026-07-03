@@ -358,6 +358,128 @@ const (
 type Project struct {
 	ID    string          `json:"id"`
 	Slots map[string]Slot `json:"slots"`
+
+	// ServiceContracts mirrors the top-level `.serviceContracts` map (component key →
+	// contract document) the projectstate RA owns. Nil until the first contract is
+	// seeded. Decoded leniently — the STP rule family reads it to resolve each test
+	// step's {component, operation} against the designed contract surface.
+	ServiceContracts map[string]ServiceContract `json:"serviceContracts,omitempty"`
+
+	// TestingState mirrors the top-level `.testingState` record. Nil until the first
+	// testing activity produces output; the STP rule family reads
+	// TestingState.SystemTestPlan.
+	TestingState *TestingState `json:"testingState,omitempty"`
+}
+
+// ---- service-contract corpus (mirror projectstate/servicecontract.go) ----
+
+// ServiceContract is the LIGHTWEIGHT structural mirror of one component's contract
+// document stored in `.serviceContracts[component]`. It carries only the fields the
+// STP rules read (identity, layer, the `$defs` schema map, and the interface's
+// operation surface); the app-side owner also carries codegen metadata (goPackage,
+// deps, infra, stub) the rules do not consult. Decoded omit-empty-tolerant.
+type ServiceContract struct {
+	Component string                     `json:"component"`
+	Layer     string                     `json:"layer"`
+	GoPackage string                     `json:"goPackage,omitempty"`
+	Title     string                     `json:"title,omitempty"`
+	Defs      map[string]json.RawMessage `json:"$defs,omitempty"`
+	Interface ContractInterface          `json:"interface"`
+}
+
+// ContractInterface mirrors the contract document's `interface`: the RPC surface's
+// name, its Method layer, and its operations.
+type ContractInterface struct {
+	Name       string              `json:"name"`
+	Layer      string              `json:"layer"`
+	Operations []ContractOperation `json:"operations"`
+}
+
+// ContractOperation is one method on the interface. A nil Params slice encodes as
+// `null` — the never-detailed-designed STUB marker STP-STALE-CONTRACT keys on.
+type ContractOperation struct {
+	Name   string          `json:"name"`
+	Params []ContractParam `json:"params"`
+	Result json.RawMessage `json:"result,omitempty"`
+	Error  bool            `json:"error"`
+}
+
+// ContractParam is one operation parameter. Schema is a JSON Schema node (raw) —
+// either a `$ref` into the contract's `$defs` or an inline schema. Pointer marks a
+// nullable pointer parameter (an OPTIONAL param — absence is not a missing-required).
+type ContractParam struct {
+	Name    string          `json:"name"`
+	Pointer bool            `json:"pointer,omitempty"`
+	Schema  json.RawMessage `json:"schema"`
+}
+
+// ---- system-test-plan (mirror projectstate/phaseartifacts.go TestingState) ----
+
+// TestingState mirrors the top-level `.testingState` record. Only the SystemTestPlan
+// is carried — the STP rule family's sole input.
+type TestingState struct {
+	SystemTestPlan *SystemTestPlan `json:"systemTestPlan,omitempty"`
+}
+
+// SystemTestPlan mirrors `.testingState.systemTestPlan` — the N-STP output the STP
+// rule family validates against the committed contracts + architecture.
+type SystemTestPlan struct {
+	UseCaseIndex []string       `json:"useCaseIndex,omitempty"`
+	Entries      []string       `json:"entries,omitempty"`
+	Scenarios    []TestScenario `json:"scenarios,omitempty"`
+	Status       string         `json:"status,omitempty"`
+}
+
+// TestScenario is one black-box scenario tracing to a core use case.
+type TestScenario struct {
+	ID          string     `json:"id"`
+	UseCase     string     `json:"useCase"`
+	Title       string     `json:"title"`
+	Description string     `json:"description,omitempty"`
+	Cases       []TestCase `json:"cases,omitempty"`
+}
+
+// TestCase is one falsification attempt: happy | negative | boundary.
+type TestCase struct {
+	ID              string     `json:"id"`
+	Kind            string     `json:"kind"`
+	Title           string     `json:"title"`
+	Proves          string     `json:"proves,omitempty"`
+	ExpectedOutcome string     `json:"expectedOutcome,omitempty"`
+	Steps           []TestStep `json:"steps,omitempty"`
+}
+
+// TestStep is one manager-operation call with its inputs and expected outcome.
+type TestStep struct {
+	Seq       int        `json:"seq"`
+	Component string     `json:"component"`
+	Operation string     `json:"operation"`
+	Status    string     `json:"status,omitempty"`
+	Inputs    []TestArg  `json:"inputs,omitempty"`
+	Expect    TestExpect `json:"expect"`
+	Assertion string     `json:"assertion,omitempty"`
+}
+
+// TestArg is one concrete input argument to a step's operation call.
+type TestArg struct {
+	Name      string `json:"name"`
+	Value     string `json:"value"`
+	SchemaRef string `json:"schemaRef,omitempty"`
+}
+
+// TestExpect is a step's expected outcome: a result value OR an expected error.
+type TestExpect struct {
+	Result        string `json:"result,omitempty"`
+	ErrorExpected bool   `json:"errorExpected"`
+	ErrorCode     string `json:"errorCode,omitempty"`
+}
+
+// systemTestPlan returns the committed System Test Plan, or nil when absent.
+func (p Project) systemTestPlan() *SystemTestPlan {
+	if p.TestingState == nil {
+		return nil
+	}
+	return p.TestingState.SystemTestPlan
 }
 
 // slotByKind returns the committed slot for a kind ordinal, or false when the slot

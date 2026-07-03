@@ -1,0 +1,102 @@
+{
+  "id": "billing-drift-demo",
+  "slots": {
+    "4": {
+      "status": 2,
+      "kind": 4,
+      "model": {
+        "decisions": [
+          {
+            "useCase": {
+              "id": "bill-the-user-for-usage",
+              "name": "Bill the User for Usage",
+              "classification": "core"
+            }
+          }
+        ]
+      }
+    },
+    "5": {
+      "status": 2,
+      "kind": 5,
+      "model": {
+        "components": [
+          { "id": "billing-manager", "name": "BillingManager", "kind": "manager", "layer": "manager" }
+        ],
+        "relationships": [],
+        "dynamicViews": []
+      }
+    }
+  },
+  "serviceContracts": {
+    "billingManager": {
+      "component": "billingManager",
+      "layer": "Manager",
+      "title": "billing contract",
+      "interface": {
+        "name": "BillingManager",
+        "layer": "Manager",
+        "operations": [
+          { "name": "CloseBillingPeriod", "params": null, "error": true },
+          { "name": "SettleAccount", "params": null, "error": true }
+        ]
+      }
+    },
+    "settlementManager": {
+      "component": "settlementManager",
+      "layer": "Manager",
+      "title": "settlement contract",
+      "$defs": { "CustomerID": { "type": "string" } },
+      "interface": {
+        "name": "SettlementManager",
+        "layer": "Manager",
+        "operations": [
+          {
+            "name": "CloseSettlementCycle",
+            "params": [ { "name": "customerID", "schema": { "$ref": "#/$defs/CustomerID" } } ],
+            "error": true
+          }
+        ]
+      }
+    }
+  },
+  "testingState": {
+    "systemTestPlan": {
+      "scenarios": [
+        {
+          "id": "STP-BILL",
+          "useCase": "bill-the-user-for-usage",
+          "title": "Bill the user for usage",
+          "cases": [
+            {
+              "id": "H1",
+              "kind": "happy",
+              "steps": [
+                {
+                  "seq": 1,
+                  "component": "billingManager",
+                  "operation": "closeBillingPeriod",
+                  "inputs": [ { "name": "customerID", "value": "cust-1" } ],
+                  "expect": { "errorExpected": false }
+                }
+              ]
+            },
+            {
+              "id": "N1",
+              "kind": "negative",
+              "steps": [
+                {
+                  "seq": 1,
+                  "component": "billingManager",
+                  "operation": "closeBillingPeriod",
+                  "inputs": [],
+                  "expect": { "errorExpected": true, "errorCode": "GatewayDeclined" }
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    }
+  }
+}

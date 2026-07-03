@@ -1,0 +1,28 @@
+{
+  "id": "no-plan-demo",
+  "slots": {
+    "5": {
+      "status": 2,
+      "kind": 5,
+      "model": {
+        "components": [
+          { "id": "settlement-manager", "name": "SettlementManager", "kind": "manager", "layer": "manager" }
+        ],
+        "relationships": [],
+        "dynamicViews": []
+      }
+    }
+  },
+  "serviceContracts": {
+    "settlementManager": {
+      "component": "settlementManager",
+      "layer": "Manager",
+      "title": "settlement contract",
+      "interface": {
+        "name": "SettlementManager",
+        "layer": "Manager",
+        "operations": [ { "name": "CloseSettlementCycle", "params": [], "error": true } ]
+      }
+    }
+  }
+}
