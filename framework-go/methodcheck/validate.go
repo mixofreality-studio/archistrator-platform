@@ -21,6 +21,7 @@ func ValidateProject(p Project) ([]Finding, error) {
 		operationalConceptsFindings,
 		standardCheckFindings,
 		appCFindings,
+		systemTestPlanFindings,
 	} {
 		f, err := run(p)
 		if err != nil {
@@ -138,6 +139,20 @@ func appCFindings(p Project) ([]Finding, error) {
 		findings = applyWaivers(findings, sc)
 	}
 	return findings, nil
+}
+
+// systemTestPlanFindings runs the STP-* System-Test-Plan family (rules_testplan.go)
+// as a verb-gated design rule, following the same prerequisite-gating posture as the
+// design verbs above: it fires ONLY when .testingState.systemTestPlan is non-empty and
+// is a total no-op otherwise (nil, nil), so pre-testing-phase projects are unaffected.
+// When the plan IS committed but a prerequisite (service contracts, the System in slot
+// 5, the core use cases in slot 4) is not, validateSystemTestPlan returns a
+// *ContractMisuseError — the same coherence fault the caller (Check) surfaces via
+// t.Errorf. ValidateProject (and thus ValidateProjectJSON) carries no ProjectSpec, so
+// the STP walk case-folds through defaultNormalizer; step→contract-op resolution stays
+// case-sensitive, so a plan step must name a frozen contract operation exactly.
+func systemTestPlanFindings(p Project) ([]Finding, error) {
+	return validateSystemTestPlan(p, nil)
 }
 
 // ValidateProjectJSON is the pure, non-test seam: decode a raw

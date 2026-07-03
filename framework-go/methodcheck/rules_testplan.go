@@ -38,8 +38,9 @@ import (
 // The family runs ONLY when the plan is non-empty AND its prerequisites (service
 // contracts + slot 5 + slot 4) are committed; a plan authored without them is a
 // ContractMisuse coherence fault (surfaced by validateSystemTestPlan's error return,
-// NOT a finding). The family is NOT wired into ValidateProject yet — it is exercised
-// behind validateSystemTestPlan pending app-side wiring.
+// NOT a finding). The family is wired into ValidateProject via systemTestPlanFindings
+// (validate.go), which passes a nil normalizer so the walk case-folds through
+// defaultNormalizer.
 //
 // Component naming bridge: STP steps name a contract KEY (camelCase, e.g.
 // settlementManager); dynamic-view participants are kebab-case slot-5 ids
