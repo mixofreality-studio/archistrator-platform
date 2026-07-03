@@ -9,6 +9,3 @@ use (
 	./framework-go-infrastructure-postgres
 	./framework-go-infrastructure-temporal
 )
-
-
-replace github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0 => ./framework-go
