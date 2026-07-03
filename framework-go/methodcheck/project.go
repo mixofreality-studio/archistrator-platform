@@ -235,10 +235,20 @@ type OperationalDecision struct {
 	JustifyingObjective int    `json:"justifyingObjective"`
 }
 
-// DeploymentTopology is the typed deployment model.
+// DeploymentTopology is the typed C4 deployment model.
 type DeploymentTopology struct {
 	DeliveryStyle string                  `json:"deliveryStyle"`
+	Containers    []DeployContainer       `json:"containers"`
 	Environments  []DeploymentEnvironment `json:"environments"`
+}
+
+// DeployContainer is a deployable unit (C4 Container) packaging System components by name.
+type DeployContainer struct {
+	Key        string   `json:"key"`
+	Name       string   `json:"name"`
+	Technology string   `json:"technology"`
+	Description string   `json:"description"`
+	Components []string `json:"components"` // System component NAMES
 }
 
 // DeploymentEnvironment is the set of nodes for one profile.
@@ -248,18 +258,40 @@ type DeploymentEnvironment struct {
 	Nodes   []DeploymentNode `json:"nodes"`
 }
 
-// DeploymentNode is a nestable deployment node.
+// DeploymentNode is a nestable C4 deployment node.
 type DeploymentNode struct {
-	Name       string              `json:"name"`
-	Technology string              `json:"technology"`
-	Children   []DeploymentNode    `json:"children"`
-	Instances  []ContainerInstance `json:"instances"`
+	Name                    string                   `json:"name"`
+	Technology              string                   `json:"technology"`
+	Description             string                   `json:"description"`
+	Instances               int                      `json:"instances"`
+	Tags                    []string                 `json:"tags"`
+	Children                []DeploymentNode         `json:"children"`
+	InfrastructureNodes     []InfrastructureNode     `json:"infrastructureNodes"`
+	ContainerInstances      []ContainerInstance      `json:"containerInstances"`
+	SoftwareSystemInstances []SoftwareSystemInstance `json:"softwareSystemInstances"`
 }
 
-// ContainerInstance places a Component into a node.
+// ContainerInstance instances a declared DeployContainer inside a node.
 type ContainerInstance struct {
-	ComponentID string `json:"componentId"`
-	Note        string `json:"note"`
+	ContainerKey string   `json:"containerKey"`
+	Note         string   `json:"note"`
+	Tags         []string `json:"tags"`
+}
+
+// InfrastructureNode is non-deployable infra (gateway, DB engine, broker).
+type InfrastructureNode struct {
+	Name        string   `json:"name"`
+	Technology  string   `json:"technology"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
+}
+
+// SoftwareSystemInstance is an external software system (GitHub, Anthropic, Keycloak).
+type SoftwareSystemInstance struct {
+	Name        string   `json:"name"`
+	Technology  string   `json:"technology"`
+	Description string   `json:"description"`
+	Tags        []string `json:"tags"`
 }
 
 // StandardCheck mirrors the StandardCheck slot model.
