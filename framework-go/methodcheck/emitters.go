@@ -26,7 +26,7 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleSysNoUp, ruleSysNoSide, ruleSysNoSkip,
 		ruleSysPubOrig, ruleSysPubDest, ruleSysDontMtoM, ruleSysDontCli,
 		ruleSysCardMgr, ruleSysCardRatio, ruleSysCardTotal,
-		ruleArchChainCov, ruleSysNameUniq,
+		ruleArchChainCov, ruleSysNameUniq, ruleUseCaseDynamicMissing,
 
 		// ---- Dynamic views (rules_dynamic.go) ----
 		ruleDVPartExist, ruleDVEdgeEnds, ruleDVEdgeInModel, ruleDVSingleMgr,

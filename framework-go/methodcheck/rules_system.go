@@ -20,6 +20,13 @@ const (
 	ruleSysCardTotal RuleID = "SYS-CARD-TOTAL"
 	ruleArchChainCov RuleID = "ARCH-CHAINCOV"
 	ruleSysNameUniq  RuleID = "SYS-NAME-UNIQUE"
+	// ruleUseCaseDynamicMissing is the FOUNDER EXTENSION beyond Löwy (2026-07-05):
+	// where ARCH-CHAINCOV requires a supporting dynamic view for every CORE use case,
+	// USECASE-DYNAMIC-MISSING requires one for EVERY use case in the committed
+	// CoreUseCases set — core AND nonCore variations alike. It is the dynamic-view twin
+	// of USECASE-ACTIVITY-MISSING (every use case must carry a non-empty activity
+	// diagram): every use case must ALSO appear as a call chain in the System model.
+	ruleUseCaseDynamicMissing RuleID = "USECASE-DYNAMIC-MISSING"
 )
 
 // layerRank collapses Manager+Engine onto the Business-Logic rank so an M→E edge
@@ -273,6 +280,39 @@ func archChainCoverage(s System, c CoreUseCases) []Finding {
 				Location: loc(i+1, section),
 			})
 		}
+	}
+	return out
+}
+
+// usecaseDynamicCoverage is the FOUNDER EXTENSION beyond Löwy (2026-07-05): every use
+// case in the committed CoreUseCases set — core AND nonCore variations alike — must
+// carry its own dynamic view (call chain) in the System model. It is the dynamic-view
+// twin of USECASE-ACTIVITY-MISSING (every use case must carry a non-empty activity
+// diagram). ARCH-CHAINCOV independently pins the core subset (Löwy validates only the
+// core); this rule pins the WHOLE set, so a missing CORE view legitimately trips both
+// (each rule states its own rationale) while a missing nonCore-variation view — the
+// case Löwy's core-only gate misses — is caught here alone.
+func usecaseDynamicCoverage(s System, c CoreUseCases) []Finding {
+	covered := make(map[string]bool, len(s.DynamicViews))
+	for _, dv := range s.DynamicViews {
+		covered[dv.UseCaseID] = true
+	}
+	var out []Finding
+	for i, d := range c.Decisions {
+		if covered[d.UseCase.ID] {
+			continue
+		}
+		kind := "use case"
+		if d.UseCase.Classification != classCore {
+			kind = "nonCore use-case variation"
+		}
+		section := fmt.Sprintf("use case %d (%s)", i+1, d.UseCase.Name)
+		out = append(out, Finding{
+			RuleID:   ruleUseCaseDynamicMissing,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("%s has no dynamic view in the System; the founder extension requires EVERY %s (core and nonCore variation alike) to carry its own call chain", section, kind),
+			Location: loc(i+1, section),
+		})
 	}
 	return out
 }

@@ -74,6 +74,7 @@ func validateArchitecture(s System, c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, sysLegality(s)...)
 	findings = append(findings, sysCardinality(s)...)
 	findings = append(findings, archChainCoverage(s, c)...)
+	findings = append(findings, usecaseDynamicCoverage(s, c)...)
 	findings = append(findings, dynamicViewConsistency(s)...)
 	return finalize(findings), nil
 }

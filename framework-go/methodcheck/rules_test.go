@@ -579,6 +579,70 @@ func TestValidateArchitecture_ChainCoverageFails(t *testing.T) {
 	}
 }
 
+// TestValidateArchitecture_UseCaseDynamicMissing_NonCoreVariation is the founder
+// extension (2026-07-05): a nonCore use-case variation without its own dynamic view
+// trips USECASE-DYNAMIC-MISSING even though ARCH-CHAINCOV (core-only) stays silent.
+func TestValidateArchitecture_UseCaseDynamicMissing_NonCoreVariation(t *testing.T) {
+	ucID := nid()
+	s := passingSystem(t, ucID) // covers ucID (the core UC) only
+	variationOf := ucID
+	c := CoreUseCases{Decisions: []UseCaseDecision{
+		{UseCase: UseCase{ID: ucID, Name: "Core flow", Classification: classCore}},
+		{UseCase: UseCase{ID: nid(), Name: "Edge variation", Classification: "nonCore", VariationOf: &variationOf}},
+	}}
+	out, _ := validateArchitecture(s, c)
+	if !hasRule(out, ruleUseCaseDynamicMissing) {
+		t.Fatalf("expected USECASE-DYNAMIC-MISSING for the uncovered nonCore variation, got %+v", out.Findings)
+	}
+	if hasRule(out, ruleArchChainCov) {
+		t.Fatalf("ARCH-CHAINCOV must stay silent for a covered core UC; got %+v", out.Findings)
+	}
+	if out.Verdict != VerdictFail {
+		t.Fatalf("expected VerdictFail")
+	}
+}
+
+// TestValidateArchitecture_UseCaseDynamicMissing_CoreTripsBoth: a missing CORE view
+// legitimately trips BOTH ARCH-CHAINCOV (Löwy) and USECASE-DYNAMIC-MISSING (founder).
+func TestValidateArchitecture_UseCaseDynamicMissing_CoreTripsBoth(t *testing.T) {
+	ucID := nid()
+	s := passingSystem(t, ucID)
+	c := CoreUseCases{Decisions: []UseCaseDecision{
+		{UseCase: UseCase{ID: ucID, Name: "Core flow", Classification: classCore}},
+		{UseCase: UseCase{ID: nid(), Name: "Uncovered core", Classification: classCore}},
+	}}
+	out, _ := validateArchitecture(s, c)
+	if !hasRule(out, ruleArchChainCov) || !hasRule(out, ruleUseCaseDynamicMissing) {
+		t.Fatalf("expected BOTH ARCH-CHAINCOV and USECASE-DYNAMIC-MISSING for the uncovered core UC, got %+v", out.Findings)
+	}
+}
+
+// TestValidateArchitecture_UseCaseDynamicMissing_AllCoveredPasses: every use case
+// (core + nonCore) covered by a view → no USECASE-DYNAMIC-MISSING.
+func TestValidateArchitecture_UseCaseDynamicMissing_AllCoveredPasses(t *testing.T) {
+	ucID := nid()
+	s := passingSystem(t, ucID)
+	variationID := nid()
+	// Add a second view for the nonCore variation, reusing the same participants/edges.
+	primary := s.DynamicViews[0]
+	s.DynamicViews = append(s.DynamicViews, DynamicView{
+		UseCaseID:    variationID,
+		Key:          "uc2",
+		Title:        "Variation flow",
+		Participants: primary.Participants,
+		Edges:        primary.Edges,
+	})
+	variationOf := ucID
+	c := CoreUseCases{Decisions: []UseCaseDecision{
+		{UseCase: UseCase{ID: ucID, Name: "Core flow", Classification: classCore}},
+		{UseCase: UseCase{ID: variationID, Name: "Edge variation", Classification: "nonCore", VariationOf: &variationOf}},
+	}}
+	out, _ := validateArchitecture(s, c)
+	if hasRule(out, ruleUseCaseDynamicMissing) {
+		t.Fatalf("USECASE-DYNAMIC-MISSING must stay silent when every use case has a view; got %+v", out.Findings)
+	}
+}
+
 func TestValidateArchitecture_DuplicateComponentNameFails(t *testing.T) {
 	a := comp(t, "Design Manager", kindManager)
 	b := comp(t, "design manager", kindManager)
