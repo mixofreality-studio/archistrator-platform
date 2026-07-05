@@ -433,7 +433,10 @@ func TestValidateArchitecture_SyncManagerToManagerFails(t *testing.T) {
 func TestValidateArchitecture_QueuedManagerToManagerLegal(t *testing.T) {
 	m1 := comp(t, "AManager", kindManager)
 	m2 := comp(t, "BManager", kindManager)
-	s := System{Components: []Component{m1, m2}, Relationships: []Relationship{{From: m1.ID, To: m2.ID, Mode: modeQueued}}}
+	// A ResourceAccess keeps the system non-degenerate (SYSTEM-LAYER-DEGENERATE), so this
+	// test isolates the queued-M→M legality it is about.
+	ra := comp(t, "StateAccess", kindResourceAccess)
+	s := System{Components: []Component{m1, m2, ra}, Relationships: []Relationship{{From: m1.ID, To: m2.ID, Mode: modeQueued}}}
 	res, _ := validateArchitecture(s, CoreUseCases{})
 	if hasRule(res, ruleSysNoSide) {
 		t.Fatalf("queued M→M is legal; should not trip SYS-NOSIDE: %+v", res.Findings)
@@ -499,6 +502,9 @@ func TestValidateArchitecture_GoldenRatioIsWarningNotFail(t *testing.T) {
 		comp(t, "EngineA", kindEngine),
 		comp(t, "EngineB", kindEngine),
 		comp(t, "EngineC", kindEngine),
+		// A ResourceAccess keeps the system non-degenerate so the golden-ratio Warning is
+		// the only rule under test.
+		comp(t, "StateAccess", kindResourceAccess),
 	}
 	out, _ := validateArchitecture(System{Components: comps}, CoreUseCases{})
 	sev, ok := severityOf(out, ruleSysCardRatio)
@@ -546,8 +552,12 @@ func TestValidateArchitecture_UtilityEdgesExemptFromLayerRules(t *testing.T) {
 	resource := comp(t, "StateDB", kindResource)
 	eng := comp(t, "ProcessEngine", kindEngine)
 	client := comp(t, "WebClient", kindClient)
+	// A Manager + ResourceAccess keep the system non-degenerate (SYSTEM-LAYER-DEGENERATE),
+	// so this test isolates the Utility-edge layer exemption it is about.
+	mgr := comp(t, "CoreManager", kindManager)
+	ra := comp(t, "StateAccess", kindResourceAccess)
 	s := System{
-		Components: []Component{util, resource, eng, client},
+		Components: []Component{util, resource, eng, client, mgr, ra},
 		Relationships: []Relationship{
 			{From: resource.ID, To: util.ID, Mode: modeSync},
 			{From: eng.ID, To: util.ID, Mode: modeSync},

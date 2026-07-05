@@ -1,6 +1,9 @@
 package methodcheck
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // rules_system.go ports the ValidateArchitecture predicate suite (whole-graph
 // layering legality, cardinality, call-chain coverage) + the shared edgeLegality
@@ -27,6 +30,17 @@ const (
 	// of USECASE-ACTIVITY-MISSING (every use case must carry a non-empty activity
 	// diagram): every use case must ALSO appear as a call chain in the System model.
 	ruleUseCaseDynamicMissing RuleID = "USECASE-DYNAMIC-MISSING"
+	// ruleSystemLayerDegenerate (F81, 2026-07-05) catches a layer-DEGENERATE System: one
+	// whose components collapse to a single layer because a drafting agent OMITTED the
+	// per-component layer (the strict app codec silently defaults an absent enum field to
+	// its zero value — layer=client — so an all-client architecture decodes cleanly and
+	// passes every layer-interaction rule VACUOUSLY). Two independent signals: (1) the
+	// system has zero Managers or zero ResourceAccess (a Method system must encapsulate at
+	// least one workflow and one resource); (2) a component's NAME stereotype suffix
+	// contradicts its declared layer ("…Manager"→manager, "…Engine"→engine,
+	// "…Access"→resourceAccess, "…Client"→client, "…Store"/"…Resource"→resource) — the
+	// fingerprint of an omitted, defaulted layer.
+	ruleSystemLayerDegenerate RuleID = "SYSTEM-LAYER-DEGENERATE"
 )
 
 // layerRank collapses Manager+Engine onto the Business-Logic rank so an M→E edge
@@ -213,6 +227,84 @@ func checkNoClientSkip(from, to Component, section string, location *Location) *
 		}
 	}
 	return nil
+}
+
+// systemLayerDegenerate is the F81 gate against a layer-DEGENERATE System (see
+// ruleSystemLayerDegenerate). It fires ERROR findings when the system has zero Managers
+// or zero ResourceAccess, and per component whose NAME stereotype suffix contradicts its
+// declared layer. It is the authoritative twin of the app-side review-panel finding
+// systemdesign.systemLayerDegenerateFindings; putDraftModel + CI both run this.
+func systemLayerDegenerate(s System) []Finding {
+	var out []Finding
+	var managers, resourceAccess int
+	for _, c := range s.Components {
+		switch c.Kind {
+		case kindManager:
+			managers++
+		case kindResourceAccess:
+			resourceAccess++
+		}
+	}
+	if managers == 0 {
+		out = append(out, Finding{
+			RuleID:   ruleSystemLayerDegenerate,
+			Severity: SeverityError,
+			Message:  "system has zero Managers; a Method system must encapsulate at least one workflow in a Manager (an all-client architecture is the F81 corruption where every component's layer was omitted and defaulted to client)",
+			Location: loc(0, "system layers"),
+		})
+	}
+	if resourceAccess == 0 {
+		out = append(out, Finding{
+			RuleID:   ruleSystemLayerDegenerate,
+			Severity: SeverityError,
+			Message:  "system has zero ResourceAccess components; a Method system must encapsulate at least one resource behind a ResourceAccess (an all-client architecture is the F81 corruption where every component's layer was omitted and defaulted to client)",
+			Location: loc(0, "system layers"),
+		})
+	}
+	for i, c := range s.Components {
+		want, suffix, mismatch := nameLayerMismatch(c.Name, c.Layer)
+		if !mismatch {
+			continue
+		}
+		section := fmt.Sprintf("component %d (%s)", i+1, c.Name)
+		out = append(out, Finding{
+			RuleID:   ruleSystemLayerDegenerate,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("%s: name ends in %q but declares layer %q instead of %q; a component's name stereotype and its layer must agree (a mismatch is the fingerprint of an omitted, defaulted layer)", section, suffix, c.Layer, want),
+			Location: loc(i+1, section),
+		})
+	}
+	return out
+}
+
+// nameLayerMismatch reports whether a component NAME's Method stereotype suffix
+// contradicts its declared layer. Returns the layer the name implies, the matched
+// suffix, and whether there is a mismatch. A name with no recognized suffix, or an empty
+// layer, never mismatches here (empty/absent layer is caught by the structure signals
+// and the app-side required-field gate).
+func nameLayerMismatch(name, layer string) (want, suffix string, mismatch bool) {
+	// Ordered: check each stereotype suffix; the first match wins.
+	suffixes := []struct {
+		suffix string
+		layer  string
+	}{
+		{"Manager", layerManager},
+		{"Engine", layerEngine},
+		{"Access", layerResourceAccess},
+		{"Client", layerClient},
+		{"Store", layerResource},
+		{"Resource", layerResource},
+	}
+	trimmed := strings.TrimSpace(name)
+	for _, sfx := range suffixes {
+		if strings.HasSuffix(trimmed, sfx.suffix) {
+			if layer != "" && layer != sfx.layer {
+				return sfx.layer, sfx.suffix, true
+			}
+			return sfx.layer, sfx.suffix, false
+		}
+	}
+	return layer, "", false
 }
 
 func sysCardinality(s System) []Finding {

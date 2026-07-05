@@ -71,6 +71,7 @@ func validateCoreUseCases(c CoreUseCases) (ValidationResult, error) {
 func validateArchitecture(s System, c CoreUseCases) (ValidationResult, error) {
 	var findings []Finding
 	findings = append(findings, componentNameUnique(s)...)
+	findings = append(findings, systemLayerDegenerate(s)...)
 	findings = append(findings, sysLegality(s)...)
 	findings = append(findings, sysCardinality(s)...)
 	findings = append(findings, archChainCoverage(s, c)...)
