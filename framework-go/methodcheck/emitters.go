@@ -27,6 +27,13 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleSysPubOrig, ruleSysPubDest, ruleSysDontMtoM, ruleSysDontCli,
 		ruleSysCardMgr, ruleSysCardRatio, ruleSysCardTotal,
 		ruleArchChainCov, ruleSysNameUniq, ruleUseCaseDynamicMissing,
+		ruleSystemLayerDegenerate,
+
+		// ---- State-validation twins (rules_statevalidation.go) ----
+		ruleSysRAOrphan, ruleSysEncapsulates, ruleSysRelDup, ruleDVChainConn,
+		ruleUCActPresent, ruleUCGuardLabel, ruleUCVariationRef,
+		ruleVolAxisExplicit, ruleStdStatusExplicit, ruleStdFailOpen,
+		ruleGlossFourQ, ruleSRIDUnique, ruleOPCTopicCoverage,
 
 		// ---- Dynamic views (rules_dynamic.go) ----
 		ruleDVPartExist, ruleDVEdgeEnds, ruleDVEdgeInModel, ruleDVSingleMgr,

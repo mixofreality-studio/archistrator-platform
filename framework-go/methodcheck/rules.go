@@ -52,8 +52,20 @@ func validateVolatilities(v Volatilities, g Glossary, sr ScrubbedRequirements) (
 	findings = append(findings, volTrace(v, sr)...)
 	findings = append(findings, volGloss(v, g)...)
 	findings = append(findings, volAxis(v)...)
+	findings = append(findings, volAxisExplicit(v)...)
 	findings = append(findings, volNatureOfBusiness(v)...)
 	return finalize(findings), nil
+}
+
+// validateGlossary runs the GLOSS-FOURQ twin over the committed Glossary.
+func validateGlossary(g Glossary) (ValidationResult, error) {
+	return finalize(glossFourQ(g)), nil
+}
+
+// validateScrubbedRequirements runs the SR-ID-UNIQUE twin over the committed
+// ScrubbedRequirements.
+func validateScrubbedRequirements(sr ScrubbedRequirements) (ValidationResult, error) {
+	return finalize(srIDUnique(sr)), nil
 }
 
 // validateCoreUseCases ports ArtifactValidationEngine.ValidateCoreUseCases.
@@ -64,6 +76,9 @@ func validateCoreUseCases(c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, actorNamesUnique(c)...)
 	findings = append(findings, activityNodeIDsUnique(c)...)
 	findings = append(findings, ucActivityDiagram(c)...)
+	findings = append(findings, ucActPresent(c)...)
+	findings = append(findings, ucGuardLabel(c)...)
+	findings = append(findings, variationRef(c)...)
 	return finalize(findings), nil
 }
 
@@ -76,6 +91,10 @@ func validateArchitecture(s System, c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, sysCardinality(s)...)
 	findings = append(findings, archChainCoverage(s, c)...)
 	findings = append(findings, usecaseDynamicCoverage(s, c)...)
+	findings = append(findings, raOrphan(s)...)
+	findings = append(findings, encapsulates(s)...)
+	findings = append(findings, relDup(s)...)
+	findings = append(findings, dvChainConnected(s)...)
 	findings = append(findings, dynamicViewConsistency(s)...)
 	return finalize(findings), nil
 }
@@ -87,13 +106,19 @@ func validateOperationalConcepts(o OperationalConcepts, m MissionStatement, s Sy
 	}
 	var findings []Finding
 	findings = append(findings, opcObjRef(o, m)...)
+	findings = append(findings, opcTopicCoverage(o)...)
 	findings = append(findings, deploymentConsistency(o, s)...)
 	return finalize(findings), nil
 }
 
-// validateStandardCheck ports ArtifactValidationEngine.ValidateStandardCheck.
+// validateStandardCheck ports ArtifactValidationEngine.ValidateStandardCheck and adds
+// the STD-STATUS-EXPLICIT + STD-FAIL-OPEN twins.
 func validateStandardCheck(sc StandardCheck) (ValidationResult, error) {
-	return finalize(stdWaive(sc)), nil
+	var findings []Finding
+	findings = append(findings, stdWaive(sc)...)
+	findings = append(findings, stdStatusExplicit(sc)...)
+	findings = append(findings, stdFailOpen(sc)...)
+	return finalize(findings), nil
 }
 
 // finalize sorts findings deterministically and computes the verdict. Ported verbatim.

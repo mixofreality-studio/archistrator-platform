@@ -75,7 +75,10 @@ func comp(t *testing.T, name, kind string) Component {
 	default:
 		t.Fatalf("comp: unhandled kind %v", kind)
 	}
-	return Component{ID: Slug(name), Name: name, Kind: kind, Layer: layer}
+	// Encapsulates is populated so the shared fixtures satisfy the SYS-ENCAPSULATES
+	// twin (a Manager/Engine/ResourceAccess with an empty encapsulates is an ERROR);
+	// tests that specifically exercise SYS-ENCAPSULATES build their own components.
+	return Component{ID: Slug(name), Name: name, Kind: kind, Layer: layer, Encapsulates: name + " volatility"}
 }
 
 // ---- ValidateVolatilities ----
@@ -189,7 +192,21 @@ func TestValidateVolatilities_GlossaryMissFails(t *testing.T) {
 // ---- ValidateCoreUseCases ----
 
 func coreUC(name string) UseCaseDecision {
-	return UseCaseDecision{UseCase: UseCase{ID: Slug(name), Name: name, Classification: classCore}}
+	return UseCaseDecision{UseCase: UseCase{ID: Slug(name), Name: name, Classification: classCore, Activity: minimalActivity()}}
+}
+
+// minimalActivity is the smallest activity diagram that satisfies the UC-ACT-PRESENT
+// twin (at least one start node and one action step) without tripping the UC-ACTDIAG
+// structural rules (no decision/fork/merge/join). Shared by the coreUC helper so the
+// core-use-case fixtures carry a non-empty activity.
+func minimalActivity() *ActivityDiagram {
+	return &ActivityDiagram{
+		Nodes: []ActivityNode{
+			{ID: "start", Kind: nodeStart, Label: "start"},
+			{ID: "act", Kind: nodeAction, Label: "do the thing"},
+		},
+		Edges: []ActivityEdge{{From: "start", To: "act", Kind: edgeControlFlow}},
+	}
 }
 
 func TestValidateCoreUseCases_Pass(t *testing.T) {
@@ -433,10 +450,15 @@ func TestValidateArchitecture_SyncManagerToManagerFails(t *testing.T) {
 func TestValidateArchitecture_QueuedManagerToManagerLegal(t *testing.T) {
 	m1 := comp(t, "AManager", kindManager)
 	m2 := comp(t, "BManager", kindManager)
-	// A ResourceAccess keeps the system non-degenerate (SYSTEM-LAYER-DEGENERATE), so this
-	// test isolates the queued-M→M legality it is about.
+	// A ResourceAccess (reaching a Resource, so it is not a SYS-RA-ORPHAN) keeps the
+	// system non-degenerate (SYSTEM-LAYER-DEGENERATE), so this test isolates the
+	// queued-M→M legality it is about.
 	ra := comp(t, "StateAccess", kindResourceAccess)
-	s := System{Components: []Component{m1, m2, ra}, Relationships: []Relationship{{From: m1.ID, To: m2.ID, Mode: modeQueued}}}
+	db := comp(t, "StateDB", kindResource)
+	s := System{Components: []Component{m1, m2, ra, db}, Relationships: []Relationship{
+		{From: m1.ID, To: m2.ID, Mode: modeQueued},
+		{From: ra.ID, To: db.ID, Mode: modeSync},
+	}}
 	res, _ := validateArchitecture(s, CoreUseCases{})
 	if hasRule(res, ruleSysNoSide) {
 		t.Fatalf("queued M→M is legal; should not trip SYS-NOSIDE: %+v", res.Findings)
@@ -502,11 +524,17 @@ func TestValidateArchitecture_GoldenRatioIsWarningNotFail(t *testing.T) {
 		comp(t, "EngineA", kindEngine),
 		comp(t, "EngineB", kindEngine),
 		comp(t, "EngineC", kindEngine),
-		// A ResourceAccess keeps the system non-degenerate so the golden-ratio Warning is
-		// the only rule under test.
+		// A ResourceAccess (reaching a Resource, so it is not a SYS-RA-ORPHAN) keeps the
+		// system non-degenerate so the golden-ratio Warning is the only rule under test.
 		comp(t, "StateAccess", kindResourceAccess),
+		comp(t, "StateDB", kindResource),
 	}
-	out, _ := validateArchitecture(System{Components: comps}, CoreUseCases{})
+	ra := comps[4]
+	res := comps[5]
+	out, _ := validateArchitecture(System{
+		Components:    comps,
+		Relationships: []Relationship{{From: ra.ID, To: res.ID, Mode: modeSync}},
+	}, CoreUseCases{})
 	sev, ok := severityOf(out, ruleSysCardRatio)
 	if !ok {
 		t.Fatalf("expected SYS-CARD-RATIO finding, got %+v", out.Findings)
@@ -521,20 +549,23 @@ func TestValidateArchitecture_GoldenRatioIsWarningNotFail(t *testing.T) {
 
 func TestValidateArchitecture_TotalComponentCountIsWarning(t *testing.T) {
 	var comps []Component
+	var rels []Relationship
 	comps = append(comps, comp(t, "OnlyManager", kindManager))
 	for i := 0; i < 4; i++ {
 		comps = append(comps, comp(t, fmt.Sprintf("Engine%d", i), kindEngine))
 	}
+	// Each ResourceAccess reaches its own Resource so none is a SYS-RA-ORPHAN; the
+	// SYS-CARD-TOTAL Warning is the only rule under test.
 	for i := 0; i < 8; i++ {
-		comps = append(comps, comp(t, fmt.Sprintf("StateAccess%d", i), kindResourceAccess))
-	}
-	for i := 0; i < 8; i++ {
-		comps = append(comps, comp(t, fmt.Sprintf("StateDB%d", i), kindResource))
+		ra := comp(t, fmt.Sprintf("StateAccess%d", i), kindResourceAccess)
+		db := comp(t, fmt.Sprintf("StateDB%d", i), kindResource)
+		comps = append(comps, ra, db)
+		rels = append(rels, Relationship{From: ra.ID, To: db.ID, Mode: modeSync})
 	}
 	if len(comps) != 21 {
 		t.Fatalf("test setup: expected 21 components, got %d", len(comps))
 	}
-	out, _ := validateArchitecture(System{Components: comps}, CoreUseCases{})
+	out, _ := validateArchitecture(System{Components: comps, Relationships: rels}, CoreUseCases{})
 	sev, ok := severityOf(out, ruleSysCardTotal)
 	if !ok {
 		t.Fatalf("expected SYS-CARD-TOTAL finding, got %+v", out.Findings)
@@ -562,6 +593,8 @@ func TestValidateArchitecture_UtilityEdgesExemptFromLayerRules(t *testing.T) {
 			{From: resource.ID, To: util.ID, Mode: modeSync},
 			{From: eng.ID, To: util.ID, Mode: modeSync},
 			{From: client.ID, To: util.ID, Mode: modeSync},
+			// ra reaches the resource so it is not a SYS-RA-ORPHAN.
+			{From: ra.ID, To: resource.ID, Mode: modeSync},
 		},
 	}
 	out, _ := validateArchitecture(s, CoreUseCases{})

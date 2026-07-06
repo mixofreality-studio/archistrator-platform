@@ -15,6 +15,8 @@ import "fmt"
 func ValidateProject(p Project) ([]Finding, error) {
 	var all []Finding
 	for _, run := range []func(Project) ([]Finding, error){
+		glossaryFindings,
+		scrubbedRequirementsFindings,
 		volatilitiesFindings,
 		coreUseCasesFindings,
 		architectureFindings,
@@ -30,6 +32,34 @@ func ValidateProject(p Project) ([]Finding, error) {
 		all = append(all, f...)
 	}
 	return all, nil
+}
+
+// glossaryFindings runs the GLOSS-FOURQ twin. It fires only when the Glossary slot is
+// committed; a pre-glossary project is a no-op.
+func glossaryFindings(p Project) ([]Finding, error) {
+	g, ok, err := p.glossary()
+	if err != nil || !ok {
+		return nil, err
+	}
+	res, verr := validateGlossary(g)
+	if verr != nil {
+		return nil, fmt.Errorf("ValidateGlossary: %w", verr)
+	}
+	return res.Findings, nil
+}
+
+// scrubbedRequirementsFindings runs the SR-ID-UNIQUE twin. It fires only when the
+// ScrubbedRequirements slot is committed; a pre-scrub project is a no-op.
+func scrubbedRequirementsFindings(p Project) ([]Finding, error) {
+	sr, ok, err := p.scrubbedRequirements()
+	if err != nil || !ok {
+		return nil, err
+	}
+	res, verr := validateScrubbedRequirements(sr)
+	if verr != nil {
+		return nil, fmt.Errorf("ValidateScrubbedRequirements: %w", verr)
+	}
+	return res.Findings, nil
 }
 
 func volatilitiesFindings(p Project) ([]Finding, error) {

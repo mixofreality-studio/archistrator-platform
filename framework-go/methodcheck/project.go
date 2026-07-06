@@ -57,8 +57,10 @@ const (
 	edgeGuardedFlow = "guardedFlow"
 )
 
-// ActivityNodeKind wire names (only the ones the activity-diagram rule reads).
+// ActivityNodeKind wire names (only the ones the activity-diagram rules read).
 const (
+	nodeStart    = "start"
+	nodeAction   = "action"
 	nodeDecision = "decision"
 	nodeMerge    = "merge"
 	nodeFork     = "fork"
@@ -69,7 +71,11 @@ const (
 const classCore = "core"
 
 // CheckStatus wire names.
-const checkWaived = "waived"
+const (
+	checkPass   = "pass"
+	checkWaived = "waived"
+	checkFail   = "fail"
+)
 
 // Axis wire names.
 const (

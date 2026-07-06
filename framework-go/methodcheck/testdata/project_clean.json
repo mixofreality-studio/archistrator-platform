@@ -25,12 +25,24 @@
       "model": {
         "items": [
           {
+            "term": "Scheduler",
+            "definition": "d",
+            "category": "Who"
+          },
+          {
             "term": "Scheduling",
-            "definition": "d"
+            "definition": "d",
+            "category": "What"
           },
           {
             "term": "Pricing",
-            "definition": "p"
+            "definition": "p",
+            "category": "How"
+          },
+          {
+            "term": "Region",
+            "definition": "r",
+            "category": "Where"
           }
         ]
       }
@@ -74,7 +86,16 @@
             "useCase": {
               "id": "decide",
               "name": "Decide",
-              "classification": "core"
+              "classification": "core",
+              "activity": {
+                "nodes": [
+                  { "id": "start", "kind": "start", "label": "start" },
+                  { "id": "act", "kind": "action", "label": "decide the thing" }
+                ],
+                "edges": [
+                  { "from": "start", "to": "act", "kind": "controlFlow" }
+                ]
+              }
             },
             "rejectionReason": ""
           },
@@ -82,7 +103,16 @@
             "useCase": {
               "id": "other",
               "name": "Other",
-              "classification": "core"
+              "classification": "core",
+              "activity": {
+                "nodes": [
+                  { "id": "start", "kind": "start", "label": "start" },
+                  { "id": "act", "kind": "action", "label": "do the other thing" }
+                ],
+                "edges": [
+                  { "from": "start", "to": "act", "kind": "controlFlow" }
+                ]
+              }
             },
             "rejectionReason": ""
           }
@@ -98,31 +128,36 @@
             "id": "appclient",
             "name": "AppClient",
             "kind": "client",
-            "layer": "client"
+            "layer": "client",
+            "encapsulates": "the client transport surface"
           },
           {
             "id": "designmanager",
             "name": "DesignManager",
             "kind": "manager",
-            "layer": "manager"
+            "layer": "manager",
+            "encapsulates": "the design workflow"
           },
           {
             "id": "validatingengine",
             "name": "ValidatingEngine",
             "kind": "engine",
-            "layer": "engine"
+            "layer": "engine",
+            "encapsulates": "the validation rules"
           },
           {
             "id": "stateaccess",
             "name": "StateAccess",
             "kind": "resourceAccess",
-            "layer": "resourceAccess"
+            "layer": "resourceAccess",
+            "encapsulates": "the project-state store access"
           },
           {
             "id": "statedb",
             "name": "StateDB",
             "kind": "resource",
-            "layer": "resource"
+            "layer": "resource",
+            "encapsulates": "the project-state database"
           }
         ],
         "relationships": [
