@@ -343,6 +343,57 @@ func (c *AppClient) MergePullRequest(ctx context.Context, fullName string, numbe
 	return res.SHA, false, nil
 }
 
+// ClosePullRequest closes PR `number` in owner/repo `fullName` WITHOUT merging it — the
+// design-rail branch-debris cleanup path for a superseded/abandoned session PR. A PR
+// that is already closed or merged is reported as alreadyClosed==true WITHOUT error (the
+// RA maps that to idempotent success), mirroring MergePullRequest's already-merged
+// short-circuit.
+func (c *AppClient) ClosePullRequest(ctx context.Context, fullName string, number int, instToken string) (alreadyClosed bool, err error) {
+	// If the PR is already closed (or merged, which closes it), the PATCH is a no-op;
+	// check first for a clean idempotent-success path.
+	pr, gErr := c.getPullRequest(ctx, fullName, number, instToken)
+	if gErr != nil {
+		return false, gErr
+	}
+	if pr.Merged || strings.EqualFold(pr.State, "closed") {
+		return true, nil
+	}
+	payload := map[string]string{"state": "closed"}
+	pb, mErr := json.Marshal(payload)
+	if mErr != nil {
+		return false, fwra.Wrap(fwra.ContractMisuse, mErr, "ClosePullRequest: marshal")
+	}
+	url := fmt.Sprintf("%s/repos/%s/pulls/%d", c.baseURL, fullName, number)
+	status, _, dErr := c.do(ctx, http.MethodPatch, url, pb, "", instToken)
+	if dErr != nil {
+		return false, dErr
+	}
+	if status < 200 || status >= 300 {
+		return false, ClassifyStatus(status, "ClosePullRequest")
+	}
+	return false, nil
+}
+
+// DeleteBranch deletes the `branch` ref in owner/repo `fullName` — the design-rail
+// branch-debris cleanup that removes a session/scratch branch once its PR is merged or
+// closed. A branch that is already absent (GitHub answers 404/422 on the ref) is
+// reported as alreadyAbsent==true WITHOUT error (the RA maps that to idempotent
+// success), mirroring CreateBranch's already-exists short-circuit.
+func (c *AppClient) DeleteBranch(ctx context.Context, fullName, branch, instToken string) (alreadyAbsent bool, err error) {
+	url := fmt.Sprintf("%s/repos/%s/git/refs/heads/%s", c.baseURL, fullName, branch)
+	status, _, dErr := c.do(ctx, http.MethodDelete, url, nil, "", instToken)
+	if dErr != nil {
+		return false, dErr
+	}
+	if status == http.StatusNotFound || status == http.StatusUnprocessableEntity {
+		return true, nil // ref already gone → idempotent success
+	}
+	if status < 200 || status >= 300 {
+		return false, ClassifyStatus(status, "DeleteBranch")
+	}
+	return false, nil
+}
+
 // ConfigureBranchProtection provisions main-branch protection that restricts
 // merges to the App, requires status checks + ≥1 approval, and blocks out-of-band
 // direct pushes — with the App itself retained as a bypass actor for aiarch's own

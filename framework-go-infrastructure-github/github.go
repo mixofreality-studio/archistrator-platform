@@ -448,24 +448,9 @@ func (c *AppClient) getRepoFullName(ctx context.Context, account, name, instToke
 // (appJWT non-empty) OR an installation/repo token (token non-empty), returning
 // (status, body). Exactly one of appJWT/token should be supplied.
 func (c *AppClient) do(ctx context.Context, method, url string, body []byte, appJWT, token string) (int, []byte, error) {
-	var rdr io.Reader
-	if body != nil {
-		rdr = bytes.NewReader(body)
-	}
-	req, err := http.NewRequestWithContext(ctx, method, url, rdr)
+	req, err := c.newRequest(ctx, method, url, body, appJWT, token)
 	if err != nil {
-		return 0, nil, fwra.Wrap(fwra.ContractMisuse, err, "github client: build request")
-	}
-	req.Header.Set("Accept", "application/vnd.github+json")
-	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
-	if body != nil {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	switch {
-	case appJWT != "":
-		req.Header.Set("Authorization", "Bearer "+appJWT)
-	case token != "":
-		req.Header.Set("Authorization", "token "+token)
+		return 0, nil, err
 	}
 
 	resp, err := c.http.Do(req)
@@ -481,7 +466,83 @@ func (c *AppClient) do(ctx context.Context, method, url string, body []byte, app
 	if err != nil {
 		return resp.StatusCode, nil, fwra.Wrap(fwra.Transient, err, "github client: read response body")
 	}
+	// Split a RATE-LIMIT 403 (retryable) from a genuine permission 403 (terminal): a
+	// bare status code cannot tell them apart, so the distinction is made HERE, where
+	// the response headers + body are still in hand. A rate-limited response short-
+	// circuits to a typed RateLimited error (every caller already returns do's error
+	// before it classifies the status). A permission 403 carries no rate-limit signal
+	// and falls through to the caller's ClassifyStatus → Auth, unchanged. The body is
+	// preserved in the error detail (app ledger F14) so the throttle is diagnosable.
+	if rlErr := rateLimitError(resp.StatusCode, resp.Header, respBody); rlErr != nil {
+		return resp.StatusCode, respBody, rlErr
+	}
 	return resp.StatusCode, respBody, nil
+}
+
+// newRequest builds the authenticated GitHub REST request shared by every call: the
+// standard Accept / API-version headers, a JSON Content-Type when a body is present,
+// and EITHER the App-JWT bearer (appJWT non-empty) OR the installation/repo token
+// (token non-empty). Exactly one of appJWT/token should be supplied.
+func (c *AppClient) newRequest(ctx context.Context, method, url string, body []byte, appJWT, token string) (*http.Request, error) {
+	var rdr io.Reader
+	if body != nil {
+		rdr = bytes.NewReader(body)
+	}
+	req, err := http.NewRequestWithContext(ctx, method, url, rdr)
+	if err != nil {
+		return nil, fwra.Wrap(fwra.ContractMisuse, err, "github client: build request")
+	}
+	req.Header.Set("Accept", "application/vnd.github+json")
+	req.Header.Set("X-GitHub-Api-Version", "2022-11-28")
+	if body != nil {
+		req.Header.Set("Content-Type", "application/json")
+	}
+	switch {
+	case appJWT != "":
+		req.Header.Set("Authorization", "Bearer "+appJWT)
+	case token != "":
+		req.Header.Set("Authorization", "token "+token)
+	}
+	return req, nil
+}
+
+// isRateLimited reports whether a GitHub 403 is a RATE-LIMIT rejection (retryable)
+// rather than a permission denial (terminal). GitHub signals a rate-limited 403 with a
+// zeroed X-RateLimit-Remaining, a Retry-After header (secondary/abuse limits), or a
+// body message naming the rate limit. A 403 with none of these is a real permission
+// fault. Only 403 is split here; 429 is already retryable (Transient) via ClassifyStatus.
+func isRateLimited(status int, header http.Header, body []byte) bool {
+	if status != http.StatusForbidden {
+		return false
+	}
+	if header.Get("Retry-After") != "" {
+		return true
+	}
+	if header.Get("X-RateLimit-Remaining") == "0" {
+		return true
+	}
+	return strings.Contains(strings.ToLower(string(body)), "rate limit")
+}
+
+// rateLimitError returns a typed retryable RateLimited error (with the response body
+// preserved for diagnosis) for a rate-limited 403, or nil when the response is not a
+// rate limit. See isRateLimited.
+func rateLimitError(status int, header http.Header, body []byte) error {
+	if !isRateLimited(status, header, body) {
+		return nil
+	}
+	detail := "github client: 403 rate limited (retryable)"
+	if snippet := strings.TrimSpace(string(body)); snippet != "" {
+		const max = 300
+		if len(snippet) > max {
+			snippet = snippet[:max]
+		}
+		detail += ": " + snippet
+	}
+	if ra := header.Get("Retry-After"); ra != "" {
+		detail += " (Retry-After: " + ra + ")"
+	}
+	return fwra.New(fwra.RateLimited, detail)
 }
 
 // ClassifyStatus maps a non-2xx GitHub REST status code onto the shared
@@ -494,6 +555,13 @@ func (c *AppClient) do(ctx context.Context, method, url string, body []byte, app
 //   - 422               => fwra.ContractMisuse  (terminal: GitHub rejected the request body) — callers may intercept the already-exists subcase before this
 //   - 429 / 5xx         => fwra.Transient       (retryable: rate-limit / GitHub 5xx)
 //   - anything else     => fwra.Infrastructure  (escalate)
+//
+// RATE-LIMIT 403 SPLIT: a 403 can be either a permission denial (terminal Auth) OR a
+// rate-limit rejection (retryable RateLimited). A bare status code cannot distinguish
+// them, so that split is made UPSTREAM in do() — which still holds the response headers
+// and body — and never reaches this classifier: a rate-limited 403 short-circuits to a
+// typed RateLimited error there. By the time a 403 arrives here it is a genuine
+// permission fault, mapped to Auth. See isRateLimited / rateLimitError.
 //
 // The already-exists (422/409 on create) and already-merged subcases are handled
 // by the calling methods (CreateOrgRepo etc.) BEFORE this classifier — they map
