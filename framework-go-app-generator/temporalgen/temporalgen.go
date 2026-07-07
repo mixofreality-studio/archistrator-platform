@@ -10,7 +10,6 @@ package temporalgen
 
 import (
 	"fmt"
-	"go/format"
 	"path"
 	"strings"
 
@@ -41,16 +40,6 @@ type emitContext struct {
 	cfg     Config
 	mgr     *projectmodel.Contract
 	pkgName string
-}
-
-// emitWorker generates the worker.gen.go file.
-func emitWorker(ec emitContext) ([]byte, error) {
-	src := genHeader + "\npackage " + ec.pkgName + "\n"
-	formatted, err := format.Source([]byte(src))
-	if err != nil {
-		return nil, err
-	}
-	return formatted, nil
 }
 
 // Generate emits the Temporal activities/invokers/worker wiring for the
