@@ -1,0 +1,47 @@
+{
+  "id": "broken-dangling-dep",
+  "version": 1,
+  "serviceContracts": {
+    "someEngine": {
+      "component": "someEngine",
+      "layer": "Engine",
+      "goPackage": "internal/engine/some",
+      "deps": [
+        { "name": "x", "component": "ghostAccess" }
+      ],
+      "title": "some-engine contract",
+      "$defs": {},
+      "interface": {
+        "name": "SomeEngine",
+        "layer": "engine",
+        "operations": [
+          { "name": "doThing", "params": null, "error": true }
+        ]
+      }
+    },
+    "someUtility": {
+      "component": "someUtility",
+      "layer": "Utility",
+      "title": "some-utility contract",
+      "$defs": {},
+      "interface": {
+        "name": "SomeUtility",
+        "layer": "utility",
+        "operations": [
+          { "name": "helperOp", "params": null, "error": false }
+        ]
+      }
+    }
+  },
+  "slots": {
+    "5": {
+      "kind": 5,
+      "model": {
+        "components": [
+          { "id": "some-engine", "name": "SomeEngine", "kind": "engine", "layer": "engine" }
+        ],
+        "relationships": []
+      }
+    }
+  }
+}

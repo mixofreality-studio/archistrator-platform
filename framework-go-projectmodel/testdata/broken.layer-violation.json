@@ -1,0 +1,49 @@
+{
+  "id": "broken-layer-violation",
+  "version": 1,
+  "serviceContracts": {
+    "someResourceAccess": {
+      "component": "someResourceAccess",
+      "layer": "ResourceAccess",
+      "goPackage": "internal/resourceaccess/some",
+      "deps": [
+        { "name": "m", "component": "someManager" }
+      ],
+      "title": "some-resource-access contract",
+      "$defs": {},
+      "interface": {
+        "name": "SomeResourceAccess",
+        "layer": "resourceaccess",
+        "operations": [
+          { "name": "fetchThing", "params": null, "error": true }
+        ]
+      }
+    },
+    "someManager": {
+      "component": "someManager",
+      "layer": "Manager",
+      "goPackage": "internal/manager/some",
+      "title": "some-manager contract",
+      "$defs": {},
+      "interface": {
+        "name": "SomeManager",
+        "layer": "manager",
+        "operations": [
+          { "name": "doThing", "params": null, "error": true }
+        ]
+      }
+    }
+  },
+  "slots": {
+    "5": {
+      "kind": 5,
+      "model": {
+        "components": [
+          { "id": "some-resource-access", "name": "SomeResourceAccess", "kind": "resourceaccess", "layer": "resourceaccess" },
+          { "id": "some-manager", "name": "SomeManager", "kind": "manager", "layer": "manager" }
+        ],
+        "relationships": []
+      }
+    }
+  }
+}
