@@ -48,8 +48,9 @@ func TestGenerateGreenfieldGolden(t *testing.T) {
 	}
 
 	got, err := temporalgen.Generate(m, temporalgen.Config{
-		ModulePath: "github.com/mixofreality-studio/archistrator/server",
-		ManagerKey: "orderManager",
+		ModulePath:     "github.com/mixofreality-studio/archistrator/server",
+		ManagerKey:     "orderManager",
+		CallerKeyedOps: map[string][]string{"orderState": {"ChargeOrder"}},
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
@@ -66,6 +67,9 @@ func TestGenerateGreenfieldGolden(t *testing.T) {
 		}
 		if !strings.Contains(string(src), "package order") {
 			t.Errorf("%s: does not contain 'package order', got:\n%s", name, string(src))
+		}
+		if strings.Contains(string(src), "package temporal") {
+			t.Errorf("%s: emitted the generator's own package clause ('package temporal'):\n%s", name, string(src))
 		}
 		checkGolden(t, filepath.Join("../testdata", "greenfield."+name+".golden"), src)
 	}

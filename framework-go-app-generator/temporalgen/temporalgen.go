@@ -43,16 +43,6 @@ type emitContext struct {
 	pkgName string
 }
 
-// emitActivities generates the activities.gen.go file.
-func emitActivities(ec emitContext) ([]byte, error) {
-	src := genHeader + "\npackage " + ec.pkgName + "\n"
-	formatted, err := format.Source([]byte(src))
-	if err != nil {
-		return nil, err
-	}
-	return formatted, nil
-}
-
 // emitInvokers generates the invokers.gen.go file.
 func emitInvokers(ec emitContext) ([]byte, error) {
 	src := genHeader + "\npackage " + ec.pkgName + "\n"
