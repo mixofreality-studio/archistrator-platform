@@ -114,7 +114,7 @@ func activityParams(rd raDep, op projectmodel.Operation, keyed bool) string {
 		parts = append(parts, "key fwra.IdempotencyKey")
 	}
 	for _, p := range businessParams(op) {
-		parts = append(parts, p.Name+" "+projectmodel.GoType(p.Schema, p.Pointer, rd.alias))
+		parts = append(parts, p.Name+" "+resolveGoType(p.Schema, p.Pointer, rd.alias))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -125,7 +125,7 @@ func activityResults(rd raDep, op projectmodel.Operation) string {
 	if op.Result == nil {
 		return "error"
 	}
-	return "(" + projectmodel.GoType(op.Result, false, rd.alias) + ", error)"
+	return "(" + resolveGoType(op.Result, false, rd.alias) + ", error)"
 }
 
 // activityBody emits the method body: build the fwra.Context (derived key, or

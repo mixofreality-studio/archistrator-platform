@@ -71,3 +71,10 @@ func (a *genActivities) OrderStateReadOrder(ctx context.Context, orderID orderst
 	v, err := a.OrderState.ReadOrder(fwra.Context{Context: ctx, IdempotencyKey: genActivityIdempotencyKey(ctx)}, orderID)
 	return v, fwmanager.MapError(err)
 }
+
+// OrderStateReceiptForOrder wraps orderStateAccess.receiptForOrder.
+// Registered as "orderStateAccess.receiptForOrder".
+func (a *genActivities) OrderStateReceiptForOrder(ctx context.Context, orderID orderstate.OrderID) (orderstate.OrderReceipt, error) {
+	v, err := a.OrderState.ReceiptForOrder(fwra.Context{Context: ctx, IdempotencyKey: genActivityIdempotencyKey(ctx)}, orderID)
+	return v, fwmanager.MapError(err)
+}

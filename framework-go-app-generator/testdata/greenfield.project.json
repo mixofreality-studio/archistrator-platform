@@ -317,6 +317,21 @@
               }
             ],
             "error": true
+          },
+          {
+            "name": "ReceiptForOrder",
+            "params": [
+              {
+                "name": "orderID",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              }
+            ],
+            "result": {
+              "x-go-type": "OrderReceipt"
+            },
+            "error": true
           }
         ]
       }

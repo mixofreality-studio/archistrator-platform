@@ -132,7 +132,7 @@ func invokerParams(rd raDep, op projectmodel.Operation, keyed bool) string {
 		parts = append(parts, "key fwra.IdempotencyKey")
 	}
 	for _, p := range businessParams(op) {
-		parts = append(parts, p.Name+" "+projectmodel.GoType(p.Schema, p.Pointer, rd.alias))
+		parts = append(parts, p.Name+" "+resolveGoType(p.Schema, p.Pointer, rd.alias))
 	}
 	return strings.Join(parts, ", ")
 }
@@ -156,6 +156,6 @@ func invokerBody(rd raDep, op projectmodel.Operation, keyed bool, registered str
 	if op.Result == nil {
 		return "\terr := " + call + ".Get(ctx, nil)\n\treturn err\n"
 	}
-	typ := projectmodel.GoType(op.Result, false, rd.alias)
+	typ := resolveGoType(op.Result, false, rd.alias)
 	return "\tvar out " + typ + "\n\terr := " + call + ".Get(ctx, &out)\n\treturn out, err\n"
 }

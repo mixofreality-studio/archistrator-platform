@@ -56,6 +56,48 @@ func resolveRADeps(ec emitContext) []raDep {
 	return out
 }
 
+// resolveGoType maps an RA op param/result schema node to the Go type the
+// generated code must use. It is the cross-package counterpart to
+// projectmodel.GoType (which the http/mcp generators consume with
+// manager-package-local semantics and must keep unchanged).
+//
+// The one behavioural difference: a schema node that binds a BARE (package-dot
+// free) x-go-type with no x-go-import — an exported type hand-written IN the RA
+// package itself, not part of its schema-first contract (e.g.
+// projectstate.Project / OperatingModel / ArtifactModel) — is emitted qualified
+// with the RA package alias. projectmodel.GoType leaves such a name bare, which
+// resolves only inside the RA package (where modelgen emits contract.gen.go);
+// here the code lands in the CONSUMING manager package, where the bare name is
+// undefined. Dotted x-go-types (fwra.IdempotencyKey, uuid.UUID) and $ref types
+// are delegated to projectmodel.GoType unchanged.
+func resolveGoType(n *projectmodel.SchemaNode, ptr bool, alias string) string {
+	if alias != "" && isBareRAType(n) {
+		t := alias + "." + n.XGoType
+		if ptr {
+			return "*" + t
+		}
+		return t
+	}
+	return projectmodel.GoType(n, ptr, alias)
+}
+
+// isBareRAType reports whether a schema node binds an unqualified, exported Go
+// type hand-written in the RA package: a non-empty x-go-type with no package
+// dot, no x-go-import, whose first rune is an uppercase ASCII letter. The
+// uppercase-first check excludes the predeclared builtins (int, string, bool,
+// float64) and builtin composites (e.g. []byte) that also carry bare
+// x-go-types in data-contract $defs but must never be package-qualified.
+func isBareRAType(n *projectmodel.SchemaNode) bool {
+	if n == nil || n.XGoType == "" || n.XGoImport != "" {
+		return false
+	}
+	if strings.Contains(n.XGoType, ".") {
+		return false
+	}
+	r := n.XGoType[0]
+	return r >= 'A' && r <= 'Z'
+}
+
 // isCallerKeyed reports whether op opName on dep depName takes an explicit
 // caller-supplied idempotency key.
 func isCallerKeyed(ec emitContext, depName, opName string) bool {

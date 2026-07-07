@@ -85,3 +85,10 @@ func (i genInvokers) OrderStateReadOrder(ctx workflow.Context, orderID orderstat
 	err := workflow.ExecuteActivity(i.options(ctx, "orderStateAccess.readOrder"), "orderStateAccess.readOrder", orderID).Get(ctx, &out)
 	return out, err
 }
+
+// OrderStateReceiptForOrder invokes activity "orderStateAccess.receiptForOrder".
+func (i genInvokers) OrderStateReceiptForOrder(ctx workflow.Context, orderID orderstate.OrderID) (orderstate.OrderReceipt, error) {
+	var out orderstate.OrderReceipt
+	err := workflow.ExecuteActivity(i.options(ctx, "orderStateAccess.receiptForOrder"), "orderStateAccess.receiptForOrder", orderID).Get(ctx, &out)
+	return out, err
+}

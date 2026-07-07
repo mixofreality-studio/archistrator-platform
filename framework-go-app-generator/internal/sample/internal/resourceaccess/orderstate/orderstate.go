@@ -25,6 +25,17 @@ type Order struct {
 	Version     Version
 }
 
+// OrderReceipt is a hand-written orderstate domain type — NOT part of the
+// schema-first contract. It exercises the bare-x-go-type qualification rule:
+// the fixture's ReceiptForOrder op binds it via a package-dot-free x-go-type
+// with no x-go-import, and the generated cross-package code must qualify it as
+// orderstate.OrderReceipt.
+type OrderReceipt struct {
+	OrderID     OrderID
+	AmountCents int
+	Currency    string
+}
+
 // OrderStateAccess is the order-state store contract. Every method takes the
 // ResourceAccess call context first, as the layer requires.
 type OrderStateAccess interface {
@@ -34,4 +45,5 @@ type OrderStateAccess interface {
 	ArchiveOrder(ctx fwra.Context, orderID OrderID, expectedVersion Version, idempotencyKey fwra.IdempotencyKey) (Version, error)
 	ChargeOrder(ctx fwra.Context, orderID OrderID, amountCents int, idempotencyKey fwra.IdempotencyKey) (Version, error)
 	PurgeOrder(ctx fwra.Context, orderID OrderID) error
+	ReceiptForOrder(ctx fwra.Context, orderID OrderID) (OrderReceipt, error)
 }
