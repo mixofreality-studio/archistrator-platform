@@ -6,6 +6,7 @@ import (
 	"go/token"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/temporalgen"
@@ -63,11 +64,34 @@ func TestGenerateGreenfieldGolden(t *testing.T) {
 		if _, err := parser.ParseFile(token.NewFileSet(), name, src, parser.AllErrors); err != nil {
 			t.Fatalf("emitted %s does not parse: %v", name, err)
 		}
+		if !strings.Contains(string(src), "package order") {
+			t.Errorf("%s: does not contain 'package order', got:\n%s", name, string(src))
+		}
 		checkGolden(t, filepath.Join("../testdata", "greenfield."+name+".golden"), src)
 	}
 
 	if len(got) != len(files) {
 		t.Fatalf("Generate returned %d files, want %d (got %v)", len(got), len(files), got)
+	}
+}
+
+// TestGenerateErrorUnknownManager asserts that Generate returns an error
+// when the ManagerKey is not found in the model.
+func TestGenerateErrorUnknownManager(t *testing.T) {
+	m, err := projectmodel.LoadFile("../testdata/greenfield.project.json")
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+
+	_, err = temporalgen.Generate(m, temporalgen.Config{
+		ModulePath: "github.com/mixofreality-studio/archistrator/server",
+		ManagerKey: "nope",
+	})
+	if err == nil {
+		t.Fatal("Generate should return an error for unknown ManagerKey")
+	}
+	if !strings.Contains(err.Error(), "nope") {
+		t.Fatalf("error should contain 'nope', got: %v", err)
 	}
 }
 
