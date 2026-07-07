@@ -30,6 +30,13 @@ func genActivityIdempotencyKey(ctx context.Context) fwra.IdempotencyKey {
 		info.WorkflowExecution.ID, info.WorkflowExecution.RunID, info.ActivityID))
 }
 
+// OrderStateArchiveOrder wraps orderStateAccess.archiveOrder.
+// Registered as "orderStateAccess.archiveOrder".
+func (a *genActivities) OrderStateArchiveOrder(ctx context.Context, orderID orderstate.OrderID, expectedVersion orderstate.Version) (orderstate.Version, error) {
+	v, err := a.OrderState.ArchiveOrder(fwra.Context{Context: ctx, IdempotencyKey: genActivityIdempotencyKey(ctx)}, orderID, expectedVersion, genActivityIdempotencyKey(ctx))
+	return v, fwmanager.MapError(err)
+}
+
 // OrderStateCancelOrder wraps orderStateAccess.cancelOrder.
 // Registered as "orderStateAccess.cancelOrder".
 func (a *genActivities) OrderStateCancelOrder(ctx context.Context, orderID orderstate.OrderID, expectedVersion orderstate.Version, reason string) (orderstate.Version, error) {
@@ -40,7 +47,7 @@ func (a *genActivities) OrderStateCancelOrder(ctx context.Context, orderID order
 // OrderStateChargeOrder wraps orderStateAccess.chargeOrder.
 // Registered as "orderStateAccess.chargeOrder".
 func (a *genActivities) OrderStateChargeOrder(ctx context.Context, key fwra.IdempotencyKey, orderID orderstate.OrderID, amountCents int) (orderstate.Version, error) {
-	v, err := a.OrderState.ChargeOrder(fwra.Context{Context: ctx, IdempotencyKey: key}, orderID, amountCents)
+	v, err := a.OrderState.ChargeOrder(fwra.Context{Context: ctx, IdempotencyKey: key}, orderID, amountCents, key)
 	return v, fwmanager.MapError(err)
 }
 

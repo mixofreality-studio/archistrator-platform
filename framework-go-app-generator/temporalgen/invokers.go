@@ -123,13 +123,15 @@ func invokerMethod(ec emitContext, rd raDep, op projectmodel.Operation) string {
 // invokerParams builds the invoker method parameter list: ctx
 // workflow.Context first, an explicit caller key second for CallerKeyedOps,
 // then the business params with the RA-alias-qualified Go types — identical
-// to the wrapped activity's param list except for the ctx type.
+// to the wrapped activity's param list except for the ctx type. Explicit RA
+// key params are omitted (the activity fills them), so the workflow can never
+// supply the RA's dedup key.
 func invokerParams(rd raDep, op projectmodel.Operation, keyed bool) string {
 	parts := []string{"ctx workflow.Context"}
 	if keyed {
 		parts = append(parts, "key fwra.IdempotencyKey")
 	}
-	for _, p := range op.Params {
+	for _, p := range businessParams(op) {
 		parts = append(parts, p.Name+" "+projectmodel.GoType(p.Schema, p.Pointer, rd.alias))
 	}
 	return strings.Join(parts, ", ")
@@ -145,7 +147,9 @@ func invokerBody(rd raDep, op projectmodel.Operation, keyed bool, registered str
 	if keyed {
 		args = append(args, "key")
 	}
-	for _, p := range op.Params {
+	// Explicit RA key params are not forwarded — the activity fills them from
+	// the derived/caller key, matching the activity's param list exactly.
+	for _, p := range businessParams(op) {
 		args = append(args, p.Name)
 	}
 	call := "workflow.ExecuteActivity(" + strings.Join(args, ", ") + ")"

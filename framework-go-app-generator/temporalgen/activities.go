@@ -105,13 +105,15 @@ func activityMethod(ec emitContext, rd raDep, op projectmodel.Operation) string 
 
 // activityParams builds the method parameter list: always ctx first, an
 // explicit caller key second for CallerKeyedOps, then the business params with
-// the RA-alias-qualified Go types.
+// the RA-alias-qualified Go types. Explicit RA key params (fwra.IdempotencyKey)
+// are omitted — the activity body fills them (see activityBody), never the
+// workflow.
 func activityParams(rd raDep, op projectmodel.Operation, keyed bool) string {
 	parts := []string{"ctx context.Context"}
 	if keyed {
 		parts = append(parts, "key fwra.IdempotencyKey")
 	}
-	for _, p := range op.Params {
+	for _, p := range businessParams(op) {
 		parts = append(parts, p.Name+" "+projectmodel.GoType(p.Schema, p.Pointer, rd.alias))
 	}
 	return strings.Join(parts, ", ")
@@ -128,6 +130,9 @@ func activityResults(rd raDep, op projectmodel.Operation) string {
 
 // activityBody emits the method body: build the fwra.Context (derived key, or
 // the caller key for CallerKeyedOps), call the RA op, thread fwmanager.MapError.
+// Explicit RA key params are filled IN PLACE with the same key expression that
+// feeds the context field, preserving the contract's param order — the derived
+// key (or the caller key) reaches the RA's dedup slot, never a workflow value.
 func activityBody(rd raDep, op projectmodel.Operation, keyed bool) string {
 	keyExpr := "genActivityIdempotencyKey(ctx)"
 	if keyed {
@@ -135,6 +140,10 @@ func activityBody(rd raDep, op projectmodel.Operation, keyed bool) string {
 	}
 	args := []string{"fwra.Context{Context: ctx, IdempotencyKey: " + keyExpr + "}"}
 	for _, p := range op.Params {
+		if isKeyParam(p) {
+			args = append(args, keyExpr)
+			continue
+		}
 		args = append(args, p.Name)
 	}
 	call := "a." + rd.field + "." + op.Name + "(" + strings.Join(args, ", ") + ")"

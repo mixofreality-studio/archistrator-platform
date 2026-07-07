@@ -41,6 +41,7 @@ func RegisterWorker(w worker.Worker, mf genWorkerManifest) {
 		w.RegisterWorkflowWithOptions(wf.Fn, workflow.RegisterOptions{Name: wf.Name})
 	}
 	acts := &mf.Activities
+	w.RegisterActivityWithOptions(acts.OrderStateArchiveOrder, activity.RegisterOptions{Name: "orderStateAccess.archiveOrder"})
 	w.RegisterActivityWithOptions(acts.OrderStateCancelOrder, activity.RegisterOptions{Name: "orderStateAccess.cancelOrder"})
 	w.RegisterActivityWithOptions(acts.OrderStateChargeOrder, activity.RegisterOptions{Name: "orderStateAccess.chargeOrder"})
 	w.RegisterActivityWithOptions(acts.OrderStatePurgeOrder, activity.RegisterOptions{Name: "orderStateAccess.purgeOrder"})

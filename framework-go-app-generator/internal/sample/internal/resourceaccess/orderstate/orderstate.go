@@ -31,6 +31,7 @@ type OrderStateAccess interface {
 	ReadOrder(ctx fwra.Context, orderID OrderID) (Order, error)
 	PutOrder(ctx fwra.Context, orderID OrderID, expectedVersion Version, order Order) (Version, error)
 	CancelOrder(ctx fwra.Context, orderID OrderID, expectedVersion Version, reason string) (Version, error)
-	ChargeOrder(ctx fwra.Context, orderID OrderID, amountCents int) (Version, error)
+	ArchiveOrder(ctx fwra.Context, orderID OrderID, expectedVersion Version, idempotencyKey fwra.IdempotencyKey) (Version, error)
+	ChargeOrder(ctx fwra.Context, orderID OrderID, amountCents int, idempotencyKey fwra.IdempotencyKey) (Version, error)
 	PurgeOrder(ctx fwra.Context, orderID OrderID) error
 }

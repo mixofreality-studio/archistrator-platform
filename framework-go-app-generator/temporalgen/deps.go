@@ -67,6 +67,37 @@ func isCallerKeyed(ec emitContext, depName, opName string) bool {
 	return false
 }
 
+// fwraIdempotencyKeyType is the canonical Go type an RA contract op binds
+// (via x-go-type) on the param it dedups on — the RA's own enforcement slot.
+const fwraIdempotencyKeyType = "fwra.IdempotencyKey"
+
+// isKeyParam reports whether an op param is an explicit idempotency-key param:
+// one whose contract schema binds the foundational Go type fwra.IdempotencyKey
+// (encoded x-go-type "fwra.IdempotencyKey", exactly as the RA contract emits
+// it — e.g. archistrator's operatedSystemStateAccess ops). The enforcing RA
+// dedups on THIS param, not on fwra.Context.IdempotencyKey, so the emitter
+// must fill it with the derived (or caller-supplied) key and hide it from the
+// generated activity/invoker signatures — it must never be workflow-supplied.
+// x-go-type is the robust discriminator (the same foundational-type binding
+// modelgen uses); fwra is always imported in the emitted files, so no extra
+// import wiring is needed.
+func isKeyParam(p projectmodel.Param) bool {
+	return p.Schema != nil && p.Schema.XGoType == fwraIdempotencyKeyType
+}
+
+// businessParams returns the op params that appear in the generated
+// activity/invoker signatures: every param except explicit key params (those
+// are filled by the emitter, not by the caller).
+func businessParams(op projectmodel.Operation) []projectmodel.Param {
+	out := make([]projectmodel.Param, 0, len(op.Params))
+	for _, p := range op.Params {
+		if !isKeyParam(p) {
+			out = append(out, p)
+		}
+	}
+	return out
+}
+
 // joinImportGroups renders a full "import (...)" block from ordered groups
 // (e.g. stdlib, sdk, framework, module), skipping empty groups and separating
 // the rest with a blank line. gofmt sorts within each group.

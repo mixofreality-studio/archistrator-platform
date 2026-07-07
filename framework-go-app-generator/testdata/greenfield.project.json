@@ -251,6 +251,34 @@
             "error": true
           },
           {
+            "name": "ArchiveOrder",
+            "params": [
+              {
+                "name": "orderID",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              },
+              {
+                "name": "expectedVersion",
+                "schema": {
+                  "$ref": "#/$defs/Version"
+                }
+              },
+              {
+                "name": "idempotencyKey",
+                "schema": {
+                  "type": "string",
+                  "x-go-type": "fwra.IdempotencyKey"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/Version"
+            },
+            "error": true
+          },
+          {
             "name": "ChargeOrder",
             "params": [
               {
@@ -263,6 +291,13 @@
                 "name": "amountCents",
                 "schema": {
                   "type": "integer"
+                }
+              },
+              {
+                "name": "idempotencyKey",
+                "schema": {
+                  "type": "string",
+                  "x-go-type": "fwra.IdempotencyKey"
                 }
               }
             ],

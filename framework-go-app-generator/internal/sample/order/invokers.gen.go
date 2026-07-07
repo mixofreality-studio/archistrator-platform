@@ -45,6 +45,13 @@ func (i genInvokers) options(ctx workflow.Context, name string) workflow.Context
 	return workflow.WithActivityOptions(ctx, opts)
 }
 
+// OrderStateArchiveOrder invokes activity "orderStateAccess.archiveOrder".
+func (i genInvokers) OrderStateArchiveOrder(ctx workflow.Context, orderID orderstate.OrderID, expectedVersion orderstate.Version) (orderstate.Version, error) {
+	var out orderstate.Version
+	err := workflow.ExecuteActivity(i.options(ctx, "orderStateAccess.archiveOrder"), "orderStateAccess.archiveOrder", orderID, expectedVersion).Get(ctx, &out)
+	return out, err
+}
+
 // OrderStateCancelOrder invokes activity "orderStateAccess.cancelOrder".
 func (i genInvokers) OrderStateCancelOrder(ctx workflow.Context, orderID orderstate.OrderID, expectedVersion orderstate.Version, reason string) (orderstate.Version, error) {
 	var out orderstate.Version
