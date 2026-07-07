@@ -1,0 +1,50 @@
+package projectmodel
+
+import (
+	"encoding/json"
+	"os"
+	"testing"
+)
+
+func loadFixtureSystem(t *testing.T) *System {
+	t.Helper()
+	raw, err := os.ReadFile("testdata/archistrator.project.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var top struct {
+		Slots map[string]struct {
+			Kind  int             `json:"kind"`
+			Model json.RawMessage `json:"model"`
+		} `json:"slots"`
+	}
+	if err := json.Unmarshal(raw, &top); err != nil {
+		t.Fatal(err)
+	}
+	s, err := ParseSystem(top.Slots["5"].Model)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+func TestParseSystemFixture(t *testing.T) {
+	s := loadFixtureSystem(t)
+	if len(s.Components) != 39 {
+		t.Fatalf("components: %d", len(s.Components))
+	}
+	if len(s.Relationships) != 71 {
+		t.Fatalf("relationships: %d", len(s.Relationships))
+	}
+}
+
+func TestComponentByContractKey(t *testing.T) {
+	s := loadFixtureSystem(t)
+	c, ok := s.ComponentByContractKey("systemDesignManager")
+	if !ok || c.ID != "system-design-manager" || c.Name != "SystemDesignManager" {
+		t.Fatalf("join failed: %+v ok=%v", c, ok)
+	}
+	if _, ok := s.ComponentByContractKey("noSuchThing"); ok {
+		t.Fatal("expected honest miss")
+	}
+}
