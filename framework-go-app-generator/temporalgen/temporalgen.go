@@ -4,8 +4,8 @@
 // them via workflow.ExecuteActivity, and the worker main that registers them
 // on the interface's task queue.
 //
-// This is the Task 4 scaffold: naming rules + a skeleton Generate that emits
-// three parseable, near-empty files. Tasks 5-7 grow each emitter's body.
+// Task 4 laid the scaffold (naming rules + a skeleton Generate). Task 5 grew
+// activities.gen.go; Task 6 grew invokers.gen.go. Task 7 grows worker.gen.go.
 package temporalgen
 
 import (
@@ -43,16 +43,6 @@ type emitContext struct {
 	pkgName string
 }
 
-// emitInvokers generates the invokers.gen.go file.
-func emitInvokers(ec emitContext) ([]byte, error) {
-	src := genHeader + "\npackage " + ec.pkgName + "\n"
-	formatted, err := format.Source([]byte(src))
-	if err != nil {
-		return nil, err
-	}
-	return formatted, nil
-}
-
 // emitWorker generates the worker.gen.go file.
 func emitWorker(ec emitContext) ([]byte, error) {
 	src := genHeader + "\npackage " + ec.pkgName + "\n"
@@ -68,11 +58,10 @@ func emitWorker(ec emitContext) ([]byte, error) {
 // files keyed by name: "activities.gen.go", "invokers.gen.go",
 // "worker.gen.go".
 //
-// Step 1 (this task) emits skeleton files — header + package clause only.
-// Tasks 5-7 grow each file's body: activities.gen.go gets one Temporal
-// Activity per ResourceAccess dep operation, invokers.gen.go gets the
-// Manager-side ExecuteActivity wrappers, worker.gen.go gets the worker main
-// that registers them on TaskQueueName(mgr.Doc.Interface.Name).
+// activities.gen.go gets one Temporal Activity per ResourceAccess dep
+// operation; invokers.gen.go gets the workflow-side typed ExecuteActivity
+// callers. worker.gen.go (Task 7) still emits a skeleton — it grows the
+// worker main that registers them on TaskQueueName(mgr.Doc.Interface.Name).
 func Generate(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
 	mgr, ok := m.Contracts[cfg.ManagerKey]
 	if !ok {
