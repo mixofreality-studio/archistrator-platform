@@ -1,0 +1,21 @@
+{
+  "id": "broken-unknown-layer",
+  "version": 1,
+  "serviceContracts": {
+    "someComponent": {
+      "component": "someComponent",
+      "layer": "Manger",
+      "goPackage": "internal/some",
+      "title": "some component contract",
+      "$defs": {},
+      "interface": {
+        "name": "SomeComponent",
+        "layer": "manager",
+        "operations": [
+          { "name": "doThing", "params": null, "error": false }
+        ]
+      }
+    }
+  },
+  "slots": {}
+}

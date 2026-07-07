@@ -35,3 +35,11 @@ func TestLoadRejectsLayerViolation(t *testing.T) {
 		t.Fatalf("want layer-rule error, got %v", err)
 	}
 }
+
+func TestLoadRejectsUnknownLayer(t *testing.T) {
+	raw, _ := os.ReadFile("testdata/broken.unknown-layer.json")
+	_, err := Load(raw)
+	if err == nil || !strings.Contains(err.Error(), "unknown layer") {
+		t.Fatalf("want unknown-layer error, got %v", err)
+	}
+}

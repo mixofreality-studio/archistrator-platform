@@ -6,6 +6,15 @@ import (
 	"sort"
 )
 
+// knownLayers enumerates all valid contract layer values.
+var knownLayers = map[string]bool{
+	"Client":         true,
+	"Manager":        true,
+	"Engine":         true,
+	"ResourceAccess": true,
+	"Utility":        true,
+}
+
 // legalDepTargets is the Method's downward-only call legality for COMPONENT
 // deps ([[the-method-layers]]): who may depend on whom. Utility targets are
 // exempt (anyone calls Utilities); plain goType deps are exempt (no contract).
@@ -37,9 +46,20 @@ func (m *Model) validate() error {
 // key) and rule 2 (dep-layer legality) for every contract's deps.
 func (m *Model) validateDeps() error {
 	for _, c := range sortedContracts(m.Contracts) {
+		if err := validateContractLayer(c); err != nil {
+			return err
+		}
 		if err := m.validateContractDeps(c); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// validateContractLayer checks that every contract's Layer is a known layer.
+func validateContractLayer(c *Contract) error {
+	if !knownLayers[c.Layer] {
+		return fmt.Errorf("projectmodel: contract %s: unknown layer %q", c.Key, c.Layer)
 	}
 	return nil
 }
@@ -57,6 +77,7 @@ func (m *Model) validateContractDeps(c *Contract) error {
 		if target.Layer == "Utility" {
 			continue // Utility targets: exempt
 		}
+		// Utility sources have no dep restrictions; others have legality rules.
 		allowed, known := legalDepTargets[c.Layer]
 		if known && !allowed[target.Layer] {
 			return fmt.Errorf("projectmodel: contract %s (%s) dep %q → %s (%s): layer rule violation", c.Key, c.Layer, d.Name, d.Component, target.Layer)
