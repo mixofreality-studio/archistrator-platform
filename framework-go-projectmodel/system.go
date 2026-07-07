@@ -48,7 +48,7 @@ func (s *System) ComponentByContractKey(key string) (*SystemComponent, bool) {
 		}
 	}
 	for i := range s.Components {
-		if strings.EqualFold(s.Components[i].ID, key) {
+		if strings.EqualFold(s.Components[i].ID, kebab) {
 			return &s.Components[i], true
 		}
 	}
