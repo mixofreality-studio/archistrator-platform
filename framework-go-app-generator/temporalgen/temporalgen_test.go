@@ -95,6 +95,32 @@ func TestGenerateErrorUnknownManager(t *testing.T) {
 	}
 }
 
+// TestGenerateErrorEmptyGoPackage asserts that Generate returns an error
+// when the Manager contract has an empty GoPackage.
+func TestGenerateErrorEmptyGoPackage(t *testing.T) {
+	m := &projectmodel.Model{
+		Contracts: map[string]*projectmodel.Contract{
+			"x": {
+				Key:       "x",
+				Layer:     "Manager",
+				GoPackage: "",
+				Doc:       nil,
+			},
+		},
+	}
+
+	_, err := temporalgen.Generate(m, temporalgen.Config{
+		ModulePath: "github.com/mixofreality-studio/archistrator/server",
+		ManagerKey: "x",
+	})
+	if err == nil {
+		t.Fatal("Generate should return an error for empty goPackage")
+	}
+	if !strings.Contains(err.Error(), "goPackage") && !strings.Contains(err.Error(), "x") {
+		t.Fatalf("error should mention goPackage or 'x', got: %v", err)
+	}
+}
+
 func checkGolden(t *testing.T, path string, got []byte) {
 	t.Helper()
 	if *update {
