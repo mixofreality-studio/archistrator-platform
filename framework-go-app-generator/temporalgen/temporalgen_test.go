@@ -5,6 +5,7 @@ import (
 	"go/parser"
 	"go/token"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -14,6 +15,49 @@ import (
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
+
+// sampleModulePath is the import root the compile-proof sample is generated
+// against: it points INSIDE this module so the emitted RA import
+// (sampleModulePath + "/internal/resourceaccess/orderstate") resolves to the
+// hand-written stub package at internal/sample/internal/resourceaccess/orderstate.
+const sampleModulePath = "github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/sample"
+
+// TestSampleInSync regenerates the greenfield trio against the in-module
+// sampleModulePath, byte-compares each emitted file against the committed
+// internal/sample/order/*.gen.go copies (rewrite with -update), then runs
+// `go build ./internal/sample/...` (GOWORK=off) to prove the emitted trio
+// compiles against the real Temporal SDK + framework-go — the httpgen
+// TestSampleInSync pattern.
+func TestSampleInSync(t *testing.T) {
+	m, err := projectmodel.LoadFile("../testdata/greenfield.project.json")
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+
+	got, err := temporalgen.Generate(m, temporalgen.Config{
+		ModulePath:     sampleModulePath,
+		ManagerKey:     "orderManager",
+		CallerKeyedOps: map[string][]string{"orderState": {"ChargeOrder"}},
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	for _, name := range []string{"activities.gen.go", "invokers.gen.go", "worker.gen.go"} {
+		src, ok := got[name]
+		if !ok {
+			t.Fatalf("Generate did not return %q", name)
+		}
+		checkGolden(t, filepath.Join("..", "internal", "sample", "order", name), src)
+	}
+
+	cmd := exec.Command("go", "build", "./internal/sample/...")
+	cmd.Dir = ".."
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go build ./internal/sample/... failed: %v\n%s", err, out)
+	}
+}
 
 func TestActivityName(t *testing.T) {
 	if got := temporalgen.ActivityName("orderStateAccess", "ReadOrder"); got != "orderStateAccess.readOrder" {
