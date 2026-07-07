@@ -44,6 +44,13 @@ func (a *genActivities) OrderStateChargeOrder(ctx context.Context, key fwra.Idem
 	return v, fwmanager.MapError(err)
 }
 
+// OrderStatePurgeOrder wraps orderStateAccess.purgeOrder.
+// Registered as "orderStateAccess.purgeOrder".
+func (a *genActivities) OrderStatePurgeOrder(ctx context.Context, orderID orderstate.OrderID) error {
+	err := a.OrderState.PurgeOrder(fwra.Context{Context: ctx, IdempotencyKey: genActivityIdempotencyKey(ctx)}, orderID)
+	return fwmanager.MapError(err)
+}
+
 // OrderStatePutOrder wraps orderStateAccess.putOrder.
 // Registered as "orderStateAccess.putOrder".
 func (a *genActivities) OrderStatePutOrder(ctx context.Context, orderID orderstate.OrderID, expectedVersion orderstate.Version, order orderstate.Order) (orderstate.Version, error) {

@@ -43,6 +43,7 @@ func RegisterWorker(w worker.Worker, mf genWorkerManifest) {
 	acts := &mf.Activities
 	w.RegisterActivityWithOptions(acts.OrderStateCancelOrder, activity.RegisterOptions{Name: "orderStateAccess.cancelOrder"})
 	w.RegisterActivityWithOptions(acts.OrderStateChargeOrder, activity.RegisterOptions{Name: "orderStateAccess.chargeOrder"})
+	w.RegisterActivityWithOptions(acts.OrderStatePurgeOrder, activity.RegisterOptions{Name: "orderStateAccess.purgeOrder"})
 	w.RegisterActivityWithOptions(acts.OrderStatePutOrder, activity.RegisterOptions{Name: "orderStateAccess.putOrder"})
 	w.RegisterActivityWithOptions(acts.OrderStateReadOrder, activity.RegisterOptions{Name: "orderStateAccess.readOrder"})
 	for _, ca := range mf.CustomActivities {

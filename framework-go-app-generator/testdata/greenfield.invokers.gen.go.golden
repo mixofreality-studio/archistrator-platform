@@ -59,6 +59,12 @@ func (i genInvokers) OrderStateChargeOrder(ctx workflow.Context, key fwra.Idempo
 	return out, err
 }
 
+// OrderStatePurgeOrder invokes activity "orderStateAccess.purgeOrder".
+func (i genInvokers) OrderStatePurgeOrder(ctx workflow.Context, orderID orderstate.OrderID) error {
+	err := workflow.ExecuteActivity(i.options(ctx, "orderStateAccess.purgeOrder"), "orderStateAccess.purgeOrder", orderID).Get(ctx, nil)
+	return err
+}
+
 // OrderStatePutOrder invokes activity "orderStateAccess.putOrder".
 func (i genInvokers) OrderStatePutOrder(ctx workflow.Context, orderID orderstate.OrderID, expectedVersion orderstate.Version, order orderstate.Order) (orderstate.Version, error) {
 	var out orderstate.Version

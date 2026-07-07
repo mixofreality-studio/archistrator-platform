@@ -270,6 +270,18 @@
               "$ref": "#/$defs/Version"
             },
             "error": true
+          },
+          {
+            "name": "PurgeOrder",
+            "params": [
+              {
+                "name": "orderID",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              }
+            ],
+            "error": true
           }
         ]
       }
