@@ -14,8 +14,8 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator/contract"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator/mcpgen"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 func main() {
@@ -37,7 +37,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	doc, err := contract.Parse(raw)
+	doc, err := projectmodel.Parse(raw)
 	if err != nil {
 		fatal(err)
 	}
@@ -52,7 +52,7 @@ func main() {
 	if err != nil {
 		fatal(err)
 	}
-	base := contract.Kebab(doc.ManagerBase())
+	base := projectmodel.Kebab(doc.ManagerBase())
 	writeOutput(*outDir, base, res)
 }
 

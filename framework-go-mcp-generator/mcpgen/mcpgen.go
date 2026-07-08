@@ -18,7 +18,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator/contract"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 const (
@@ -40,7 +40,7 @@ type Options struct {
 	MCPImport              string // mcp sdk import path (default official)
 }
 
-func (o Options) withDefaults(doc *contract.Doc) Options {
+func (o Options) withDefaults(doc *projectmodel.Doc) Options {
 	if o.Package == "" {
 		o.Package = defaultPackage
 	}
@@ -69,7 +69,7 @@ type Result struct {
 }
 
 // Generate produces the MCP tool registration source for a contract.
-func Generate(doc *contract.Doc, opts Options) (Result, error) {
+func Generate(doc *projectmodel.Doc, opts Options) (Result, error) {
 	opts = opts.withDefaults(doc)
 	src, err := genTools(doc, opts)
 	if err != nil {
@@ -78,10 +78,10 @@ func Generate(doc *contract.Doc, opts Options) (Result, error) {
 	return Result{ToolsGo: src}, nil
 }
 
-func genTools(doc *contract.Doc, opts Options) ([]byte, error) {
+func genTools(doc *projectmodel.Doc, opts Options) ([]byte, error) {
 	var b strings.Builder
 	alias := opts.ManagerAlias
-	mgrPrefix := contract.LowerFirst(doc.ManagerBase())
+	mgrPrefix := projectmodel.LowerFirst(doc.ManagerBase())
 
 	extra := toolExtraImports(doc)
 
@@ -148,19 +148,19 @@ func writeToolImports(b *strings.Builder, opts Options, extra []string) {
 
 // writeIOTypes emits the typed Input/Output struct for every operation. The SDK
 // infers each tool's JSON Schema from these structs.
-func writeIOTypes(b *strings.Builder, doc *contract.Doc, alias string) {
+func writeIOTypes(b *strings.Builder, doc *projectmodel.Doc, alias string) {
 	for _, op := range doc.Interface.Operations {
-		lower := contract.LowerFirst(op.Name)
+		lower := projectmodel.LowerFirst(op.Name)
 		fmt.Fprintf(b, "type %sInput struct {\n", lower)
 		for _, p := range op.Params {
 			fmt.Fprintf(b, "\t%s %s `json:%q`\n",
-				upperFirst(p.Name), contract.GoType(p.Schema, p.Pointer, alias), p.Name)
+				upperFirst(p.Name), projectmodel.GoType(p.Schema, p.Pointer, alias), p.Name)
 		}
 		b.WriteString("}\n\n")
 
 		if op.Result != nil {
 			fmt.Fprintf(b, "type %sOutput struct {\n", lower)
-			fmt.Fprintf(b, "\tResult %s `json:\"result\"`\n", contract.GoType(op.Result, false, alias))
+			fmt.Fprintf(b, "\tResult %s `json:\"result\"`\n", projectmodel.GoType(op.Result, false, alias))
 			b.WriteString("}\n\n")
 		} else {
 			fmt.Fprintf(b, "type %sOutput struct{}\n\n", lower)
@@ -168,8 +168,8 @@ func writeIOTypes(b *strings.Builder, doc *contract.Doc, alias string) {
 	}
 }
 
-func writeToolHandler(b *strings.Builder, op contract.Operation) {
-	lower := contract.LowerFirst(op.Name)
+func writeToolHandler(b *strings.Builder, op projectmodel.Operation) {
+	lower := projectmodel.LowerFirst(op.Name)
 	fmt.Fprintf(b, "// handle%s is the MCP tool handler for the %s operation.\n", op.Name, op.Name)
 	fmt.Fprintf(b, "func (h *Handler) handle%s(ctx context.Context, _ *mcp.CallToolRequest, in %sInput) (*mcp.CallToolResult, %sOutput, error) {\n",
 		op.Name, lower, lower)
@@ -198,10 +198,10 @@ func writeToolHandler(b *strings.Builder, op contract.Operation) {
 // generated input/output structs reference (uuid/time/[]byte/json.RawMessage
 // bound via x-go-type on a param or result), so the tool types compile against
 // the real manager signatures.
-func toolExtraImports(doc *contract.Doc) []string {
+func toolExtraImports(doc *projectmodel.Doc) []string {
 	set := map[string]bool{}
-	add := func(n *contract.SchemaNode) {
-		for _, imp := range contract.GoImports(n) {
+	add := func(n *projectmodel.SchemaNode) {
+		for _, imp := range projectmodel.GoImports(n) {
 			set[imp] = true
 		}
 		if kind, ok := doc.ScalarKind(n); ok && kind == "uuid" {

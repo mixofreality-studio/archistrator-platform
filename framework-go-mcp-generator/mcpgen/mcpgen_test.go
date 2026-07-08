@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator/contract"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator/mcpgen"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files")
@@ -80,7 +80,7 @@ func TestGenerateGolden(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			doc, err := contract.Parse(raw)
+			doc, err := projectmodel.Parse(raw)
 			if err != nil {
 				t.Fatalf("parse contract: %v", err)
 			}
@@ -98,7 +98,7 @@ func TestGenerateGolden(t *testing.T) {
 			if got := strings.Count(src, "mcp.AddTool(srv,"); got != len(doc.Interface.Operations) {
 				t.Errorf("AddTool count = %d, want %d", got, len(doc.Interface.Operations))
 			}
-			prefix := contract.LowerFirst(doc.ManagerBase())
+			prefix := projectmodel.LowerFirst(doc.ManagerBase())
 			for _, op := range doc.Interface.Operations {
 				name := prefix + op.Name
 				if !strings.Contains(src, `Name: "`+name+`"`) {
@@ -122,7 +122,7 @@ func TestSampleInSync(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			doc, err := contract.Parse(raw)
+			doc, err := projectmodel.Parse(raw)
 			if err != nil {
 				t.Fatal(err)
 			}
