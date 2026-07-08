@@ -3,7 +3,7 @@ package httpgen
 import (
 	"strings"
 
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/contract"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 // placement is where an operation parameter is carried on the wire.
@@ -17,13 +17,13 @@ const (
 
 // paramPlan is one parameter with its resolved wire placement.
 type paramPlan struct {
-	param contract.Param
+	param projectmodel.Param
 	place placement
 }
 
 // opPlan is a fully resolved HTTP binding for one operation.
 type opPlan struct {
-	op           contract.Operation
+	op           projectmodel.Operation
 	method       string // "GET" or "POST"
 	path         string // /api/v1/<manager>/<op>[/{param}...]
 	pathParams   []paramPlan
@@ -58,8 +58,8 @@ type opPlan struct {
 //     is Kind=<identity minus trailing ID, lowercased>, ID=<that value>;
 //     otherwise it is the owner-scoped catalog (Kind=<manager>Catalog,
 //     ID=principal.Subject).
-func planOps(doc *contract.Doc) []opPlan {
-	mgrKebab := contract.Kebab(doc.ManagerBase())
+func planOps(doc *projectmodel.Doc) []opPlan {
+	mgrKebab := projectmodel.Kebab(doc.ManagerBase())
 	plans := make([]opPlan, 0, len(doc.Interface.Operations))
 	for _, op := range doc.Interface.Operations {
 		plans = append(plans, planOp(doc, op, mgrKebab))
@@ -69,7 +69,7 @@ func planOps(doc *contract.Doc) []opPlan {
 
 // planOp resolves the HTTP binding for a single operation per the convention
 // documented on planOps.
-func planOp(doc *contract.Doc, op contract.Operation, mgrKebab string) opPlan {
+func planOp(doc *projectmodel.Doc, op projectmodel.Operation, mgrKebab string) opPlan {
 	pathParams, rest := splitParams(doc, op.Params)
 
 	method := "POST"
@@ -77,8 +77,8 @@ func planOp(doc *contract.Doc, op contract.Operation, mgrKebab string) opPlan {
 		method = "GET"
 	}
 
-	p := opPlan{op: op, method: method, verb: contract.Kebab(op.Name)}
-	path := "/api/v1/" + mgrKebab + "/" + contract.Kebab(op.Name)
+	p := opPlan{op: op, method: method, verb: projectmodel.Kebab(op.Name)}
+	path := "/api/v1/" + mgrKebab + "/" + projectmodel.Kebab(op.Name)
 	for _, param := range pathParams {
 		p.pathParams = append(p.pathParams, paramPlan{param, placePath})
 		path += "/{" + param.Name + "}"
@@ -89,14 +89,14 @@ func planOp(doc *contract.Doc, op contract.Operation, mgrKebab string) opPlan {
 		p.resourceKind = resourceKindFor(p.pathParams[0].param)
 	} else {
 		p.catalog = true
-		p.resourceKind = contract.LowerFirst(doc.ManagerBase()) + "Catalog"
+		p.resourceKind = projectmodel.LowerFirst(doc.ManagerBase()) + "Catalog"
 	}
 	return p
 }
 
 // splitParams partitions an op's params into ID path params and the rest, in
 // declared order.
-func splitParams(doc *contract.Doc, params []contract.Param) (pathParams, rest []contract.Param) {
+func splitParams(doc *projectmodel.Doc, params []projectmodel.Param) (pathParams, rest []projectmodel.Param) {
 	for _, param := range params {
 		if isIDPathParam(doc, param) {
 			pathParams = append(pathParams, param)
@@ -109,7 +109,7 @@ func splitParams(doc *contract.Doc, params []contract.Param) (pathParams, rest [
 
 // assignRest places each non-path param onto the wire: query for a GET, JSON body
 // otherwise.
-func assignRest(p *opPlan, rest []contract.Param, method string) {
+func assignRest(p *opPlan, rest []projectmodel.Param, method string) {
 	for _, param := range rest {
 		if method == "GET" {
 			p.queryParams = append(p.queryParams, paramPlan{param, placeQuery})
@@ -129,7 +129,7 @@ func methodFor(opName string) string {
 }
 
 // allScalar reports whether every param can ride a path/query value.
-func allScalar(doc *contract.Doc, params []contract.Param) bool {
+func allScalar(doc *projectmodel.Doc, params []projectmodel.Param) bool {
 	for _, p := range params {
 		if _, ok := doc.ScalarKind(p.Schema); !ok {
 			return false
@@ -138,13 +138,13 @@ func allScalar(doc *contract.Doc, params []contract.Param) bool {
 	return true
 }
 
-func isIDPathParam(doc *contract.Doc, p contract.Param) bool {
+func isIDPathParam(doc *projectmodel.Doc, p projectmodel.Param) bool {
 	if name := p.Schema.RefName(); name != "" {
-		return doc.IsScalarStringDef(name) && contract.EndsWithID(name)
+		return doc.IsScalarStringDef(name) && projectmodel.EndsWithID(name)
 	}
 	// Inline uuid identity (operatedAppID, customerID): keyed on the param name.
 	if kind, ok := doc.ScalarKind(p.Schema); ok && kind == "uuid" {
-		return contract.EndsWithID(p.Name)
+		return projectmodel.EndsWithID(p.Name)
 	}
 	return false
 }
@@ -152,9 +152,9 @@ func isIDPathParam(doc *contract.Doc, p contract.Param) bool {
 // resourceKindFor derives the authz resource Kind from the first path param: the
 // $def type name for a named scalar, else the param name for an inline uuid, with
 // the trailing "ID" stripped and lowercased.
-func resourceKindFor(p contract.Param) string {
+func resourceKindFor(p projectmodel.Param) string {
 	if name := p.Schema.RefName(); name != "" {
-		return strings.ToLower(contract.TrimIDSuffix(name))
+		return strings.ToLower(projectmodel.TrimIDSuffix(name))
 	}
-	return strings.ToLower(contract.TrimIDSuffix(p.Name))
+	return strings.ToLower(projectmodel.TrimIDSuffix(p.Name))
 }

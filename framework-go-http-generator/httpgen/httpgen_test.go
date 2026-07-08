@@ -9,8 +9,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/contract"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/httpgen"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 	"gopkg.in/yaml.v3"
 )
 
@@ -87,7 +87,7 @@ func TestGenerateGolden(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			doc, err := contract.Parse(raw)
+			doc, err := projectmodel.Parse(raw)
 			if err != nil {
 				t.Fatalf("parse contract: %v", err)
 			}
@@ -149,7 +149,7 @@ func TestSampleInSync(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			doc, err := contract.Parse(raw)
+			doc, err := projectmodel.Parse(raw)
 			if err != nil {
 				t.Fatal(err)
 			}

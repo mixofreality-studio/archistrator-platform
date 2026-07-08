@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/contract"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 	"gopkg.in/yaml.v3"
 )
 
@@ -15,7 +15,7 @@ import (
 // verbatim — only the internal $ref base "#/$defs/" is rewritten to
 // "#/components/schemas/"; x-* extensions, incl. x-go-* and x-enum-varnames,
 // pass through unchanged as permitted specification extensions).
-func genOpenAPI(doc *contract.Doc, plans []opPlan, opts Options) ([]byte, error) {
+func genOpenAPI(doc *projectmodel.Doc, plans []opPlan, opts Options) ([]byte, error) {
 	schemas := map[string]any{}
 	for name, raw := range doc.Defs {
 		var v any
@@ -172,7 +172,7 @@ func errorResponseRef(desc string) map[string]any {
 }
 
 // nodeToOAS renders a param/result schema node as an OAS schema object.
-func nodeToOAS(n *contract.SchemaNode) map[string]any {
+func nodeToOAS(n *projectmodel.SchemaNode) map[string]any {
 	if n == nil {
 		return map[string]any{}
 	}

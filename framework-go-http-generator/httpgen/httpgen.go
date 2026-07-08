@@ -16,7 +16,7 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/contract"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 // Default import paths for the archistrator-platform framework. Overridable via
@@ -49,7 +49,7 @@ type Options struct {
 	Version string
 }
 
-func (o Options) withDefaults(doc *contract.Doc) Options {
+func (o Options) withDefaults(doc *projectmodel.Doc) Options {
 	if o.Package == "" {
 		o.Package = defaultPackage
 	}
@@ -83,7 +83,7 @@ type Result struct {
 }
 
 // Generate produces the REST handlers and the OpenAPI document for a contract.
-func Generate(doc *contract.Doc, opts Options) (Result, error) {
+func Generate(doc *projectmodel.Doc, opts Options) (Result, error) {
 	opts = opts.withDefaults(doc)
 	plans := planOps(doc)
 	handlers, err := genHandlers(doc, plans, opts)
@@ -97,7 +97,7 @@ func Generate(doc *contract.Doc, opts Options) (Result, error) {
 	return Result{HandlersGo: handlers, OpenAPIYAML: oas}, nil
 }
 
-func genHandlers(doc *contract.Doc, plans []opPlan, opts Options) ([]byte, error) {
+func genHandlers(doc *projectmodel.Doc, plans []opPlan, opts Options) ([]byte, error) {
 	var b strings.Builder
 	alias := opts.ManagerAlias
 
@@ -174,18 +174,18 @@ func writeRequestBodyTypes(b *strings.Builder, plans []opPlan, alias string) {
 		if len(p.bodyParams) == 0 {
 			continue
 		}
-		fmt.Fprintf(b, "type %sRequest struct {\n", contract.LowerFirst(p.op.Name))
+		fmt.Fprintf(b, "type %sRequest struct {\n", projectmodel.LowerFirst(p.op.Name))
 		for _, bp := range p.bodyParams {
 			fmt.Fprintf(b, "\t%s %s `json:%q`\n",
 				upperFirst(bp.param.Name),
-				contract.GoType(bp.param.Schema, bp.param.Pointer, alias),
+				projectmodel.GoType(bp.param.Schema, bp.param.Pointer, alias),
 				bp.param.Name)
 		}
 		b.WriteString("}\n\n")
 	}
 }
 
-func writeHandler(b *strings.Builder, doc *contract.Doc, p opPlan, opts Options) error {
+func writeHandler(b *strings.Builder, doc *projectmodel.Doc, p opPlan, opts Options) error {
 	alias := opts.ManagerAlias
 	op := p.op
 
@@ -205,7 +205,7 @@ func writeHandler(b *strings.Builder, doc *contract.Doc, p opPlan, opts Options)
 
 	// Body params (POST).
 	if len(p.bodyParams) > 0 {
-		fmt.Fprintf(b, "\tvar req %sRequest\n", contract.LowerFirst(op.Name))
+		fmt.Fprintf(b, "\tvar req %sRequest\n", projectmodel.LowerFirst(op.Name))
 		b.WriteString("\tif !decodeJSON(w, r, &req) {\n\t\treturn\n\t}\n")
 		for _, bp := range p.bodyParams {
 			argExpr[bp.param.Name] = "req." + upperFirst(bp.param.Name)
@@ -254,7 +254,7 @@ func writeHandler(b *strings.Builder, doc *contract.Doc, p opPlan, opts Options)
 // Go value `param.Name` from rawExpr (a string expression like r.PathValue("x")).
 // A string scalar is a direct (named-type) conversion; a uuid/int/number/bool is
 // parsed, with a 400 written and the handler aborted on a malformed value.
-func writeScalarBind(b *strings.Builder, doc *contract.Doc, alias string, param contract.Param, rawExpr string) {
+func writeScalarBind(b *strings.Builder, doc *projectmodel.Doc, alias string, param projectmodel.Param, rawExpr string) {
 	name := param.Name
 	ref := param.Schema.RefName()
 	kind, _ := doc.ScalarKind(param.Schema)
@@ -318,7 +318,7 @@ func badRequest(name string) string {
 
 // resourceIDExpr renders the authz ResourceRef.ID expression for the first path
 // param: uuid -> .String(); a named string scalar -> string(...).
-func resourceIDExpr(doc *contract.Doc, fp contract.Param) string {
+func resourceIDExpr(doc *projectmodel.Doc, fp projectmodel.Param) string {
 	kind, _ := doc.ScalarKind(fp.Schema)
 	if kind == "uuid" {
 		if fp.Pointer {
@@ -335,11 +335,11 @@ func resourceIDExpr(doc *contract.Doc, fp contract.Param) string {
 // handlerExtraImports collects the sorted, de-duplicated x-go-import paths the
 // emitted handlers reference: the uuid package for parse + every param's bound
 // foundational type (uuid path/query/body fields).
-func handlerExtraImports(doc *contract.Doc, plans []opPlan) []string {
+func handlerExtraImports(doc *projectmodel.Doc, plans []opPlan) []string {
 	set := map[string]bool{}
 	for _, p := range plans {
 		for _, pp := range allParams(p) {
-			for _, imp := range contract.GoImports(pp.param.Schema) {
+			for _, imp := range projectmodel.GoImports(pp.param.Schema) {
 				set[imp] = true
 			}
 			if kind, ok := doc.ScalarKind(pp.param.Schema); ok && kind == "uuid" {
@@ -352,7 +352,7 @@ func handlerExtraImports(doc *contract.Doc, plans []opPlan) []string {
 
 // handlerNeedsStrconv reports whether any path/query param is a non-string scalar
 // requiring a strconv parse.
-func handlerNeedsStrconv(doc *contract.Doc, plans []opPlan) bool {
+func handlerNeedsStrconv(doc *projectmodel.Doc, plans []opPlan) bool {
 	for _, p := range plans {
 		for _, pp := range append(append([]paramPlan{}, p.pathParams...), p.queryParams...) {
 			switch kind, _ := doc.ScalarKind(pp.param.Schema); kind {
