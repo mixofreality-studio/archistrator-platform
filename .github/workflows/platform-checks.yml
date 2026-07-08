@@ -16,9 +16,16 @@ jobs:
       - uses: actions/setup-go@v6
         with:
           go-version: '1.25'
+      # framework-go-projectmodel/-app-generator/-http-generator/-mcp-generator
+      # build standalone under GOWORK=off: projectmodel and mcp-generator have
+      # no sibling deps at all; app-generator and http-generator resolve
+      # framework-go (and, for app-generator, framework-go-projectmodel) via
+      # `replace` directives in their own go.mod pointing at the sibling
+      # checkout, which this job satisfies since actions/checkout@v6 above
+      # checks out the whole repo.
       - name: Build all platform Go modules
         run: |
-          for m in framework-go framework-go-infrastructure-*; do
+          for m in framework-go framework-go-infrastructure-* framework-go-projectmodel framework-go-app-generator framework-go-http-generator framework-go-mcp-generator; do
             echo "== $m =="
             ( cd "$m" && GOWORK=off go build ./... )
           done
@@ -27,13 +34,13 @@ jobs:
           curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b /usr/local/bin
       - name: Lint all platform Go modules
         run: |
-          for m in framework-go framework-go-infrastructure-*; do
+          for m in framework-go framework-go-infrastructure-* framework-go-projectmodel framework-go-app-generator framework-go-http-generator framework-go-mcp-generator; do
             echo "== $m =="
             ( cd "$m" && GOWORK=off golangci-lint run ./... )
           done
       - name: Test all platform Go modules
         run: |
-          for m in framework-go framework-go-infrastructure-*; do
+          for m in framework-go framework-go-infrastructure-* framework-go-projectmodel framework-go-app-generator framework-go-http-generator framework-go-mcp-generator; do
             echo "== $m =="
             ( cd "$m" && GOWORK=off go test ./... )
           done
