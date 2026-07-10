@@ -37,7 +37,7 @@ func variantArgsForSubstrate(substrate, infraKey string) []string {
 	default:
 		var out []string
 		for _, in := range substrateCatalog[substrate] {
-			out = append(out, "cfg."+infraFieldName(infraKey, in))
+			out = append(out, "cfg."+infraFieldName(infraKey, in.Name))
 		}
 		return out
 	}

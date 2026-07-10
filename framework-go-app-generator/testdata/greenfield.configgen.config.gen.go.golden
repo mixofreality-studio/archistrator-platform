@@ -57,8 +57,8 @@ func LoadConfig() (*Config, error) {
 		KeycloakJWKSURL:         getenv("ORDERAPP_KEYCLOAK_JWKS_URL"),
 		KeycloakIssuer:          getenv("ORDERAPP_KEYCLOAK_ISSUER"),
 		PostgresURL:             getenv("ORDERAPP_POSTGRES_URL"),
-		TemporalHostport:        getenv("ORDER_TEMPORAL_ADDR"),
-		TemporalNamespace:       getenv("ORDERAPP_TEMPORAL_NAMESPACE"),
+		TemporalHostport:        getenvString("ORDER_TEMPORAL_ADDR", "temporal-frontend.temporal.svc:7233"),
+		TemporalNamespace:       getenvString("ORDERAPP_TEMPORAL_NAMESPACE", "default"),
 		ListenAddr:              getenvString("ORDERAPP_LISTEN_ADDR", ":8080"),
 		AuthDevMode:             getenvBool("ORDERAPP_AUTH_DEV_MODE", "false"),
 		MaxRetries:              getenvInt("ORDERAPP_MAX_RETRIES", "3"),
@@ -66,12 +66,6 @@ func LoadConfig() (*Config, error) {
 	}
 
 	var missing []string
-	if c.TemporalHostport == "" {
-		missing = append(missing, "ORDER_TEMPORAL_ADDR")
-	}
-	if c.TemporalNamespace == "" {
-		missing = append(missing, "ORDERAPP_TEMPORAL_NAMESPACE")
-	}
 	if len(missing) > 0 {
 		return nil, fmt.Errorf("config: missing required configuration for all declared profiles: %s", strings.Join(missing, ", "))
 	}
@@ -81,8 +75,8 @@ func LoadConfig() (*Config, error) {
 // requiredEnvByProfile lists, per profile, the env vars of required-class
 // infrastructure provisioned for that profile.
 var requiredEnvByProfile = map[string][]string{
-	"cloud": {"ORDERAPP_POSTGRES_URL", "ORDER_TEMPORAL_ADDR", "ORDERAPP_TEMPORAL_NAMESPACE"},
-	"local": {"ORDER_TEMPORAL_ADDR", "ORDERAPP_TEMPORAL_NAMESPACE"},
+	"cloud": {"ORDERAPP_POSTGRES_URL"},
+	"local": {},
 }
 
 // MissingFor reports the required env vars for profile that are absent.

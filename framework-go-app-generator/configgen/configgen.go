@@ -50,6 +50,7 @@ type infraField struct {
 	RequiredClass bool     // owning decl presence == "required" (neither optional nor optional-dormant)
 	Profiles      []string // profiles the owning decl is provisioned for
 	OptDormant    bool     // owning decl presence == optional-dormant
+	Default       string   // catalog-declared default; non-empty ⇒ never "missing" (LoadConfig falls back to it)
 }
 
 // settingField is one emitted setting field.
@@ -127,18 +128,19 @@ func collectInfra(d *projectmodel.Deployment, prefix string) ([]infraField, erro
 		}
 		requiredClass := decl.Presence != "optional" && decl.Presence != "optional-dormant"
 		for _, in := range inputs {
-			env := decl.Env[in]
+			env := decl.Env[in.Name]
 			if env == "" {
-				env = prefix + "_" + upperSnakeKey(decl.Key) + "_" + in
+				env = prefix + "_" + upperSnakeKey(decl.Key) + "_" + in.Name
 			}
 			out = append(out, infraField{
-				GoName:        pascalToken(decl.Key) + pascalToken(in),
+				GoName:        pascalToken(decl.Key) + pascalToken(in.Name),
 				Env:           env,
 				InfraKey:      decl.Key,
-				RequiredAll:   requiredClass && coversAll(decl.Profiles, allProfiles),
+				RequiredAll:   requiredClass && coversAll(decl.Profiles, allProfiles) && in.Default == "",
 				RequiredClass: requiredClass,
 				Profiles:      decl.Profiles,
 				OptDormant:    decl.Presence == "optional-dormant",
+				Default:       in.Default,
 			})
 		}
 	}

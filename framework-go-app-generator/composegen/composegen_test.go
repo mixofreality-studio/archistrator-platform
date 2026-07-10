@@ -113,6 +113,18 @@ var archistratorCfg = composegen.Config{
 	},
 }
 
+// hasTemporalInfra reports whether the deployment declares a "temporal"
+// infrastructure substrate (as opposed to configuring Temporal via plain
+// settings, G7).
+func hasTemporalInfra(d *projectmodel.Deployment) bool {
+	for _, decl := range d.Infrastructure {
+		if decl.Substrate == "temporal" {
+			return true
+		}
+	}
+	return false
+}
+
 // TestArchistratorFixtureGenerates is the recurrence guard: composegen MUST emit
 // a gofmt-clean, parseable composition root for the REAL archistrator model —
 // the shape that surfaced the six emitter gaps (import-alias collisions,
@@ -121,9 +133,33 @@ var archistratorCfg = composegen.Config{
 // three load-bearing anchors: the construction Worker's conditional registration
 // (G6b), the arm-less billingState stub call (G4), and the projectstate GitHub
 // variant-args hook call (G3).
+//
+// G7 (recorded in the step-8 A2 report, not yet fixed on the archistrator
+// side): the fixture's deployment configures Temporal via plain SETTINGS
+// (temporalHostPort/temporalNamespace), not an `infrastructure` decl, even
+// though its Managers declare a client.Client dep — today that's a genuine gap
+// in the MODEL, not the emitter, and Generate now fails with the clear, named
+// error instead of emitting an undefined `tc` reference. This branch is
+// flip-ready: once the archistrator-side deployment amendment splices temporal
+// into `infrastructure` (the A2 retry), hasTemporalInfra flips true and the
+// test falls through to the existing success-path assertions below with no
+// further edits required.
 func TestArchistratorFixtureGenerates(t *testing.T) {
 	m := loadArchistrator(t)
 	got, err := composegen.Generate(m, archistratorCfg)
+
+	if !hasTemporalInfra(m.Deployment) {
+		if err == nil {
+			t.Fatal("want the missing-temporal-infrastructure error, got nil — " +
+				"has the fixture gained a temporal infra decl? if so, delete this branch")
+		}
+		want := `composegen: container "archistrator-server": managers require a "temporal" infrastructure declaration`
+		if err.Error() != want {
+			t.Fatalf("error = %q, want %q", err.Error(), want)
+		}
+		return
+	}
+
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
@@ -207,6 +243,34 @@ func loadGreenfield(t *testing.T) *projectmodel.Model {
 		t.Fatalf("load fixture: %v", err)
 	}
 	return m
+}
+
+func loadNoTemporal(t *testing.T) *projectmodel.Model {
+	t.Helper()
+	m, err := projectmodel.LoadFile("../testdata/composegen_notemporal.project.json")
+	if err != nil {
+		t.Fatalf("load no-temporal fixture: %v", err)
+	}
+	return m
+}
+
+// TestMissingTemporalInfra covers G7 (recorded not fixed, then closed): a
+// deployment whose Managers need the Temporal control-plane client
+// (client.Client) but which declares NO "temporal" infrastructure substrate
+// must fail Generate with a clear, named error — not silently emit an
+// undefined `tc` reference that only fails to COMPILE. The fixture is the
+// greenfield model with its "temporal" infra decl removed (Managers keep
+// their client.Client dep unchanged).
+func TestMissingTemporalInfra(t *testing.T) {
+	m := loadNoTemporal(t)
+	_, err := composegen.Generate(m, greenfieldCfg)
+	if err == nil {
+		t.Fatal("want error for missing temporal infrastructure, got nil")
+	}
+	want := `composegen: container "order-app": managers require a "temporal" infrastructure declaration`
+	if err.Error() != want {
+		t.Fatalf("error = %q, want %q", err.Error(), want)
+	}
 }
 
 func loadGaps(t *testing.T) *projectmodel.Model {

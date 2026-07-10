@@ -21,18 +21,29 @@ func emitFile(d *projectmodel.Deployment, cfg Config, infra []infraField, settin
 	b.WriteString(genHeader)
 	writeDocHeader(&b, cfg)
 	fmt.Fprintf(&b, "package %s\n\n", cfg.PackageName)
-	writeImports(&b, settings)
+	writeImports(&b, infra, settings)
 	writeStruct(&b, infra, settings)
 	writeLoadConfig(&b, cfg, infra, settings)
 	writeMissingFor(&b, d, infra)
 	writeDormantWarnings(&b, infra)
-	writeHelpers(&b, settings)
+	writeHelpers(&b, infra, settings)
 
 	src, err := format.Source(b.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("configgen: gofmt: %w\n%s", err, b.String())
 	}
 	return src, nil
+}
+
+// anyInfraDefault reports whether any infra input carries a catalog default
+// (⇒ LoadConfig needs the getenvString fallback helper for it).
+func anyInfraDefault(infra []infraField) bool {
+	for _, f := range infra {
+		if f.Default != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // writeDocHeader documents the contract of the generated file.
@@ -54,7 +65,7 @@ func writeDocHeader(b *bytes.Buffer, cfg Config) {
 
 // writeImports emits the import block; strconv/time are pulled in only when a
 // setting needs them.
-func writeImports(b *bytes.Buffer, settings []settingField) {
+func writeImports(b *bytes.Buffer, infra []infraField, settings []settingField) {
 	imps := []string{"fmt", "os", "strings"}
 	if anyKind(settings, "bool") || anyKind(settings, "int") {
 		imps = append(imps, "strconv")
@@ -99,6 +110,10 @@ func writeLoadConfig(b *bytes.Buffer, cfg Config, infra []infraField, settings [
 	b.WriteString("func LoadConfig() (*Config, error) {\n")
 	b.WriteString("\tc := &Config{\n")
 	for _, f := range infra {
+		if f.Default != "" {
+			fmt.Fprintf(b, "\t\t%s: getenvString(%q, %q),\n", f.GoName, f.Env, f.Default)
+			continue
+		}
 		fmt.Fprintf(b, "\t\t%s: getenv(%q),\n", f.GoName, f.Env)
 	}
 	for _, f := range settings {
@@ -175,11 +190,11 @@ func writeDormantWarnings(b *bytes.Buffer, infra []infraField) {
 }
 
 // writeHelpers emits the env-reading helpers actually used.
-func writeHelpers(b *bytes.Buffer, settings []settingField) {
+func writeHelpers(b *bytes.Buffer, infra []infraField, settings []settingField) {
 	b.WriteString("// getenv reads and trims an environment variable.\n")
 	b.WriteString("func getenv(name string) string { return strings.TrimSpace(os.Getenv(name)) }\n\n")
 
-	if anyKind(settings, "string") {
+	if anyKind(settings, "string") || anyInfraDefault(infra) {
 		b.WriteString("// getenvString returns the trimmed env value, or def when unset.\n")
 		b.WriteString("func getenvString(name, def string) string {\n")
 		b.WriteString("\tif v := getenv(name); v != \"\" {\n\t\treturn v\n\t}\n\treturn def\n}\n\n")
@@ -224,11 +239,13 @@ func sortedProfiles(d *projectmodel.Deployment) []string {
 // requiredEnvsForProfile lists the env vars of required-class infra
 // provisioned for profile p (in the infra field order). Plain-optional and
 // optional-dormant decls are excluded regardless of profile membership — only
-// presence=="required" decls belong in the per-profile MissingFor table.
+// presence=="required" decls belong in the per-profile MissingFor table. An
+// input carrying a catalog default is never "missing" (LoadConfig falls back
+// to it), so it is excluded here too.
 func requiredEnvsForProfile(infra []infraField, p string) []string {
 	var vars []string
 	for _, f := range infra {
-		if f.RequiredClass && f.RequiredForProfile(p) {
+		if f.RequiredClass && f.RequiredForProfile(p) && f.Default == "" {
 			vars = append(vars, f.Env)
 		}
 	}

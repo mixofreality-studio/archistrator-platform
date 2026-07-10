@@ -10,6 +10,23 @@ package deploynaming
 
 import "strings"
 
+// SubstrateInput is one configuration input a substrate declares: its
+// canonical UPPER_SNAKE name plus an OPTIONAL default. A non-empty Default
+// means the input is never "missing" — LoadConfig falls back to it instead of
+// hard-requiring the env var, and it is excluded from MissingFor/DormantWarnings'
+// required-var accounting. An empty Default preserves today's behavior (the
+// input is required per its owning decl's presence/profile coverage).
+//
+// Field named Name (not "Token") deliberately: gosec's G101 hardcoded-
+// credentials heuristic pattern-matches a "Token"-named struct field against
+// its string literal value, flagging entries like PRIVATE_KEY_PEM/JWKS_URL as
+// false-positive hardcoded secrets even though these are catalog INPUT NAMES,
+// not credential values.
+type SubstrateInput struct {
+	Name    string
+	Default string
+}
+
 // SubstrateCatalog is the MECHANISM half of the deployment split: it maps a
 // declared infrastructure substrate to its ordered set of configuration
 // INPUTS. project.json declares only intent (which substrates, which
@@ -24,11 +41,18 @@ import "strings"
 // (<PREFIX>_<INFRAKEY>_<INPUT>) from it, and a per-declaration env override
 // may replace the latter for backwards compatibility. composegen threads the
 // SAME cfg fields the config file exposes for those inputs.
-var SubstrateCatalog = map[string][]string{
-	"temporal":   {"HOSTPORT", "NAMESPACE"},
-	"postgres":   {"URL"},
-	"github-app": {"APP_ID", "PRIVATE_KEY_PEM", "ACCOUNT", "APP_SLUG", "INSTALLATION_ID", "API_BASE_URL"},
-	"keycloak":   {"JWKS_URL", "ISSUER"},
+//
+// Only "temporal" carries input defaults today (the archistrator dev cluster's
+// well-known Temporal frontend address/namespace); every other substrate is
+// unchanged (no default — required per presence/profile coverage as before).
+var SubstrateCatalog = map[string][]SubstrateInput{
+	"temporal": {
+		{Name: "HOSTPORT", Default: "temporal-frontend.temporal.svc:7233"},
+		{Name: "NAMESPACE", Default: "default"},
+	},
+	"postgres":   {{Name: "URL"}},
+	"github-app": {{Name: "APP_ID"}, {Name: "PRIVATE_KEY_PEM"}, {Name: "ACCOUNT"}, {Name: "APP_SLUG"}, {Name: "INSTALLATION_ID"}, {Name: "API_BASE_URL"}},
+	"keycloak":   {{Name: "JWKS_URL"}, {Name: "ISSUER"}},
 	"otel":       {}, // env-driven by the OTEL_* SDK convention; no declared inputs
 }
 

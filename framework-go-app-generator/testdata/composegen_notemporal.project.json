@@ -1,0 +1,668 @@
+{
+  "id": "greenfield",
+  "version": 1,
+  "slots": {
+    "5": {
+      "status": 2,
+      "kind": 5,
+      "model": {
+        "components": [
+          {
+            "id": "web-client",
+            "name": "WebClient",
+            "kind": "client",
+            "layer": "client",
+            "encapsulates": "Transport entry point for the browser SPA.",
+            "atomicBusinessVerbs": []
+          },
+          {
+            "id": "order-manager",
+            "name": "OrderManager",
+            "kind": "manager",
+            "layer": "manager",
+            "encapsulates": "Encapsulates the order lifecycle workflow: place, price, charge, cancel.",
+            "atomicBusinessVerbs": []
+          },
+          {
+            "id": "order-state-access",
+            "name": "OrderStateAccess",
+            "kind": "resourceAccess",
+            "layer": "resourceAccess",
+            "encapsulates": "Encapsulates the order-state store: read/put/cancel/charge over the order record.",
+            "atomicBusinessVerbs": [
+              "readOrder",
+              "putOrder",
+              "cancelOrder",
+              "chargeOrder"
+            ]
+          },
+          {
+            "id": "pricing-engine",
+            "name": "PricingEngine",
+            "kind": "engine",
+            "layer": "engine",
+            "encapsulates": "Encapsulates the order pricing policy: order -> price quote.",
+            "atomicBusinessVerbs": []
+          },
+          {
+            "id": "fulfillment-manager",
+            "name": "FulfillmentManager",
+            "kind": "manager",
+            "layer": "manager",
+            "encapsulates": "Encapsulates the shipment fulfillment workflow: query carrier status, ping carrier liveness.",
+            "atomicBusinessVerbs": []
+          }
+        ],
+        "relationships": [
+          {
+            "from": "web-client",
+            "to": "order-manager",
+            "mode": "sync",
+            "label": "placeOrder | cancelOrder"
+          },
+          {
+            "from": "order-manager",
+            "to": "order-state-access",
+            "mode": "sync",
+            "label": "readOrder | putOrder | cancelOrder | chargeOrder"
+          },
+          {
+            "from": "order-manager",
+            "to": "pricing-engine",
+            "mode": "sync",
+            "label": "price"
+          },
+          {
+            "from": "web-client",
+            "to": "fulfillment-manager",
+            "mode": "sync",
+            "label": "getShipmentStatus | pingCarrier"
+          }
+        ],
+        "dynamicViews": []
+      }
+    },
+    "6": {
+      "kind": 6,
+      "model": {
+        "deployment": {
+          "deliveryStyle": "cloud",
+          "containers": [
+            {
+              "key": "order-app",
+              "name": "order-app",
+              "components": [
+                "orderManager",
+                "orderStateAccess"
+              ]
+            }
+          ],
+          "environments": [
+            {
+              "profile": "cloud",
+              "title": "Cloud"
+            },
+            {
+              "profile": "local",
+              "title": "Local"
+            }
+          ],
+          "infrastructure": [
+            {
+              "key": "otel",
+              "substrate": "otel",
+              "profiles": [
+                "cloud",
+                "local"
+              ],
+              "presence": "optional"
+            },
+            {
+              "key": "postgres",
+              "substrate": "postgres",
+              "profiles": [
+                "cloud"
+              ],
+              "presence": "required"
+            },
+            {
+              "key": "github-app",
+              "substrate": "github-app",
+              "profiles": [
+                "cloud"
+              ],
+              "presence": "optional-dormant"
+            },
+            {
+              "key": "keycloak",
+              "substrate": "keycloak",
+              "profiles": [
+                "cloud"
+              ],
+              "presence": "optional"
+            }
+          ],
+          "bindings": [
+            {
+              "component": "orderStateAccess",
+              "presence": "optional",
+              "perProfile": {
+                "cloud": {
+                  "variant": "postgres",
+                  "infra": [
+                    "postgres"
+                  ]
+                },
+                "local": {
+                  "variant": "memory",
+                  "infra": []
+                }
+              }
+            }
+          ],
+          "settings": [
+            {
+              "name": "listenAddr",
+              "type": "string",
+              "default": ":8080"
+            },
+            {
+              "name": "authDevMode",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "maxRetries",
+              "type": "int",
+              "default": "3"
+            },
+            {
+              "name": "shutdownTimeout",
+              "type": "duration",
+              "default": "20s"
+            }
+          ]
+        }
+      }
+    }
+  },
+  "serviceContracts": {
+    "orderManager": {
+      "component": "orderManager",
+      "layer": "Manager",
+      "goPackage": "internal/manager/order",
+      "deps": [
+        {
+          "name": "client",
+          "goType": "client.Client",
+          "goImport": "go.temporal.io/sdk/client"
+        },
+        {
+          "name": "orderState",
+          "component": "orderStateAccess"
+        },
+        {
+          "name": "pricing",
+          "component": "pricingEngine"
+        },
+        {
+          "name": "repo",
+          "goType": "func(orderID string) (repolookup.RepoRef, bool)",
+          "goImport": "example.com/greenfield/server/internal/resourceaccess/repolookup"
+        },
+        {
+          "name": "repoBase",
+          "goType": "string"
+        }
+      ],
+      "title": "order-manager contract",
+      "$defs": {
+        "OrderID": {
+          "type": "string"
+        },
+        "Order": {
+          "type": "object",
+          "properties": {
+            "ID": {
+              "$ref": "#/$defs/OrderID"
+            },
+            "AmountCents": {
+              "type": "integer"
+            },
+            "Status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ID",
+            "AmountCents",
+            "Status"
+          ],
+          "additionalProperties": false
+        },
+        "Money": {
+          "type": "object",
+          "properties": {
+            "AmountCents": {
+              "type": "integer"
+            },
+            "Currency": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "AmountCents",
+            "Currency"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "interface": {
+        "name": "OrderManager",
+        "layer": "manager",
+        "operations": [
+          {
+            "name": "PlaceOrder",
+            "params": [
+              {
+                "name": "order",
+                "schema": {
+                  "$ref": "#/$defs/Order"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/Order"
+            },
+            "error": true
+          }
+        ]
+      }
+    },
+    "orderStateAccess": {
+      "component": "orderStateAccess",
+      "layer": "ResourceAccess",
+      "goPackage": "internal/resourceaccess/orderstate",
+      "infra": [
+        "Postgres"
+      ],
+      "title": "orderStateAccess contract",
+      "$defs": {
+        "OrderID": {
+          "type": "string"
+        },
+        "Version": {
+          "type": "integer"
+        },
+        "Order": {
+          "type": "object",
+          "properties": {
+            "ID": {
+              "$ref": "#/$defs/OrderID"
+            },
+            "AmountCents": {
+              "type": "integer"
+            },
+            "Status": {
+              "type": "string"
+            },
+            "Version": {
+              "$ref": "#/$defs/Version"
+            }
+          },
+          "required": [
+            "ID",
+            "AmountCents",
+            "Status",
+            "Version"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "interface": {
+        "name": "OrderStateAccess",
+        "layer": "resourceaccess",
+        "operations": [
+          {
+            "name": "ReadOrder",
+            "params": [
+              {
+                "name": "orderID",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/Order"
+            },
+            "error": true
+          },
+          {
+            "name": "PutOrder",
+            "params": [
+              {
+                "name": "orderID",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              },
+              {
+                "name": "expectedVersion",
+                "schema": {
+                  "$ref": "#/$defs/Version"
+                }
+              },
+              {
+                "name": "order",
+                "schema": {
+                  "$ref": "#/$defs/Order"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/Version"
+            },
+            "error": true
+          },
+          {
+            "name": "CancelOrder",
+            "params": [
+              {
+                "name": "orderID",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              },
+              {
+                "name": "expectedVersion",
+                "schema": {
+                  "$ref": "#/$defs/Version"
+                }
+              },
+              {
+                "name": "reason",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/Version"
+            },
+            "error": true
+          },
+          {
+            "name": "ArchiveOrder",
+            "params": [
+              {
+                "name": "orderID",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              },
+              {
+                "name": "expectedVersion",
+                "schema": {
+                  "$ref": "#/$defs/Version"
+                }
+              },
+              {
+                "name": "idempotencyKey",
+                "schema": {
+                  "type": "string",
+                  "x-go-type": "fwra.IdempotencyKey"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/Version"
+            },
+            "error": true
+          },
+          {
+            "name": "ChargeOrder",
+            "params": [
+              {
+                "name": "orderID",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              },
+              {
+                "name": "amountCents",
+                "schema": {
+                  "type": "integer"
+                }
+              },
+              {
+                "name": "idempotencyKey",
+                "schema": {
+                  "type": "string",
+                  "x-go-type": "fwra.IdempotencyKey"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/Version"
+            },
+            "error": true
+          },
+          {
+            "name": "PurgeOrder",
+            "params": [
+              {
+                "name": "orderID",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              }
+            ],
+            "error": true
+          },
+          {
+            "name": "ReceiptForOrder",
+            "params": [
+              {
+                "name": "orderID",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              }
+            ],
+            "result": {
+              "x-go-type": "OrderReceipt"
+            },
+            "error": true
+          }
+        ]
+      }
+    },
+    "pricingEngine": {
+      "component": "pricingEngine",
+      "layer": "Engine",
+      "goPackage": "internal/engine/pricing",
+      "title": "pricingEngine contract",
+      "$defs": {
+        "OrderID": {
+          "type": "string"
+        },
+        "Order": {
+          "type": "object",
+          "properties": {
+            "ID": {
+              "$ref": "#/$defs/OrderID"
+            },
+            "AmountCents": {
+              "type": "integer"
+            },
+            "Status": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ID",
+            "AmountCents",
+            "Status"
+          ],
+          "additionalProperties": false
+        },
+        "PriceQuote": {
+          "type": "object",
+          "properties": {
+            "AmountCents": {
+              "type": "integer"
+            },
+            "Currency": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "AmountCents",
+            "Currency"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "interface": {
+        "name": "PricingEngine",
+        "layer": "engine",
+        "operations": [
+          {
+            "name": "Price",
+            "params": [
+              {
+                "name": "order",
+                "schema": {
+                  "$ref": "#/$defs/Order"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/PriceQuote"
+            },
+            "error": true
+          }
+        ]
+      }
+    },
+    "fulfillmentManager": {
+      "component": "fulfillmentManager",
+      "layer": "Manager",
+      "goPackage": "internal/manager/fulfillment",
+      "deps": [
+        {
+          "name": "client",
+          "goType": "client.Client",
+          "goImport": "go.temporal.io/sdk/client"
+        }
+      ],
+      "title": "fulfillment-manager contract",
+      "$defs": {
+        "ShipmentID": {
+          "type": "string"
+        },
+        "OrderID": {
+          "type": "integer"
+        },
+        "CarrierStatus": {
+          "type": "integer",
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "x-enum-varnames": [
+            "CarrierStatusPending",
+            "CarrierStatusInTransit",
+            "CarrierStatusDelivered"
+          ],
+          "x-go-base": "int"
+        },
+        "Money": {
+          "type": "object",
+          "properties": {
+            "AmountCents": {
+              "type": "integer"
+            },
+            "Currency": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "AmountCents",
+            "Currency"
+          ],
+          "additionalProperties": false
+        },
+        "ShipmentStatus": {
+          "type": "object",
+          "properties": {
+            "ID": {
+              "$ref": "#/$defs/ShipmentID"
+            },
+            "RelatedOrder": {
+              "$ref": "#/$defs/OrderID"
+            },
+            "Status": {
+              "$ref": "#/$defs/CarrierStatus"
+            },
+            "Fee": {
+              "$ref": "#/$defs/Money"
+            },
+            "Detail": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ID",
+            "RelatedOrder",
+            "Status",
+            "Fee",
+            "Detail"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "interface": {
+        "name": "FulfillmentManager",
+        "layer": "manager",
+        "operations": [
+          {
+            "name": "GetShipmentStatus",
+            "params": [
+              {
+                "name": "shipmentID",
+                "schema": {
+                  "$ref": "#/$defs/ShipmentID"
+                }
+              },
+              {
+                "name": "detail",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/ShipmentStatus"
+            },
+            "error": true
+          },
+          {
+            "name": "PingCarrier",
+            "params": [
+              {
+                "name": "shipmentID",
+                "schema": {
+                  "$ref": "#/$defs/ShipmentID"
+                }
+              }
+            ],
+            "error": true
+          }
+        ]
+      }
+    }
+  }
+}

@@ -383,8 +383,15 @@ func (r *resolved) resolveEngines(m *projectmodel.Model) {
 
 // resolveManagers constructs every manager-layer contract that declares deps
 // (i.e. has a generated DI constructor), threading each dep and recording which
-// managers are web-exposed (a client-layer relationship targets them).
+// managers are web-exposed (a client-layer relationship targets them). It
+// fails fast with a clear error when some manager needs the Temporal
+// control-plane client (client.Client) but the deployment declares no
+// "temporal" infrastructure — without this check the walk would emit an
+// undefined `tc` reference (G7) instead of a Generate-time diagnostic.
 func (r *resolved) resolveManagers(m *projectmodel.Model) error {
+	if !r.hasTemporal && requiresTemporalClient(m) {
+		return fmt.Errorf("composegen: container %q: managers require a %q infrastructure declaration", r.cfg.ContainerKey, "temporal")
+	}
 	clientIDs := clientComponentIDs(m.System)
 	for _, key := range sortedKeys(m.Contracts) {
 		c := m.Contracts[key]
@@ -487,6 +494,23 @@ func (r *resolved) threadHookDep(mc managerComp, dep projectmodel.Dep) string {
 // dialed satellite, not a hook.
 func isTemporalClient(dep projectmodel.Dep) bool {
 	return dep.GoType == "client.Client" && dep.GoImport == "go.temporal.io/sdk/client"
+}
+
+// requiresTemporalClient reports whether any built manager-layer contract (the
+// same G2-tolerant set resolveManagers walks) declares a client.Client plain
+// dep — i.e. the composition root needs the dialed Temporal satellite.
+func requiresTemporalClient(m *projectmodel.Model) bool {
+	for _, c := range m.Contracts {
+		if c == nil || !strings.EqualFold(c.Layer, "manager") || c.Doc == nil || len(c.Deps) == 0 || c.GoPackage == "" {
+			continue
+		}
+		for _, dep := range c.Deps {
+			if isTemporalClient(dep) {
+				return true
+			}
+		}
+	}
+	return false
 }
 
 // clientComponentIDs is the set of client-layer component ids (kebab) — the
