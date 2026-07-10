@@ -135,6 +135,14 @@
                 "cloud"
               ],
               "presence": "optional-dormant"
+            },
+            {
+              "key": "keycloak",
+              "substrate": "keycloak",
+              "profiles": [
+                "cloud"
+              ],
+              "presence": "optional"
             }
           ],
           "bindings": [

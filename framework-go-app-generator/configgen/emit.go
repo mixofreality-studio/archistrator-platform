@@ -222,11 +222,13 @@ func sortedProfiles(d *projectmodel.Deployment) []string {
 }
 
 // requiredEnvsForProfile lists the env vars of required-class infra
-// provisioned for profile p (in the infra field order).
+// provisioned for profile p (in the infra field order). Plain-optional and
+// optional-dormant decls are excluded regardless of profile membership — only
+// presence=="required" decls belong in the per-profile MissingFor table.
 func requiredEnvsForProfile(infra []infraField, p string) []string {
 	var vars []string
 	for _, f := range infra {
-		if !f.OptDormant && f.RequiredForProfile(p) {
+		if f.RequiredClass && f.RequiredForProfile(p) {
 			vars = append(vars, f.Env)
 		}
 	}

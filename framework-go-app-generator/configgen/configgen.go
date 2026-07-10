@@ -28,7 +28,8 @@ type Config struct {
 	// ContainerKey is the deployment container the config file is emitted for.
 	// It is validated to resolve against the deployment's containers; the
 	// emitted input/setting set is currently deployment-global (container
-	// scoping via bindings is a future refinement).
+	// scoping via bindings — including per-binding Binding.Settings, which
+	// collectSettings does not walk today — is a future refinement).
 	ContainerKey string
 	// EnvPrefix is the env-var namespace prefix (e.g. "ARCHISTRATOR"). Default
 	// env-var names are "<PREFIX>_<INFRAKEY>_<INPUT>" for infra inputs and
@@ -42,12 +43,13 @@ type Config struct {
 
 // infraField is one emitted infrastructure input field.
 type infraField struct {
-	GoName      string   // exported Go field name
-	Env         string   // resolved env-var name
-	InfraKey    string   // owning infra decl key
-	RequiredAll bool     // required across ALL declared profiles ⇒ hard-required
-	Profiles    []string // profiles the owning decl is provisioned for
-	OptDormant  bool     // owning decl presence == optional-dormant
+	GoName        string   // exported Go field name
+	Env           string   // resolved env-var name
+	InfraKey      string   // owning infra decl key
+	RequiredAll   bool     // required across ALL declared profiles ⇒ hard-required
+	RequiredClass bool     // owning decl presence == "required" (neither optional nor optional-dormant)
+	Profiles      []string // profiles the owning decl is provisioned for
+	OptDormant    bool     // owning decl presence == optional-dormant
 }
 
 // settingField is one emitted setting field.
@@ -130,12 +132,13 @@ func collectInfra(d *projectmodel.Deployment, prefix string) ([]infraField, erro
 				env = prefix + "_" + upperSnakeKey(decl.Key) + "_" + in
 			}
 			out = append(out, infraField{
-				GoName:      pascalToken(decl.Key) + pascalToken(in),
-				Env:         env,
-				InfraKey:    decl.Key,
-				RequiredAll: requiredClass && coversAll(decl.Profiles, allProfiles),
-				Profiles:    decl.Profiles,
-				OptDormant:  decl.Presence == "optional-dormant",
+				GoName:        pascalToken(decl.Key) + pascalToken(in),
+				Env:           env,
+				InfraKey:      decl.Key,
+				RequiredAll:   requiredClass && coversAll(decl.Profiles, allProfiles),
+				RequiredClass: requiredClass,
+				Profiles:      decl.Profiles,
+				OptDormant:    decl.Presence == "optional-dormant",
 			})
 		}
 	}

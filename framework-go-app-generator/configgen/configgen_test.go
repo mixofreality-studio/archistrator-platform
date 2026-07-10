@@ -90,6 +90,47 @@ func TestCompileSandbox(t *testing.T) {
 			t.Fatalf("go %v in sandbox failed: %v\n%s", args, err, o)
 		}
 	}
+
+	// Runtime probe: an unparseable ORDERAPP_SHUTDOWN_TIMEOUT must fall back to
+	// the declared default ("20s"), proving getenvDuration's fallback actually
+	// runs (not just compiles).
+	probeDir := filepath.Join(dir, "cmd", "probe")
+	if err := os.MkdirAll(probeDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	probeSrc := `package main
+
+import (
+	"fmt"
+	"os"
+
+	config "configsandbox"
+)
+
+func main() {
+	c, err := config.LoadConfig()
+	if err != nil {
+		fmt.Println("ERR:", err)
+		os.Exit(1)
+	}
+	fmt.Println(c.ShutdownTimeout)
+}
+`
+	if err := os.WriteFile(filepath.Join(probeDir, "main.go"), []byte(probeSrc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "run", "./cmd/probe")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod",
+		"ORDER_TEMPORAL_ADDR=localhost:7233", "ORDERAPP_TEMPORAL_NAMESPACE=default",
+		"ORDERAPP_SHUTDOWN_TIMEOUT=not-a-duration")
+	o, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("probe run failed: %v\n%s", err, o)
+	}
+	if got := strings.TrimSpace(string(o)); got != "20s" {
+		t.Fatalf("getenvDuration fallback: got %q, want \"20s\"", got)
+	}
 }
 
 // TestConfigErrors asserts the required-parameter and resolution guards.

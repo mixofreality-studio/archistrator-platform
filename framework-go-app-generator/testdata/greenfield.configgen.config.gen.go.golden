@@ -31,6 +31,8 @@ type Config struct {
 	GithubAppAppSlug        string
 	GithubAppInstallationID string
 	GithubAppAPIBaseURL     string
+	KeycloakJWKSURL         string
+	KeycloakIssuer          string
 	PostgresURL             string
 	TemporalHostport        string
 	TemporalNamespace       string
@@ -52,6 +54,8 @@ func LoadConfig() (*Config, error) {
 		GithubAppAppSlug:        getenv("ORDERAPP_GITHUB_APP_APP_SLUG"),
 		GithubAppInstallationID: getenv("ORDERAPP_GITHUB_APP_INSTALLATION_ID"),
 		GithubAppAPIBaseURL:     getenv("ORDERAPP_GITHUB_APP_API_BASE_URL"),
+		KeycloakJWKSURL:         getenv("ORDERAPP_KEYCLOAK_JWKS_URL"),
+		KeycloakIssuer:          getenv("ORDERAPP_KEYCLOAK_ISSUER"),
 		PostgresURL:             getenv("ORDERAPP_POSTGRES_URL"),
 		TemporalHostport:        getenv("ORDER_TEMPORAL_ADDR"),
 		TemporalNamespace:       getenv("ORDERAPP_TEMPORAL_NAMESPACE"),
