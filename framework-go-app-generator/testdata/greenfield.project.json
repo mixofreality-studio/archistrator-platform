@@ -81,6 +81,104 @@
         ],
         "dynamicViews": []
       }
+    },
+    "6": {
+      "kind": 6,
+      "model": {
+        "deployment": {
+          "deliveryStyle": "cloud",
+          "containers": [
+            {
+              "key": "order-app",
+              "name": "order-app",
+              "components": [
+                "orderManager",
+                "orderStateAccess"
+              ]
+            }
+          ],
+          "environments": [
+            {
+              "profile": "cloud",
+              "title": "Cloud"
+            },
+            {
+              "profile": "local",
+              "title": "Local"
+            }
+          ],
+          "infrastructure": [
+            {
+              "key": "temporal",
+              "substrate": "temporal",
+              "profiles": [
+                "cloud",
+                "local"
+              ],
+              "presence": "required",
+              "env": {
+                "HOSTPORT": "ORDER_TEMPORAL_ADDR"
+              }
+            },
+            {
+              "key": "postgres",
+              "substrate": "postgres",
+              "profiles": [
+                "cloud"
+              ],
+              "presence": "required"
+            },
+            {
+              "key": "github-app",
+              "substrate": "github-app",
+              "profiles": [
+                "cloud"
+              ],
+              "presence": "optional-dormant"
+            }
+          ],
+          "bindings": [
+            {
+              "component": "orderStateAccess",
+              "presence": "optional",
+              "perProfile": {
+                "cloud": {
+                  "variant": "postgres",
+                  "infra": [
+                    "postgres"
+                  ]
+                },
+                "local": {
+                  "variant": "memory",
+                  "infra": []
+                }
+              }
+            }
+          ],
+          "settings": [
+            {
+              "name": "listenAddr",
+              "type": "string",
+              "default": ":8080"
+            },
+            {
+              "name": "authDevMode",
+              "type": "bool",
+              "default": "false"
+            },
+            {
+              "name": "maxRetries",
+              "type": "int",
+              "default": "3"
+            },
+            {
+              "name": "shutdownTimeout",
+              "type": "duration",
+              "default": "20s"
+            }
+          ]
+        }
+      }
     }
   },
   "serviceContracts": {
