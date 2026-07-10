@@ -42,6 +42,7 @@ func writeHTTPMethod(b *bytes.Buffer, info *mgrInfo, op projectmodel.Operation, 
 	for _, p := range op.Params {
 		paramByName[p.Name] = p
 	}
+	pathParams := pathParamSet(plan)
 
 	// Request wrapper for POST ops (always sent, even when empty — the server
 	// handler always decodes a body).
@@ -58,11 +59,7 @@ func writeHTTPMethod(b *bytes.Buffer, info *mgrInfo, op projectmodel.Operation, 
 		b.WriteString("}\n\n")
 	}
 
-	// Method signature.
-	sig := []string{"ctx context.Context"}
-	for _, p := range op.Params {
-		sig = append(sig, p.Name+" "+goType(p.Schema, p.Pointer, info.rename, cfg.UUIDAsString))
-	}
+	sig := buildMethodSignature(op, pathParams, info, cfg)
 	resultType := goType(op.Result, false, info.rename, cfg.UUIDAsString)
 
 	fmt.Fprintf(b, "// %s calls the %s operation on the %s manager over HTTP.\n", method, op.Name, info.base)
@@ -93,6 +90,20 @@ func writeHTTPMethod(b *bytes.Buffer, info *mgrInfo, op projectmodel.Operation, 
 	return needFmt, needURL
 }
 
+// buildMethodSignature renders a client method's Go parameter list. A
+// path-positioned param (pathParams) is ALWAYS emitted as a value scalar: the
+// URL segment is always present on the wire (the "-" placeholder convention
+// is a caller policy, not an absent value), regardless of PlanParam.Pointer —
+// see writePathAssembly, which formats it with a plain %s/%d/%v verb.
+func buildMethodSignature(op projectmodel.Operation, pathParams map[string]bool, info *mgrInfo, cfg Config) []string {
+	sig := []string{"ctx context.Context"}
+	for _, p := range op.Params {
+		ptr := p.Pointer && !pathParams[p.Name]
+		sig = append(sig, p.Name+" "+goType(p.Schema, ptr, info.rename, cfg.UUIDAsString))
+	}
+	return sig
+}
+
 // requestLiteral renders the POST request wrapper composite literal, filling one
 // field per body param.
 func requestLiteral(reqType string, plan httpgen.OpPlan) string {
@@ -104,6 +115,18 @@ func requestLiteral(reqType string, plan httpgen.OpPlan) string {
 		fields = append(fields, upperFirst(bp.Name)+": "+bp.Name)
 	}
 	return reqType + "{" + strings.Join(fields, ", ") + "}"
+}
+
+// pathParamSet returns the set of op param names plan resolves as URL path
+// params (plan.PathParams), the client-signature source of truth for which
+// params must be emitted as value scalars rather than pointers — a path
+// segment is always present on the wire, unlike an optional body/query param.
+func pathParamSet(plan httpgen.OpPlan) map[string]bool {
+	set := make(map[string]bool, len(plan.PathParams))
+	for _, pp := range plan.PathParams {
+		set[pp.Name] = true
+	}
+	return set
 }
 
 // writePathAssembly emits the statements assigning `path`, returning whether fmt

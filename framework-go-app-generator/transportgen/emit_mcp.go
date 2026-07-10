@@ -30,19 +30,27 @@ func writeMCPMethod(b *bytes.Buffer, info *mgrInfo, op projectmodel.Operation, p
 	method := info.base + op.Name
 	tool := info.toolPref + op.Name
 	inType := method + "Input"
+	pathParams := pathParamSet(plan)
 
 	// Input struct: every param is a JSON tool argument (tag = wire param name).
+	// A param that plan resolves as an HTTP path param is ALWAYS a value scalar
+	// here too — MCP has no path/query/body distinction, but the SDK keeps
+	// HTTPClient and MCPClient signatures identical per op (see transportgen
+	// migration notes), and the value is never actually optional on the wire
+	// (the "-" placeholder convention supplies a concrete value, never nil).
 	fmt.Fprintf(b, "// %s is the MCP tool-call argument object for %s.\n", inType, tool)
 	fmt.Fprintf(b, "type %s struct {\n", inType)
 	for _, p := range op.Params {
+		ptr := p.Pointer && !pathParams[p.Name]
 		fmt.Fprintf(b, "\t%s %s `json:%q`\n", upperFirst(p.Name),
-			goType(p.Schema, p.Pointer, info.rename, cfg.UUIDAsString), jsonTag(p.Name, p.Pointer))
+			goType(p.Schema, ptr, info.rename, cfg.UUIDAsString), jsonTag(p.Name, ptr))
 	}
 	b.WriteString("}\n\n")
 
 	sig := []string{"ctx context.Context"}
 	for _, p := range op.Params {
-		sig = append(sig, p.Name+" "+goType(p.Schema, p.Pointer, info.rename, cfg.UUIDAsString))
+		ptr := p.Pointer && !pathParams[p.Name]
+		sig = append(sig, p.Name+" "+goType(p.Schema, ptr, info.rename, cfg.UUIDAsString))
 	}
 	resultType := goType(op.Result, false, info.rename, cfg.UUIDAsString)
 	inLit := inputLiteral(inType, op)

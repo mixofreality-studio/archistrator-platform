@@ -155,8 +155,14 @@ func TestArchistratorRouteFidelity(t *testing.T) {
 }
 
 // TestArchistratorCompileSandbox emits the full 5-manager SDK into an isolated
-// throwaway module and proves (a) it builds with `go build` under GOWORK=off and
-// (b) every emitted file imports NOTHING beyond the Go standard library.
+// throwaway module and proves (a) it builds with `go build` under GOWORK=off,
+// (b) every emitted file imports NOTHING beyond the Go standard library, and
+// (c) it passes `go vet` — the gate that catches the printf-verb defect class
+// where an optional (pointer) path param is formatted into a path template
+// with a plain %s/%d/%v verb (see writePathAssembly / pathParamSet): a path
+// segment is always present on the wire, so path params must be value
+// scalars in the generated signature regardless of the contract's
+// PlanParam.Pointer, or vet's printf checker rejects the mismatch.
 func TestArchistratorCompileSandbox(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping compile sandbox in -short")
@@ -198,6 +204,58 @@ func TestArchistratorCompileSandbox(t *testing.T) {
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
 	if buildOut, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("go build ./... in sandbox failed: %v\n%s", err, buildOut)
+	}
+
+	vetCmd := exec.Command("go", "vet", "./...")
+	vetCmd.Dir = dir
+	vetCmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
+	if vetOut, err := vetCmd.CombinedOutput(); err != nil {
+		t.Fatalf("go vet ./... in sandbox failed: %v\n%s", err, vetOut)
+	}
+}
+
+// TestArchistratorPathParamsAreValueScalars pins the fix for the pointer-path
+// printf defect: an op whose contract marks an ID path param optional
+// (PlanParam.Pointer) must still emit that param as a VALUE scalar — never a
+// pointer — in both the HTTP client method signature and the MCP input
+// struct/signature, since a path segment is always present on the wire.
+// ConstructionGetSessionState's activityID and ProjectDesignSubmitSDPDecision's
+// optionID are both declared `"pointer": true` in archistrator.project.json
+// while being path params, so they exercise exactly the regressed branch.
+func TestArchistratorPathParamsAreValueScalars(t *testing.T) {
+	m, err := projectmodel.LoadFile("../testdata/archistrator.project.json")
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	out, err := transportgen.Generate(m, transportgen.Config{
+		Managers: fiveManagers, PackageName: "sdk", UUIDAsString: true,
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	checks := []struct {
+		file string
+		want string
+		bad  string
+	}{
+		{"http_construction.gen.go", "activityID ActivityID", "activityID *ActivityID"},
+		{"http_project-design.gen.go", "optionID OptionID", "optionID *OptionID"},
+		{"mcp_construction.gen.go", "activityID ActivityID", "activityID *ActivityID"},
+		{"mcp_project-design.gen.go", "optionID OptionID", "optionID *OptionID"},
+	}
+	for _, c := range checks {
+		src, ok := out[c.file]
+		if !ok {
+			t.Fatalf("Generate did not return %q (%v)", c.file, keysOf(out))
+		}
+		s := string(src)
+		if !strings.Contains(s, c.want) {
+			t.Errorf("%s: want value-scalar param %q, not found in:\n%s", c.file, c.want, s)
+		}
+		if strings.Contains(s, c.bad) {
+			t.Errorf("%s: found regressed pointer param %q", c.file, c.bad)
+		}
 	}
 }
 
