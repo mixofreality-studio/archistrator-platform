@@ -24,11 +24,22 @@ func writeRABlocks(b *strings.Builder, r *resolved) {
 	for _, ra := range r.ras {
 		if ra.switched {
 			writeSwitchArms(b, ra)
-			continue
+		} else {
+			writeSingleArm(b, ra)
 		}
-		writeSingleArm(b, ra)
+		if isOptionalPresence(ra.presence) {
+			writeFinalizeCall(b, ra)
+		}
 	}
 	b.WriteString("\n")
+}
+
+// writeFinalizeCall emits the typed Finalize<Component> hook call (B3)
+// immediately after an optional/optional-dormant binding's construction — the
+// composition-root seam to swap or wrap the constructed value (identity
+// otherwise).
+func writeFinalizeCall(b *strings.Builder, ra raBinding) {
+	b.WriteString("\t" + ra.varName + " = hooks." + finalizeHookName(ra.key) + "(cfg, " + ra.varName + ")\n")
 }
 
 // writeSingleArm emits a binding with exactly one profile arm (no switch).

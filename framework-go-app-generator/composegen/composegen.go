@@ -65,6 +65,19 @@ type Config struct {
 	// listed, its substrate-arg/setting threading is REPLACED by the single hook
 	// call (the hook impl reads cfg itself).
 	VariantHookArgs map[string][]HookArgType
+	// WebExposedManagers, when non-nil, REPLACES the System-relationship-derived
+	// web-exposed manager set (isWebExposed) with exactly this component-key
+	// set — e.g. archistrator's billingManager carries a web-client relationship
+	// in the committed System model, but cmd/clientgen deliberately generates no
+	// internal/client/web/billing package for it (money-move ops are not
+	// web-wired), so the relationship alone must not force a <mgr>web.Handler
+	// import/mount that would not compile. A manager NOT in this set is never
+	// web-exposed, regardless of its System relationships. When nil (the
+	// default), the current relationship derivation stands unchanged. Keys are
+	// component keys (e.g. "systemDesignManager"), matching VariantHookArgs's
+	// binding-key convention. The emitted file's header comment records that the
+	// web-exposed set came from this override.
+	WebExposedManagers []string
 }
 
 // HookArgType is one return value of a per-variant args Hooks method: a verbatim

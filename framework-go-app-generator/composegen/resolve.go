@@ -46,6 +46,10 @@ type resolved struct {
 	// Register<Iface>Worker — collected during manager resolution, in manager
 	// order.
 	workerGateHooks []hookMethod
+	// finalizeHooks are the per-binding post-construction seams (B3) —
+	// Finalize<Component> — one per optional/optional-dormant binding that is
+	// actually constructed, collected during RA resolution in binding order.
+	finalizeHooks []hookMethod
 
 	// hookDeps is every distinct unmatched plain manager dep threaded through a
 	// typed Hooks method (the resolver seam: func-typed resolvers AND
@@ -59,6 +63,12 @@ type resolved struct {
 	optDormant   map[string]bool   // RA component key -> binding presence is optional-dormant (G6b)
 	localVar     map[string]string // component key -> constructed local var name
 	consumedKeys map[string]bool   // infra keys consumed by some binding variant
+
+	// webExposedOverride is the Config.WebExposedManagers lookup set
+	// (component key -> true), B1. nil means the driver did not set the
+	// override, so the System-relationship derivation (isWebExposed) stands;
+	// a non-nil (possibly empty) map REPLACES it entirely.
+	webExposedOverride map[string]bool
 }
 
 // hookDep is one unmatched plain manager dep resolved to a typed Hooks method:
@@ -139,6 +149,7 @@ func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
 	if r.serviceName == "" {
 		r.serviceName = "server"
 	}
+	r.webExposedOverride = webExposedManagerSet(cfg.WebExposedManagers)
 	r.resolveInfra(m.Deployment)
 	r.profiles = sortedProfiles(m.Deployment)
 	r.resolveAliases(m)
@@ -258,20 +269,39 @@ func (r *resolved) resolveRAs(m *projectmodel.Model) error {
 		if b.Presence == "optional-dormant" {
 			r.optDormant[b.Component] = true
 		}
-		c, ok := m.Contracts[b.Component]
-		if !ok || c == nil || c.Doc == nil || c.GoPackage == "" {
-			continue // G2: no built package / no DI ctor — tolerate an unbuilt contract.
-		}
-		rb, err := r.resolveBinding(m, b, c)
-		if err != nil {
+		if err := r.resolveOneRA(m, b); err != nil {
 			return err
 		}
-		if !r.finalizeBinding(&rb, b) {
-			continue
-		}
-		r.ras = append(r.ras, rb)
-		r.localVar[b.Component] = rb.varName
 	}
+	return nil
+}
+
+// resolveOneRA resolves and records one deployment binding (the per-binding
+// body of resolveRAs, split out to keep both under the cognitive-complexity
+// gate). A binding whose component contract has no goPackage is skipped (G2),
+// as is one that stays unbuilt (finalizeBinding — an arm-less optional
+// binding).
+func (r *resolved) resolveOneRA(m *projectmodel.Model, b projectmodel.Binding) error {
+	c, ok := m.Contracts[b.Component]
+	if !ok || c == nil || c.Doc == nil || c.GoPackage == "" {
+		return nil // G2: no built package / no DI ctor — tolerate an unbuilt contract.
+	}
+	rb, err := r.resolveBinding(m, b, c)
+	if err != nil {
+		return err
+	}
+	if !r.finalizeBinding(&rb, b) {
+		return nil
+	}
+	if isOptionalPresence(rb.presence) {
+		// B3: every optional/optional-dormant binding that is actually
+		// constructed gets a typed post-construction seam — the
+		// composition-root policy hook for e.g. archistrator's construction
+		// dry-run stub swap-in.
+		r.finalizeHooks = append(r.finalizeHooks, finalizeHook(rb))
+	}
+	r.ras = append(r.ras, rb)
+	r.localVar[b.Component] = rb.varName
 	return nil
 }
 
@@ -436,12 +466,41 @@ func (r *resolved) resolveManager(m *projectmodel.Model, key string, c *projectm
 	if mc.gated {
 		r.workerGateHooks = append(r.workerGateHooks, workerGateHook(mc.iface))
 	}
-	if isWebExposed(m.System, key, clientIDs) {
+	if r.managerIsWebExposed(m.System, key, clientIDs) {
 		mc.webExposed = true
 		mc.webAlias = webPkgBase(c.GoPackage) + "web"
 		mc.webImport = r.cfg.ModulePath + "/internal/client/web/" + webPkgBase(c.GoPackage)
 	}
 	return mc, nil
+}
+
+// managerIsWebExposed decides whether a manager is web-exposed (B1). When the
+// driver supplies Config.WebExposedManagers, that set REPLACES the
+// System-relationship derivation entirely — a client→manager relationship
+// alone no longer forces web exposure (e.g. archistrator's billingManager
+// carries a web-client relationship but clientgen deliberately generates no
+// web handler package for it). When the driver leaves it nil, the
+// relationship-derived isWebExposed stands unchanged.
+func (r *resolved) managerIsWebExposed(s *projectmodel.System, key string, clientIDs map[string]bool) bool {
+	if r.webExposedOverride != nil {
+		return r.webExposedOverride[key]
+	}
+	return isWebExposed(s, key, clientIDs)
+}
+
+// webExposedManagerSet builds the component-key lookup set for
+// Config.WebExposedManagers (B1). nil in, nil out — so the caller can tell
+// "driver left it to the model" (nil) apart from "driver explicitly configured
+// zero web-exposed managers" (non-nil empty map).
+func webExposedManagerSet(keys []string) map[string]bool {
+	if keys == nil {
+		return nil
+	}
+	out := make(map[string]bool, len(keys))
+	for _, k := range keys {
+		out[k] = true
+	}
+	return out
 }
 
 // threadDep resolves one manager DI-constructor dependency to its arg

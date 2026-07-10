@@ -10,6 +10,7 @@ func emitMain(r *resolved) ([]byte, error) {
 	var b strings.Builder
 	b.WriteString(genHeader)
 	b.WriteString("\npackage " + r.pkgName + "\n\n")
+	writeWebExposureNote(&b, r)
 	b.WriteString(r.computeImports().render())
 	b.WriteString("// serviceName is the OTel service.name + span-name root for this container.\n")
 	b.WriteString("const serviceName = \"" + r.serviceName + "\"\n\n")
@@ -22,6 +23,36 @@ func emitMain(r *resolved) ([]byte, error) {
 		return nil, wrapFormatErr(err, b.String())
 	}
 	return src, nil
+}
+
+// writeWebExposureNote records, in the emitted file's header, that the
+// web-exposed manager set was DRIVER-CONFIGURED (B1: Config.WebExposedManagers)
+// rather than derived from System relationships — the two can genuinely
+// diverge (a client→manager relationship with no generated web handler
+// package, e.g. archistrator's billingManager) and a reader of the generated
+// file should be able to tell which derivation produced webMgrs without
+// cross-referencing the driver invocation. Silent when the driver left web
+// exposure to the model (Config.WebExposedManagers == nil).
+func writeWebExposureNote(b *strings.Builder, r *resolved) {
+	if r.cfg.WebExposedManagers == nil {
+		return
+	}
+	set := "(none)"
+	if keys := webExposedKeys(r); len(keys) > 0 {
+		set = strings.Join(keys, ", ")
+	}
+	b.WriteString("// Web-exposed managers are DRIVER-CONFIGURED (Config.WebExposedManagers),\n")
+	b.WriteString("// NOT derived from System relationships: " + set + ".\n\n")
+}
+
+// webExposedKeys is the resolved web-exposed manager component keys, in
+// resolution order (already deterministic — sorted contract-key order).
+func webExposedKeys(r *resolved) []string {
+	keys := make([]string, 0, len(r.webMgrs))
+	for _, mc := range r.webMgrs {
+		keys = append(keys, mc.key)
+	}
+	return keys
 }
 
 // writeWebManagersType emits the typed bundle of web-exposed managers threaded

@@ -22,6 +22,10 @@ type hookMethod struct {
 //     concrete dep.GoType (a resolver seam, e.g. the design PR-rail func-typed
 //     repo resolvers, or a scalar/interface dep with no setting/binding link,
 //     e.g. repoBase / the durableExecution client — archistrator A2).
+//   - one Finalize<Component> per optional/optional-dormant binding that is
+//     actually constructed (B3): the post-construction seam for composition
+//     policy that swaps or wraps the constructed value (e.g. archistrator's
+//     construction dry-run stub swap-in). Identity otherwise.
 func deriveHooks(r *resolved) []hookMethod {
 	var hs []hookMethod
 	hs = append(hs, hookResolveProfile())
@@ -32,6 +36,7 @@ func deriveHooks(r *resolved) []hookMethod {
 		hs = append(hs, hookPDP(), hookTokenValidator(), hookDevConfig(), hookWrapManagers(), hookExtraMounts())
 	}
 	hs = append(hs, r.variantHooks...)    // G3: per-variant args hooks
+	hs = append(hs, r.finalizeHooks...)   // B3: per-binding post-construction seams
 	hs = append(hs, r.workerGateHooks...) // G6b: conditional-worker gates
 	hs = append(hs, resolverHooks(r)...)  // G5: per-manager plain-dep resolvers
 	return hs
@@ -85,6 +90,35 @@ func workerGateHook(iface string) hookMethod {
 			"register; gate on the dep presence / a dry-run stub otherwise).",
 		},
 		line: "Register" + iface + "Worker(cfg *Config) bool",
+	}
+}
+
+// finalizeHookName is the per-binding post-construction Hooks method name
+// (B3): Finalize<Component> (e.g. artifactAccess -> FinalizeArtifactAccess).
+func finalizeHookName(component string) string {
+	return "Finalize" + upperFirst(component)
+}
+
+// finalizeHook is the typed post-construction seam (B3) for one
+// optional/optional-dormant binding: Finalize<Component>(cfg, v) is called
+// immediately after the binding's construction (single arm or profile
+// switch), and its return value REPLACES the constructed local. IDENTITY
+// SEMANTICS: return v unchanged unless composition policy needs to swap or
+// wrap it — e.g. archistrator's construction dry-run stub swap-in for
+// constructionPipelineAccess/artifactAccess. This is the seam the deployment
+// model cannot express: whether/when to substitute the profile-built RA is
+// composition-root policy, not a binding variant.
+func finalizeHook(rb raBinding) hookMethod {
+	typ := rb.alias + "." + rb.iface
+	name := finalizeHookName(rb.key)
+	return hookMethod{
+		doc: []string{
+			name + " is called immediately after " + rb.key + "'s construction",
+			"(presence " + strings.ToLower(rb.presence) + "). Return v unchanged unless",
+			"composition policy needs to swap or wrap it (e.g. a construction",
+			"dry-run stub swap-in) — the identity implementation is always correct.",
+		},
+		line: name + "(cfg *Config, v " + typ + ") " + typ,
 	}
 }
 

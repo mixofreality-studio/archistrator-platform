@@ -89,12 +89,23 @@ const projectstatePkg = "github.com/mixofreality-studio/archistrator/server/inte
 // tuples the deployment model cannot express (G3): projectstate GitHub needs the
 // sourcecontrol-backed catalog + minter PORTS (an RA→RA edge forbidden inside
 // projectstate), and artifact GitHubCloud needs the repoURL/owner strings + the
-// typed int64 installationID.
+// typed int64 installationID. WebExposedManagers (B1) matches the REAL driver:
+// cmd/clientgen's exposedManagers list (the 4 web-wired managers) — billing is
+// deliberately excluded (no internal/client/web/billing package is generated;
+// billing is driven by its own Schedules + cross-Manager signals, never
+// mounted on HTTP/MCP), even though the committed System model declares a
+// web-client/mcp-client → billing-manager relationship.
 var archistratorCfg = composegen.Config{
 	ContainerKey: "archistrator-server",
 	ModulePath:   "github.com/mixofreality-studio/archistrator/server",
 	PackageName:  "main",
 	EnvPrefix:    "ARCHISTRATOR",
+	WebExposedManagers: []string{
+		"systemDesignManager",
+		"projectDesignManager",
+		"constructionManager",
+		"operationsManager",
+	},
 	VariantHookArgs: map[string][]composegen.HookArgType{
 		"projectStateAccess/GitHub": {
 			{GoType: "string"}, // webHost
@@ -194,6 +205,16 @@ func TestArchistratorFixtureGenerates(t *testing.T) {
 	for _, gone := range []string{"NewArtifactRenderingAccess", "NewSystemDesignEngine", "NewArtifactValidationEngine"} {
 		if strings.Contains(s, gone) {
 			t.Errorf("emitted main.gen.go constructs a nil-goPackage engine contract %q (G2 skip failed)", gone)
+		}
+	}
+	// B1: WebExposedManagers REPLACES the relationship-derived web-exposed set —
+	// billingManager carries a web-client/mcp-client relationship in the
+	// committed System model but MUST NOT be web-exposed (clientgen generates no
+	// internal/client/web/billing package; a "billingweb" import would not
+	// compile).
+	for _, gone := range []string{"billingweb", "internal/client/web/billing", "BillingManager: billingManager"} {
+		if strings.Contains(s, gone) {
+			t.Errorf("emitted main.gen.go references billing web exposure %q (B1 override failed)", gone)
 		}
 	}
 }

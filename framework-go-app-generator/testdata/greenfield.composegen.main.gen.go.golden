@@ -77,6 +77,12 @@ type Hooks interface {
 	// managers are supplied for transports the generated server does not mount.
 	ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, managers WebManagers)
 
+	// FinalizeOrderStateAccess is called immediately after orderStateAccess's construction
+	// (presence optional). Return v unchanged unless
+	// composition policy needs to swap or wrap it (e.g. a construction
+	// dry-run stub swap-in) — the identity implementation is always correct.
+	FinalizeOrderStateAccess(cfg *Config, v orderstate.OrderStateAccess) orderstate.OrderStateAccess
+
 	// OrderManagerRepo supplies a composition-root value the deployment model
 	// cannot express (a func-typed resolver, or a scalar/interface dep with no
 	// setting/binding link). Return the zero value (nil for an interface) for a
@@ -160,6 +166,7 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 		orderStateAccess = orderstate.NewMemoryOrderStateAccess()
 		logger.Info("orderStateAccess (memory) ready")
 	}
+	orderStateAccess = hooks.FinalizeOrderStateAccess(cfg, orderStateAccess)
 
 	// Engines — pure, deterministic, dependency-free.
 	pricingEngine := pricing.NewPricingEngine()

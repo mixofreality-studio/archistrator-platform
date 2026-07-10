@@ -157,7 +157,7 @@
      "bindings": [
       {
        "component": "orderStateAccess",
-       "presence": "optional",
+       "presence": "optional-dormant",
        "perProfile": {
         "cloud": {
          "variant": "postgres",

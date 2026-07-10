@@ -80,6 +80,18 @@ type Hooks interface {
 	// managers are supplied for transports the generated server does not mount.
 	ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, managers WebManagers)
 
+	// FinalizeOrderStateAccess is called immediately after orderStateAccess's construction
+	// (presence optional-dormant). Return v unchanged unless
+	// composition policy needs to swap or wrap it (e.g. a construction
+	// dry-run stub swap-in) — the identity implementation is always correct.
+	FinalizeOrderStateAccess(cfg *Config, v orderstate.OrderStateAccess) orderstate.OrderStateAccess
+
+	// RegisterOrderManagerWorker reports whether to register the OrderManager
+	// Temporal Worker. The manager has ≥1 optional-dormant dependency, so its
+	// Worker registration is composition-root policy (return true to always
+	// register; gate on the dep presence / a dry-run stub otherwise).
+	RegisterOrderManagerWorker(cfg *Config) bool
+
 	// BillingManagerRepo supplies a composition-root value the deployment model
 	// cannot express (a func-typed resolver, or a scalar/interface dep with no
 	// setting/binding link). Return the zero value (nil for an interface) for a
@@ -171,6 +183,7 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 		orderStateAccess = orderstate.NewMemoryOrderStateAccess()
 		logger.Info("orderStateAccess (memory) ready")
 	}
+	orderStateAccess = hooks.FinalizeOrderStateAccess(cfg, orderStateAccess)
 
 	// Engines — pure, deterministic, dependency-free.
 	billingEngine := enginebilling.NewBillingEngine()
@@ -194,13 +207,17 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 	defer wFulfillmentManager.Stop()
 	logger.Info("embedded temporal worker started", "taskQueue", fulfillment.TaskQueue)
 	orderManager := order.NewOrderManager(tc, orderStateAccess, pricingEngine, hooks.OrderManagerRepo(), hooks.OrderManagerRepoBase())
-	wOrderManager := worker.New(tc, order.TaskQueue, worker.Options{})
-	order.RegisterManagerWorker(wOrderManager, orderManager)
-	if err := wOrderManager.Start(); err != nil {
-		return err
+	if hooks.RegisterOrderManagerWorker(cfg) {
+		wOrderManager := worker.New(tc, order.TaskQueue, worker.Options{})
+		order.RegisterManagerWorker(wOrderManager, orderManager)
+		if err := wOrderManager.Start(); err != nil {
+			return err
+		}
+		defer wOrderManager.Stop()
+		logger.Info("embedded temporal worker started", "taskQueue", order.TaskQueue)
+	} else {
+		logger.Warn("orderManager Worker NOT registered — optional-dormant dependencies absent (RegisterOrderManagerWorker gate returned false)")
 	}
-	defer wOrderManager.Stop()
-	logger.Info("embedded temporal worker started", "taskQueue", order.TaskQueue)
 
 	// Security Utility + auth boundary.
 	sec := security.New(security.WithPolicyDecisionPoint(hooks.PolicyDecisionPoint()))

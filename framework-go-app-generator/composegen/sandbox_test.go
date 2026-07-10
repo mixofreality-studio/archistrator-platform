@@ -109,6 +109,7 @@ import (
 
 	web "` + sandboxModule + `/internal/client/web"
 	managerbilling "` + sandboxModule + `/internal/manager/billing"
+	"` + sandboxModule + `/internal/resourceaccess/orderstate"
 	"` + sandboxModule + `/internal/resourceaccess/repolookup"
 	security "github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 	tlog "go.temporal.io/sdk/log"
@@ -133,6 +134,17 @@ func (appHooks) OrderManagerRepoBase() string { return "" }
 func (appHooks) BillingManagerRepo() func(id managerbilling.AccountID) (repolookup.RepoRef, bool) {
 	return func(id managerbilling.AccountID) (repolookup.RepoRef, bool) { return repolookup.RepoRef{}, false }
 }
+
+// FinalizeOrderStateAccess (B3): identity — no composition-root swap/wrap
+// needed for the sandbox proof.
+func (appHooks) FinalizeOrderStateAccess(cfg *Config, v orderstate.OrderStateAccess) orderstate.OrderStateAccess {
+	return v
+}
+
+// RegisterOrderManagerWorker (G6b): orderStateAccess is optional-dormant in
+// this fixture but always present (both profiles carry an arm), so the
+// sandbox always registers the Worker.
+func (appHooks) RegisterOrderManagerWorker(cfg *Config) bool { return true }
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
