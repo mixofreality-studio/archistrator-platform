@@ -24,22 +24,62 @@ var fiveManagers = []string{
 	"constructionManager", "operationsManager", "billingManager",
 }
 
-// TestGreenfieldGolden emits the SDK for the synthetic greenfield orderManager
-// and byte-compares the types/http/mcp/core trio against committed goldens.
+// TestGreenfieldGolden emits the SDK for the synthetic greenfield orderManager +
+// fulfillmentManager pair and byte-compares every emitted file against committed
+// goldens. The second manager (fulfillmentManager) exists solely to pin emission
+// branches orderManager alone never exercises: a GET op with a path param AND a
+// query param (GetShipmentStatus), a void op with zero body params — POST + `{}`
+// body + 204 (PingCarrier), an int enum with x-enum-varnames (CarrierStatus, pins
+// the <Type>Name varname bridge), a $def name collision with orderManager's own
+// OrderID but a DIFFERENT shape (string vs integer — forces the conflict
+// prefix-rename + $ref-rewrite path on BOTH managers), and a byte-identical
+// shared $def (Money, declared verbatim in both managers — forces the
+// types_shared.gen.go dedup path).
+//
+// Hand-verified against the emitter rules on introduction (2026-07):
+//   - greenfield.transportgen.types_fulfillment.gen.go.golden: `type
+//     FulfillmentOrderID int64` (conflict-renamed from bare "OrderID", ManagerBase
+//     "Fulfillment" prefixed) plus the CarrierStatusName varname-bridge switch,
+//     one case per x-enum-varnames entry in declared order, default "".
+//   - greenfield.transportgen.types_order.gen.go.golden: bare "OrderID" is ALSO a
+//     conflict now (fulfillmentManager declares an OrderID of a different shape,
+//     integer vs string) — renamed to `OrderOrderID`, and Order.ID's $ref rewritten
+//     to match; Money is skipped here (lives in types_shared.gen.go instead).
+//   - greenfield.transportgen.types_shared.gen.go.golden: `Money` emitted exactly
+//     once, un-prefixed, since its isolated EmitTypes output is byte-identical
+//     across both declaring managers.
+//   - greenfield.transportgen.http_fulfillment.gen.go.golden:
+//     FulfillmentGetShipmentStatus is GET (name starts "Get", its only non-path
+//     param "detail" is a scalar) with a `fmt.Sprintf(.../%s, shipmentID)` path
+//     assembly plus a `url.Values`-encoded query string for "detail";
+//     FulfillmentPingCarrier is POST (name doesn't start Get/List/Query) with ITS
+//     path param consuming its only op param, so BodyParams is empty — the request
+//     wrapper is `FulfillmentPingCarrierRequest{}` (zero fields) and the call
+//     decodes no response body (`http.StatusNoContent`), pinning the void/204 +
+//     empty-`{}`-body branches together, exactly as they emit in combination.
+//   - greenfield.transportgen.mcp_fulfillment.gen.go.golden: mirrors the same two
+//     ops; MCP input structs carry every op param (path/query distinction is an
+//     HTTP-only concept) and PingCarrier's tool call passes a nil result pointer.
 func TestGreenfieldGolden(t *testing.T) {
 	m, err := projectmodel.LoadFile("../testdata/greenfield.project.json")
 	if err != nil {
 		t.Fatalf("load fixture: %v", err)
 	}
 	got, err := transportgen.Generate(m, transportgen.Config{
-		Managers: []string{"orderManager"}, PackageName: "sdk", UUIDAsString: true,
+		Managers: []string{"orderManager", "fulfillmentManager"}, PackageName: "sdk", UUIDAsString: true,
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
 	}
 
-	// A single manager has no cross-manager collisions, so no shared file.
-	want := []string{"types_order.gen.go", "http_order.gen.go", "mcp_order.gen.go", "core.gen.go"}
+	// Two managers sharing a byte-identical Money $def AND conflicting over a
+	// differently-shaped OrderID $def: both the shared file and the per-manager
+	// conflict-prefixed rename are exercised.
+	want := []string{
+		"types_order.gen.go", "http_order.gen.go", "mcp_order.gen.go",
+		"types_fulfillment.gen.go", "http_fulfillment.gen.go", "mcp_fulfillment.gen.go",
+		"types_shared.gen.go", "core.gen.go",
+	}
 	if len(got) != len(want) {
 		t.Fatalf("Generate returned %d files, want %d (%v)", len(got), len(want), keysOf(got))
 	}

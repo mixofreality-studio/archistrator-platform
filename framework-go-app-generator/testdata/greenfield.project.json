@@ -43,6 +43,14 @@
             "layer": "engine",
             "encapsulates": "Encapsulates the order pricing policy: order -> price quote.",
             "atomicBusinessVerbs": []
+          },
+          {
+            "id": "fulfillment-manager",
+            "name": "FulfillmentManager",
+            "kind": "manager",
+            "layer": "manager",
+            "encapsulates": "Encapsulates the shipment fulfillment workflow: query carrier status, ping carrier liveness.",
+            "atomicBusinessVerbs": []
           }
         ],
         "relationships": [
@@ -63,6 +71,12 @@
             "to": "pricing-engine",
             "mode": "sync",
             "label": "price"
+          },
+          {
+            "from": "web-client",
+            "to": "fulfillment-manager",
+            "mode": "sync",
+            "label": "getShipmentStatus | pingCarrier"
           }
         ],
         "dynamicViews": []
@@ -111,6 +125,22 @@
             "ID",
             "AmountCents",
             "Status"
+          ],
+          "additionalProperties": false
+        },
+        "Money": {
+          "type": "object",
+          "properties": {
+            "AmountCents": {
+              "type": "integer"
+            },
+            "Currency": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "AmountCents",
+            "Currency"
           ],
           "additionalProperties": false
         }
@@ -399,6 +429,124 @@
             "result": {
               "$ref": "#/$defs/PriceQuote"
             },
+            "error": true
+          }
+        ]
+      }
+    },
+    "fulfillmentManager": {
+      "component": "fulfillmentManager",
+      "layer": "Manager",
+      "goPackage": "internal/manager/fulfillment",
+      "deps": [
+        {
+          "name": "client",
+          "goType": "client.Client",
+          "goImport": "go.temporal.io/sdk/client"
+        }
+      ],
+      "title": "fulfillment-manager contract",
+      "$defs": {
+        "ShipmentID": {
+          "type": "string"
+        },
+        "OrderID": {
+          "type": "integer"
+        },
+        "CarrierStatus": {
+          "type": "integer",
+          "enum": [
+            0,
+            1,
+            2
+          ],
+          "x-enum-varnames": [
+            "CarrierStatusPending",
+            "CarrierStatusInTransit",
+            "CarrierStatusDelivered"
+          ],
+          "x-go-base": "int"
+        },
+        "Money": {
+          "type": "object",
+          "properties": {
+            "AmountCents": {
+              "type": "integer"
+            },
+            "Currency": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "AmountCents",
+            "Currency"
+          ],
+          "additionalProperties": false
+        },
+        "ShipmentStatus": {
+          "type": "object",
+          "properties": {
+            "ID": {
+              "$ref": "#/$defs/ShipmentID"
+            },
+            "RelatedOrder": {
+              "$ref": "#/$defs/OrderID"
+            },
+            "Status": {
+              "$ref": "#/$defs/CarrierStatus"
+            },
+            "Fee": {
+              "$ref": "#/$defs/Money"
+            },
+            "Detail": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "ID",
+            "RelatedOrder",
+            "Status",
+            "Fee",
+            "Detail"
+          ],
+          "additionalProperties": false
+        }
+      },
+      "interface": {
+        "name": "FulfillmentManager",
+        "layer": "manager",
+        "operations": [
+          {
+            "name": "GetShipmentStatus",
+            "params": [
+              {
+                "name": "shipmentID",
+                "schema": {
+                  "$ref": "#/$defs/ShipmentID"
+                }
+              },
+              {
+                "name": "detail",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/ShipmentStatus"
+            },
+            "error": true
+          },
+          {
+            "name": "PingCarrier",
+            "params": [
+              {
+                "name": "shipmentID",
+                "schema": {
+                  "$ref": "#/$defs/ShipmentID"
+                }
+              }
+            ],
             "error": true
           }
         ]

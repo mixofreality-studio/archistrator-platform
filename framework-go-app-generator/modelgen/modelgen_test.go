@@ -48,6 +48,7 @@ func TestGenerateGreenfieldGolden(t *testing.T) {
 		"internal/manager/order":             "order",
 		"internal/resourceaccess/orderstate": "orderstate",
 		"internal/engine/pricing":            "pricing",
+		"internal/manager/fulfillment":       "fulfillment",
 	}
 	if len(got) != len(wantPkgs) {
 		t.Fatalf("Generate returned %d files, want %d (keys %v)", len(got), len(wantPkgs), keysOf(got))

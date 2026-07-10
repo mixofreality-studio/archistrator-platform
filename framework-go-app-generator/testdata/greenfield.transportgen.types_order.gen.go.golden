@@ -3,9 +3,9 @@
 package sdk
 
 type Order struct {
-	ID          OrderID `json:"ID"`
-	AmountCents int64   `json:"AmountCents"`
-	Status      string  `json:"Status"`
+	ID          OrderOrderID `json:"ID"`
+	AmountCents int64        `json:"AmountCents"`
+	Status      string       `json:"Status"`
 }
 
-type OrderID string
+type OrderOrderID string

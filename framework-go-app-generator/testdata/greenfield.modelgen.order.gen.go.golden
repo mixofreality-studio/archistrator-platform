@@ -10,6 +10,11 @@ import (
 	"go.temporal.io/sdk/client"
 )
 
+type Money struct {
+	AmountCents int64  `json:"AmountCents"`
+	Currency    string `json:"Currency"`
+}
+
 type Order struct {
 	ID          OrderID `json:"ID"`
 	AmountCents int64   `json:"AmountCents"`
