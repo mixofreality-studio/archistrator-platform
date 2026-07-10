@@ -27,17 +27,17 @@ func writeRABlocks(b *strings.Builder, r *resolved) {
 		} else {
 			writeSingleArm(b, ra)
 		}
-		if isOptionalPresence(ra.presence) {
-			writeFinalizeCall(b, ra)
-		}
+		writeFinalizeCall(b, ra)
 	}
 	b.WriteString("\n")
 }
 
-// writeFinalizeCall emits the typed Finalize<Component> hook call (B3)
-// immediately after an optional/optional-dormant binding's construction — the
-// composition-root seam to swap or wrap the constructed value (identity
-// otherwise).
+// writeFinalizeCall emits the typed Finalize<Component> hook call (B3/A2)
+// immediately after ANY binding's construction — required bindings included
+// (A2: a required, profile-keyed binding needs the same orthogonal
+// composition-root toggle seam as an optional one, e.g. archistrator's
+// operatedRuntimeAccess dry-run override) — the composition-root seam to swap
+// or wrap the constructed value (identity otherwise).
 func writeFinalizeCall(b *strings.Builder, ra raBinding) {
 	b.WriteString("\t" + ra.varName + " = hooks." + finalizeHookName(ra.key) + "(cfg, " + ra.varName + ")\n")
 }

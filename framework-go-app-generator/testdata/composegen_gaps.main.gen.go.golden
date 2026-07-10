@@ -80,6 +80,12 @@ type Hooks interface {
 	// managers are supplied for transports the generated server does not mount.
 	ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, managers WebManagers)
 
+	// FinalizeLedgerStateAccess is called immediately after ledgerStateAccess's construction
+	// (presence required). Return v unchanged unless
+	// composition policy needs to swap or wrap it (e.g. a construction
+	// dry-run stub swap-in) — the identity implementation is always correct.
+	FinalizeLedgerStateAccess(cfg *Config, v ledgerstate.LedgerStateAccess) ledgerstate.LedgerStateAccess
+
 	// FinalizeOrderStateAccess is called immediately after orderStateAccess's construction
 	// (presence optional-dormant). Return v unchanged unless
 	// composition policy needs to swap or wrap it (e.g. a construction
@@ -170,6 +176,7 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 	// ResourceAccess — one binding per component, variant-selected by profile.
 	ledgerStateAccess := ledgerstate.NewLedgerStateAccess()
 	logger.Info("ledgerStateAccess (stub) ready")
+	ledgerStateAccess = hooks.FinalizeLedgerStateAccess(cfg, ledgerStateAccess)
 	var orderStateAccess orderstate.OrderStateAccess
 	switch profile {
 	case "cloud":

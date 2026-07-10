@@ -195,6 +195,7 @@ func TestArchistratorFixtureGenerates(t *testing.T) {
 		"hooks.ProjectStateAccessGitHubArgs(cfg)",           // G3 variant-args hook call
 		"enginebilling ", // G1 alias-collision disambiguation
 		"ProjectStateAccessGitHubArgs(cfg *Config) (string, string, projectstate.ProjectCatalog, projectstate.CredentialMinter)", // G3 typed hook
+		"operatedRuntimeAccess = hooks.FinalizeOperatedRuntimeAccess(cfg, operatedRuntimeAccess)",                                // A2 required-binding Finalize call (orthogonal dry-run toggle)
 	} {
 		if !strings.Contains(s, anchor) {
 			t.Errorf("emitted main.gen.go missing expected anchor %q", anchor)

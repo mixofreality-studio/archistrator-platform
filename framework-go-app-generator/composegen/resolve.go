@@ -46,9 +46,12 @@ type resolved struct {
 	// Register<Iface>Worker — collected during manager resolution, in manager
 	// order.
 	workerGateHooks []hookMethod
-	// finalizeHooks are the per-binding post-construction seams (B3) —
-	// Finalize<Component> — one per optional/optional-dormant binding that is
-	// actually constructed, collected during RA resolution in binding order.
+	// finalizeHooks are the per-binding post-construction seams (B3/A2) —
+	// Finalize<Component> — one per binding that is actually constructed
+	// (required bindings included, per the archistrator A2 finding that a
+	// REQUIRED profile-keyed binding needs the same orthogonal composition-root
+	// toggle seam as an optional one, e.g. operatedRuntimeAccess's dry-run
+	// override), collected during RA resolution in binding order.
 	finalizeHooks []hookMethod
 
 	// hookDeps is every distinct unmatched plain manager dep threaded through a
@@ -293,13 +296,13 @@ func (r *resolved) resolveOneRA(m *projectmodel.Model, b projectmodel.Binding) e
 	if !r.finalizeBinding(&rb, b) {
 		return nil
 	}
-	if isOptionalPresence(rb.presence) {
-		// B3: every optional/optional-dormant binding that is actually
-		// constructed gets a typed post-construction seam — the
-		// composition-root policy hook for e.g. archistrator's construction
-		// dry-run stub swap-in.
-		r.finalizeHooks = append(r.finalizeHooks, finalizeHook(rb))
-	}
+	// B3/A2: every binding that is actually constructed gets a typed
+	// post-construction seam — the composition-root policy hook for e.g.
+	// archistrator's construction dry-run stub swap-in (optional) or the
+	// operatedRuntimeAccess dry-run override (required, A2). Identity
+	// otherwise — the seam costs nothing when composition policy needs no
+	// override.
+	r.finalizeHooks = append(r.finalizeHooks, finalizeHook(rb))
 	r.ras = append(r.ras, rb)
 	r.localVar[b.Component] = rb.varName
 	return nil

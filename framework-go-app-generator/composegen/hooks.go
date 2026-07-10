@@ -22,10 +22,13 @@ type hookMethod struct {
 //     concrete dep.GoType (a resolver seam, e.g. the design PR-rail func-typed
 //     repo resolvers, or a scalar/interface dep with no setting/binding link,
 //     e.g. repoBase / the durableExecution client — archistrator A2).
-//   - one Finalize<Component> per optional/optional-dormant binding that is
-//     actually constructed (B3): the post-construction seam for composition
-//     policy that swaps or wraps the constructed value (e.g. archistrator's
-//     construction dry-run stub swap-in). Identity otherwise.
+//   - one Finalize<Component> per binding that is actually constructed
+//     (B3/A2) — required bindings included: the post-construction seam for
+//     composition policy that swaps or wraps the constructed value (e.g.
+//     archistrator's construction dry-run stub swap-in for an optional
+//     binding, or its operatedRuntimeAccess dry-run override for a REQUIRED,
+//     profile-keyed binding — A2: an orthogonal per-component toggle needs
+//     this seam regardless of presence). Identity otherwise.
 func deriveHooks(r *resolved) []hookMethod {
 	var hs []hookMethod
 	hs = append(hs, hookResolveProfile())
@@ -94,20 +97,26 @@ func workerGateHook(iface string) hookMethod {
 }
 
 // finalizeHookName is the per-binding post-construction Hooks method name
-// (B3): Finalize<Component> (e.g. artifactAccess -> FinalizeArtifactAccess).
+// (B3/A2): Finalize<Component> (e.g. artifactAccess -> FinalizeArtifactAccess,
+// operatedRuntimeAccess -> FinalizeOperatedRuntimeAccess). Emitted for EVERY
+// binding-constructed component, required bindings included.
 func finalizeHookName(component string) string {
 	return "Finalize" + upperFirst(component)
 }
 
-// finalizeHook is the typed post-construction seam (B3) for one
-// optional/optional-dormant binding: Finalize<Component>(cfg, v) is called
-// immediately after the binding's construction (single arm or profile
+// finalizeHook is the typed post-construction seam (B3/A2) for one
+// constructed binding — presence irrelevant: Finalize<Component>(cfg, v) is
+// called immediately after the binding's construction (single arm or profile
 // switch), and its return value REPLACES the constructed local. IDENTITY
 // SEMANTICS: return v unchanged unless composition policy needs to swap or
 // wrap it — e.g. archistrator's construction dry-run stub swap-in for
-// constructionPipelineAccess/artifactAccess. This is the seam the deployment
-// model cannot express: whether/when to substitute the profile-built RA is
-// composition-root policy, not a binding variant.
+// constructionPipelineAccess/artifactAccess (optional), or its
+// operatedRuntimeAccess dry-run override (REQUIRED, profile-keyed — A2: a
+// REQUIRED binding needs the same orthogonal per-component toggle seam so its
+// own dry-run flag isn't silently deadened by the profile switch alone). This
+// is the seam the deployment model cannot express: whether/when to
+// substitute the profile-built RA is composition-root policy, not a binding
+// variant.
 func finalizeHook(rb raBinding) hookMethod {
 	typ := rb.alias + "." + rb.iface
 	name := finalizeHookName(rb.key)
