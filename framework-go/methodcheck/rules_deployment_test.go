@@ -1,6 +1,9 @@
 package methodcheck
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // rules_deployment_test.go PORTS predicates_deployment_test.go to the C4 container
 // deployment model: System components are packaged into DeployContainers (by name),
@@ -128,8 +131,15 @@ func TestDeploymentConsistency_ProfileSet_Unexpected(t *testing.T) {
 	s := deploymentBaseSystem(t)
 	op := deploymentBaseOC(t, s)
 	op.Deployment.DeliveryStyle = styleCloud
+	// "local" is now the recognized DEV-BOOT profile — always permitted, never
+	// required, for any delivery style (see isDevBootProfile in
+	// rules_deployment.go) — so it is no longer an "unexpected profile" under
+	// StyleCloud. Swap it for a genuinely unknown profile to keep probing
+	// DEP-PROFILE-SET's unexpected-profile detection; local-under-cloud
+	// tolerance itself is covered by TestDeployment_DevBootLocal_EmptyNodesPasses.
+	op.Deployment.Environments[1].Profile = "prod"
 	if !hasRuleFindings(deploymentConsistency(op, s), ruleDepProfileSet) {
-		t.Fatalf("expected DEP-PROFILE-SET for unexpected local under StyleCloud")
+		t.Fatalf("expected DEP-PROFILE-SET for unexpected \"prod\" environment under StyleCloud")
 	}
 }
 
@@ -327,6 +337,95 @@ func TestDeploymentConsistency_NodeWellformed_EmptyEnvironment(t *testing.T) {
 	op.Deployment.Environments[0].Nodes = []DeploymentNode{{Name: "cluster", Technology: "k8s"}}
 	if !hasRuleFindings(deploymentConsistency(op, s), ruleDepNodeWellformed) {
 		t.Fatalf("expected DEP-NODE-WELLFORMED for empty environment")
+	}
+}
+
+// devBootLocalOC builds a cloud-delivery-style topology (required profiles:
+// {cloud, test}) with an ADDITIONAL "local" environment representing the
+// dev-boot profile — not an operated topology, so its node tree may be
+// sparse/minimal (even empty).
+func devBootLocalOC(t *testing.T, s System, localNodes []DeploymentNode) OperationalConcepts {
+	t.Helper()
+	containers := deploymentBaseContainers(s)
+	infra := resourceInfraNodes(s)
+	return OperationalConcepts{Deployment: DeploymentTopology{
+		DeliveryStyle: styleCloud,
+		Containers:    containers,
+		Environments: []DeploymentEnvironment{
+			envInstancingAll(profileCloud, "Cloud", containers, infra),
+			envInstancingAll(profileTest, "Test", containers, infra),
+			{Profile: profileLocal, Title: "Local", Nodes: localNodes},
+		},
+	}}
+}
+
+// TestDeployment_DevBootLocal_EmptyNodesPasses proves the local dev-boot
+// profile is recognized under a cloud delivery style (not required, not
+// coverage-checked) and its node tree may be entirely empty with zero
+// DEP-* findings.
+func TestDeployment_DevBootLocal_EmptyNodesPasses(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := devBootLocalOC(t, s, nil)
+	if f := deploymentConsistency(op, s); len(f) != 0 {
+		t.Fatalf("a cloud-style deployment with a minimal (empty) local dev-boot environment must produce zero findings, got %+v", f)
+	}
+}
+
+// TestDeployment_DevBootLocal_BareNodePasses covers the other minimal shape —
+// a single bare node with no container instances.
+func TestDeployment_DevBootLocal_BareNodePasses(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := devBootLocalOC(t, s, []DeploymentNode{{Name: "dev"}})
+	if f := deploymentConsistency(op, s); len(f) != 0 {
+		t.Fatalf("a cloud-style deployment with a bare-node local dev-boot environment must produce zero findings, got %+v", f)
+	}
+}
+
+// TestDeploymentConsistency_ProfileSet_UnknownProfileStillFatals proves the
+// local dev-boot tolerance is NOT a general "any extra profile is fine"
+// relaxation — a typo'd/unknown profile must still trip DEP-PROFILE-SET.
+func TestDeploymentConsistency_ProfileSet_UnknownProfileStillFatals(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	containers := deploymentBaseContainers(s)
+	infra := resourceInfraNodes(s)
+	op := OperationalConcepts{Deployment: DeploymentTopology{
+		DeliveryStyle: styleCloud,
+		Containers:    containers,
+		Environments: []DeploymentEnvironment{
+			envInstancingAll(profileCloud, "Cloud", containers, infra),
+			envInstancingAll(profileTest, "Test", containers, infra),
+			envInstancingAll("staging", "Staging", containers, infra),
+		},
+	}}
+	if !hasRuleFindings(deploymentConsistency(op, s), ruleDepProfileSet) {
+		t.Fatalf("expected DEP-PROFILE-SET for an unknown \"staging\" profile")
+	}
+}
+
+// TestDeployment_DevBootLocal_ExemptFromCoverageButCloudStillFires proves the
+// local dev-boot environment produces NO coverage findings even when it is
+// missing components the cloud environment requires, while the cloud
+// environment's OWN coverage violation still fires.
+func TestDeployment_DevBootLocal_ExemptFromCoverageButCloudStillFires(t *testing.T) {
+	s := deploymentBaseSystem(t)
+	op := devBootLocalOC(t, s, []DeploymentNode{{Name: "dev"}}) // local: bare node, packages nothing
+	// Break cloud's coverage by dropping its first container instance (AppClient).
+	insts := op.Deployment.Environments[0].Nodes[0].ContainerInstances
+	op.Deployment.Environments[0].Nodes[0].ContainerInstances = insts[1:]
+	findings := deploymentConsistency(op, s)
+	sev, ok := findingSeverity(findings, ruleDepCoverage)
+	if !ok {
+		t.Fatalf("expected DEP-COVERAGE for the cloud environment's own missing coverage, got %+v", findings)
+	}
+	if sev != SeverityError {
+		t.Fatalf("DEP-COVERAGE must be Error, got %v", sev)
+	}
+	for _, f := range findings {
+		if f.RuleID == ruleDepCoverage || f.RuleID == ruleDepGraphIdentity || f.RuleID == ruleDepNodeWellformed {
+			if strings.Contains(f.Message, `"local"`) {
+				t.Fatalf("the local dev-boot environment must be exempt from coverage/identity/node-wellformed checks, got %+v", f)
+			}
+		}
 	}
 }
 

@@ -132,11 +132,12 @@ func deploymentConsistency(op OperationalConcepts, s System) []Finding {
 	containersByKey, memberFindings := checkContainerMembership(topo.Containers, nameIdx)
 	out = append(out, memberFindings...)
 
-	byProfile, presentProfiles, instancedKeys, envFindings := checkEnvironments(topo.Environments, containersByKey)
+	expected := expectedProfiles(topo.DeliveryStyle)
+	byProfile, presentProfiles, instancedKeys, envFindings := checkEnvironments(topo.Environments, containersByKey, expected)
 	out = append(out, envFindings...)
 
 	out = append(out, checkContainersUsed(topo.Containers, instancedKeys)...)
-	out = append(out, checkProfileSets(presentProfiles, expectedProfiles(topo.DeliveryStyle))...)
+	out = append(out, checkProfileSets(presentProfiles, expected)...)
 	out = append(out, checkCrossProfileCoverage(byProfile, internalComponentNames(s))...)
 	out = append(out, plannedSkippedInfo(ruleDepPlannedSkipped, "deployment container coverage", plannedContainerComponents(s))...)
 	out = append(out, checkResourcesPresent(topo, s)...)
@@ -191,10 +192,27 @@ func checkContainerMembership(containers []DeployContainer, nameIdx map[string]C
 	return containersByKey, out
 }
 
+// isDevBootProfile reports whether a profile is the "local" DEV-BOOT profile —
+// a local development-boot topology, not an operated environment. It is
+// recognized whenever a "local" environment is present but the chosen
+// delivery style does NOT already require "local" as its real, operated
+// profile (that's the styleLocal/styleBoth on-prem target, which keeps its
+// existing coverage/identity requirements unchanged). The dev-boot profile is
+// always permitted but never required, and — because it may be sparse or
+// entirely empty — is exempt from every check that iterates environments for
+// structural well-formedness, coverage, or graph identity.
+func isDevBootProfile(profile string, expected map[string]bool) bool {
+	return profile == profileLocal && !expected[profileLocal]
+}
+
 // checkEnvironments walks every environment, collecting the per-profile covered
 // component sets, the present profiles, and the union of instanced container keys,
-// plus each environment's own findings.
-func checkEnvironments(environments []DeploymentEnvironment, containersByKey map[string]DeployContainer) (map[string]envSet, map[string]bool, map[string]bool, []Finding) {
+// plus each environment's own findings. The dev-boot "local" profile (see
+// isDevBootProfile) is skipped entirely — it does not contribute to coverage,
+// graph identity, container-instance/infra-node well-formedness, or the
+// instanced-container-keys set — but IS recorded as present so checkProfileSets
+// can tolerate it.
+func checkEnvironments(environments []DeploymentEnvironment, containersByKey map[string]DeployContainer, expected map[string]bool) (map[string]envSet, map[string]bool, map[string]bool, []Finding) {
 	byProfile := make(map[string]envSet)
 	presentProfiles := make(map[string]bool)
 	instancedKeys := make(map[string]bool)
@@ -202,6 +220,9 @@ func checkEnvironments(environments []DeploymentEnvironment, containersByKey map
 	for i, env := range environments {
 		ordinal := i + 1
 		presentProfiles[env.Profile] = true
+		if isDevBootProfile(env.Profile, expected) {
+			continue
+		}
 		keys, _ := flattenContainerKeys(env.Nodes)
 		for _, k := range keys {
 			instancedKeys[k] = true
@@ -347,14 +368,20 @@ func checkProfileSets(presentProfiles, expected map[string]bool) []Finding {
 		}
 	}
 	for p := range presentProfiles {
-		if !expected[p] {
-			out = append(out, Finding{
-				RuleID:   ruleDepProfileSet,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("deployment has an unexpected %q environment for the chosen delivery style", profileName(p)),
-				Location: loc(0, "deployment topology"),
-			})
+		if expected[p] {
+			continue
 		}
+		if isDevBootProfile(p, expected) {
+			// The local DEV-BOOT profile is always permitted but never
+			// required, for any delivery style — see isDevBootProfile.
+			continue
+		}
+		out = append(out, Finding{
+			RuleID:   ruleDepProfileSet,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("deployment has an unexpected %q environment for the chosen delivery style", profileName(p)),
+			Location: loc(0, "deployment topology"),
+		})
 	}
 	return out
 }
