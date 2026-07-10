@@ -10,9 +10,10 @@ import (
 
 // Model is the validated codegen view of one project.json.
 type Model struct {
-	Contracts map[string]*Contract
-	System    *System
-	Warnings  []string
+	Contracts  map[string]*Contract
+	System     *System
+	Deployment *Deployment
+	Warnings   []string
 }
 
 // LoadFile reads path and delegates to Load. The path is caller-supplied
@@ -51,7 +52,11 @@ func Load(raw []byte) (*Model, error) {
 	if err != nil {
 		return nil, err
 	}
-	m := &Model{Contracts: contracts, System: sys}
+	dep, err := findDeployment(top.Slots)
+	if err != nil {
+		return nil, err
+	}
+	m := &Model{Contracts: contracts, System: sys, Deployment: dep}
 	if err := m.validate(); err != nil {
 		return nil, err
 	}

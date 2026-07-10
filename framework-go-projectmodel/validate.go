@@ -32,6 +32,9 @@ func (m *Model) validate() error {
 	if err := m.validateDeps(); err != nil {
 		return err
 	}
+	if err := m.validateDeployment(); err != nil {
+		return err
+	}
 	if m.System == nil {
 		return nil
 	}
