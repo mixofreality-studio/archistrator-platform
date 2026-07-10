@@ -53,6 +53,25 @@ type Config struct {
 	// other emitters; main.gen.go references the config by Go field name, not by
 	// env var, so it is currently unused by the walk).
 	EnvPrefix string
+	// VariantHookArgs marks binding variants whose constructor arguments the
+	// deployment model CANNOT supply — composition-root ports (e.g. the
+	// projectstate GitHub catalog/minter) or a typed value the substrate catalog
+	// can't produce (e.g. the artifact GitHub int64 installationID). Keyed by
+	// "<component>/<variant>", the value is the ORDERED Go types the emitted
+	// per-variant Hooks method (<Comp><Variant>Args(cfg *Config)) returns and the
+	// variant constructor consumes verbatim (Go's f(g()) multi-value spread). The
+	// emitter stays policy-free: it emits a typed hook, the driver supplies the
+	// types here, and the hand hooks.go supplies the values. When a variant is
+	// listed, its substrate-arg/setting threading is REPLACED by the single hook
+	// call (the hook impl reads cfg itself).
+	VariantHookArgs map[string][]HookArgType
+}
+
+// HookArgType is one return value of a per-variant args Hooks method: a verbatim
+// Go type string plus the import path (if any) the emitted file must add.
+type HookArgType struct {
+	GoType   string
+	GoImport string
 }
 
 // genHeader is the generated-code marker every emitted file starts with (the

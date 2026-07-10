@@ -22,11 +22,11 @@ func writeRABlocks(b *strings.Builder, r *resolved) {
 	}
 	b.WriteString("\t// ResourceAccess — one binding per component, variant-selected by profile.\n")
 	for _, ra := range r.ras {
-		if len(ra.arms) == 1 {
-			writeSingleArm(b, ra)
+		if ra.switched {
+			writeSwitchArms(b, ra)
 			continue
 		}
-		writeSwitchArms(b, ra)
+		writeSingleArm(b, ra)
 	}
 	b.WriteString("\n")
 }
@@ -91,17 +91,34 @@ func writeManagers(b *strings.Builder, r *resolved) {
 	b.WriteString("\t// Managers — generated DI constructors + one embedded Worker each.\n")
 	for _, mc := range r.managers {
 		b.WriteString("\t" + mc.varName + " := " + mc.ctor + "(" + strings.Join(mc.ctorArgs, ", ") + ")\n")
-		writeWorker(b, mc)
+		if mc.gated {
+			writeGatedWorker(b, mc)
+			continue
+		}
+		writeWorker(b, "\t", mc)
 	}
 	b.WriteString("\n")
 }
 
-// writeWorker emits one manager's Worker registration + start + deferred stop.
-func writeWorker(b *strings.Builder, mc managerComp) {
+// writeGatedWorker wraps a manager's Worker registration in its
+// Register<Iface>Worker(cfg) gate hook (G6b) — the Worker runs only when the
+// composition root says so (optional-dormant deps present / a dry-run stub filled
+// them), else a dormancy warning.
+func writeGatedWorker(b *strings.Builder, mc managerComp) {
+	b.WriteString("\tif hooks.Register" + mc.iface + "Worker(cfg) {\n")
+	writeWorker(b, "\t\t", mc)
+	b.WriteString("\t} else {\n")
+	b.WriteString("\t\tlogger.Warn(\"" + mc.key + " Worker NOT registered — optional-dormant dependencies absent (Register" + mc.iface + "Worker gate returned false)\")\n")
+	b.WriteString("\t}\n")
+}
+
+// writeWorker emits one manager's Worker registration + start + deferred stop at
+// the given indent.
+func writeWorker(b *strings.Builder, indent string, mc managerComp) {
 	w := "w" + upperFirst(mc.varName)
-	b.WriteString("\t" + w + " := worker.New(tc, " + mc.alias + ".TaskQueue, worker.Options{})\n")
-	b.WriteString("\t" + mc.alias + ".RegisterManagerWorker(" + w + ", " + mc.varName + ")\n")
-	b.WriteString("\tif err := " + w + ".Start(); err != nil {\n\t\treturn err\n\t}\n")
-	b.WriteString("\tdefer " + w + ".Stop()\n")
-	b.WriteString("\tlogger.Info(\"embedded temporal worker started\", \"taskQueue\", " + mc.alias + ".TaskQueue)\n")
+	b.WriteString(indent + w + " := worker.New(tc, " + mc.alias + ".TaskQueue, worker.Options{})\n")
+	b.WriteString(indent + mc.alias + ".RegisterManagerWorker(" + w + ", " + mc.varName + ")\n")
+	b.WriteString(indent + "if err := " + w + ".Start(); err != nil {\n" + indent + "\treturn err\n" + indent + "}\n")
+	b.WriteString(indent + "defer " + w + ".Stop()\n")
+	b.WriteString(indent + "logger.Info(\"embedded temporal worker started\", \"taskQueue\", " + mc.alias + ".TaskQueue)\n")
 }

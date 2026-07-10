@@ -23,7 +23,7 @@ func TestCompileSandbox(t *testing.T) {
 	if testing.Short() {
 		t.Skip("skipping compile sandbox in -short")
 	}
-	m := loadGreenfield(t)
+	m := loadGaps(t)
 	main, err := composegen.Generate(m, greenfieldCfg)
 	if err != nil {
 		t.Fatalf("composegen: %v", err)
@@ -108,6 +108,7 @@ import (
 	"os"
 
 	web "` + sandboxModule + `/internal/client/web"
+	managerbilling "` + sandboxModule + `/internal/manager/billing"
 	"` + sandboxModule + `/internal/resourceaccess/repolookup"
 	security "github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 	tlog "go.temporal.io/sdk/log"
@@ -125,10 +126,13 @@ func (appHooks) TokenValidator(ctx context.Context, cfg *Config) (security.Valid
 }
 func (appHooks) ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, m WebManagers) {
 }
-func (appHooks) Repo() func(orderID string) (repolookup.RepoRef, bool) {
+func (appHooks) OrderManagerRepo() func(orderID string) (repolookup.RepoRef, bool) {
 	return func(orderID string) (repolookup.RepoRef, bool) { return repolookup.RepoRef{}, false }
 }
-func (appHooks) RepoBase() string { return "" }
+func (appHooks) OrderManagerRepoBase() string { return "" }
+func (appHooks) BillingManagerRepo() func(id managerbilling.AccountID) (repolookup.RepoRef, bool) {
+	return func(id managerbilling.AccountID) (repolookup.RepoRef, bool) { return repolookup.RepoRef{}, false }
+}
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -223,6 +227,57 @@ const TaskQueue = "fulfillment"
 func NewFulfillmentManager(tc client.Client) FulfillmentManager { return impl{} }
 
 func RegisterManagerWorker(w worker.Worker, m FulfillmentManager) {}
+`
+	// G2 nil-goPackage: reportingEngine carries goPackage=null and is SKIPPED by
+	// the emitter — it needs no stub. G4 zero-arm required stub RA:
+	files["internal/resourceaccess/ledgerstate/ledgerstate.go"] = `package ledgerstate
+
+// LedgerStateAccess is a modelgen no-arg stub RA (contract stub=true, an arm-less
+// required binding): the emitter builds it as ledgerstate.NewLedgerStateAccess().
+type LedgerStateAccess interface{}
+
+type stub struct{}
+
+func NewLedgerStateAccess() LedgerStateAccess { return stub{} }
+`
+	// G1 alias collision: internal/engine/billing + internal/manager/billing both
+	// end in "billing" — the emitter aliases them enginebilling / managerbilling.
+	files["internal/engine/billing/billing.go"] = `package billing
+
+type BillingEngine interface{}
+
+type impl struct{}
+
+func NewBillingEngine() BillingEngine { return impl{} }
+`
+	// G5 cross-manager same-name func dep: billingManager also declares a "repo"
+	// dep, whose bare (unqualified) exported type AccountID the emitter qualifies
+	// with THIS package's alias (managerbilling.AccountID), and whose hook is
+	// named per-manager (BillingManagerRepo) so it never collides with the order
+	// manager's Repo.
+	files["internal/manager/billing/billing.go"] = `package billing
+
+import (
+	enginebilling "` + sandboxModule + `/internal/engine/billing"
+	"` + sandboxModule + `/internal/resourceaccess/ledgerstate"
+	"` + sandboxModule + `/internal/resourceaccess/repolookup"
+	"go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/worker"
+)
+
+type AccountID string
+
+type BillingManager interface{}
+
+type impl struct{}
+
+const TaskQueue = "billing"
+
+func NewBillingManager(tc client.Client, billing enginebilling.BillingEngine, ledgerState ledgerstate.LedgerStateAccess, repo func(id AccountID) (repolookup.RepoRef, bool)) BillingManager {
+	return impl{}
+}
+
+func RegisterManagerWorker(w worker.Worker, m BillingManager) {}
 `
 	addWebStubs(files)
 }

@@ -14,9 +14,12 @@ import (
 	web "example.com/greenfield/server/internal/client/web"
 	fulfillmentweb "example.com/greenfield/server/internal/client/web/fulfillment"
 	orderweb "example.com/greenfield/server/internal/client/web/order"
+	enginebilling "example.com/greenfield/server/internal/engine/billing"
 	"example.com/greenfield/server/internal/engine/pricing"
+	managerbilling "example.com/greenfield/server/internal/manager/billing"
 	"example.com/greenfield/server/internal/manager/fulfillment"
 	"example.com/greenfield/server/internal/manager/order"
+	"example.com/greenfield/server/internal/resourceaccess/ledgerstate"
 	"example.com/greenfield/server/internal/resourceaccess/orderstate"
 	"example.com/greenfield/server/internal/resourceaccess/repolookup"
 	otelinfra "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-otel"
@@ -76,6 +79,12 @@ type Hooks interface {
 	// /mcp) onto the root mux, behind the same auth boundary. The wrapped
 	// managers are supplied for transports the generated server does not mount.
 	ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, managers WebManagers)
+
+	// BillingManagerRepo supplies a composition-root value the deployment model
+	// cannot express (a func-typed resolver, or a scalar/interface dep with no
+	// setting/binding link). Return the zero value (nil for an interface) for a
+	// dependency that stays unbuilt in the active profile.
+	BillingManagerRepo() func(id managerbilling.AccountID) (repolookup.RepoRef, bool)
 
 	// OrderManagerRepo supplies a composition-root value the deployment model
 	// cannot express (a func-typed resolver, or a scalar/interface dep with no
@@ -147,6 +156,8 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 	defer pool.Close()
 
 	// ResourceAccess — one binding per component, variant-selected by profile.
+	ledgerStateAccess := ledgerstate.NewLedgerStateAccess()
+	logger.Info("ledgerStateAccess (stub) ready")
 	var orderStateAccess orderstate.OrderStateAccess
 	switch profile {
 	case "cloud":
@@ -162,9 +173,18 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 	}
 
 	// Engines — pure, deterministic, dependency-free.
+	billingEngine := enginebilling.NewBillingEngine()
 	pricingEngine := pricing.NewPricingEngine()
 
 	// Managers — generated DI constructors + one embedded Worker each.
+	billingManager := managerbilling.NewBillingManager(tc, billingEngine, ledgerStateAccess, hooks.BillingManagerRepo())
+	wBillingManager := worker.New(tc, managerbilling.TaskQueue, worker.Options{})
+	managerbilling.RegisterManagerWorker(wBillingManager, billingManager)
+	if err := wBillingManager.Start(); err != nil {
+		return err
+	}
+	defer wBillingManager.Stop()
+	logger.Info("embedded temporal worker started", "taskQueue", managerbilling.TaskQueue)
 	fulfillmentManager := fulfillment.NewFulfillmentManager(tc)
 	wFulfillmentManager := worker.New(tc, fulfillment.TaskQueue, worker.Options{})
 	fulfillment.RegisterManagerWorker(wFulfillmentManager, fulfillmentManager)

@@ -112,10 +112,19 @@ func (r *resolved) computeImports() *importSet {
 	r.addInfraImports(s)
 	r.addComponentImports(s)
 	r.addHookDepImports(s)
+	r.addVariantHookImports(s)
 	if len(r.webMgrs) > 0 {
 		r.addWebImports(s)
 	}
 	return s
+}
+
+// addVariantHookImports adds the packages the per-variant args Hooks return
+// types reference (G3 — e.g. the projectstate catalog/minter port types).
+func (r *resolved) addVariantHookImports(s *importSet) {
+	for _, p := range r.variantHookImports {
+		s.add(p, "")
+	}
 }
 
 // needsTime reports whether the emitted body references the "time" package:
@@ -174,16 +183,27 @@ func (r *resolved) addInfraImports(s *importSet) {
 	}
 }
 
-// addComponentImports adds the RA / engine / manager package imports.
+// addComponentImports adds the RA / engine / manager package imports, emitting
+// an EXPLICIT import alias whenever the resolved alias differs from the package's
+// last path segment (G1 — the collision-disambiguated enginebilling /
+// managerbilling; the Go package's own name is the segment, so the rename must
+// be spelled out at the import).
 func (r *resolved) addComponentImports(s *importSet) {
+	addAliased := func(importPath, alias string) {
+		if alias != pkgAlias(importPath) {
+			s.add(importPath, alias)
+			return
+		}
+		s.add(importPath, "")
+	}
 	for _, ra := range r.ras {
-		s.add(ra.importPath, "")
+		addAliased(ra.importPath, ra.alias)
 	}
 	for _, e := range r.engines {
-		s.add(e.importPath, "")
+		addAliased(e.importPath, e.alias)
 	}
 	for _, mc := range r.managers {
-		s.add(mc.importPath, "")
+		addAliased(mc.importPath, mc.alias)
 	}
 }
 

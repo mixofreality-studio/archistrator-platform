@@ -3,10 +3,14 @@ package composegen
 import (
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
+
+// itoa is a tiny alias so the alias-collision fallback reads cleanly.
+func itoa(n int) string { return strconv.Itoa(n) }
 
 // resolved is the fully-resolved composition plan the emitter renders: the
 // ordered satellites, ResourceAccess bindings, engines, managers, the derived
@@ -32,13 +36,27 @@ type resolved struct {
 
 	hooks []hookMethod
 
+	// variantHooks are the per-variant args hooks (G3) — <Comp><Variant>Args —
+	// collected during RA resolution, in binding/profile order.
+	variantHooks []hookMethod
+	// variantHookImports are the import paths the variant-arg hook return types
+	// reference (e.g. the projectstate package for the catalog/minter ports).
+	variantHookImports []string
+	// workerGateHooks are the conditional-worker-registration gates (G6b) —
+	// Register<Iface>Worker — collected during manager resolution, in manager
+	// order.
+	workerGateHooks []hookMethod
+
 	// hookDeps is every distinct unmatched plain manager dep threaded through a
 	// typed Hooks method (the resolver seam: func-typed resolvers AND
 	// scalar/interface plain deps with no setting/binding link), first-seen
-	// order. hookSeen dedups by the derived hook name.
+	// order. Names are qualified per owning manager (G5), so hookSeen dedups
+	// only within a manager (no cross-manager collapse of same-named deps).
 	hookDeps []hookDep
 	hookSeen map[string]bool
 
+	pkgAliases   map[string]string // goPackage -> import alias (collision-disambiguated, G1)
+	optDormant   map[string]bool   // RA component key -> binding presence is optional-dormant (G6b)
 	localVar     map[string]string // component key -> constructed local var name
 	consumedKeys map[string]bool   // infra keys consumed by some binding variant
 }
@@ -51,9 +69,11 @@ type hookDep struct {
 	goImport string
 }
 
-// raBinding is one ResourceAccess binding resolved to its profile-switched
-// construction: the interface it presents, its package, presence, and one arm
-// per declared profile.
+// raBinding is one ResourceAccess binding resolved to its construction: the
+// interface it presents, its package, presence, and one arm per declared
+// profile. switched marks a profile switch (>1 arm, or an optional binding whose
+// missing-profile arms leave it nil); stub marks a required arm-less binding
+// built by its no-arg New<Interface>() stub constructor (G4).
 type raBinding struct {
 	key        string
 	varName    string
@@ -62,6 +82,8 @@ type raBinding struct {
 	importPath string
 	presence   string
 	arms       []variantArm
+	switched   bool
+	stub       bool
 }
 
 // variantArm is one profile's variant construction for a binding.
@@ -95,6 +117,10 @@ type managerComp struct {
 	webExposed bool
 	webAlias   string
 	webImport  string
+	// gated marks a manager whose Worker registration is guarded by a
+	// Register<Iface>Worker(cfg) bool hook (G6b) — it has ≥1 optional-dormant
+	// component dep, so whether its Worker runs is composition-root policy.
+	gated bool
 }
 
 // resolve builds the composition plan.
@@ -104,6 +130,8 @@ func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
 		pkgName:      cfg.PackageName,
 		serviceName:  cfg.ContainerKey,
 		infra:        map[string]projectmodel.InfraDecl{},
+		pkgAliases:   map[string]string{},
+		optDormant:   map[string]bool{},
 		localVar:     map[string]string{},
 		consumedKeys: map[string]bool{},
 		hookSeen:     map[string]bool{},
@@ -113,6 +141,7 @@ func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
 	}
 	r.resolveInfra(m.Deployment)
 	r.profiles = sortedProfiles(m.Deployment)
+	r.resolveAliases(m)
 
 	if err := r.resolveRAs(m); err != nil {
 		return nil, err
@@ -123,6 +152,80 @@ func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
 	}
 	r.hooks = deriveHooks(r)
 	return r, nil
+}
+
+// resolveAliases computes the import alias for every component package the walk
+// imports (bound RAs + engines + managers-with-deps), disambiguating base-name
+// collisions (G1). Two packages sharing a last segment (e.g.
+// internal/engine/billing + internal/manager/billing) would both import as
+// "billing" — uncompilable; each colliding member is instead aliased
+// <parentSeg><base> ("enginebilling" / "managerbilling", mirroring hand run()),
+// with a numeric fallback if that still collides. A unique base keeps its plain
+// segment alias. aliasFor reads the result.
+func (r *resolved) resolveAliases(m *projectmodel.Model) {
+	pkgs := aliasImportPkgs(m)
+	baseCount := map[string]int{}
+	for _, gp := range pkgs {
+		baseCount[pkgAlias(gp)]++
+	}
+	used := map[string]bool{}
+	for _, gp := range pkgs {
+		r.pkgAliases[gp] = uniqueAlias(gp, baseCount, used)
+	}
+}
+
+// aliasImportPkgs is the deterministic (sorted, de-duplicated) set of component
+// goPackages the walk imports: every bound RA + every engine + every
+// manager-with-deps.
+func aliasImportPkgs(m *projectmodel.Model) []string {
+	pkgs := map[string]bool{}
+	for _, b := range m.Deployment.Bindings {
+		if c, ok := m.Contracts[b.Component]; ok && c != nil && c.GoPackage != "" {
+			pkgs[c.GoPackage] = true
+		}
+	}
+	for _, c := range m.Contracts {
+		if c != nil && c.GoPackage != "" && importsAsComponent(c) {
+			pkgs[c.GoPackage] = true
+		}
+	}
+	out := make([]string, 0, len(pkgs))
+	for gp := range pkgs {
+		out = append(out, gp)
+	}
+	sort.Strings(out)
+	return out
+}
+
+// importsAsComponent reports whether a contract is emitted (and so imported) as a
+// constructed component: every engine, and every manager that declares deps.
+func importsAsComponent(c *projectmodel.Contract) bool {
+	return strings.EqualFold(c.Layer, "engine") || (strings.EqualFold(c.Layer, "manager") && len(c.Deps) > 0)
+}
+
+// uniqueAlias returns the import alias for goPackage: its plain last segment when
+// that base is unique, else <parentSeg><base> (with a numeric fallback if that
+// still collides). used records claimed aliases across the set.
+func uniqueAlias(goPackage string, baseCount map[string]int, used map[string]bool) string {
+	base := pkgAlias(goPackage)
+	alias := base
+	if baseCount[base] > 1 {
+		alias = parentSeg(goPackage) + base
+	}
+	for n := 2; used[alias]; n++ {
+		alias = base + itoa(n)
+	}
+	used[alias] = true
+	return alias
+}
+
+// aliasFor returns the collision-disambiguated import alias for a goPackage
+// (falling back to its last segment for a package not in the precomputed set).
+func (r *resolved) aliasFor(goPackage string) string {
+	if a, ok := r.pkgAliases[goPackage]; ok {
+		return a
+	}
+	return pkgAlias(goPackage)
 }
 
 // resolveInfra indexes the infra decls by key and records which root-satellite
@@ -142,16 +245,29 @@ func (r *resolved) resolveInfra(d *projectmodel.Deployment) {
 	}
 }
 
-// resolveRAs resolves every deployment binding to a profile-switched RA
-// construction, registering each RA's local var so manager component deps
-// resolve against it.
+// resolveRAs resolves every deployment binding to its RA construction,
+// registering each RA's local var so manager component deps resolve against it.
+// A binding whose component contract has no goPackage is skipped (G2 — a
+// design-only/unbuilt contract carries no DI constructor). An arm-less binding
+// is either a required no-arg stub (G4) or, when optional, a literal nil the
+// managers receive directly.
 func (r *resolved) resolveRAs(m *projectmodel.Model) error {
 	binds := append([]projectmodel.Binding(nil), m.Deployment.Bindings...)
 	sort.Slice(binds, func(i, j int) bool { return binds[i].Component < binds[j].Component })
 	for _, b := range binds {
-		rb, err := r.resolveBinding(m, b)
+		if b.Presence == "optional-dormant" {
+			r.optDormant[b.Component] = true
+		}
+		c, ok := m.Contracts[b.Component]
+		if !ok || c == nil || c.Doc == nil || c.GoPackage == "" {
+			continue // G2: no built package / no DI ctor — tolerate an unbuilt contract.
+		}
+		rb, err := r.resolveBinding(m, b, c)
 		if err != nil {
 			return err
+		}
+		if !r.finalizeBinding(&rb, b) {
+			continue
 		}
 		r.ras = append(r.ras, rb)
 		r.localVar[b.Component] = rb.varName
@@ -159,18 +275,38 @@ func (r *resolved) resolveRAs(m *projectmodel.Model) error {
 	return nil
 }
 
+// finalizeBinding resolves an arm-less binding (G4) and sets the switch flag,
+// reporting whether the binding is constructed. An arm-less optional binding
+// stays unbuilt — managers receive literal nil (no import, no construction) and
+// it is NOT appended; an arm-less required binding becomes the modelgen no-arg
+// New<Interface>() stub built directly (no profile switch).
+func (r *resolved) finalizeBinding(rb *raBinding, b projectmodel.Binding) bool {
+	if len(rb.arms) == 0 {
+		if !strings.EqualFold(b.Presence, "required") {
+			r.localVar[b.Component] = "nil"
+			return false
+		}
+		rb.stub = true
+		rb.arms = []variantArm{{variant: "stub", ctor: rb.alias + ".New" + rb.iface}}
+	}
+	rb.switched = !rb.stub && (len(rb.arms) > 1 || (isOptionalPresence(b.Presence) && len(rb.arms) >= 1))
+	return true
+}
+
+// isOptionalPresence reports whether a binding presence is optional or
+// optional-dormant (a switch leaves it nil on any profile with no arm).
+func isOptionalPresence(p string) bool {
+	return strings.EqualFold(p, "optional") || strings.EqualFold(p, "optional-dormant")
+}
+
 // resolveBinding resolves one binding: its interface/package + one variant arm
 // per declared profile (profiles sorted for determinism).
-func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding) (raBinding, error) {
-	c, ok := m.Contracts[b.Component]
-	if !ok || c.Doc == nil {
-		return raBinding{}, fmt.Errorf("composegen: binding %q: unknown/undocumented component", b.Component)
-	}
+func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding, c *projectmodel.Contract) (raBinding, error) {
 	rb := raBinding{
 		key:        b.Component,
 		varName:    projectmodel.LowerFirst(b.Component),
 		iface:      c.Doc.Interface.Name,
-		alias:      pkgAlias(c.GoPackage),
+		alias:      r.aliasFor(c.GoPackage),
 		importPath: r.cfg.ModulePath + "/" + c.GoPackage,
 		presence:   b.Presence,
 	}
@@ -184,11 +320,29 @@ func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding)
 	return rb, nil
 }
 
-// resolveArm resolves one profile's variant to a New<Variant><Interface> call:
-// positional infra values (per the substrate catalog) then binding settings. A
-// variant that consumes any infra returns (Interface, error); an infra-free
-// variant (memory/dry-run) returns the interface alone.
+// resolveArm resolves one profile's variant to a New<Variant><Interface> call.
+// When the variant is registered in Config.VariantHookArgs (G3), the WHOLE arg
+// list is a single spread call hooks.<Comp><Variant>Args(cfg) — the model can't
+// supply those args (composition-root ports / typed values), so the emitter
+// delegates them to a typed hook and threads no infra/settings. Otherwise the
+// positional convention applies: infra values (per the substrate catalog) then
+// binding settings; a variant that consumes any infra returns (Interface,
+// error), an infra-free variant (memory/dry-run) returns the interface alone.
 func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.BindingVariant, settings []projectmodel.Setting) variantArm {
+	ctor := rb.alias + ".New" + variantToken(pv.Variant) + rb.iface
+	if specs, ok := r.cfg.VariantHookArgs[rb.key+"/"+pv.Variant]; ok {
+		for _, ik := range pv.Infra {
+			r.consumedKeys[ik] = true // still a consumed substrate (the hook reads its cfg)
+		}
+		r.addVariantHook(rb, pv.Variant, specs)
+		return variantArm{
+			profile:      profile,
+			variant:      pv.Variant,
+			ctor:         ctor,
+			args:         []string{"hooks." + variantHookName(rb.key, pv.Variant) + "(cfg)"},
+			returnsError: len(pv.Infra) > 0,
+		}
+	}
 	var args []string
 	for _, ik := range pv.Infra {
 		decl := r.infra[ik]
@@ -201,7 +355,7 @@ func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.Bind
 	return variantArm{
 		profile:      profile,
 		variant:      pv.Variant,
-		ctor:         rb.alias + ".New" + pascalToken(pv.Variant) + rb.iface,
+		ctor:         ctor,
 		args:         args,
 		returnsError: len(pv.Infra) > 0,
 	}
@@ -212,13 +366,13 @@ func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.Bind
 func (r *resolved) resolveEngines(m *projectmodel.Model) {
 	for _, key := range sortedKeys(m.Contracts) {
 		c := m.Contracts[key]
-		if !strings.EqualFold(c.Layer, "engine") || c.Doc == nil {
-			continue
+		if !strings.EqualFold(c.Layer, "engine") || c.Doc == nil || c.GoPackage == "" {
+			continue // G2: skip a design-only engine contract with no built package.
 		}
 		e := engineComp{
 			varName:    projectmodel.LowerFirst(key),
 			iface:      c.Doc.Interface.Name,
-			alias:      pkgAlias(c.GoPackage),
+			alias:      r.aliasFor(c.GoPackage),
 			importPath: r.cfg.ModulePath + "/" + c.GoPackage,
 		}
 		e.ctor = e.alias + ".New" + e.iface
@@ -234,8 +388,8 @@ func (r *resolved) resolveManagers(m *projectmodel.Model) error {
 	clientIDs := clientComponentIDs(m.System)
 	for _, key := range sortedKeys(m.Contracts) {
 		c := m.Contracts[key]
-		if !strings.EqualFold(c.Layer, "manager") || c.Doc == nil || len(c.Deps) == 0 {
-			continue
+		if !strings.EqualFold(c.Layer, "manager") || c.Doc == nil || len(c.Deps) == 0 || c.GoPackage == "" {
+			continue // G2: skip an unbuilt manager contract.
 		}
 		mc, err := r.resolveManager(m, key, c, clientIDs)
 		if err != nil {
@@ -256,16 +410,24 @@ func (r *resolved) resolveManager(m *projectmodel.Model, key string, c *projectm
 		key:        key,
 		varName:    projectmodel.LowerFirst(key),
 		iface:      c.Doc.Interface.Name,
-		alias:      pkgAlias(c.GoPackage),
+		alias:      r.aliasFor(c.GoPackage),
 		importPath: r.cfg.ModulePath + "/" + c.GoPackage,
 	}
 	mc.ctor = mc.alias + ".New" + mc.iface
 	for _, dep := range c.Deps {
-		arg, err := r.threadDep(m, dep)
+		arg, err := r.threadDep(m, mc, dep)
 		if err != nil {
 			return managerComp{}, fmt.Errorf("composegen: manager %q: %w", key, err)
 		}
 		mc.ctorArgs = append(mc.ctorArgs, arg)
+		// G6b: a component dep bound to an optional-dormant RA makes this
+		// manager's Worker registration composition-root policy.
+		if dep.Component != "" && r.optDormant[dep.Component] {
+			mc.gated = true
+		}
+	}
+	if mc.gated {
+		r.workerGateHooks = append(r.workerGateHooks, workerGateHook(mc.iface))
 	}
 	if isWebExposed(m.System, key, clientIDs) {
 		mc.webExposed = true
@@ -281,7 +443,7 @@ func (r *resolved) resolveManager(m *projectmodel.Model, key string, c *projectm
 // everything else the deployment model has no link for (a func-typed
 // resolver, or a scalar/interface plain dep, e.g. the durableExecution client)
 // — a typed Hooks method call (see threadHookDep).
-func (r *resolved) threadDep(m *projectmodel.Model, dep projectmodel.Dep) (string, error) {
+func (r *resolved) threadDep(m *projectmodel.Model, mc managerComp, dep projectmodel.Dep) (string, error) {
 	if dep.Component != "" {
 		v, ok := r.localVar[dep.Component]
 		if !ok {
@@ -295,25 +457,25 @@ func (r *resolved) threadDep(m *projectmodel.Model, dep projectmodel.Dep) (strin
 	if field, ok := hasSetting(m.Deployment, dep.Name); ok {
 		return "cfg." + field, nil
 	}
-	return r.threadHookDep(dep), nil
+	return r.threadHookDep(mc, dep), nil
 }
 
 // threadHookDep threads an unmatched plain dep through a typed Hooks method —
-// the composition-root resolver seam for anything the model cannot express.
-// The model has no binding link for a plain dep today (see the derivation
-// note on resolverHooks), so this fires uniformly for func-typed resolvers
-// (e.g. archistrator's repo lookups) AND scalar/interface plain deps (e.g.
-// repoBase, or a nilable dep like the unbuilt durableExecution client); the
-// hook impl returns the zero value / nil for anything that stays unbuilt in
-// the active profile. One hook method per distinct dep name, first-seen
-// order.
-func (r *resolved) threadHookDep(dep projectmodel.Dep) string {
-	name := upperFirst(dep.Name)
+// the composition-root resolver seam for anything the model cannot express
+// (func-typed resolvers e.g. archistrator's repo lookups, AND scalar/interface
+// plain deps e.g. repoBase or the construction ports). G5: the hook is named
+// per OWNING MANAGER (<Iface><Dep>) and NEVER deduped across managers — two
+// design managers each declaring a "repo" dep get distinct hooks — and any bare
+// (unqualified) exported type in the dep's goType is qualified with the owning
+// manager's package alias (ProjectID -> systemdesign.ProjectID), since the two
+// managers' concrete types differ. One hook per distinct dep name per manager.
+func (r *resolved) threadHookDep(mc managerComp, dep projectmodel.Dep) string {
+	name := mc.iface + upperFirst(dep.Name)
 	if !r.hookSeen[name] {
 		r.hookSeen[name] = true
 		r.hookDeps = append(r.hookDeps, hookDep{
 			name:     name,
-			goType:   strings.TrimSpace(dep.GoType),
+			goType:   qualifyBareTypes(strings.TrimSpace(dep.GoType), mc.alias),
 			goImport: dep.GoImport,
 		})
 	}

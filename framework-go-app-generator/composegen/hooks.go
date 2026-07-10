@@ -1,5 +1,7 @@
 package composegen
 
+import "strings"
+
 // hookMethod is one emitted Hooks interface method: its Go signature line and a
 // doc comment. The set is DERIVED from the model (see deriveHooks).
 type hookMethod struct {
@@ -29,8 +31,61 @@ func deriveHooks(r *resolved) []hookMethod {
 	if len(r.webMgrs) > 0 {
 		hs = append(hs, hookPDP(), hookTokenValidator(), hookDevConfig(), hookWrapManagers(), hookExtraMounts())
 	}
-	hs = append(hs, resolverHooks(r)...)
+	hs = append(hs, r.variantHooks...)    // G3: per-variant args hooks
+	hs = append(hs, r.workerGateHooks...) // G6b: conditional-worker gates
+	hs = append(hs, resolverHooks(r)...)  // G5: per-manager plain-dep resolvers
 	return hs
+}
+
+// variantHookName is the per-variant args Hooks method name (G3):
+// <Comp><Variant>Args (e.g. projectStateAccess + GitHub -> ProjectStateAccessGitHubArgs).
+func variantHookName(component, variant string) string {
+	return upperFirst(component) + variantToken(variant) + "Args"
+}
+
+// addVariantHook records the per-variant args Hooks method (G3) for a bound
+// variant listed in Config.VariantHookArgs: <Comp><Variant>Args(cfg *Config)
+// returns the ordered driver-supplied Go types the variant constructor consumes
+// verbatim. The emitter stays policy-free — it emits only the typed seam; the
+// hand hooks.go reads cfg and builds the composition-root ports/values.
+func (r *resolved) addVariantHook(rb raBinding, variant string, specs []HookArgType) {
+	types := make([]string, 0, len(specs))
+	for _, s := range specs {
+		types = append(types, s.GoType)
+		if s.GoImport != "" {
+			r.variantHookImports = append(r.variantHookImports, s.GoImport)
+		}
+	}
+	name := variantHookName(rb.key, variant)
+	r.variantHooks = append(r.variantHooks, hookMethod{
+		doc: []string{
+			name + " supplies the " + rb.key + " " + variant + " variant's constructor",
+			"arguments the deployment model cannot express (composition-root ports /",
+			"typed values). Read from cfg; the returned tuple is spread into the",
+			"generated variant constructor call.",
+		},
+		line: name + "(cfg *Config) (" + strings.Join(types, ", ") + ")",
+	})
+}
+
+// workerGateHook is the conditional-worker-registration gate (G6b) for a manager
+// with ≥1 optional-dormant component dep: Register<Iface>Worker(cfg) reports
+// whether to register the manager's Temporal Worker. WHICH managers get the gate
+// is derived (optional-dormant dep presence); the boolean itself is irreducible
+// policy — a manager may be nil-tolerant and always register (the design
+// managers, whose rail just goes dormant) or gate on its external-effect deps
+// being present / a dry-run stub filling them (the construction Worker, run()'s
+// selectConstructionDeps) — so it is a hook.
+func workerGateHook(iface string) hookMethod {
+	return hookMethod{
+		doc: []string{
+			"Register" + iface + "Worker reports whether to register the " + iface,
+			"Temporal Worker. The manager has ≥1 optional-dormant dependency, so its",
+			"Worker registration is composition-root policy (return true to always",
+			"register; gate on the dep presence / a dry-run stub otherwise).",
+		},
+		line: "Register" + iface + "Worker(cfg *Config) bool",
+	}
 }
 
 func hookResolveProfile() hookMethod {

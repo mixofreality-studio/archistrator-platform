@@ -92,11 +92,12 @@ func writeProfile(b *strings.Builder, r *resolved) {
 	b.WriteString("\tprofile := hooks.ResolveProfile(cfg)\n\n")
 }
 
-// needProfile reports whether any binding has more than one profile arm (⇒ a
-// switch, ⇒ a resolved profile).
+// needProfile reports whether any binding emits a profile switch (⇒ a resolved
+// profile): a multi-arm binding, or a single-arm optional binding whose
+// missing-profile arms leave it nil.
 func needProfile(r *resolved) bool {
 	for _, ra := range r.ras {
-		if len(ra.arms) > 1 {
+		if ra.switched {
 			return true
 		}
 	}
