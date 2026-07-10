@@ -109,6 +109,15 @@
           ],
           "infrastructure": [
             {
+              "key": "otel",
+              "substrate": "otel",
+              "profiles": [
+                "cloud",
+                "local"
+              ],
+              "presence": "optional"
+            },
+            {
               "key": "temporal",
               "substrate": "temporal",
               "profiles": [
