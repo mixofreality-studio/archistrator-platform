@@ -5,6 +5,7 @@ go 1.25.0
 require (
 	github.com/google/jsonschema-go v0.4.3
 	github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator v0.3.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.1.0
 	go.temporal.io/sdk v1.44.0
 )
@@ -39,6 +40,14 @@ require (
 // makes the standalone module build (GOWORK=off) resolve it from the local
 // checkout rather than a published version.
 replace github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel => ../framework-go-projectmodel
+
+// framework-go-http-generator is a sibling module in this repo. transportgen
+// consumes its exported route planner (httpgen.PlanOps) as the single source of
+// route/verb/param truth. The require pins the NOT-YET-PUBLISHED v0.3.0 that
+// step-5's P4 release will tag (PlanOps landed after v0.2.0); the unversioned
+// replace resolves it from the local checkout under GOWORK=off until that tag
+// exists, mirroring the pre-tag projectmodel handling above.
+replace github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator => ../framework-go-http-generator
 
 // framework-go is a sibling module in this repo. The compile-proof sample
 // (internal/sample/order) imports its real manager/resourceaccess packages;
