@@ -183,6 +183,39 @@ func toSet(keys []string) map[string]bool {
 func genOne(raw []byte, meta contractMeta, modulePath string, allow map[string]bool, resolver map[string]contractRef) ([]byte, error) {
 	pkg := filepath.Base(meta.GoPackage)
 
+	// Emit the type/interface body first so x-go-type bindings can register their
+	// imports (collected in pendingImports) before the import block is written.
+	pendingImports = map[string]string{}
+	var buf bytes.Buffer
+
+	doc, err := emitTypesBody(&buf, raw)
+	if err != nil {
+		return nil, err
+	}
+
+	// Interface (the RPC surface) lives under the document's `interface` key,
+	// carried via jsonschema-go's Extra map. Re-decode it into the typed
+	// descriptor and emit the Go interface.
+	iface, haveIface, err := decodeAndEmitInterface(&buf, doc)
+	if err != nil {
+		return nil, err
+	}
+
+	if haveIface {
+		if err := emitImplSurface(&buf, iface, meta, modulePath, allow, resolver); err != nil {
+			return nil, err
+		}
+	}
+
+	return formatGeneratedFile(pkg, &buf)
+}
+
+// emitTypesBody parses one contract document's raw JSON and writes ONLY its
+// $defs type block (structs/enums/sums + their codecs) into buf, returning the
+// parsed schema for callers (genOne) that go on to emit more from the same
+// document. It is the single emission path shared by genOne (Generate) and
+// EmitTypes — the two never diverge because they run the identical code.
+func emitTypesBody(buf *bytes.Buffer, raw []byte) (*jsonschema.Schema, error) {
 	var doc jsonschema.Schema
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("parse schema: %w", err)
@@ -197,28 +230,49 @@ func genOne(raw []byte, meta contractMeta, modulePath string, allow map[string]b
 	// from the raw JSON for clean, stable, diff-friendly output.
 	order := propOrder(raw)
 
-	// Emit the type/interface body first so x-go-type bindings can register their
-	// imports (collected in pendingImports) before the import block is written.
+	if _, err := emitDefs(buf, &doc, order); err != nil {
+		return nil, err
+	}
+	return &doc, nil
+}
+
+// TypeOptions configures EmitTypes.
+type TypeOptions struct {
+	// PackageName is the emitted file's package name (required).
+	PackageName string
+	// UUIDAsString, when true, emits a uuid.UUID-bound scalar (a $defs node or
+	// struct field carrying x-go-type "uuid.UUID") as a plain `string` instead,
+	// and never imports "github.com/google/uuid" — for a zero-non-stdlib-import
+	// client mirror. The wire representation is unchanged (a uuid already
+	// marshals to its canonical string form); only the emitted Go type differs.
+	// false (the default) reproduces Generate's own behavior verbatim.
+	UUIDAsString bool
+}
+
+// EmitTypes emits ONLY the types block for one contract document — header +
+// package + imports + the $defs type block (structs/enums/sums with their
+// codecs). It emits NO interface and NO impls/DI constructors: unlike
+// Generate, it is not tied to a manager's server-side wiring, so client-side
+// mirrors (framework-go-app-generator/transportgen and friends) can reuse the
+// exact same DTOs Generate emits for the manager without linking against the
+// manager's dependencies or layer plumbing.
+//
+// EmitTypes shares its emission path with Generate byte-for-byte (both run
+// emitTypesBody): with UUIDAsString=false, EmitTypes' output for a given
+// contract's $defs is exactly the types-block prefix of what Generate emits
+// for the same document.
+func EmitTypes(raw json.RawMessage, opts TypeOptions) ([]byte, error) {
+	if opts.PackageName == "" {
+		return nil, fmt.Errorf("modelgen: TypeOptions.PackageName is empty")
+	}
+
 	pendingImports = map[string]string{}
+	uuidAsString = opts.UUIDAsString
+	defer func() { uuidAsString = false }()
+
 	var buf bytes.Buffer
-
-	if _, err := emitDefs(&buf, &doc, order); err != nil {
+	if _, err := emitTypesBody(&buf, raw); err != nil {
 		return nil, err
 	}
-
-	// Interface (the RPC surface) lives under the document's `interface` key,
-	// carried via jsonschema-go's Extra map. Re-decode it into the typed
-	// descriptor and emit the Go interface.
-	iface, haveIface, err := decodeAndEmitInterface(&buf, &doc)
-	if err != nil {
-		return nil, err
-	}
-
-	if haveIface {
-		if err := emitImplSurface(&buf, iface, meta, modulePath, allow, resolver); err != nil {
-			return nil, err
-		}
-	}
-
-	return formatGeneratedFile(pkg, &buf)
+	return formatGeneratedFile(opts.PackageName, &buf)
 }
