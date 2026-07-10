@@ -1,16 +1,14 @@
 package composegen
 
+import "github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/deploynaming"
+
 // substrateCatalog maps a declared infrastructure substrate to its ordered
-// configuration INPUTS — the MECHANISM half of the deployment split, identical
-// to configgen.substrateCatalog (composegen threads the SAME cfg fields the
-// config file exposes for those inputs). Kept in sync by convention.
-var substrateCatalog = map[string][]string{
-	"temporal":   {"HOSTPORT", "NAMESPACE"},
-	"postgres":   {"URL"},
-	"github-app": {"APP_ID", "PRIVATE_KEY_PEM", "ACCOUNT", "APP_SLUG", "INSTALLATION_ID", "API_BASE_URL"},
-	"keycloak":   {"JWKS_URL", "ISSUER"},
-	"otel":       {},
-}
+// configuration INPUTS — the MECHANISM half of the deployment split. Shared
+// verbatim with configgen via internal/deploynaming (composegen threads the
+// SAME cfg fields the config file exposes for those inputs — see that
+// package's doc comment for the full rationale; a drift here can no longer
+// silently break the cfg.<Field> references).
+var substrateCatalog = deploynaming.SubstrateCatalog
 
 // The substrates that produce a SINGLE root-level satellite the composition
 // root constructs once and shares (rather than config values a variant consumes

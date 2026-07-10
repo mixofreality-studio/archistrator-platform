@@ -6,6 +6,7 @@ package order
 import (
 	"example.com/greenfield/internal/engine/pricing"
 	"example.com/greenfield/internal/resourceaccess/orderstate"
+	"example.com/greenfield/server/internal/resourceaccess/repolookup"
 	fwm "github.com/mixofreality-studio/archistrator-platform/framework-go/manager"
 	"go.temporal.io/sdk/client"
 )
@@ -32,6 +33,6 @@ type OrderManager interface {
 // builder newOrderManager in the manager package (which owns the stateful facade setup:
 // the Temporal client, the deps, and config). The constructor returns the
 // interface, so the concrete manager impl stays unexported.
-func NewOrderManager(client client.Client, orderState orderstate.OrderStateAccess, pricing pricing.PricingEngine) OrderManager {
-	return newOrderManager(client, orderState, pricing)
+func NewOrderManager(client client.Client, orderState orderstate.OrderStateAccess, pricing pricing.PricingEngine, repo func(orderID string) (repolookup.RepoRef, bool), repoBase string) OrderManager {
+	return newOrderManager(client, orderState, pricing, repo, repoBase)
 }

@@ -216,6 +216,15 @@
         {
           "name": "pricing",
           "component": "pricingEngine"
+        },
+        {
+          "name": "repo",
+          "goType": "func(orderID string) (repolookup.RepoRef, bool)",
+          "goImport": "example.com/greenfield/server/internal/resourceaccess/repolookup"
+        },
+        {
+          "name": "repoBase",
+          "goType": "string"
         }
       ],
       "title": "order-manager contract",

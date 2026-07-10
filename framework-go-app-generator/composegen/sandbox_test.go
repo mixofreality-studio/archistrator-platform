@@ -108,6 +108,7 @@ import (
 	"os"
 
 	web "` + sandboxModule + `/internal/client/web"
+	"` + sandboxModule + `/internal/resourceaccess/repolookup"
 	security "github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 	tlog "go.temporal.io/sdk/log"
 )
@@ -124,6 +125,10 @@ func (appHooks) TokenValidator(ctx context.Context, cfg *Config) (security.Valid
 }
 func (appHooks) ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, m WebManagers) {
 }
+func (appHooks) Repo() func(orderID string) (repolookup.RepoRef, bool) {
+	return func(orderID string) (repolookup.RepoRef, bool) { return repolookup.RepoRef{}, false }
+}
+func (appHooks) RepoBase() string { return "" }
 
 func main() {
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
@@ -176,6 +181,7 @@ import (
 
 	"` + sandboxModule + `/internal/engine/pricing"
 	"` + sandboxModule + `/internal/resourceaccess/orderstate"
+	"` + sandboxModule + `/internal/resourceaccess/repolookup"
 )
 
 type OrderManager interface{}
@@ -184,11 +190,22 @@ type impl struct{}
 
 const TaskQueue = "order"
 
-func NewOrderManager(tc client.Client, orderState orderstate.OrderStateAccess, pr pricing.PricingEngine) OrderManager {
+func NewOrderManager(tc client.Client, orderState orderstate.OrderStateAccess, pr pricing.PricingEngine, repo func(orderID string) (repolookup.RepoRef, bool), repoBase string) OrderManager {
 	return impl{}
 }
 
 func RegisterManagerWorker(w worker.Worker, m OrderManager) {}
+`
+	files["internal/resourceaccess/repolookup/repolookup.go"] = `package repolookup
+
+// RepoRef is a placeholder for a resolved source-control repo reference — the
+// stub stands in for the real framework-go-app-generator/internal/... RA
+// import a func-typed plain manager dep threads through a typed Hooks method
+// (composegen fix 1: the hook's dep.GoImport is added to the emitted imports).
+type RepoRef struct {
+	Owner string
+	Name  string
+}
 `
 	files["internal/manager/fulfillment/fulfillment.go"] = `package fulfillment
 

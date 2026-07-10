@@ -1,7 +1,5 @@
 package composegen
 
-import "strings"
-
 // hookMethod is one emitted Hooks interface method: its Go signature line and a
 // doc comment. The set is DERIVED from the model (see deriveHooks).
 type hookMethod struct {
@@ -18,9 +16,10 @@ type hookMethod struct {
 //   - PolicyDecisionPoint / TokenValidator / DevConfig / WrapManagers /
 //     ExtraMounts: when the container has ≥1 web-exposed Manager (the auth
 //     boundary + the logging wrap + composition-root-only routes).
-//   - one method per func-typed plain manager dep (a resolver seam, e.g. the
-//     design PR-rail repo resolvers — archistrator A2; none in the greenfield
-//     fixture).
+//   - one method per distinct unmatched plain manager dep, typed at its
+//     concrete dep.GoType (a resolver seam, e.g. the design PR-rail func-typed
+//     repo resolvers, or a scalar/interface dep with no setting/binding link,
+//     e.g. repoBase / the durableExecution client — archistrator A2).
 func deriveHooks(r *resolved) []hookMethod {
 	var hs []hookMethod
 	hs = append(hs, hookResolveProfile())
@@ -106,23 +105,24 @@ func hookExtraMounts() hookMethod {
 	}
 }
 
-// resolverHooks emits one hook per distinct func-typed plain manager dep, in
-// first-seen order.
+// resolverHooks emits one hook per distinct unmatched plain manager dep
+// (r.hookDeps, populated by threadHookDep during resolveManagers), in
+// first-seen order. There is no binding link for a plain dep today, so this
+// covers BOTH func-typed resolvers and scalar/interface deps the model can't
+// otherwise source — the hook impl returns the zero value / nil for one that
+// stays unbuilt in the active profile.
 func resolverHooks(r *resolved) []hookMethod {
 	var hs []hookMethod
-	seen := map[string]bool{}
-	for _, mc := range r.managers {
-		for _, arg := range mc.ctorArgs {
-			if !strings.HasPrefix(arg, "hooks.") || seen[arg] {
-				continue
-			}
-			seen[arg] = true
-			name := strings.TrimSuffix(strings.TrimPrefix(arg, "hooks."), "()")
-			hs = append(hs, hookMethod{
-				doc:  []string{name + " supplies a composition-root resolver the model cannot express."},
-				line: name + "() any",
-			})
-		}
+	for _, hd := range r.hookDeps {
+		hs = append(hs, hookMethod{
+			doc: []string{
+				hd.name + " supplies a composition-root value the deployment model",
+				"cannot express (a func-typed resolver, or a scalar/interface dep with no",
+				"setting/binding link). Return the zero value (nil for an interface) for a",
+				"dependency that stays unbuilt in the active profile.",
+			},
+			line: hd.name + "() " + hd.goType,
+		})
 	}
 	return hs
 }

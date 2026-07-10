@@ -100,15 +100,56 @@ func isStdlib(p string) bool {
 // computeImports collects every import the walk for r needs.
 func (r *resolved) computeImports() *importSet {
 	s := newImportSet()
-	for _, p := range []string{"context", "log/slog", "os/signal", "syscall", "time"} {
+	for _, p := range []string{"context", "log/slog", "os/signal", "syscall"} {
 		s.add(p, "")
+	}
+	if r.needsTime() {
+		s.add("time", "")
+	}
+	if r.needsErrors() {
+		s.add("errors", "")
 	}
 	r.addInfraImports(s)
 	r.addComponentImports(s)
+	r.addHookDepImports(s)
 	if len(r.webMgrs) > 0 {
 		r.addWebImports(s)
 	}
 	return s
+}
+
+// needsTime reports whether the emitted body references the "time" package:
+// the telemetry shutdown timeout (gated on an otel decl) or the HTTP server's
+// ReadHeaderTimeout (gated on web exposure).
+func (r *resolved) needsTime() bool {
+	return r.hasOtel || len(r.webMgrs) > 0
+}
+
+// needsErrors reports whether the emitted body references the "errors"
+// package: a required RA binding's profile-switch default arm (errors.New) or
+// the HTTP serve loop's errors.Is(err, http.ErrServerClosed) check (web
+// exposure).
+func (r *resolved) needsErrors() bool {
+	if len(r.webMgrs) > 0 {
+		return true
+	}
+	for _, ra := range r.ras {
+		if len(ra.arms) > 1 && strings.EqualFold(ra.presence, "required") {
+			return true
+		}
+	}
+	return false
+}
+
+// addHookDepImports adds the GoImport of every unmatched plain manager dep
+// threaded through a typed Hooks method — the concrete dep.GoType may
+// reference a package the emitted file must import.
+func (r *resolved) addHookDepImports(s *importSet) {
+	for _, hd := range r.hookDeps {
+		if hd.goImport != "" {
+			s.add(hd.goImport, "")
+		}
+	}
 }
 
 // addInfraImports adds the satellite + Temporal SDK imports.
@@ -146,9 +187,9 @@ func (r *resolved) addComponentImports(s *importSet) {
 	}
 }
 
-// addWebImports adds the transport + security + otelhttp imports.
+// addWebImports adds the transport + security + otelhttp imports. "errors" is
+// added by needsErrors (web exposure always needs it, for errors.Is).
 func (r *resolved) addWebImports(s *importSet) {
-	s.add("errors", "")
 	s.add("net/http", "")
 	s.add(pathOtelHTTP, "otelhttp")
 	s.add(pathSecurity, "security")

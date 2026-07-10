@@ -38,9 +38,18 @@ func writeSingleArm(b *strings.Builder, ra raBinding) {
 	if arm.returnsError {
 		b.WriteString("\t" + ra.varName + ", err := " + call + "\n")
 		b.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n")
+		writeReadyLog(b, "\t", ra.key, arm.variant)
 		return
 	}
 	b.WriteString("\t" + ra.varName + " := " + call + "\n")
+	writeReadyLog(b, "\t", ra.key, arm.variant)
+}
+
+// writeReadyLog emits the boot-log parity line for one constructed binding arm
+// (run()'s "<componentKey> (<variant>) ready" convention, e.g. "artifactAccess
+// (github) ready").
+func writeReadyLog(b *strings.Builder, indent, key, variant string) {
+	b.WriteString(indent + "logger.Info(\"" + key + " (" + variant + ") ready\")\n")
 }
 
 // writeSwitchArms emits a binding with multiple profile arms as a profile switch
@@ -66,9 +75,11 @@ func writeArmBody(b *strings.Builder, ra raBinding, arm variantArm) {
 		b.WriteString("\t\tv, err := " + call + "\n")
 		b.WriteString("\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n")
 		b.WriteString("\t\t" + ra.varName + " = v\n")
+		writeReadyLog(b, "\t\t", ra.key, arm.variant)
 		return
 	}
 	b.WriteString("\t\t" + ra.varName + " = " + call + "\n")
+	writeReadyLog(b, "\t\t", ra.key, arm.variant)
 }
 
 // writeManagers emits each manager's DI construction + its embedded Temporal

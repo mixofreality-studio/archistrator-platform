@@ -32,8 +32,23 @@ type resolved struct {
 
 	hooks []hookMethod
 
+	// hookDeps is every distinct unmatched plain manager dep threaded through a
+	// typed Hooks method (the resolver seam: func-typed resolvers AND
+	// scalar/interface plain deps with no setting/binding link), first-seen
+	// order. hookSeen dedups by the derived hook name.
+	hookDeps []hookDep
+	hookSeen map[string]bool
+
 	localVar     map[string]string // component key -> constructed local var name
 	consumedKeys map[string]bool   // infra keys consumed by some binding variant
+}
+
+// hookDep is one unmatched plain manager dep resolved to a typed Hooks method:
+// <Name>() <goType>, with goImport (if any) added to the emitted imports.
+type hookDep struct {
+	name     string
+	goType   string
+	goImport string
 }
 
 // raBinding is one ResourceAccess binding resolved to its profile-switched
@@ -52,6 +67,7 @@ type raBinding struct {
 // variantArm is one profile's variant construction for a binding.
 type variantArm struct {
 	profile      string
+	variant      string // the raw binding variant name (e.g. "postgres", "memory") — the ready-log text
 	ctor         string
 	args         []string
 	returnsError bool
@@ -90,6 +106,7 @@ func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
 		infra:        map[string]projectmodel.InfraDecl{},
 		localVar:     map[string]string{},
 		consumedKeys: map[string]bool{},
+		hookSeen:     map[string]bool{},
 	}
 	if r.serviceName == "" {
 		r.serviceName = "server"
@@ -183,6 +200,7 @@ func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.Bind
 	}
 	return variantArm{
 		profile:      profile,
+		variant:      pv.Variant,
 		ctor:         rb.alias + ".New" + pascalToken(pv.Variant) + rb.iface,
 		args:         args,
 		returnsError: len(pv.Infra) > 0,
@@ -259,8 +277,10 @@ func (r *resolved) resolveManager(m *projectmodel.Model, key string, c *projectm
 
 // threadDep resolves one manager DI-constructor dependency to its arg
 // expression: a COMPONENT dep to its constructed local var; a PLAIN dep to the
-// Temporal client (client.Client), a config setting (name match), a Hooks
-// method (a func type — a resolver seam), or nil (an unbound optional).
+// Temporal client (client.Client), a config setting (name match), or — for
+// everything else the deployment model has no link for (a func-typed
+// resolver, or a scalar/interface plain dep, e.g. the durableExecution client)
+// — a typed Hooks method call (see threadHookDep).
 func (r *resolved) threadDep(m *projectmodel.Model, dep projectmodel.Dep) (string, error) {
 	if dep.Component != "" {
 		v, ok := r.localVar[dep.Component]
@@ -275,10 +295,29 @@ func (r *resolved) threadDep(m *projectmodel.Model, dep projectmodel.Dep) (strin
 	if field, ok := hasSetting(m.Deployment, dep.Name); ok {
 		return "cfg." + field, nil
 	}
-	if strings.HasPrefix(strings.TrimSpace(dep.GoType), "func(") {
-		return "hooks." + upperFirst(dep.Name) + "()", nil
+	return r.threadHookDep(dep), nil
+}
+
+// threadHookDep threads an unmatched plain dep through a typed Hooks method —
+// the composition-root resolver seam for anything the model cannot express.
+// The model has no binding link for a plain dep today (see the derivation
+// note on resolverHooks), so this fires uniformly for func-typed resolvers
+// (e.g. archistrator's repo lookups) AND scalar/interface plain deps (e.g.
+// repoBase, or a nilable dep like the unbuilt durableExecution client); the
+// hook impl returns the zero value / nil for anything that stays unbuilt in
+// the active profile. One hook method per distinct dep name, first-seen
+// order.
+func (r *resolved) threadHookDep(dep projectmodel.Dep) string {
+	name := upperFirst(dep.Name)
+	if !r.hookSeen[name] {
+		r.hookSeen[name] = true
+		r.hookDeps = append(r.hookDeps, hookDep{
+			name:     name,
+			goType:   strings.TrimSpace(dep.GoType),
+			goImport: dep.GoImport,
+		})
 	}
-	return "nil", nil
+	return "hooks." + name + "()"
 }
 
 // isTemporalClient reports whether a plain dep is the Temporal control-plane
