@@ -36,6 +36,13 @@ type Layer struct {
 	Name        string         // "Manager", "Engine", "ResourceAccess"
 	DirPrefix   string         // path under ModulePrefix, NO trailing slash, e.g. "manager"
 	IfaceSuffix *regexp.Regexp // exported-interface name pattern; nil = skip naming + return checks
+
+	// FileStereotype is the layer's file-layout stereotype ("manager", "engine",
+	// "access", "client"). When non-empty, CheckFileLayout enforces the closed
+	// hand-file set on every leaf package of this layer: <leaf><stereotype>.go,
+	// per-workflow files (Manager layer only), <stereotype>_test.go, *.gen.go.
+	// Empty disables file-layout enforcement for the layer.
+	FileStereotype string
 }
 
 // Spec parameterizes Check for one consuming module.
@@ -110,11 +117,11 @@ func MethodSpec(moduleRoot, modulePrefix string) Spec {
 		ModulePrefix: modulePrefix,
 		Patterns:     []string{"./internal/..."},
 		Layers: []Layer{
-			{Name: "Client", DirPrefix: "client", IfaceSuffix: nil},
-			{Name: "Manager", DirPrefix: "manager", IfaceSuffix: nil},
-			{Name: "Engine", DirPrefix: "engine", IfaceSuffix: regexp.MustCompile(`Engine$`)},
-			{Name: "ResourceAccess", DirPrefix: "resourceaccess", IfaceSuffix: regexp.MustCompile(`Access$`)},
-			{Name: "Utility", DirPrefix: "utility", IfaceSuffix: nil},
+			{Name: "Client", DirPrefix: "client", IfaceSuffix: nil, FileStereotype: "client"},
+			{Name: "Manager", DirPrefix: "manager", IfaceSuffix: nil, FileStereotype: "manager"},
+			{Name: "Engine", DirPrefix: "engine", IfaceSuffix: regexp.MustCompile(`Engine$`), FileStereotype: "engine"},
+			{Name: "ResourceAccess", DirPrefix: "resourceaccess", IfaceSuffix: regexp.MustCompile(`Access$`), FileStereotype: "access"},
+			{Name: "Utility", DirPrefix: "utility", IfaceSuffix: nil, FileStereotype: ""},
 		},
 		TemporalLayer: "Manager",
 	}
@@ -180,6 +187,19 @@ func makePermitted(spec Spec) string {
 	return strings.Join(dirs, ", ")
 }
 
+// layerFor resolves pkgPath's classified Layer, plus its index in spec.Layers,
+// via layerIndex's prefix classification. It is the single place that turns an
+// index into a Layer value, shared by Check's structural rules (checkPackage)
+// and CheckFileLayout's file rules (fileLayoutViolations) so neither
+// reimplements the ModulePrefix/DirPrefix matching housed in makeLayerIndex.
+func layerFor(layerIndex func(string) (int, bool), spec Spec, pkgPath string) (layer Layer, idx int, ok bool) {
+	idx, ok = layerIndex(pkgPath)
+	if !ok {
+		return Layer{}, 0, false
+	}
+	return spec.Layers[idx], idx, true
+}
+
 func checkPackage(t *testing.T, pkg *packages.Package, spec Spec, layerIndex func(string) (int, bool), permitted string) {
 	t.Helper()
 	// A directory that contributes no production Go files (e.g. one holding
@@ -190,7 +210,7 @@ func checkPackage(t *testing.T, pkg *packages.Package, spec Spec, layerIndex fun
 	if len(pkg.Syntax) == 0 {
 		return
 	}
-	pkgIdx, ok := layerIndex(pkg.PkgPath)
+	layer, pkgIdx, ok := layerFor(layerIndex, spec, pkg.PkgPath)
 	if !ok {
 		// Rule 0: every loaded internal package MUST classify into a declared
 		// layer. There is no "unclassified" escape — a rogue package invented
@@ -202,7 +222,6 @@ func checkPackage(t *testing.T, pkg *packages.Package, spec Spec, layerIndex fun
 			pkg.PkgPath, permitted)
 		return
 	}
-	layer := spec.Layers[pkgIdx]
 	checkPackageImports(t, pkg, spec, pkgIdx, layer, layerIndex)
 	checkPackageInterfaces(t, pkg, layer)
 }
