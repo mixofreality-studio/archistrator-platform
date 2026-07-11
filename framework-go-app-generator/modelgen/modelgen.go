@@ -18,7 +18,11 @@
 // last segment. Entries without a `goPackage` are skipped. An entry flagged
 // `"stub": true` is CONTRACTED-BUT-UNBUILT: it still carries a goPackage + $defs +
 // interface, and modelgen emits a fully generated not-implemented impl for it
-// (see emitStubImpl).
+// (see emitStubImpl). Two or more entries sharing one goPackage — a secondary
+// component re-homed onto an existing package because RA→RA imports are
+// banned — merge into that package's single contract.gen.go (see genGroup):
+// one deduped $defs block plus each entry's own interface/impl, in ascending
+// contract-key order.
 //
 // This is the library form of archistrator's server/cmd/modelgen (a thin CLI
 // shim now wraps it). The module path and engine-impl allowlist — the only two
@@ -73,6 +77,19 @@ type contractMeta struct {
 // Generate emits every built component's contract.gen.go from the project.json
 // document, keyed by the contract's goPackage. Entries without a goPackage are
 // skipped. An error carries the offending contract's key.
+//
+// Two or more entries sharing the same goPackage — the multi-component-per-
+// package case (RA→RA imports are banned, so a secondary component re-homed
+// onto an existing package's directory shares that package's goPackage with
+// the primary component) — merge into that package's single emitted file (see
+// genGroup): one $defs type block (shared/identical defs deduped, colliding
+// same-name-different-shape defs a hard error) plus each entry's own interface
+// + impl surface, in ascending contract-key order (the deterministic merge
+// order — there is no other tie-break; a key that was historically folded
+// from contract.schema.json sorts first only if its name does). A goPackage
+// used by exactly one entry is unaffected: it takes the original single-entry
+// path (genOne) and its output is byte-identical to before merge support
+// existed.
 func Generate(projectJSON []byte, cfg Config) (map[string][]byte, error) {
 	if cfg.ModulePath == "" {
 		return nil, fmt.Errorf("modelgen: Config.ModulePath is empty")
@@ -93,14 +110,16 @@ func Generate(projectJSON []byte, cfg Config) (map[string][]byte, error) {
 	}
 	sort.Strings(keys)
 
+	groupOrder, groups, err := groupByGoPackage(keys, contracts)
+	if err != nil {
+		return nil, err
+	}
+
 	out := map[string][]byte{}
-	for _, k := range keys {
-		goPkg, src, err := emitContract(k, contracts[k], cfg.ModulePath, allow, resolver)
+	for _, goPkg := range groupOrder {
+		src, err := emitGoPackage(goPkg, groups[goPkg], contracts, cfg.ModulePath, allow, resolver)
 		if err != nil {
 			return nil, err
-		}
-		if goPkg == "" { // no goPackage ⇒ skip (stub / unbuilt entry)
-			continue
 		}
 		out[goPkg] = src
 	}
@@ -108,6 +127,40 @@ func Generate(projectJSON []byte, cfg Config) (map[string][]byte, error) {
 		return nil, fmt.Errorf("no built service contracts (with goPackage) found")
 	}
 	return out, nil
+}
+
+// groupByGoPackage buckets built (non-empty goPackage) keys by goPackage,
+// preserving each group's ascending key order (keys is already sorted) and
+// the order goPackages were first encountered while walking keys.
+func groupByGoPackage(keys []string, contracts map[string]json.RawMessage) ([]string, map[string][]string, error) {
+	groups := map[string][]string{}
+	order := make([]string, 0, len(keys))
+	for _, k := range keys {
+		var meta contractMeta
+		if err := json.Unmarshal(contracts[k], &meta); err != nil {
+			return nil, nil, fmt.Errorf("parse contract %q: %w", k, err)
+		}
+		if meta.GoPackage == "" { // no goPackage ⇒ skip (stub / unbuilt entry)
+			continue
+		}
+		if _, seen := groups[meta.GoPackage]; !seen {
+			order = append(order, meta.GoPackage)
+		}
+		groups[meta.GoPackage] = append(groups[meta.GoPackage], k)
+	}
+	return order, groups, nil
+}
+
+// emitGoPackage emits one goPackage's contract.gen.go: the original
+// single-entry path (genOne, via emitContract) when exactly one contract key
+// maps to it — byte-identical to before merge support existed — or the merge
+// path (genGroup) when two or more share it.
+func emitGoPackage(goPkg string, keys []string, contracts map[string]json.RawMessage, modulePath string, allow map[string]bool, resolver map[string]contractRef) ([]byte, error) {
+	if len(keys) == 1 {
+		_, src, err := emitContract(keys[0], contracts[keys[0]], modulePath, allow, resolver)
+		return src, err
+	}
+	return genGroup(goPkg, keys, contracts, modulePath, allow, resolver)
 }
 
 // emitContract processes one .serviceContracts entry: it returns the entry's
