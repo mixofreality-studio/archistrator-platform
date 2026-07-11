@@ -169,6 +169,37 @@ func TestGenerateErrorEmptyGoPackage(t *testing.T) {
 	}
 }
 
+// TestNoCustomActivitiesSurface asserts the emitted worker.gen.go carries no
+// hand-registration escape hatch: the file-layout standard bans handwritten
+// Temporal activities, so every activity is generated and CustomActivities /
+// genRegisteredActivity must not appear in the emitted bytes.
+func TestNoCustomActivitiesSurface(t *testing.T) {
+	m, err := projectmodel.LoadFile("../testdata/greenfield.project.json")
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+
+	got, err := temporalgen.Generate(m, temporalgen.Config{
+		ModulePath:     "github.com/mixofreality-studio/archistrator/server",
+		ManagerKey:     "orderManager",
+		CallerKeyedOps: map[string][]string{"orderState": {"ChargeOrder"}},
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	src, ok := got["worker.gen.go"]
+	if !ok {
+		t.Fatal("Generate did not return worker.gen.go")
+	}
+	if strings.Contains(string(src), "CustomActivities") {
+		t.Errorf("worker.gen.go contains CustomActivities, want it removed:\n%s", src)
+	}
+	if strings.Contains(string(src), "genRegisteredActivity") {
+		t.Errorf("worker.gen.go contains genRegisteredActivity, want it removed:\n%s", src)
+	}
+}
+
 func checkGolden(t *testing.T, path string, got []byte) {
 	t.Helper()
 	if *update {

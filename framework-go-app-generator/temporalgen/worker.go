@@ -7,28 +7,23 @@ import (
 	"strings"
 )
 
-// workerManifestBlock is the genWorkerManifest / genRegisteredWorkflow /
-// genRegisteredActivity type surface emitted verbatim: what the hand-written
-// manager supplies to RegisterWorker. Codegen cannot know the workflow
-// functions or hybrid hand-written activities, so the manifest carries them;
-// the invoker options hook and the genActivities dep struct ride along.
+// workerManifestBlock is the genWorkerManifest / genRegisteredWorkflow type
+// surface emitted verbatim: what the hand-written manager supplies to
+// RegisterWorker. Codegen cannot know the workflow functions, so the
+// manifest carries them; the invoker options hook and the genActivities dep
+// struct ride along. There is no hand-registration escape hatch: the
+// file-layout standard bans handwritten Temporal activities, so every
+// activity is generated.
 const workerManifestBlock = `// genWorkerManifest is what the hand-written manager supplies to
-// RegisterWorker: the workflow functions (codegen cannot know them), any
-// hybrid hand-written activities, the invoker options hook, and the
-// genActivities dep threading.
+// RegisterWorker: the workflow functions (codegen cannot know them), the
+// invoker options hook, and the genActivities dep threading.
 type genWorkerManifest struct {
-	Workflows        []genRegisteredWorkflow
-	CustomActivities []genRegisteredActivity
-	ActivityOptions  func(activityName string) (workflow.ActivityOptions, bool)
-	Activities       genActivities
+	Workflows       []genRegisteredWorkflow
+	ActivityOptions func(activityName string) (workflow.ActivityOptions, bool)
+	Activities      genActivities
 }
 
 type genRegisteredWorkflow struct {
-	Name string
-	Fn   any
-}
-
-type genRegisteredActivity struct {
 	Name string
 	Fn   any
 }
@@ -44,9 +39,9 @@ type workerActivity struct {
 
 // emitWorker generates worker.gen.go: the TaskQueue const, the genWorkerManifest
 // type surface, and RegisterWorker, which registers every workflow, then every
-// generated activity explicitly by registered name, then the manifest's custom
-// (hybrid hand-written) activities. Forgetting a generated activity is
-// impossible — the loop over resolveRADeps enumerates them all.
+// generated activity explicitly by registered name. There is no hand-written
+// activity escape hatch — forgetting a generated activity is impossible, since
+// the loop over resolveRADeps enumerates them all.
 func emitWorker(ec emitContext) ([]byte, error) {
 	deps := resolveRADeps(ec)
 	taskQueue := TaskQueueName(ec.mgr.Doc.Interface.Name)
@@ -83,13 +78,12 @@ func emitWorker(ec emitContext) ([]byte, error) {
 }
 
 // registerWorkerFunc emits RegisterWorker: workflows first, then each generated
-// activity bound off a *genActivities and registered by its Temporal name, then
-// the manifest's custom activities.
+// activity bound off a *genActivities and registered by its Temporal name.
 func registerWorkerFunc(acts []workerActivity) string {
 	var b strings.Builder
-	b.WriteString("// RegisterWorker registers every workflow + generated activity + custom\n")
-	b.WriteString("// activity on w. Forgetting a generated activity is impossible; workflows and\n")
-	b.WriteString("// hybrids are exactly what the manifest declares.\n")
+	b.WriteString("// RegisterWorker registers every workflow + generated activity on w.\n")
+	b.WriteString("// Forgetting a generated activity is impossible; workflows are exactly what\n")
+	b.WriteString("// the manifest declares.\n")
 	b.WriteString("func RegisterWorker(w worker.Worker, mf genWorkerManifest) {\n")
 	b.WriteString("\tfor _, wf := range mf.Workflows {\n")
 	b.WriteString("\t\tw.RegisterWorkflowWithOptions(wf.Fn, workflow.RegisterOptions{Name: wf.Name})\n")
@@ -99,9 +93,6 @@ func registerWorkerFunc(acts []workerActivity) string {
 		fmt.Fprintf(&b, "\tw.RegisterActivityWithOptions(acts.%s, activity.RegisterOptions{Name: %q})\n",
 			a.method, a.registered)
 	}
-	b.WriteString("\tfor _, ca := range mf.CustomActivities {\n")
-	b.WriteString("\t\tw.RegisterActivityWithOptions(ca.Fn, activity.RegisterOptions{Name: ca.Name})\n")
-	b.WriteString("\t}\n")
 	b.WriteString("}\n")
 	return b.String()
 }

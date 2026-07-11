@@ -13,14 +13,12 @@ import (
 const TaskQueue = "order"
 
 // genWorkerManifest is what the hand-written manager supplies to
-// RegisterWorker: the workflow functions (codegen cannot know them), any
-// hybrid hand-written activities, the invoker options hook, and the
-// genActivities dep threading.
+// RegisterWorker: the workflow functions (codegen cannot know them), the
+// invoker options hook, and the genActivities dep threading.
 type genWorkerManifest struct {
-	Workflows        []genRegisteredWorkflow
-	CustomActivities []genRegisteredActivity
-	ActivityOptions  func(activityName string) (workflow.ActivityOptions, bool)
-	Activities       genActivities
+	Workflows       []genRegisteredWorkflow
+	ActivityOptions func(activityName string) (workflow.ActivityOptions, bool)
+	Activities      genActivities
 }
 
 type genRegisteredWorkflow struct {
@@ -28,14 +26,9 @@ type genRegisteredWorkflow struct {
 	Fn   any
 }
 
-type genRegisteredActivity struct {
-	Name string
-	Fn   any
-}
-
-// RegisterWorker registers every workflow + generated activity + custom
-// activity on w. Forgetting a generated activity is impossible; workflows and
-// hybrids are exactly what the manifest declares.
+// RegisterWorker registers every workflow + generated activity on w.
+// Forgetting a generated activity is impossible; workflows are exactly what
+// the manifest declares.
 func RegisterWorker(w worker.Worker, mf genWorkerManifest) {
 	for _, wf := range mf.Workflows {
 		w.RegisterWorkflowWithOptions(wf.Fn, workflow.RegisterOptions{Name: wf.Name})
@@ -48,7 +41,4 @@ func RegisterWorker(w worker.Worker, mf genWorkerManifest) {
 	w.RegisterActivityWithOptions(acts.OrderStatePutOrder, activity.RegisterOptions{Name: "orderStateAccess.putOrder"})
 	w.RegisterActivityWithOptions(acts.OrderStateReadOrder, activity.RegisterOptions{Name: "orderStateAccess.readOrder"})
 	w.RegisterActivityWithOptions(acts.OrderStateReceiptForOrder, activity.RegisterOptions{Name: "orderStateAccess.receiptForOrder"})
-	for _, ca := range mf.CustomActivities {
-		w.RegisterActivityWithOptions(ca.Fn, activity.RegisterOptions{Name: ca.Name})
-	}
 }
