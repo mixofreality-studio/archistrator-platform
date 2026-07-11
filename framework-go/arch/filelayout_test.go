@@ -30,7 +30,7 @@ func loadLayoutPkgs(t *testing.T) []*packages.Package {
 	t.Setenv("GOWORK", "off")
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
-			packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
+			packages.NeedSyntax,
 		Dir:   "testdata/layoutapp",
 		Tests: false,
 	}

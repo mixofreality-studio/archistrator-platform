@@ -38,7 +38,7 @@ import (
 // file for free since it lists names, not import graphs.
 //
 // fileLayoutViolations is the pure core: it takes an already-loaded package
-// set (Tests:false, matching gensurface.go's load mode) and returns every
+// set (Tests:false, syntax-level load — no type info needed) and returns every
 // violation, deterministically ordered by iteration over pkgs and their
 // CompiledGoFiles. CheckFileLayout below is the t.Errorf-routing wrapper.
 type fileLayoutViolation struct{ Pkg, File, Rule, Detail string }
@@ -52,8 +52,10 @@ type fileLayoutViolation struct{ Pkg, File, Rule, Detail string }
 func CheckFileLayout(t *testing.T, spec Spec) {
 	t.Helper()
 	cfg := &packages.Config{
+		// The check is AST-name-based (file names + parsed syntax); it never
+		// touches type information, so Types/TypesInfo are deliberately not loaded.
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
-			packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
+			packages.NeedSyntax,
 		Dir:   spec.ModuleRoot,
 		Tests: false,
 	}

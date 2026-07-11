@@ -2,7 +2,9 @@ package methodcheck
 
 import (
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
@@ -83,6 +85,62 @@ func TestCheck_WithCodeRunsAllThree(t *testing.T) {
 	// The full, correct alignapp spec: design rules + arch.Check + alignment all run
 	// and all pass. (Same module arch's own TestZZ-style check passes against.)
 	Check(t, ProjectSpec{RepoRoot: repoRoot, Arch: alignAppArchSpec()})
+}
+
+// layoutBadArchSpec targets the layoutbadapp fixture: a Manager package that
+// passes the arch layer rules but carries helpers.go, a handwritten file outside
+// the closed file-layout set. The Manager layer has a real FileStereotype, so the
+// default-on arch.CheckFileLayout wiring inside Check MUST flag it.
+func layoutBadArchSpec() arch.Spec {
+	return arch.Spec{
+		ModuleRoot:   "testdata/layoutbadapp",
+		ModulePrefix: "example.com/layoutbadapp/internal/",
+		Patterns:     []string{"./internal/..."},
+		Layers: []arch.Layer{
+			{Name: "Manager", DirPrefix: "manager", FileStereotype: "manager"},
+		},
+	}
+}
+
+// layoutBadSubprocessEnv marks the re-exec'd child of
+// TestCheck_FileLayoutViolationSurfacesThroughCheck.
+const layoutBadSubprocessEnv = "METHODCHECK_LAYOUTBAD_SUBPROCESS"
+
+// TestCheck_FileLayoutViolationSurfacesThroughCheck proves the default-on
+// file-layout wiring FIRES through methodcheck.Check — the sole enforcement
+// path for consumer repos that run no separate arch test. The violation is
+// routed via t.Errorf inside Check, so the failing direction is observed by
+// re-exec'ing this test binary (the standard subprocess pattern): the child
+// runs Check against the layout-violating fixture and must FAIL with the
+// "file-not-allowed" rule in its output. (The passing direction is covered by
+// every test using alignAppArchSpec, whose layers carry real FileStereotypes
+// over the layout-clean alignapp fixture.) If a refactor dropped or mis-argued
+// the arch.CheckFileLayout call in runLayerAndAlignmentChecks, the child would
+// exit clean of that rule and this test would fail.
+func TestCheck_FileLayoutViolationSurfacesThroughCheck(t *testing.T) {
+	if os.Getenv(layoutBadSubprocessEnv) == "1" {
+		// CHILD: actually drive Check; the file-layout violation t.Errorf's and
+		// fails this process — which is exactly what the parent asserts. (The
+		// clean design state keeps the design rules quiet; the alignment pass
+		// also reports its own findings against this fixture, which is fine —
+		// the parent greps for the file-layout rule specifically.)
+		t.Setenv("GOWORK", "off") // nested testdata module — see loadAlignPkgs.
+		repoRoot := writeRepoState(t, "project_clean.json")
+		Check(t, ProjectSpec{RepoRoot: repoRoot, Arch: layoutBadArchSpec()})
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestCheck_FileLayoutViolationSurfacesThroughCheck$", "-test.v")
+	cmd.Env = append(os.Environ(), layoutBadSubprocessEnv+"=1")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected Check to FAIL on the layout-violating fixture; subprocess passed:\n%s", out)
+	}
+	if !strings.Contains(string(out), "file-not-allowed") {
+		t.Fatalf("subprocess failed, but not with the file-layout rule — the CheckFileLayout wiring did not fire:\n%s", out)
+	}
+	if !strings.Contains(string(out), "helpers.go") {
+		t.Fatalf("file-layout failure did not name the violating file helpers.go:\n%s", out)
+	}
 }
 
 func TestCheck_MissingStateIsCleanPass(t *testing.T) {

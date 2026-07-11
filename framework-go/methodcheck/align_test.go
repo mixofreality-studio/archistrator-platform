@@ -12,7 +12,12 @@ import (
 // package fail, extra package fail, layer mismatch fail, and the empty-code
 // design-phase no-op.
 
-// alignAppArchSpec is the arch.Spec for the testdata alignment module.
+// alignAppArchSpec is the arch.Spec for the testdata alignment module. The
+// layers carry the standard FileStereotype values (matching arch.MethodSpec) so
+// every Check test that uses this spec ALSO drives the default-on file-layout
+// gate on its passing path — the alignapp fixture files are named to the
+// <leaf><stereotype>.go convention (appclientclient.go, designmanagermanager.go,
+// ...) and must stay layout-clean.
 func alignAppArchSpec() arch.Spec {
 	return arch.Spec{
 		ModuleRoot: "testdata/alignapp",
@@ -22,10 +27,10 @@ func alignAppArchSpec() arch.Spec {
 		ModulePrefix: "example.com/alignapp/internal/",
 		Patterns:     []string{"./internal/..."},
 		Layers: []arch.Layer{
-			{Name: "Client", DirPrefix: "client"},
-			{Name: "Manager", DirPrefix: "manager"},
-			{Name: "Engine", DirPrefix: "engine"},
-			{Name: "ResourceAccess", DirPrefix: "resourceaccess"},
+			{Name: "Client", DirPrefix: "client", FileStereotype: "client"},
+			{Name: "Manager", DirPrefix: "manager", FileStereotype: "manager"},
+			{Name: "Engine", DirPrefix: "engine", FileStereotype: "engine"},
+			{Name: "ResourceAccess", DirPrefix: "resourceaccess", FileStereotype: "access"},
 			{Name: "Utility", DirPrefix: "utility"},
 		},
 	}
