@@ -19,6 +19,12 @@ type SystemComponent struct {
 	Name  string `json:"name"` // PascalCase ("SystemDesignManager")
 	Kind  string `json:"kind"`
 	Layer string `json:"layer"`
+	// ContractKey is the OPTIONAL explicit join back to a serviceContracts key
+	// (camelCase, e.g. "systemDesignManager"). When present it is the preferred,
+	// exact match in ComponentByContractKey; when absent (documents that predate
+	// the field — spec: Schema ownership & evolution, tolerant evolution) the
+	// case-convention heuristic is used instead.
+	ContractKey string `json:"contractKey,omitempty"`
 }
 
 type Relationship struct {
@@ -38,9 +44,24 @@ func ParseSystem(slotModel json.RawMessage) (*System, error) {
 
 // ComponentByContractKey joins a camelCase serviceContracts key to its
 // systemDesign component — the Go port of the webApp's
-// resolveContractComponentId: (1) Kebab(key) match on ID, (2) case-insensitive
-// ID match, (3) case-insensitive Kebab(name) match. Honest miss on no match.
+// resolveContractComponentId. Preferred-exact-match with heuristic fallback
+// (spec: Schema ownership & evolution, tolerant evolution):
+//
+//	(0) exact match on an explicit ContractKey — the join the document owns;
+//	(1) Kebab(key) match on ID,
+//	(2) case-insensitive ID match,
+//	(3) case-insensitive Kebab(name) match.
+//
+// Documents that predate the ContractKey field carry no (0) candidate and fall
+// straight through to the heuristic, so behaviour is unchanged for them. Honest
+// miss on no match.
 func (s *System) ComponentByContractKey(key string) (*SystemComponent, bool) {
+	// (0) Explicit contractKey — preferred over every case-convention heuristic.
+	for i := range s.Components {
+		if s.Components[i].ContractKey != "" && s.Components[i].ContractKey == key {
+			return &s.Components[i], true
+		}
+	}
 	kebab := Kebab(key)
 	for i := range s.Components {
 		if s.Components[i].ID == kebab {
