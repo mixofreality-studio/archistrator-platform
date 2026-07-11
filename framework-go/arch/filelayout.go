@@ -6,6 +6,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"testing"
 
 	"golang.org/x/tools/go/packages"
 )
@@ -39,9 +40,35 @@ import (
 // fileLayoutViolations is the pure core: it takes an already-loaded package
 // set (Tests:false, matching gensurface.go's load mode) and returns every
 // violation, deterministically ordered by iteration over pkgs and their
-// CompiledGoFiles. The public CheckFileLayout wrapper (t.Errorf routing) is
-// Task A2's concern, not this file's.
+// CompiledGoFiles. CheckFileLayout below is the t.Errorf-routing wrapper.
 type fileLayoutViolation struct{ Pkg, File, Rule, Detail string }
+
+// CheckFileLayout loads the module named by spec and reports, via t.Errorf,
+// every file-layout violation across its classified packages — see the file
+// header for the closed set of rules enforced. A package that does not
+// classify into a spec layer, or whose layer has an empty FileStereotype, is
+// silently skipped (file-layout enforcement is opt-in per layer via
+// Layer.FileStereotype).
+func CheckFileLayout(t *testing.T, spec Spec) {
+	t.Helper()
+	cfg := &packages.Config{
+		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
+			packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,
+		Dir:   spec.ModuleRoot,
+		Tests: false,
+	}
+	pkgs, err := packages.Load(cfg, spec.Patterns...)
+	if err != nil {
+		t.Fatalf("arch: packages.Load: %v", err)
+	}
+	if n := packages.PrintErrors(pkgs); n > 0 {
+		t.Fatalf("arch: %d package load error(s); fix the build before checking the file layout", n)
+	}
+
+	for _, v := range fileLayoutViolations(pkgs, spec) {
+		t.Errorf("%s: %s %s: %s", v.Pkg, v.Rule, v.File, v.Detail)
+	}
+}
 
 // fileLayoutViolations returns every file-layout violation across pkgs. A
 // package that does not classify into a spec layer, or whose layer has an

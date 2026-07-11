@@ -148,6 +148,12 @@ func runLayerAndAlignmentChecks(t *testing.T, spec ProjectSpec, proj Project, pk
 	// runs the structural suite; it is the authority on layering/naming/
 	// Temporal/allowlist and reports its own violations via t.Errorf.
 	arch.Check(t, spec.Arch)
+	// (a″) File-layout gate — unconditional (default-on): every leaf package of
+	// a layer carrying a non-empty FileStereotype is subject to the closed
+	// handwritten-file set (arch.CheckFileLayout). Layers with an empty
+	// FileStereotype are skipped inside the checker itself, so this call is
+	// harmless for any Spec that does not opt a layer in.
+	arch.CheckFileLayout(t, spec.Arch)
 	// (a′) Encapsulation gate — only when the spec opts in with an allowlist.
 	// arch.CheckGeneratedSurface re-loads the module and fails any exported symbol
 	// outside the generated contract surface + allowlist.

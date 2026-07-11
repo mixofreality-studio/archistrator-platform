@@ -56,6 +56,16 @@ func hasLayoutViolation(vs []fileLayoutViolation, file, rule string) bool {
 	return false
 }
 
+// TestCheckFileLayoutPassesClean drives the public entry point on the passing
+// path: restricting Patterns to only the clean fixture packages (goodmgr,
+// goodeng) must produce zero t.Errorf calls.
+func TestCheckFileLayoutPassesClean(t *testing.T) {
+	t.Setenv("GOWORK", "off")
+	spec := layoutSpec()
+	spec.Patterns = []string{"./internal/manager/goodmgr/...", "./internal/engine/goodeng/..."}
+	CheckFileLayout(t, spec)
+}
+
 func TestFileLayoutViolations(t *testing.T) {
 	pkgs := loadLayoutPkgs(t)
 	spec := layoutSpec()
