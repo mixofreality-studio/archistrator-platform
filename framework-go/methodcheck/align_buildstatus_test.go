@@ -49,7 +49,7 @@ func TestAlign_LayerScoped_SameLeafTwoLayers(t *testing.T) {
 		cpkg("ex/manager/settlement", "settlement", "Manager"),
 		cpkg("ex/engine/settlement", "settlement", "Engine"),
 	}
-	if f := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer); len(f) != 0 {
+	if f := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil); len(f) != 0 {
 		t.Fatalf("same-leaf packages in two layers must both match under layer-scoped keys, got %+v", f)
 	}
 }
@@ -84,7 +84,7 @@ func TestAlign_StalePlanned_ExactLeaf(t *testing.T) {
 	mgr.BuildStatus = buildStatusPlanned
 	s := System{Components: []Component{mgr}}
 	pkgs := []classifiedPackage{cpkg("ex/manager/design", "design", "Manager")}
-	if !hasRuleFindings(alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer), ruleAlignStalePlanned) {
+	if !hasRuleFindings(alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil), ruleAlignStalePlanned) {
 		t.Fatalf("a planned component with a matching package must emit ALIGN-STALE-PLANNED")
 	}
 }
@@ -100,7 +100,7 @@ func TestAlign_StalePlanned_MCPSubpackageShape(t *testing.T) {
 		cpkg("ex/client/mcp/designtools", "designtools", "Client"),
 		cpkg("ex/client/mcp/statetools", "statetools", "Client"),
 	}
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil)
 	if !hasRuleFindings(got, ruleAlignStalePlanned) {
 		t.Fatalf("a planned MCPClient with generated subpackages under client/mcp/* must emit ALIGN-STALE-PLANNED, got %+v", got)
 	}
@@ -119,7 +119,7 @@ func TestAlign_Planned_NoPackage_NoMissing(t *testing.T) {
 	planned.BuildStatus = buildStatusPlanned
 	s := System{Components: []Component{built, planned}}
 	pkgs := []classifiedPackage{cpkg("ex/manager/design", "design", "Manager")}
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil)
 	if hasRuleFindings(got, ruleAlignMissingPkg) {
 		t.Fatalf("a planned component with no package must not emit ALIGN-MISSING-PKG, got %+v", got)
 	}
@@ -141,7 +141,7 @@ func TestAlign_ExternalNonUtility(t *testing.T) {
 	ext.BuildStatus = buildStatusExternal
 	s := System{Components: []Component{built, ext}}
 	pkgs := []classifiedPackage{cpkg("ex/manager/design", "design", "Manager")}
-	sev, ok := findingSeverity(alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer), ruleAlignExternalNonUtility)
+	sev, ok := findingSeverity(alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil), ruleAlignExternalNonUtility)
 	if !ok {
 		t.Fatalf("an external non-Utility must emit ALIGN-EXTERNAL-NONUTILITY")
 	}
@@ -160,7 +160,7 @@ func TestAlign_ExternalUtility_Wired(t *testing.T) {
 	pkgs := []classifiedPackage{
 		cpkg("ex/manager/design", "design", "Manager", "github.com/x/framework-go/utilities/security"),
 	}
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil)
 	if hasRuleFindings(got, ruleAlignExternalUnwired) || hasRuleFindings(got, ruleAlignExternalNonUtility) {
 		t.Fatalf("a wired external Utility must produce no external finding, got %+v", got)
 	}
@@ -174,7 +174,7 @@ func TestAlign_ExternalUtility_Unwired(t *testing.T) {
 	sec.BuildStatus = buildStatusExternal
 	s := System{Components: []Component{built, sec}}
 	pkgs := []classifiedPackage{cpkg("ex/manager/design", "design", "Manager")}
-	sev, ok := findingSeverity(alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer), ruleAlignExternalUnwired)
+	sev, ok := findingSeverity(alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil), ruleAlignExternalUnwired)
 	if !ok {
 		t.Fatalf("an unwired external Utility must emit ALIGN-EXTERNAL-UNWIRED")
 	}
@@ -277,7 +277,7 @@ func TestAlign_Built_MCPSubpackageShape(t *testing.T) {
 		cpkg("ex/client/mcp/designtools", "designtools", "Client"),
 		cpkg("ex/client/mcp/statetools", "statetools", "Client"),
 	}
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil)
 	if len(got) != 0 {
 		t.Fatalf("a built subpackage-only MCPClient must absorb client/mcp/* cleanly, got %+v", got)
 	}
@@ -296,7 +296,7 @@ func TestAlign_Built_NeighborClients_NoSwallow(t *testing.T) {
 		cpkg("ex/client/web/tools", "tools", "Client"),
 		cpkg("ex/client/mcp/tools", "tools", "Client"),
 	}
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil)
 	if len(got) != 0 {
 		t.Fatalf("neighboring web/mcp clients must each absorb their own subtree cleanly, got %+v", got)
 	}
@@ -315,7 +315,7 @@ func TestAlign_Built_NestedComponent_DeepestOwnerWins(t *testing.T) {
 	pkgs := []classifiedPackage{
 		cpkg("ex/client/mcp/tools/render", "render", "Client"),
 	}
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil)
 	if hasRuleFindings(got, ruleAlignStalePlanned) {
 		t.Fatalf("outer planned MCPClient must not be flagged stale by a nested component's package, got %+v", got)
 	}
@@ -337,7 +337,7 @@ func TestAlign_Built_OrphanSubpackage_StillExtra(t *testing.T) {
 		cpkg("ex/client/mcp/designtools", "designtools", "Client"), // owned by MCPClient
 		cpkg("ex/client/ghost/orphaned", "orphaned", "Client"),     // under no component dir
 	}
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil)
 	if !hasRuleFindings(got, ruleAlignExtraPkg) {
 		t.Fatalf("a subpackage under no component directory must still be ALIGN-EXTRA-PKG, got %+v", got)
 	}

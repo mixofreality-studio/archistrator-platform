@@ -71,7 +71,7 @@ func alignAppSystem() System {
 
 func TestAlign_MatchedPasses(t *testing.T) {
 	pkgs := loadAlignPkgs(t)
-	findings := alignSystemToCode(alignAppSystem(), pkgs, nil)
+	findings := alignSystemToCode(alignAppSystem(), pkgs, nil, nil)
 	if len(findings) != 0 {
 		t.Fatalf("a design whose components all have matching packages must produce zero findings, got %+v", findings)
 	}
@@ -82,7 +82,7 @@ func TestAlign_MissingPackageFails(t *testing.T) {
 	s := alignAppSystem()
 	// Add a design Manager with no corresponding code package.
 	s.Components = append(s.Components, Component{ID: "phantommanager", Name: "PhantomManager", Kind: kindManager, Layer: layerManager})
-	findings := alignSystemToCode(s, pkgs, nil)
+	findings := alignSystemToCode(s, pkgs, nil, nil)
 	if !hasRuleFindings(findings, ruleAlignMissingPkg) {
 		t.Fatalf("expected ALIGN-MISSING-PKG, got %+v", findings)
 	}
@@ -99,7 +99,7 @@ func TestAlign_ExtraPackageFails(t *testing.T) {
 		}
 	}
 	s.Components = trimmed
-	findings := alignSystemToCode(s, pkgs, nil)
+	findings := alignSystemToCode(s, pkgs, nil, nil)
 	if !hasRuleFindings(findings, ruleAlignExtraPkg) {
 		t.Fatalf("expected ALIGN-EXTRA-PKG for the unmatched designmanager package, got %+v", findings)
 	}
@@ -115,7 +115,7 @@ func TestAlign_LayerMismatchFails(t *testing.T) {
 			s.Components[i].Layer = layerEngine
 		}
 	}
-	findings := alignSystemToCode(s, pkgs, nil)
+	findings := alignSystemToCode(s, pkgs, nil, nil)
 	if !hasRuleFindings(findings, ruleAlignLayerMismate) {
 		t.Fatalf("expected ALIGN-LAYER-MISMATCH, got %+v", findings)
 	}
@@ -123,7 +123,7 @@ func TestAlign_LayerMismatchFails(t *testing.T) {
 
 func TestAlign_EmptyCodeDesignPhaseIsNoOp(t *testing.T) {
 	// Pure design phase: a System but ZERO loaded packages → no alignment findings.
-	findings := alignSystemToCode(alignAppSystem(), nil, nil)
+	findings := alignSystemToCode(alignAppSystem(), nil, nil, nil)
 	if len(findings) != 0 {
 		t.Fatalf("design phase (no code) must emit no alignment findings, got %+v", findings)
 	}
@@ -136,7 +136,7 @@ func TestAlign_CustomNormalizerOverride(t *testing.T) {
 	// packages "match" the same key — proving the override is wired. Use a benign
 	// one that strips a known prefix so DesignManager still matches designmanager.
 	norm := func(in string) string { return defaultNormalizer(in) }
-	findings := alignSystemToCode(s, pkgs, norm)
+	findings := alignSystemToCode(s, pkgs, norm, nil)
 	if len(findings) != 0 {
 		t.Fatalf("explicit default-equivalent normalizer must still match cleanly, got %+v", findings)
 	}

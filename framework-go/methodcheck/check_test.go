@@ -194,7 +194,7 @@ func TestCheck_AlignmentSurfacesMissingPackage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("load: %v", err)
 	}
-	findings := alignSystemToCode(sys, pkgs, nil)
+	findings := alignSystemToCode(sys, pkgs, nil, nil)
 	if !hasRuleFindings(findings, ruleAlignMissingPkg) {
 		t.Fatalf("expected ALIGN-MISSING-PKG when the manager package is excluded, got %+v", findings)
 	}

@@ -198,7 +198,7 @@ func componentLayerName(layer string) string {
 //   - external → no missing-package failure; ALIGN-EXTERNAL-NONUTILITY for a non-Utility,
 //     else ALIGN-EXTERNAL-UNWIRED (Warning) unless a framework utility import backs it.
 //   - built (absent) → the ordinary missing/mismatch/extra reconciliation.
-func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string) string) []Finding {
+func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string) string, contracts map[string]ServiceContract) []Finding {
 	if len(pkgs) == 0 {
 		return nil
 	}
@@ -219,7 +219,7 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 			continue
 		}
 		section := fmt.Sprintf("component %d (%s)", i+1, c.Name)
-		out = append(out, alignComponent(c, key, section, i, pkgs, layersByName, pkgByName, matched, normalize, compKeys)...)
+		out = append(out, alignComponent(c, key, section, i, pkgs, contracts, layersByName, pkgByName, matched, normalize, compKeys)...)
 	}
 
 	out = append(out, checkOrphanedPackages(byNameLayer, matched)...)
@@ -227,7 +227,7 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 }
 
 // alignComponent dispatches a single component to the build-status–appropriate check.
-func alignComponent(c Component, key, section string, i int, pkgs []classifiedPackage, layersByName map[string]map[string]bool, pkgByName map[string]string, matched map[compKey]bool, normalize func(string) string, compKeys map[string]map[string]bool) []Finding {
+func alignComponent(c Component, key, section string, i int, pkgs []classifiedPackage, contracts map[string]ServiceContract, layersByName map[string]map[string]bool, pkgByName map[string]string, matched map[compKey]bool, normalize func(string) string, compKeys map[string]map[string]bool) []Finding {
 	declaredLayer := componentLayerName(c.Layer)
 	switch c.BuildStatus {
 	case buildStatusPlanned:
@@ -235,18 +235,25 @@ func alignComponent(c Component, key, section string, i int, pkgs []classifiedPa
 	case buildStatusExternal:
 		return alignExternalComponent(c, key, section, i, pkgs, normalize)
 	default:
-		return alignBuiltComponent(key, declaredLayer, section, i, pkgs, layersByName, pkgByName, matched, normalize, compKeys)
+		return alignBuiltComponent(c, key, declaredLayer, section, i, pkgs, contracts, layersByName, pkgByName, matched, normalize, compKeys)
 	}
 }
 
 // alignBuiltComponent is the ordinary reconciliation for a to-be-built component: it
 // PASSES when the component OWNS at least one package in its declared layer (its
 // exact-leaf package, or the subpackages beneath its mapped directory that no deeper
-// component owns: the MCPClient client/mcp/* shape with no root package). The name
-// present only in ANOTHER layer is ALIGN-LAYER-MISMATCH; absence is ALIGN-MISSING-PKG.
-func alignBuiltComponent(key, declaredLayer, section string, i int, pkgs []classifiedPackage, layersByName map[string]map[string]bool, pkgByName map[string]string, matched map[compKey]bool, normalize func(string) string, compKeys map[string]map[string]bool) []Finding {
+// component owns: the MCPClient client/mcp/* shape with no root package), OR — when the
+// name match fails — when its contractKey JOINS to a .serviceContracts entry whose
+// goPackage a loaded package in the declared layer realizes (a shared-goPackage
+// secondary: several RA components fronting one git-as-DB aggregate package). The name
+// present only in ANOTHER layer is ALIGN-LAYER-MISMATCH; absence (and a failed or
+// absent join) is ALIGN-MISSING-PKG.
+func alignBuiltComponent(c Component, key, declaredLayer, section string, i int, pkgs []classifiedPackage, contracts map[string]ServiceContract, layersByName map[string]map[string]bool, pkgByName map[string]string, matched map[compKey]bool, normalize func(string) string, compKeys map[string]map[string]bool) []Finding {
 	if _, ok := absorbOwnedPackages(key, declaredLayer, pkgs, matched, normalize, compKeys); ok {
 		return nil
+	}
+	if joined, findings := alignViaSharedGoPackage(c, declaredLayer, section, i, pkgs, contracts, matched, normalize); joined {
+		return findings
 	}
 	if layers, exists := layersByName[key]; exists && len(layers) > 0 {
 		// The name exists, just in a different layer — account those packages so they
@@ -267,6 +274,70 @@ func alignBuiltComponent(key, declaredLayer, section string, i int, pkgs []class
 		Message:  fmt.Sprintf("%s declares a %s but no code package matches it in any layer; the design declares a component with no implementation", section, declaredLayer),
 		Location: loc(i+1, section),
 	}}
+}
+
+// alignViaSharedGoPackage attempts to align a component that owns NO package under its
+// OWN normalized name by joining component → contractKey → .serviceContracts[key].
+// goPackage: when that goPackage names a loaded package in the component's declared
+// layer, the component is a shared-goPackage SECONDARY of whatever primary component
+// (if any) also owns that package — e.g. ConstructionTransitionAccess,
+// GitActivityStatusAccess and DesignSessionAccess all front the same
+// internal/resourceaccess/projectstate package ProjectStateAccess owns by name. This is
+// consulted ONLY as a fallback after the name match has already failed (never overrides
+// it) — see the single call site in alignBuiltComponent.
+//
+// Return value: joined=false means "no contractKey to join on (or the contract carries
+// no goPackage)" — the caller must fall through to its own missing/mismatch handling
+// unchanged. joined=true means the join path applies and is authoritative: findings=nil
+// is a clean shared-package ALIGN; a non-nil findings is a LOUD ALIGN-MISSING-PKG for a
+// contractKey naming no committed contract, or a goPackage naming no loaded package —
+// a broken join is never a silent pass.
+func alignViaSharedGoPackage(c Component, declaredLayer, section string, i int, pkgs []classifiedPackage, contracts map[string]ServiceContract, matched map[compKey]bool, normalize func(string) string) (joined bool, findings []Finding) {
+	if c.ContractKey == "" {
+		return false, nil
+	}
+	contract, ok := contracts[c.ContractKey]
+	if !ok {
+		return true, []Finding{{
+			RuleID:   ruleAlignMissingPkg,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("%s declares contractKey %q but .serviceContracts has no entry for it; the design references a service contract that was never committed", section, c.ContractKey),
+			Location: loc(i+1, section),
+		}}
+	}
+	if contract.GoPackage == "" {
+		// Nothing to join on — fall through to the ordinary missing-package handling.
+		return false, nil
+	}
+	for _, p := range pkgs {
+		if p.layer != declaredLayer {
+			continue
+		}
+		if !pkgPathMatchesGoPackage(p.pkgPath, contract.GoPackage) {
+			continue
+		}
+		// Mark the joined-to package matched so it does not ALSO read as orphaned; this
+		// is idempotent with the primary owner (if any) marking the same package.
+		matched[compKey{name: normalize(p.leaf), layer: p.layer}] = true
+		return true, nil
+	}
+	return true, []Finding{{
+		RuleID:   ruleAlignMissingPkg,
+		Severity: SeverityError,
+		Message:  fmt.Sprintf("%s declares contractKey %q whose goPackage %q names no loaded %s code package; the shared-package join target does not exist", section, c.ContractKey, contract.GoPackage, declaredLayer),
+		Location: loc(i+1, section),
+	}}
+}
+
+// pkgPathMatchesGoPackage reports whether a loaded package's full import path pkgPath
+// realizes a contract's goPackage. goPackage is module-root-relative
+// (e.g. "internal/resourceaccess/projectstate"); pkgPath is the FULL import path
+// packages.Load reports (e.g. ".../server/internal/resourceaccess/projectstate"). A
+// '/'-boundary suffix match (or exact equality, for module-prefix-less test fixtures)
+// realizes the join without needing the module's import-path prefix, and the '/'
+// boundary avoids a false positive like "xinternal/..." matching "internal/...".
+func pkgPathMatchesGoPackage(pkgPath, goPackage string) bool {
+	return pkgPath == goPackage || strings.HasSuffix(pkgPath, "/"+goPackage)
 }
 
 // alignPlannedComponent skips the missing-package failure (a planned component has no

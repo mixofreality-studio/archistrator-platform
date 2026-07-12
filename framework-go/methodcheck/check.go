@@ -168,7 +168,7 @@ func runLayerAndAlignmentChecks(t *testing.T, spec ProjectSpec, proj Project, pk
 		t.Fatalf("methodcheck: decode System for alignment: %v", sErr)
 	}
 	if sysOK {
-		reportFindings(t, alignSystemToCode(sys, pkgs, spec.NameNormalizer))
+		reportFindings(t, alignSystemToCode(sys, pkgs, spec.NameNormalizer, proj.ServiceContracts))
 		reportFindings(t, conformanceCheck(sys, pkgs, spec.NameNormalizer))
 	}
 }

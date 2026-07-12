@@ -217,6 +217,15 @@ type Component struct {
 	Encapsulates        string   `json:"encapsulates"`
 	AtomicBusinessVerbs []string `json:"atomicBusinessVerbs"`
 
+	// ContractKey is an OPTIONAL pointer to this component's `.serviceContracts[key]`
+	// entry. It is the join key the alignment pass uses to resolve a SHARED-goPackage
+	// secondary component: when no code package matches the component's own normalized
+	// name, ContractKey → serviceContracts[ContractKey].GoPackage names the package
+	// that actually implements it (several RA components fronting one git-as-DB
+	// aggregate package is the motivating shape). Empty means the component carries no
+	// contract pointer — the ordinary name-matched alignment applies unchanged.
+	ContractKey string `json:"contractKey,omitempty"`
+
 	// BuildStatus is an OPTIONAL per-component lifecycle marker the design carries so
 	// UIs can render a "planned"/"external" badge and the alignment rules can honor
 	// the component's intended state. It lives in STATE (slot-5 component JSON), not in
