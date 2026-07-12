@@ -77,6 +77,7 @@ func TestFileLayoutViolations(t *testing.T) {
 		{"badmgr_test.go", "test-file-name"},
 		{"regcall.go", "hand-activity-registration"},
 		{"pure.go", "workflow-func-outside-manager"},
+		{"orphanhelper.go", "file-not-allowed"},
 	} {
 		if !hasLayoutViolation(vs, want.file, want.rule) {
 			t.Errorf("missing violation %s in %s: got %+v", want.rule, want.file, vs)

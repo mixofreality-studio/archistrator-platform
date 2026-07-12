@@ -15,13 +15,26 @@ import (
 // carrying a non-empty Layer.FileStereotype, handwritten (non *.gen.go) .go
 // files are limited to a closed set — (1) the impl file
 // <leaf><stereotype>.go, carrying all contract methods and shared/non-workflow
-// code; (2) on the Manager layer only, one per-workflow file per exported
-// func taking a workflow.Context param, named after the func (minus the
-// "Workflow" suffix, lowercased); (3) the single test file
-// <stereotype>_test.go. Anywhere in scope, a hand call to
-// RegisterActivity/RegisterActivityWithOptions is forbidden (registration is
-// reserved for the generated worker), and a workflow.Context func outside the
-// Manager layer is forbidden regardless of its file.
+// code; (2) on the Manager layer only, one per-workflow file per workflow
+// ENTRY func, named after the func (minus the "Workflow" suffix, lowercased);
+// (3) the single test file <stereotype>_test.go. Anywhere in scope, a hand
+// call to RegisterActivity/RegisterActivityWithOptions is forbidden
+// (registration is reserved for the generated worker), and a workflow.Context
+// func outside the Manager layer is forbidden regardless of its file.
+//
+// A workflow ENTRY func is a func whose name ends in "Workflow" AND takes a
+// workflow.Context param (both conditions required — a func merely named
+// "...Workflow" without the param, or one taking workflow.Context without the
+// name suffix, is not an entry func). Rule 2 keys on entry funcs, not on
+// every workflow.Context-taking func: workflow-file-multiple-funcs fires only
+// when a file declares MORE THAN ONE entry func, and the required filename is
+// derived from THE entry func. A non-entry, context-taking helper is legal in
+// any file that has exactly one entry func (real workflow packages fold an
+// entry point plus its context-taking helpers into one file). Such a helper
+// remains illegal in the impl file (workflow-in-impl-file fires for ANY
+// context-taking func there, entry or helper) and in a file with NO entry
+// func — a helpers-only file is not a workflow file, so it falls through to
+// file-not-allowed rather than being silently passed.
 //
 // workflow.Context is matched by the AST selector's NAME ("workflow.Context"),
 // not by resolved import path, so both a real go.temporal.io/sdk/workflow
@@ -109,17 +122,23 @@ func packageFileLayoutViolations(p *packages.Package, spec Spec, layer Layer) []
 		for _, call := range registerActivityCalls(f) {
 			out = append(out, fileLayoutViolation{p.PkgPath, base, "hand-activity-registration", call})
 		}
-		out = append(out, fileHandwrittenViolations(p.PkgPath, base, implFile, testFile, layer, spec, workflowFuncs(f))...)
+		out = append(out, fileHandwrittenViolations(p.PkgPath, base, implFile, testFile, layer, spec, workflowFuncs(f), workflowEntryFuncs(f))...)
 	}
 	return out
 }
 
 // fileHandwrittenViolations classifies a single handwritten (non *.gen.go)
 // file against the closed allowed set and returns every structural violation
-// for it (a workflow file can fail both the one-func-per-file rule and the
-// filename rule at once). wfFuncs is the file's list of workflow.Context func
-// names.
-func fileHandwrittenViolations(pkgPath, base, implFile, testFile string, layer Layer, spec Spec, wfFuncs []string) []fileLayoutViolation {
+// for it (a workflow file can fail both the one-entry-func-per-file rule and
+// the filename rule at once). wfFuncs is the file's list of ALL
+// workflow.Context func names (entry funcs and non-entry helpers alike) —
+// used by workflow-in-impl-file and workflow-func-outside-manager, which
+// apply regardless of entry-func status. entryFuncs is the subset that are
+// workflow ENTRY funcs (name ends "Workflow" AND takes workflow.Context) —
+// the rule-2 classification key: a file is a "workflow file" iff it has
+// exactly one entry func, and the required filename and the
+// multiple-funcs check are both derived from entryFuncs, not wfFuncs.
+func fileHandwrittenViolations(pkgPath, base, implFile, testFile string, layer Layer, spec Spec, wfFuncs, entryFuncs []string) []fileLayoutViolation {
 	var out []fileLayoutViolation
 	switch {
 	case base == implFile:
@@ -133,10 +152,18 @@ func fileHandwrittenViolations(pkgPath, base, implFile, testFile string, layer L
 				"workflow func " + wfFuncs[0] + " found outside the " + spec.TemporalLayer + " layer"})
 			return out
 		}
-		if len(wfFuncs) > 1 {
-			out = append(out, fileLayoutViolation{pkgPath, base, "workflow-file-multiple-funcs", strings.Join(wfFuncs, ",")})
+		if len(entryFuncs) == 0 {
+			// Context-taking func(s) present, but none is a workflow ENTRY
+			// func — this is not a workflow file (e.g. a helpers-only file),
+			// so it falls into the closed set's default: file-not-allowed.
+			out = append(out, fileLayoutViolation{pkgPath, base, "file-not-allowed",
+				"handwritten files are limited to " + implFile + ", per-workflow files, " + testFile})
+			return out
 		}
-		want := strings.ToLower(strings.TrimSuffix(wfFuncs[0], "Workflow")) + ".go"
+		if len(entryFuncs) > 1 {
+			out = append(out, fileLayoutViolation{pkgPath, base, "workflow-file-multiple-funcs", strings.Join(entryFuncs, ",")})
+		}
+		want := strings.ToLower(strings.TrimSuffix(entryFuncs[0], "Workflow")) + ".go"
 		if base != want {
 			out = append(out, fileLayoutViolation{pkgPath, base, "workflow-file-name", "want " + want})
 		}
@@ -171,12 +198,32 @@ func testFileNameViolations(p *packages.Package, testFile string) []fileLayoutVi
 
 // workflowFuncs returns the name of every top-level func in f whose parameter
 // list includes a workflow.Context-typed parameter (matched by selector NAME,
-// not import path — see file header).
+// not import path — see file header). This includes both workflow ENTRY
+// funcs and non-entry context-taking helpers; it feeds the two rules that
+// apply to any context-taking func regardless of entry status
+// (workflow-in-impl-file, workflow-func-outside-manager). Use
+// workflowEntryFuncs for the rule-2 (one-workflow-file) classification.
 func workflowFuncs(f *ast.File) []string {
 	var out []string
 	for _, decl := range f.Decls {
 		fd, ok := decl.(*ast.FuncDecl)
 		if !ok || !hasWorkflowContextParam(fd) {
+			continue
+		}
+		out = append(out, fd.Name.Name)
+	}
+	return out
+}
+
+// workflowEntryFuncs returns the name of every top-level func in f that is a
+// workflow ENTRY func: its name ends in "Workflow" AND it takes a
+// workflow.Context param — both conditions required (see file header). This
+// is the rule-2 classification key.
+func workflowEntryFuncs(f *ast.File) []string {
+	var out []string
+	for _, decl := range f.Decls {
+		fd, ok := decl.(*ast.FuncDecl)
+		if !ok || !hasWorkflowContextParam(fd) || !strings.HasSuffix(fd.Name.Name, "Workflow") {
 			continue
 		}
 		out = append(out, fd.Name.Name)
