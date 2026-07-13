@@ -8,6 +8,13 @@ import (
 )
 
 // Pinned platform versions the scaffold seeds (spec §6).
+//
+// AppGeneratorVersion and ProjectModelVersion are currently unreferenced by
+// any rendered template: framework-go-app-generator and
+// framework-go-projectmodel ship no cmd/ main packages (library-only), so
+// go.mod.tmpl's require/tool blocks omit them (see its EARMARK comment). Kept
+// here so a future platform release that ships those CLI wrappers can wire
+// the require/tool lines back in against these same pins.
 const (
 	GoVersion            = "1.25.0"
 	FrameworkGoVersion   = "v0.5.2"
@@ -43,11 +50,13 @@ var renderedPaths = map[string]string{ // dest path -> template asset
 	".github/workflows/aiarch-construct.yml": "assets/workflows/aiarch-construct.yml.tmpl",
 	"go.mod":                                 "assets/scaffold/go.mod.tmpl",
 	"aiarch_method_test.go":                  "assets/scaffold/aiarch_method_test.go.tmpl",
-	".aiarch/state/project.json":             "assets/scaffold/project.json.tmpl",
 }
 
 // ScaffoldFiles renders the complete managed-scaffold file set for one app
-// repo: workflows + go.mod + method test + seed state + the .claude tree.
+// repo: workflows + go.mod + method test + the .claude tree. It deliberately
+// does NOT seed .aiarch/state/project.json: the archistrator server's
+// projectStateAccess.CreateProject already seeds that path at Version 1, and
+// the scaffold must not double-write a server-owned path.
 func ScaffoldFiles(data ScaffoldData) (map[string][]byte, error) {
 	out, err := ClaudeFiles()
 	if err != nil {

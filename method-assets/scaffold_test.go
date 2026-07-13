@@ -1,7 +1,6 @@
 package methodassets
 
 import (
-	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -21,11 +20,15 @@ func TestScaffoldFiles(t *testing.T) {
 	for _, want := range []string{
 		".github/workflows/aiarch-design.yml", ".github/workflows/aiarch-construct.yml",
 		"go.mod", "aiarch_method_test.go", "internal/.gitkeep",
-		".aiarch/state/project.json", ".claude/agents/system-architect.md",
+		".claude/agents/system-architect.md",
 	} {
 		if _, ok := files[want]; !ok {
 			t.Errorf("missing %s", want)
 		}
+	}
+	// server's CreateProject owns that path.
+	if _, ok := files[".aiarch/state/project.json"]; ok {
+		t.Errorf("ScaffoldFiles must not seed .aiarch/state/project.json: server's CreateProject owns that path")
 	}
 	for p, b := range files {
 		// .claude/** is ClaudeFiles()'s untouched passthrough (never fed through
@@ -46,21 +49,16 @@ func TestScaffoldFiles(t *testing.T) {
 		"module github.com/acme/widgets",
 		"go 1.25.0",
 		"require github.com/mixofreality-studio/archistrator-platform/framework-go " + FrameworkGoVersion,
-		"tool github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator",
+		"tool github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/cmd/httpgen",
+		"tool github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator/cmd/mcpgen",
 	} {
 		if !strings.Contains(gomod, want) {
 			t.Errorf("go.mod missing %q", want)
 		}
 	}
-	var pj struct {
-		ID    string         `json:"id"`
-		Phase int            `json:"phase"`
-		Slots map[string]any `json:"slots"`
-	}
-	if err := json.Unmarshal(files[".aiarch/state/project.json"], &pj); err != nil {
-		t.Fatalf("project.json invalid: %v", err)
-	}
-	if pj.ID != "widgets" || pj.Phase != 0 || len(pj.Slots) != 0 {
-		t.Errorf("project.json seed wrong: %+v", pj)
+	// framework-go-app-generator ships no cmd/ main package (library-only); a
+	// tool directive against it breaks `go mod tidy` in generated apps.
+	if strings.Contains(gomod, "framework-go-app-generator") {
+		t.Errorf("go.mod must not reference framework-go-app-generator: it ships no cmd/ main package")
 	}
 }

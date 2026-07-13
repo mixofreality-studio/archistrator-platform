@@ -5,22 +5,20 @@ go [[.GoVersion]]
 require github.com/mixofreality-studio/archistrator-platform/framework-go [[.FrameworkGoVersion]]
 
 // tool deps pinned; go mod tidy keeps them via the tool directives below.
+//
+// EARMARK: app-generator + modelgen tool directives land when the platform
+// ships their cmd wrappers. Both generators are library-only today (no cmd/
+// main package in either module); a seeded tool directive against a
+// nonexistent package breaks `go mod tidy` in every generated app. Their only
+// current CLI shims live server-side in the archistrator repo, unreachable
+// from a seated app repo.
 require (
-	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator [[.AppGeneratorVersion]] // indirect
 	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator [[.HTTPGeneratorVersion]] // indirect
 	github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator [[.MCPGeneratorVersion]] // indirect
-	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel [[.ProjectModelVersion]] // indirect
 )
 
 // Generator CLIs runnable via `go tool <name>` in this repo, no global install
 // needed (Go 1.24+ tool directives). httpgen and mcpgen are real published CLI
-// binaries. app-generator and modelgen do NOT yet ship a cmd/ main package in
-// archistrator-platform (their only current CLI shims live server-side, in
-// archistrator/server/cmd/appgen and cmd/modelgen, unreachable from a seated
-// app repo which has no archistrator-server source) — these two lines are
-// forward-declared against the wrapper paths the platform is expected to add;
-// until then `go tool app-generator` / `go tool modelgen` will not resolve.
-tool github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/cmd/app-generator
+// binaries.
 tool github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/cmd/httpgen
 tool github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator/cmd/mcpgen
-tool github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/cmd/modelgen
