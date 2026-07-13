@@ -1,0 +1,85 @@
+// method-assets/scaffold.go
+package methodassets
+
+import (
+	"bytes"
+	"embed"
+	"text/template"
+)
+
+// Pinned platform versions the scaffold seeds (spec §6).
+const (
+	GoVersion            = "1.25.0"
+	FrameworkGoVersion   = "v0.5.2"
+	AppGeneratorVersion  = "v0.6.1"
+	HTTPGeneratorVersion = "v0.3.0"
+	MCPGeneratorVersion  = "v0.2.0"
+	ProjectModelVersion  = "v0.2.1"
+)
+
+type ScaffoldData struct {
+	ModulePath string // github.com/<owner>/<repo>
+	// AppSlug is the GitHub App slug seated into aiarch-construct.yml's
+	// `allowed_bots` input. REQUIRED: the construct workflow template has no
+	// empty-AppSlug guard, so an empty value here renders `allowed_bots: `
+	// (empty) and construction dispatch is refused as a non-allow-listed bot.
+	AppSlug               string
+	ProjectID             string // project.json id (repo name)
+	Owner                 string // org/user login
+	Name                  string // project display name
+	StateMcpModulePath    string // archistrator state-MCP module path
+	StateMcpModuleVersion string // pin (version or SHA)
+}
+
+// internal render payload: ScaffoldData + version consts.
+type renderData struct {
+	ScaffoldData
+	GoVersion, FrameworkGoVersion, AppGeneratorVersion,
+	HTTPGeneratorVersion, MCPGeneratorVersion, ProjectModelVersion string
+}
+
+var renderedPaths = map[string]string{ // dest path -> template asset
+	".github/workflows/aiarch-design.yml":    "assets/workflows/aiarch-design.yml.tmpl",
+	".github/workflows/aiarch-construct.yml": "assets/workflows/aiarch-construct.yml.tmpl",
+	"go.mod":                                 "assets/scaffold/go.mod.tmpl",
+	"aiarch_method_test.go":                  "assets/scaffold/aiarch_method_test.go.tmpl",
+	".aiarch/state/project.json":             "assets/scaffold/project.json.tmpl",
+}
+
+// ScaffoldFiles renders the complete managed-scaffold file set for one app
+// repo: workflows + go.mod + method test + seed state + the .claude tree.
+func ScaffoldFiles(data ScaffoldData) (map[string][]byte, error) {
+	out, err := ClaudeFiles()
+	if err != nil {
+		return nil, err
+	}
+	rd := renderData{ScaffoldData: data, GoVersion: GoVersion,
+		FrameworkGoVersion: FrameworkGoVersion, AppGeneratorVersion: AppGeneratorVersion,
+		HTTPGeneratorVersion: HTTPGeneratorVersion, MCPGeneratorVersion: MCPGeneratorVersion,
+		ProjectModelVersion: ProjectModelVersion}
+	for dest, asset := range renderedPaths {
+		b, err := renderAsset(assetsFS, asset, rd)
+		if err != nil {
+			return nil, err
+		}
+		out[dest] = b
+	}
+	out["internal/.gitkeep"] = []byte("")
+	return out, nil
+}
+
+func renderAsset(fsys embed.FS, name string, data renderData) ([]byte, error) {
+	raw, err := fsys.ReadFile(name)
+	if err != nil {
+		return nil, err
+	}
+	t, err := template.New(name).Delims("[[", "]]").Parse(string(raw))
+	if err != nil {
+		return nil, err
+	}
+	var buf bytes.Buffer
+	if err := t.Execute(&buf, data); err != nil {
+		return nil, err
+	}
+	return buf.Bytes(), nil
+}
