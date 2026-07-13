@@ -1,6 +1,8 @@
 package methodassets
 
 import (
+	"encoding/json"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -60,5 +62,62 @@ func TestScaffoldFiles(t *testing.T) {
 	// tool directive against it breaks `go mod tidy` in generated apps.
 	if strings.Contains(gomod, "framework-go-app-generator") {
 		t.Errorf("go.mod must not reference framework-go-app-generator: it ships no cmd/ main package")
+	}
+}
+
+// The server's SyncManagedScaffold fast-paths "already at version X" off a
+// single manifest read instead of ~100 per-file compares (Task B4). Pin the
+// manifest ScaffoldFiles emits: same {version, files[] sorted} shape the
+// materializer writes, files scoped to the .claude/** keys the output
+// carries (the manifest is not self-listed), and no other new key leaks in.
+func TestScaffoldFilesIncludesManifest(t *testing.T) {
+	files, err := ScaffoldFiles(testData)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	raw, ok := files[manifestPath]
+	if !ok {
+		t.Fatalf("missing %s", manifestPath)
+	}
+	var m manifest
+	if uerr := json.Unmarshal(raw, &m); uerr != nil {
+		t.Fatalf("manifest is not valid JSON: %v", uerr)
+	}
+
+	if m.Version != Version() {
+		t.Errorf("manifest version = %q, want Version() = %q", m.Version, Version())
+	}
+
+	var wantFiles []string
+	for p := range files {
+		if p == manifestPath {
+			continue
+		}
+		if strings.HasPrefix(p, ".claude/") {
+			wantFiles = append(wantFiles, p)
+		}
+	}
+	sort.Strings(wantFiles)
+	got := append([]string(nil), m.Files...)
+	sort.Strings(got)
+	if len(got) != len(wantFiles) {
+		t.Fatalf("manifest files = %v, want %v", got, wantFiles)
+	}
+	for i := range got {
+		if got[i] != wantFiles[i] {
+			t.Errorf("manifest files[%d] = %q, want %q", i, got[i], wantFiles[i])
+		}
+	}
+
+	// No other new key appeared: every output key is either a known rendered
+	// destination, the .claude/** passthrough, or the manifest itself.
+	for p := range files {
+		if p == manifestPath || p == "internal/.gitkeep" || strings.HasPrefix(p, ".claude/") {
+			continue
+		}
+		if _, ok := renderedPaths[p]; !ok {
+			t.Errorf("unexpected key in ScaffoldFiles output: %q", p)
+		}
 	}
 }

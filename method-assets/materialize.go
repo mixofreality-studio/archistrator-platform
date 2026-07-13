@@ -59,12 +59,13 @@ func Materialize(destRepo string) error {
 		owned[p] = true
 	}
 
-	next := manifest{Version: moduleVersion(), Files: make([]string, 0, len(owned))}
+	// buildManifest only reads keys, so a retained path with no known content
+	// (files[p] is nil for it) still round-trips into the manifest correctly.
+	ownedFiles := make(map[string][]byte, len(owned))
 	for p := range owned {
-		next.Files = append(next.Files, p)
+		ownedFiles[p] = files[p]
 	}
-	sort.Strings(next.Files)
-	b, merr := json.MarshalIndent(next, "", "  ")
+	b, merr := json.MarshalIndent(buildManifest(ownedFiles), "", "  ")
 	if merr != nil {
 		return merr
 	}
@@ -160,8 +161,26 @@ func isSafeManifestPath(p string) bool {
 	return true
 }
 
-// moduleVersion reports this module's version via build info ("(devel)" in tests).
-func moduleVersion() string { return readBuildVersion() }
+// buildManifest builds the manifest for a file set: the module version plus
+// the sorted list of files' keys. Content is never inspected — callers may
+// pass nil bodies for keys whose content isn't at hand (e.g. Materialize's
+// retained-but-unwritten orphans). Shared by Materialize and ScaffoldFiles so
+// the manifest shape is defined in exactly one place.
+func buildManifest(files map[string][]byte) manifest {
+	m := manifest{Version: Version(), Files: make([]string, 0, len(files))}
+	for p := range files {
+		m.Files = append(m.Files, p)
+	}
+	sort.Strings(m.Files)
+	return m
+}
+
+// Version reports this module's version (build-info derived; "devel" outside
+// a versioned build). Exported so callers — the archistrator server's
+// SyncManagedScaffold in particular — can fingerprint a seated .claude/**
+// tree against the manifest's version without re-deriving it from build info
+// themselves.
+func Version() string { return readBuildVersion() }
 
 // readBuildVersion resolves this module's version from runtime/debug build
 // info: the main module's version if the main module IS method-assets (the

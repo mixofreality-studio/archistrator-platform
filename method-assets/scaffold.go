@@ -3,6 +3,8 @@ package methodassets
 import (
 	"bytes"
 	"embed"
+	"encoding/json"
+	"strings"
 	"text/template"
 )
 
@@ -52,10 +54,13 @@ var renderedPaths = map[string]string{ // dest path -> template asset
 }
 
 // ScaffoldFiles renders the complete managed-scaffold file set for one app
-// repo: workflows + go.mod + method test + the .claude tree. It deliberately
-// does NOT seed .aiarch/state/project.json: the archistrator server's
-// projectStateAccess.CreateProject already seeds that path at Version 1, and
-// the scaffold must not double-write a server-owned path.
+// repo: workflows + go.mod + method test + the .claude tree, plus a seat
+// manifest at manifestPath so the server can fingerprint the seated set by
+// reading one file instead of comparing every .claude/** entry on every
+// design dispatch. It deliberately does NOT seed .aiarch/state/project.json:
+// the archistrator server's projectStateAccess.CreateProject already seeds
+// that path at Version 1, and the scaffold must not double-write a
+// server-owned path.
 func ScaffoldFiles(data ScaffoldData) (map[string][]byte, error) {
 	out, err := ClaudeFiles()
 	if err != nil {
@@ -73,7 +78,27 @@ func ScaffoldFiles(data ScaffoldData) (map[string][]byte, error) {
 		out[dest] = b
 	}
 	out["internal/.gitkeep"] = []byte("")
+
+	mb, err := json.MarshalIndent(buildManifest(claudeSubset(out)), "", "  ")
+	if err != nil {
+		return nil, err
+	}
+	out[manifestPath] = append(mb, '\n')
 	return out, nil
+}
+
+// claudeSubset returns the entries of files keyed under ".claude/" — the set
+// the seat manifest describes. None of ScaffoldFiles' rendered destinations
+// (renderedPaths, "internal/.gitkeep") fall under that prefix, so this
+// yields exactly the embedded .claude tree ClaudeFiles produced.
+func claudeSubset(files map[string][]byte) map[string][]byte {
+	out := make(map[string][]byte, len(files))
+	for p, b := range files {
+		if strings.HasPrefix(p, ".claude/") {
+			out[p] = b
+		}
+	}
+	return out
 }
 
 func renderAsset(fsys embed.FS, name string, data renderData) ([]byte, error) {
