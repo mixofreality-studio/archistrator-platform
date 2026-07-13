@@ -8,7 +8,7 @@ description: The project.json git-as-DB driver. Use whenever a construction comm
 `project.json` at `.aiarch/state/project.json` is the single source of truth for the whole project. It is a typed JSON object; the Go structs in `server/internal/resourceaccess/projectstate/` are its schema of record. Never write a parallel markdown copy of state — markdown is render-on-read only.
 
 > **STATE CHANGES GO THROUGH THE `aiarch-state` MCP TOOLS — NOT hand-edits.**
-> A construction job runs the `aiarch-state` MCP server (job mode `construct`). Record your phase's artifact through its tools and let `publishDraft` commit it. **Do NOT hand-edit `project.json` and do NOT run `git` yourself for state.** The tools validate every write through the full server codec **and** the Method CI rules *before* it lands, so a malformed contract/artifact is rejected in-loop with an actionable error instead of committed to stall the rail. The ambient component/activity already fix your target — you never choose a slot.
+> A Method CI job — a design-rail job (job mode `draft` / `critique` / `answer`) or a construction job (job mode `construct`) — runs the `aiarch-state` MCP server. Record your phase's artifact through its tools and let `publishDraft` commit it. **Do NOT hand-edit `project.json` and do NOT run `git` yourself for state.** The tools validate every write through the full server codec **and** the Method CI rules *before* it lands, so a malformed contract/artifact is rejected in-loop with an actionable error instead of committed to stall the rail. The ambient kind/component/activity already fix your target — you never choose a slot.
 >
 > The direct `jq`/`git` editing described below is retained only for **humans and debugging** (inspecting or hand-repairing state), not for agents on the construction rail.
 
@@ -84,6 +84,16 @@ When your phase produces an artifact that lives in state, record it through the 
 The tool payload is the typed Go struct for that target (field names + shapes exactly — read the backing struct in `projectstate/` if unsure); the tool rejects invented/malformed fields before writing. `recordServiceContract` uses your ambient component; `recordPhaseArtifact`/`recordTestingState` use your ambient activity. A rejected write tells you exactly what to fix — correct it and call the tool again. When every artifact is recorded, call `publishDraft`.
 
 If a specific raw ResourceAccess/Engine operation is in your task's tool allowlist, call it by its generated tool name; anything not covered by a tool is a code file, not a state edit.
+
+## Design-rail jobs (job modes `draft` / `critique` / `answer`)
+
+The `record*` verbs above drive Phase-3 construction. Phase-1/2 design artifacts run on the **design rail**, where the ambient `AIARCH_ARTIFACT_KIND` + `AIARCH_JOB_MODE` env fix the target slot and which verbs are in play — you never choose a slot or a kind. The reads (`getCommittedSlot`, `getDraftSlot`, `getReviewThread`) are common to every mode; the write verb is the mode's:
+
+- **`draft`** — read the basis with `getCommittedSlot`/`getDraftSlot` and the ledger with `getReviewThread`, then author the typed model with `putDraftModel` (it validates through the full server codec **and** the Method CI rules, returning actionable errors — fix and resubmit until accepted). Answer every open ledger comment with `respondToReviewComment`, then finish with `publishDraft` exactly once.
+- **`critique`** — record the verdict (approve/revise + comments) with `setCritiqueVerdict`. A critique **never rewrites the model** — there is no `putDraftModel` in this mode. Then `publishDraft` exactly once.
+- **`answer`** — answer the founder's open questions with `respondToReviewComment` only; no model write and no verdict. Then `publishDraft` exactly once.
+
+Same invariants as the construct rail: one `publishDraft`, never hand-edit `project.json`, never run `git` for state, never touch `.activityConstruction` / `.constructionProgress` / `.reviewPolicy`.
 
 ## Status is NOT yours
 

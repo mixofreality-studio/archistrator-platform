@@ -7,16 +7,16 @@ import (
 
 // wantWrites: the exact aiarch-state WRITE verbs each role may hold (spec §4).
 var wantWrites = map[string][]string{
-	"system-architect": {"putDraftModel", "publishDraft", "respondToReviewComment"},
+	"system-architect": {"putDraftModel", "recordServiceContract", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
 	"product-manager":  {"setCritiqueVerdict", "respondToReviewComment", "publishDraft"},
-	"project-manager":  {"putDraftModel", "publishDraft"},
-	"senior-developer": {"recordServiceContract", "publishDraft", "respondToReviewComment"},
+	"project-manager":  {"putDraftModel", "recordPhaseArtifact", "publishDraft"},
+	"senior-developer": {"recordServiceContract", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
 	"junior-developer": {"recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
 	"ui-designer":      {"recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
 	"ux-reviewer":      {"respondToReviewComment"},
-	"test-engineer":    {"recordTestingState", "publishDraft", "respondToReviewComment"},
-	"software-tester":  {"recordTestingState", "publishDraft", "respondToReviewComment"},
-	"qa-engineer":      {"recordTestingState", "publishDraft", "respondToReviewComment"},
+	"test-engineer":    {"recordTestingState", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
+	"software-tester":  {"recordTestingState", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
+	"qa-engineer":      {"recordTestingState", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
 }
 
 var allWrites = []string{

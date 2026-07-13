@@ -17,6 +17,7 @@ tools:
   - mcp__aiarch-state__getResearchSource
   - mcp__aiarch-state__projectStateReadProject
   - mcp__aiarch-state__putDraftModel
+  - mcp__aiarch-state__recordPhaseArtifact
   - mcp__aiarch-state__publishDraft
   - mcp__aiarch-state__estimationComputeEarnedValue
   - mcp__aiarch-state__estimationComputeNetwork
@@ -42,6 +43,10 @@ aggregate of `ArtifactSlot`s), NOT in `designs/<product>/*.md` or
 which **replaces** the old `network.yaml` file. Tracking weeks, floats,
 critical path, resource assignments, and statuses all live inside `.network`.
 Any markdown/YAML rendering is a render-on-read of that slot.
+
+Your `recordPhaseArtifact` write is only the deployment provisioning spec
+(`provisioningSpec`) for the deployment detailed-design (provisioning-spec) step; you
+never record a service contract, a testing artifact, or a Phase-1/2 slot through it.
 
 ## Responsibilities
 

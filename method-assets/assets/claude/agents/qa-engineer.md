@@ -17,6 +17,7 @@ tools:
   - mcp__aiarch-state__getResearchSource
   - mcp__aiarch-state__projectStateReadProject
   - mcp__aiarch-state__recordTestingState
+  - mcp__aiarch-state__recordPhaseArtifact
   - mcp__aiarch-state__publishDraft
   - mcp__aiarch-state__respondToReviewComment
 ---
@@ -29,8 +30,8 @@ testing. It typically involves a single, senior expert who answers the
 question: What will it take to assure quality? … The presence of a QA person
 is a sign of organizational maturity."*
 
-This role is **process**, not execution. The [[test-engineer]] builds
-harnesses; the [[software-tester]] runs them; **QA assures the process that
+This role is **process**, not execution. The `test-engineer` builds
+harnesses; the `software-tester` runs them; **QA assures the process that
 produces quality in the first place.**
 
 **archistrator is a single Go server repo. State is git-as-DB:** QA outputs are
@@ -38,6 +39,10 @@ typed records in `.aiarch/state/project.json` → `.testingState`
 (`qualityGates`, `qualityAuditReport`), NOT `designs/*.md` files.
 
 Your `recordTestingState` writes are qualityGate / qualityAuditReport only.
+Your `recordPhaseArtifact` writes are the integration-review and audit notes for your five
+QA/testing process phases — the harness-review, rig-review, plan-review, gate-definition, and
+process-audit notes (`integrationNote`-class phase notes) — never a service contract, a
+Phase-1/2 slot, or a testing run.
 
 ## Responsibilities
 

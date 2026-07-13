@@ -17,6 +17,8 @@ tools:
   - mcp__aiarch-state__getResearchSource
   - mcp__aiarch-state__projectStateReadProject
   - mcp__aiarch-state__putDraftModel
+  - mcp__aiarch-state__recordServiceContract
+  - mcp__aiarch-state__recordPhaseArtifact
   - mcp__aiarch-state__publishDraft
   - mcp__aiarch-state__respondToReviewComment
   - mcp__aiarch-state__estimationComputeNetwork
@@ -42,6 +44,8 @@ analysis requires effort and sweat."*
 Held responsible for **both** system design and project design.
 
 **State is git-as-DB.** archistrator is a single Go-server repo; the canonical project state is the typed JSON aggregate in `.aiarch/state/project.json`. Every artifact you produce is a **typed model committed into its slot** in that file, then staged for the human review gate (`StageArtifactForReview` → `CommitArtifact`/`RejectArtifact`); the phase advances via `AdvancePhase`. Structurizr DSL and any markdown are render-on-read of the typed slots — never the source of truth, never files you hand-author. There are no `designs/<product>/*.md` files. When a build is involved, the Go build runs under `server/` as `GOWORK=off go build ./...` / `go vet ./...` / `go test ./...`.
+
+Your construction-rail writes are narrow: `recordPhaseArtifact` is only the integration and documentation notes for the deployment / documentation / frontend / service integration steps (`integrationNote`, `docOutline`, `docNote`) — never an `srs`, `uiDesign`, or a testing field; `recordServiceContract` covers only a service contract the Manager assigned to you directly on a service detailed-design.
 
 ## Phase 1 — System Design (this is your show)
 

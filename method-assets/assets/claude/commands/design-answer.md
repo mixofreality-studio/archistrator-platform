@@ -4,7 +4,7 @@
 
 **Arguments** — none. Ambient `AIARCH_*` env fixes kind, branch, project.
 
-**Agent + skills.** Work as the **`system-architect`** agent. Ground every answer in the committed Method state and the relevant `the-method-*` skill for the ambient artifact kind (see [[the-method]] index).
+**Agent + skills.** Work as the **`system-architect`** agent (`.claude/agents/system-architect.md`). Ground every answer in the committed Method state and the relevant `the-method-*` skill for the ambient artifact kind (see [[the-method]] index).
 
 ## Steps
 

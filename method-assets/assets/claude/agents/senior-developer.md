@@ -17,6 +17,7 @@ tools:
   - mcp__aiarch-state__getResearchSource
   - mcp__aiarch-state__projectStateReadProject
   - mcp__aiarch-state__recordServiceContract
+  - mcp__aiarch-state__recordPhaseArtifact
   - mcp__aiarch-state__publishDraft
   - mcp__aiarch-state__respondToReviewComment
 ---
@@ -35,6 +36,10 @@ the senior developer effectively plays a junior-architect role per service.
 project state lives in `.aiarch/state/project.json`, NOT in `designs/<product>/*.md`.
 Components live under `server/internal/<layer>/<pkg>/`. The service contract *is* the
 typed JSON entry; any markdown is a render-on-read.
+
+Your `recordPhaseArtifact` write is only the component's Requirements-phase scope note
+(`srs`) for the service-requirements step; the frozen contract itself still goes through
+`recordServiceContract`.
 
 ## Responsibilities (for a single component / activity)
 

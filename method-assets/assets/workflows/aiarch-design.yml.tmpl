@@ -3,8 +3,10 @@
 # This is a Go text/template. Its action delimiters are the double-square-bracket
 # pair (not the default brace pair) — chosen so GitHub Actions' own ${{ ... }}
 # expressions are left untouched. The server renders it with the
-# configured GitHub App slug before seating it (renderDesignWorkflow); the ONLY
-# templated value is the allowed_bots actor on the claude-code-action step.
+# configured values before seating it (renderDesignWorkflow). Three values are
+# templated: .AppSlug (the allowed_bots actor on the claude-code-action step),
+# and .StateMcpModuleVersion + .StateMcpModulePath (the aiarch-state MCP module
+# pin and import path the go-install step installs).
 #
 # This is the DESIGN counterpart of the construction reference workflow
 # (products/archistrator/deploy/construction-workflow/aiarch-construct.yml).

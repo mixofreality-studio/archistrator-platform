@@ -1,0 +1,3 @@
+# built method-assets CLI binary (module dir shares the binary's name — anchor it)
+/method-assets
+/cmd/method-assets/method-assets

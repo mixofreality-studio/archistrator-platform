@@ -1,4 +1,3 @@
-// method-assets/scaffold.go
 package methodassets
 
 import (

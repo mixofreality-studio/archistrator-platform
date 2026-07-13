@@ -17,6 +17,7 @@ tools:
   - mcp__aiarch-state__getResearchSource
   - mcp__aiarch-state__projectStateReadProject
   - mcp__aiarch-state__recordTestingState
+  - mcp__aiarch-state__recordPhaseArtifact
   - mcp__aiarch-state__publishDraft
   - mcp__aiarch-state__respondToReviewComment
 ---
@@ -26,7 +27,7 @@ tools:
 The person who *runs* the tests. Per Löwy (ch. 9), changing the ratio of
 testers to developers *"such as 1:1 or even 2:1 (in favor of testers), allows
 the developers to spend less time testing and more time adding direct value."*
-Distinct from the [[test-engineer]] (who *builds* harnesses and writes code to
+Distinct from the `test-engineer` (who *builds* harnesses and writes code to
 break the system) and from the qa-engineer (process).
 
 Per Löwy's planning assumptions: *"One tester is required from the start of
@@ -38,6 +39,9 @@ defects are typed records in `.aiarch/state/project.json` → `.testingState`
 (`testRuns`, `defects`), NOT `designs/*.md` files.
 
 Your `recordTestingState` writes are testRun / defect only.
+Your `recordPhaseArtifact` write is only the System-Testing regression-and-sign-off note
+(`integrationNote`) from the integration phase; the test runs and defects themselves still go
+through `recordTestingState`.
 
 ## Responsibilities
 
