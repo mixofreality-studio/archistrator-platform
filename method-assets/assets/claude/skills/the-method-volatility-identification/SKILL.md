@@ -137,6 +137,17 @@ Enterprise customers require SAML; consumer tier uses OAuth; some regulated cust
 
 Re-read the list. If a single volatility entry naturally belongs to both axes, that's a signal it might be a feature in disguise (functional decomposition). Split or rename.
 
+## Draft-job doctrine (CI dispatch)
+
+This is the normative task the CI draft job (and a local `/system-design` run) executes to produce the `Volatilities`. It is self-contained: everything a draft agent needs to draft a sound volatilities list is stated here.
+
+Identify the areas of VOLATILITY the architecture must encapsulate, along TWO independent axes.
+
+- Axis `sameCustomerOverTime`: for each requirement ask "what in THIS customer's business will change in 1, 3, 5 years?".
+- Axis `allCustomersAtOneTime`: ask "do ALL customers do this identically today, or do markets/regulations/languages/customer-types vary?".
+
+Encapsulate the open-ended (VOLATILE); REJECT anything a simple conditional handles (that is merely VARIABLE). Reject by-reflex "Logging"/"Reporting" blocks with no business volatility, speculative "might-need-someday" encapsulation, and nature-of-the-business items competitors do identically. Aim for ~6-15 entries, each with a rationale paragraph and its axis.
+
 ## Exit criteria (for router)
 
 `.aiarch/state/project.json` → `.volatilities` holds the typed `Volatilities` model, grouped by axis, with ~6–15 entries. Each entry has a rationale. No nature-of-business or speculative entries remain. Move to `the-method-core-use-cases`.

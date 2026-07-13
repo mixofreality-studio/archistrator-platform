@@ -130,6 +130,18 @@ The PM is dispatched after architect produces drafts:
 
 PM does not author either model.
 
+## Draft-job doctrine (CI dispatch)
+
+These are the normative tasks the CI draft job (and a local `/system-design` run) executes to produce the two typed models. Each is self-contained: everything a draft agent needs to draft a sound artifact of this kind is stated here.
+
+### Glossary
+
+Extract the system's ubiquitous-language terms, each categorised by the Four Questions: Who interacts with the system, What is required of it, How (the business activity), Where (state lives). Define each term crisply in business language with NO solution/implementation wording. These terms are the shared vocabulary every later artifact must reuse verbatim.
+
+### Scrubbed requirements
+
+Scrub every solution out of the requirements and emit the underlying NEEDS only. A need states what the business requires; a solution states how to build it — strip the how. "Users log in with OAuth" is a solution; "the system authenticates users" is the need. Each item must be solution-free and traceable to the mission.
+
 ## Exit criteria (for router)
 
 `.aiarch/state/project.json` → `.glossary` and `.scrubbedRequirements` both hold their typed models. Glossary has entries under all five Four-Question categories. Every research requirement appears in `.scrubbedRequirements` with a candidate volatility hint. Move to `the-method-volatility-identification`.

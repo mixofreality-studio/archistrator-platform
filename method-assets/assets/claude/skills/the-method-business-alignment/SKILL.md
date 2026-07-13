@@ -92,9 +92,23 @@ Hand to the Product Manager (or the user) for ratification. They review for:
 
 They do not author. They ratify or push back. If they push back, iterate until aligned.
 
+## Draft-job doctrine (CI dispatch)
+
+This is the normative task the CI draft job (and a local `/system-design` run) executes to produce the `MissionStatement`. It is self-contained: everything a draft agent needs to draft a sound mission is stated here.
+
+Produce the mission from the research corpus.
+
+- The vision is ONE terse sentence naming the future the system creates.
+- First distill the 2-3 business pillars that DIFFERENTIATE this system from competitors; ground the vision, mission, and objectives in those.
+- The mission narrative describes the BUSINESS CAPABILITY and USER-FACING VALUE of the end-to-end workflow — why it matters, and what outcome or trust it produces for the user — NOT a feature list.
+- Write it PURELY in business and user language: you MUST NOT use the words component, module, service, subsystem, layer, or any system-architecture / software-decomposition terminology, and you MUST NOT assert or imply any breakdown of the system into parts. The structural boundaries are derived LATER from volatility analysis in the Structure artifact — pre-deciding a decomposition here is a defect.
+- Each objective is a numbered, measurable BUSINESS outcome (not a feature deliverable).
+
+**Reconciliation with the book framing above.** Löwy frames the mission as "build components, not features" (Step 3, and the TradeMe quote). That is his rhetorical device to *force* volatility-based decomposition downstream — it is NOT license to put software-decomposition words in the committed mission text. For archistrator's committed `.mission`, the business-and-user-language rule above is binding and stricter: the mission narrative names business capability and user-facing value, and never uses component / module / service / subsystem / layer terminology.
+
 ## Exit criteria (for router)
 
-`.aiarch/state/project.json` → `.mission` holds a typed `MissionStatement` with a one-sentence vision, business-only numbered objectives, a component-framed mission, and verified bidirectional traceability. Move to `the-method-requirements-analysis`.
+`.aiarch/state/project.json` → `.mission` holds a typed `MissionStatement` with a one-sentence vision, business-only numbered objectives, a business-and-user-language mission (no software-decomposition terminology per the draft-job doctrine above), and verified bidirectional traceability. Move to `the-method-requirements-analysis`.
 
 ## Anti-patterns to reject
 

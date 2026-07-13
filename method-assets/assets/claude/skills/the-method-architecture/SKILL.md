@@ -222,6 +222,30 @@ This is a hard gate. When the typed `System` is staged/committed, the server ren
 
 If a build is involved when running the server locally, the Go build is `GOWORK=off go build ./...` / `go vet ./...` / `go test ./...` under `server/`.
 
+## Draft-job doctrine (CI dispatch)
+
+This is the normative task the CI draft job (and a local `/system-design` run) executes to produce the `System`. It is self-contained: everything a draft agent needs to draft a sound architecture is stated here.
+
+Decompose the system by VOLATILITY into layered components, then validate by drawing the call chains. Bin each volatility with the Four Questions: Who -> Client, What -> Manager, How(activity) -> Engine, How(resource) -> ResourceAccess, Where(state) -> Resource, cross-cutting reuse -> Utility. Each component encapsulates EXACTLY ONE volatility and sits in EXACTLY ONE layer; Component.Layer MUST equal Component.Kind. Obey closed layering: calls go downward only, never upward, never sideways except queued Manager->Manager. REJECT functional decomposition (components named after features) and domain decomposition (components named after entities) — name components after the volatility they hide. Keep it small: order-of-magnitude ~10 components, Managers <=5, fewer Engines than Managers. Emit one dynamicView per use case — CORE and SUPPORTING (nonCore) variations ALIKE — tracing its call chain (exactly one Manager entered from the Client; every edge labelled in the destination layer's vocabulary, not infrastructure terms). FOUNDER EXTENSION (beyond Löwy, who validates only the core): EVERY use case in the committed CoreUseCases set MUST carry its own dynamic view — you may NOT ship the architecture with any use case (core or a nonCore variation) left without a call chain. If a use case cannot be drawn cleanly, the DECOMPOSITION is wrong — fix the components, not the use case.
+
+IDENTITY BY NAME: every component is identified by its NAME — you do NOT emit any id, and you do NOT emit a component's layer (it is fixed by its kind and the server derives it). Component names must be UNIQUE. In `relationships` and a dynamic view's `participants`/`edges`, reference components by their NAME (the from/to are component names). In each dynamic view set `useCase` to that use case's NAME (exactly as it appears in the CoreUseCases context — core OR nonCore) — do NOT emit a view key; the server derives it. The server resolves every name to its internal id and rejects any name that does not match a component or use case.
+
+### Operating-model deployment constraint
+
+The project's operating model constrains the deployment topology the design may model. There are two cases:
+
+**self-operated (`selfOperated`, the default).** The customer runs the built app in their OWN infrastructure, so today's OPEN guidance stands — no extra deployment constraint is imposed. The draft prompt emits nothing beyond the standard deployment-topology guidance.
+
+**archistrator-operated (`archistratorOperated`).** OPERATING MODEL — ARCHISTRATOR-OPERATED (platform-constrained deployment). This project is OPERATED BY ARCHISTRATOR on the shared platform, so the deployment topology is CONSTRAINED to the archistrator-platform infrastructure ONLY. Model the deployment using EXACTLY these platform building blocks and do NOT introduce any bespoke or third-party cloud infrastructure:
+
+- Data / persistence: CloudNativePG (CNPG) Postgres — the framework-go-infrastructure-postgres module. Model every relational Resource as a CNPG Postgres cluster infrastructureNode.
+- Workflows / durable execution: Temporal — the framework-go-infrastructure-temporal module (the SHARED platform Temporal at software/k8s/shared/temporal). Do NOT model a bespoke queue or worker pool.
+- Authentication / identity: Keycloak — the framework-go-infrastructure-keycloak module (the archistrator auth platform lib, software/k8s/argocd/auth).
+- Observability: the OpenTelemetry stack — the framework-go-infrastructure-otel module.
+- Deploy target: the platform Kubernetes cluster via the ArgoCD stack at software/k8s (namespaces/apps under k8s/argocd/applications). deliveryStyle MUST be cloud; every container is a Kubernetes Deployment in the platform cluster and every infrastructureNode names the exact framework-go-infrastructure-* module above.
+
+FORBIDDEN for this operating model: AWS (RDS, EKS, ECS, CloudFront, S3, Lambda), GCP, Azure, or any other bespoke / self-managed / third-party-managed cloud infrastructure — those are legitimate ONLY for self-operated projects. If a Resource needs a database it is CNPG Postgres; if it needs workflows it is Temporal; if it needs auth it is Keycloak; if it needs telemetry it is the otel stack.
+
 ## Exit criteria
 
 - `.aiarch/state/project.json` → `.systemDesign` holds the typed `System` model, and it renders to Structurizr DSL that parses cleanly (no parser errors, no ERROR-level log lines) during server-side artifact validation.
