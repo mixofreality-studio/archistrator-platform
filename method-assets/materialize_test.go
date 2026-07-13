@@ -12,8 +12,8 @@ func TestMaterializePreservesLocalExtrasAndPrunesOrphans(t *testing.T) {
 	dir := t.TempDir()
 	// Local extra the materializer must never touch.
 	extra := filepath.Join(dir, ".claude", "skills", "grillme", "SKILL.md")
-	os.MkdirAll(filepath.Dir(extra), 0o755)
-	os.WriteFile(extra, []byte("local"), 0o644)
+	mustMkdirAll(t, filepath.Dir(extra))
+	mustWriteFile(t, extra, []byte("local"))
 
 	if err := Materialize(dir); err != nil {
 		t.Fatal(err)
@@ -28,7 +28,7 @@ func TestMaterializePreservesLocalExtrasAndPrunesOrphans(t *testing.T) {
 	// Simulate an asset removed in a future version: plant an owned orphan
 	// by appending a fake entry to the manifest, then re-materialize.
 	orphan := filepath.Join(dir, ".claude", "commands", "dead-command.md")
-	os.WriteFile(orphan, []byte("stale"), 0o644)
+	mustWriteFile(t, orphan, []byte("stale"))
 	appendToManifest(t, dir, ".claude/commands/dead-command.md")
 	if err := Materialize(dir); err != nil {
 		t.Fatal(err)
@@ -38,6 +38,26 @@ func TestMaterializePreservesLocalExtrasAndPrunesOrphans(t *testing.T) {
 	}
 	if b, _ := os.ReadFile(extra); string(b) != "local" {
 		t.Fatal("local extra clobbered on re-run")
+	}
+}
+
+// mustMkdirAll creates dir (and any missing parents) or fails the test.
+// Test helper: sidesteps errcheck noise from the repeated os.MkdirAll calls
+// test setup needs to plant fixtures.
+func mustMkdirAll(t *testing.T, dir string) {
+	t.Helper()
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// mustWriteFile writes content to path or fails the test. Test helper:
+// sidesteps errcheck noise from the repeated os.WriteFile calls test setup
+// needs to plant fixtures.
+func mustWriteFile(t *testing.T, path string, content []byte) {
+	t.Helper()
+	if err := os.WriteFile(path, content, 0o600); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -70,7 +90,7 @@ func readManifest(t *testing.T, dir string) manifest {
 func writeManifest(t *testing.T, dir string, m manifest) {
 	t.Helper()
 	manifestFile := filepath.Join(dir, manifestPath)
-	os.MkdirAll(filepath.Dir(manifestFile), 0o755)
+	mustMkdirAll(t, filepath.Dir(manifestFile))
 	out, err := json.MarshalIndent(m, "", "  ")
 	if err != nil {
 		t.Fatal(err)
@@ -178,10 +198,8 @@ func TestMaterializePruneContainmentRejectsTraversal(t *testing.T) {
 func TestMaterializeCorruptManifestReturnsError(t *testing.T) {
 	dir := t.TempDir()
 	manifestFile := filepath.Join(dir, manifestPath)
-	os.MkdirAll(filepath.Dir(manifestFile), 0o755)
-	if err := os.WriteFile(manifestFile, []byte("{not valid json"), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	mustMkdirAll(t, filepath.Dir(manifestFile))
+	mustWriteFile(t, manifestFile, []byte("{not valid json"))
 
 	err := Materialize(dir)
 	if err == nil {
