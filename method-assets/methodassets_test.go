@@ -43,8 +43,8 @@ func TestClaudeFilesInventory(t *testing.T) {
 	if agents != 10 {
 		t.Errorf("agents = %d, want 10", agents)
 	}
-	if commands != 51 { // grows to 56 in Task 6; update there
-		t.Errorf("commands = %d, want 51", commands)
+	if commands != 56 {
+		t.Errorf("commands = %d, want 56", commands)
 	}
 	if len(skills) != 27 {
 		t.Errorf("skill dirs = %d, want 27", len(skills))
@@ -72,6 +72,19 @@ func TestDesignDraftCommandsExist(t *testing.T) {
 	} {
 		if _, ok := files[".claude/commands/"+name+".md"]; !ok {
 			t.Errorf("missing draft command %s", name)
+		}
+	}
+}
+
+func TestDesignReviewCommandsExist(t *testing.T) {
+	files, _ := ClaudeFiles()
+	for _, name := range []string{
+		"mission-critique", "glossary-critique",
+		"scrubbed-requirements-critique", "core-use-cases-critique",
+		"design-answer",
+	} {
+		if _, ok := files[".claude/commands/"+name+".md"]; !ok {
+			t.Errorf("missing review command %s", name)
 		}
 	}
 }

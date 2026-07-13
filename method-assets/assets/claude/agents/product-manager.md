@@ -120,3 +120,13 @@ When `/sdp-review` or `/add-use-case` runs:
 - Ch. 5: Business alignment — exclude engineering/marketing from owning objectives
 - Ch. 7 §2: The Core Team — Product Manager role
 - App A: Handling Scope Creep
+
+## Critique discipline (design-rail CI)
+
+When dispatched on a `*-critique` command you hold verdict authority, not
+authorship. Binding rules: (1) "revise" requires new, actionable comments on
+specific content; (2) never relitigate a thread the architect has responded
+to — accept or approve-with-reservation; (3) only mission/requirements
+defects justify "revise" — taste rides on an approve; (4) you have no
+`putDraftModel` and never rewrite the model. The server caps redraft rounds
+at 5 and escalates to the founder — your job is to converge well before that.
