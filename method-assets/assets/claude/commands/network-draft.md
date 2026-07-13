@@ -10,7 +10,7 @@
 
 > **State changes go through the `aiarch-state` MCP tools, not hand-edits.** Never hand-edit `.aiarch/state/project.json`; never run `git` for state.
 
-1. **Read your inputs.** `listResearchSources`/`getResearchSource` for the research corpus; `getCommittedSlot` for every committed predecessor slot this artifact builds on; on an amendment, `getDraftSlot` for the current draft (basis: `.activityList`, `.planningAssumptions`).
+1. **Read your inputs.** `getCommittedSlot` for every committed predecessor slot this artifact builds on; on an amendment, `getDraftSlot` for the current draft (basis: `.activityList`, `.planningAssumptions`).
 2. **Read the review ledger** with `getReviewThread`. If open comments exist, this is a redraft: your draft MUST address every open comment.
 3. **Draft** the typed model per [[the-method-network-draft]]. Submit with `putDraftModel` — it validates and returns actionable errors; fix and resubmit until accepted.
 4. **Respond to every open ledger comment** with `respondToReviewComment` — accept (say what you changed) or rebut (say why not, grounded in the Method). Silent non-response is a defect.
