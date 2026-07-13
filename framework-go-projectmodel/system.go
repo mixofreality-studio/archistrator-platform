@@ -56,13 +56,26 @@ func ParseSystem(slotModel json.RawMessage) (*System, error) {
 // straight through to the heuristic, so behaviour is unchanged for them. Honest
 // miss on no match.
 func (s *System) ComponentByContractKey(key string) (*SystemComponent, bool) {
-	// (0) Explicit contractKey — preferred over every case-convention heuristic.
+	if c, ok := s.componentByExplicitContractKey(key); ok {
+		return c, true
+	}
+	return s.componentByKebabHeuristic(Kebab(key))
+}
+
+// componentByExplicitContractKey implements step (0) of the join: the
+// document-owned exact match, preferred over every case-convention heuristic.
+func (s *System) componentByExplicitContractKey(key string) (*SystemComponent, bool) {
 	for i := range s.Components {
 		if s.Components[i].ContractKey != "" && s.Components[i].ContractKey == key {
 			return &s.Components[i], true
 		}
 	}
-	kebab := Kebab(key)
+	return nil, false
+}
+
+// componentByKebabHeuristic implements steps (1)-(3): the case-convention
+// fallback used by documents that predate the ContractKey field.
+func (s *System) componentByKebabHeuristic(kebab string) (*SystemComponent, bool) {
 	for i := range s.Components {
 		if s.Components[i].ID == kebab {
 			return &s.Components[i], true
