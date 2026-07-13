@@ -43,8 +43,8 @@ func TestClaudeFilesInventory(t *testing.T) {
 	if agents != 10 {
 		t.Errorf("agents = %d, want 10", agents)
 	}
-	if commands != 35 { // grows to 57 in Tasks 5-6; update there
-		t.Errorf("commands = %d, want 35", commands)
+	if commands != 51 { // grows to 56 in Task 6; update there
+		t.Errorf("commands = %d, want 51", commands)
 	}
 	if len(skills) != 27 {
 		t.Errorf("skill dirs = %d, want 27", len(skills))
@@ -55,6 +55,23 @@ func TestClaudeFilesInventory(t *testing.T) {
 	for p := range files {
 		if strings.Contains(p, "structurizr") || strings.HasPrefix(p, ".claude/hooks/") {
 			t.Errorf("cruft lifted: %s", p)
+		}
+	}
+}
+
+func TestDesignDraftCommandsExist(t *testing.T) {
+	files, _ := ClaudeFiles()
+	for _, name := range []string{
+		"mission-draft", "glossary-draft", "scrubbed-requirements-draft",
+		"volatilities-draft", "core-use-cases-draft", "system-draft",
+		"operational-concepts-draft", "standard-check-draft",
+		"planning-assumptions-draft", "activity-list-draft", "network-draft",
+		"normal-solution-draft", "subcritical-solution-draft",
+		"decompressed-solution-draft", "compressed-solution-draft",
+		"risk-model-draft",
+	} {
+		if _, ok := files[".claude/commands/"+name+".md"]; !ok {
+			t.Errorf("missing draft command %s", name)
 		}
 	}
 }
