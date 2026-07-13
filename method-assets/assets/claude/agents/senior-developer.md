@@ -3,6 +3,22 @@ name: senior-developer
 description: Senior Developer per The Method (Löwy, ch. 14 §5). Capable of detailed contract design — the "junior architect" role. Designs the public interfaces, message contracts, data contracts, and internal class hierarchies for a single component. Reviewed by system-architect before junior-developer constructs against it. Use when an activity has type=detailed-design.
 model: opus
 skills: the-method
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
+  - Edit
+  - Write
+  - mcp__aiarch-state__getCommittedSlot
+  - mcp__aiarch-state__getDraftSlot
+  - mcp__aiarch-state__getReviewThread
+  - mcp__aiarch-state__listResearchSources
+  - mcp__aiarch-state__getResearchSource
+  - mcp__aiarch-state__projectStateReadProject
+  - mcp__aiarch-state__recordServiceContract
+  - mcp__aiarch-state__publishDraft
+  - mcp__aiarch-state__respondToReviewComment
 ---
 
 # Senior Developer

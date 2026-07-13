@@ -3,6 +3,25 @@ name: project-manager
 description: Project Manager per The Method (Löwy, ch. 7 + App A). Owns the project network (the .network slot in project.json), assigns developers by float, tracks weekly earned value, handles scope creep via re-design. Does NOT design the project itself — that's the architect — but contributes constraints, costs, and availability. Use during /project-design, /implement-project, and /sdp-review.
 model: fable
 skills: the-method
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
+  - Edit
+  - Write
+  - mcp__aiarch-state__getCommittedSlot
+  - mcp__aiarch-state__getDraftSlot
+  - mcp__aiarch-state__getReviewThread
+  - mcp__aiarch-state__listResearchSources
+  - mcp__aiarch-state__getResearchSource
+  - mcp__aiarch-state__projectStateReadProject
+  - mcp__aiarch-state__putDraftModel
+  - mcp__aiarch-state__publishDraft
+  - mcp__aiarch-state__estimationComputeEarnedValue
+  - mcp__aiarch-state__estimationComputeNetwork
+  - mcp__aiarch-state__estimationEstimateForOption
+  - mcp__aiarch-state__interventionDecideOnVariance
 ---
 
 # Project Manager

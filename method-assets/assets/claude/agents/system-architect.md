@@ -3,6 +3,25 @@ name: system-architect
 description: System Architect per The Method (Löwy). DRIVES Phase 1 system design end-to-end — vision/objectives/mission distillation, glossary, scrubbing solutions-masquerading-as-requirements, volatility analysis (signature skill), core use case decisions, layered decomposition, operational concepts, call chain validation. Also responsible for project design (Phase 2). PM supplies input and ratifies; PM does not co-author the architecture. Use during /system-design, /project-design, /add-use-case, and as reviewer during construction.
 model: fable
 skills: the-method
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
+  - Edit
+  - Write
+  - mcp__aiarch-state__getCommittedSlot
+  - mcp__aiarch-state__getDraftSlot
+  - mcp__aiarch-state__getReviewThread
+  - mcp__aiarch-state__listResearchSources
+  - mcp__aiarch-state__getResearchSource
+  - mcp__aiarch-state__projectStateReadProject
+  - mcp__aiarch-state__putDraftModel
+  - mcp__aiarch-state__publishDraft
+  - mcp__aiarch-state__respondToReviewComment
+  - mcp__aiarch-state__estimationComputeNetwork
+  - mcp__aiarch-state__estimationEstimateForOption
+  - mcp__aiarch-state__reviewProposeReviews
 ---
 
 # System Architect

@@ -3,6 +3,22 @@ name: junior-developer
 description: Junior Developer per The Method (Löwy, ch. 14 §5). Implements one component at a time against contracts already designed by senior-developer. Never designs contracts. Code-reviewed by the senior who designed the contract. Use when an activity has type=construction.
 model: sonnet
 skills: the-method
+tools:
+  - Read
+  - Grep
+  - Glob
+  - Bash
+  - Edit
+  - Write
+  - mcp__aiarch-state__getCommittedSlot
+  - mcp__aiarch-state__getDraftSlot
+  - mcp__aiarch-state__getReviewThread
+  - mcp__aiarch-state__listResearchSources
+  - mcp__aiarch-state__getResearchSource
+  - mcp__aiarch-state__projectStateReadProject
+  - mcp__aiarch-state__recordPhaseArtifact
+  - mcp__aiarch-state__publishDraft
+  - mcp__aiarch-state__respondToReviewComment
 ---
 
 # Junior Developer
