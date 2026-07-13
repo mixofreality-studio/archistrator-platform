@@ -1,0 +1,176 @@
+# aiarch CONSTRUCTION workflow (TEMPLATE — seated into each app repo)
+# ==================================================================
+# This is a Go text/template. Its action delimiters are the double-square-bracket
+# pair (not the default brace pair) — chosen so GitHub Actions' own ${{ ... }}
+# expressions pass through untouched. The method-assets scaffold seats it at the
+# APP REPO ROOT (the app module root — there is no server/ subdirectory). It is the
+# venue-portable counterpart of the design workflow (aiarch-design.yml.tmpl) and is
+# dispatched by archistrator-server constructionPipelineAccess (UC3) via
+# workflow_dispatch when construction is live.
+#
+# LOAD-BEARING CONTRACT — DO NOT CHANGE THESE ANCHORS:
+#   1. workflow_dispatch input named EXACTLY `idempotency_token` (string,
+#      required). framework-go-infrastructure-github DispatchInputKeyIdempotency
+#      = "idempotency_token". The RA stamps this input LAST and finds/dedups/
+#      observes/cancels runs BY RUN NAME (aiarch-cp-<token>).
+#   2. Top-level `run-name: aiarch-cp-${{ inputs.idempotency_token }}`.
+#      RunNamePrefix="aiarch-cp-"; ListRunsByName matches on this prefix.
+#      Wrong run-name = RA can never see its own dispatched run.
+#   3. workflow_dispatch-triggerable on the dispatch ref (main).
+name: aiarch-construct
+
+# (2) Run-name is the idempotency anchor. EXACT prefix required.
+run-name: aiarch-cp-${{ inputs.idempotency_token }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      # (1) LOAD-BEARING — the dedup token the RA stamps into run-name.
+      idempotency_token:
+        description: "aiarch dedup token (RA-supplied; stamped into run-name)"
+        required: true
+        type: string
+      # Activity id from the project network (e.g. "C-PE").
+      activity_id:
+        description: "construction activity id (e.g. C-PE)"
+        required: true
+        type: string
+      # Component id matching a component contract in the project's committed state.
+      component_id:
+        description: "component id — the contract/component this activity constructs"
+        required: true
+        type: string
+      # Thin routing: the Manager computes which slash command this phase runs.
+      command:
+        description: "slash command to run (e.g. service-construction) — computed by the Manager from type/variant/phase"
+        required: true
+        type: string
+      phase:
+        description: "App-A method phase for this dispatch (also encoded in `command`)"
+        required: false
+        type: string
+      role:
+        description: "assigned worker class (ignored by this single-shot workflow)"
+        required: false
+        type: string
+
+permissions:
+  contents: write
+  pull-requests: write
+  # claude-code-action exchanges an OIDC token for its OAuth flow; without this the
+  # action fails with "Could not fetch an OIDC token".
+  id-token: write
+
+# One in-flight construction run per dedup token — belt-and-braces alongside the
+# RA's own run-name convergence.
+concurrency:
+  group: aiarch-cp-${{ inputs.idempotency_token }}
+  cancel-in-progress: false
+
+jobs:
+  construct:
+    runs-on: ubuntu-latest
+    # Bound the run — claude must implement + open the PR within this window or the
+    # job is killed (no silent multi-hour grinds). 12 min was observed cutting off
+    # substantive components (a ~900 LOC component with an external integration + tests)
+    # mid-implement before commit+PR; 25 gives runway to land the PR while still
+    # bounding any runaway. Keep this >= the prompt's stated budget below.
+    timeout-minutes: 25
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go (for the aiarch-state MCP server)
+        uses: actions/setup-go@v5
+        with:
+          # Pin the toolchain INDEPENDENTLY of the seated app go.mod: `go install` of
+          # the archistrator state-MCP module needs a Go at least as new as that
+          # module's own `go` directive. Same rationale as the design workflow's
+          # setup-go step.
+          go-version: "1.25.x"
+
+      # -----------------------------------------------------------------------
+      # aiarch-state MCP server (agentic-managers spec §Construction application) — the
+      # SAME rail the DESIGN workflow wires (aiarch-design.yml.tmpl). It runs in the
+      # CONSTRUCT job mode (component/activity ambient context), exposing the composed
+      # construction verbs (recordServiceContract/recordPhaseArtifact/recordTestingState +
+      # publishDraft) plus the non-hidden read-only + Engine raw generated tools the
+      # per-mode set exposes — so a construction agent records its phase artifact through
+      # validated tools instead of hand-editing project.json.
+      #
+      # DELIVERY: this workflow is SEATED into an APP repo, which has NO archistrator
+      # server source to build from, so it `go install <module>@<pin>` the published
+      # binary via GOPROXY — the SAME way the design workflow and the seated go.mod
+      # scaffold obtain their platform modules. The managed-scaffold sync re-renders this
+      # file (and its pin) whenever the server release moves it, so a run can never
+      # install a binary the dispatching server's validators reject.
+      # -----------------------------------------------------------------------
+      - name: Obtain the aiarch-state MCP server
+        id: statemcp
+        env:
+          GOBIN: ${{ runner.temp }}/aiarch-bin
+          # VERSION HANDSHAKE (managed-scaffold sync): the control plane stamps the
+          # state-MCP pin it rendered this seated file with; the job echoes it so any
+          # run's log states which binary generation this scaffold carries.
+          AIARCH_STATE_MCP_PIN: "[[.StateMcpModuleVersion]]"
+        run: |
+          echo "aiarch-state-mcp pin: [[.StateMcpModulePath]]@${AIARCH_STATE_MCP_PIN}"
+          mkdir -p "${GOBIN}"
+          go install [[.StateMcpModulePath]]@"${AIARCH_STATE_MCP_PIN}"
+          echo "bin=${GOBIN}/aiarch-state-mcp" >> "$GITHUB_OUTPUT"
+
+      # The MCP config claude-code-action passes to the Claude CLI (--mcp-config). The
+      # ambient CONSTRUCTION context (project id, job mode, component id, activity id,
+      # target branch, state root) is baked in as env on the MCP server process from the
+      # dispatch inputs + the repo name. The agent supplies NONE of these.
+      - name: Write the aiarch-state MCP config
+        env:
+          MCP_BIN: ${{ steps.statemcp.outputs.bin }}
+        run: |
+          cat > "${RUNNER_TEMP}/aiarch-mcp.json" <<EOF
+          {
+            "mcpServers": {
+              "aiarch-state": {
+                "command": "${MCP_BIN}",
+                "env": {
+                  "AIARCH_PROJECT_ID": "${{ github.event.repository.name }}",
+                  "AIARCH_JOB_MODE": "construct",
+                  "AIARCH_COMPONENT_ID": "${{ inputs.component_id }}",
+                  "AIARCH_ACTIVITY_ID": "${{ inputs.activity_id }}",
+                  "AIARCH_TARGET_BRANCH": "activity/${{ inputs.activity_id }}",
+                  "AIARCH_STATE_ROOT": "${{ github.workspace }}"
+                }
+              }
+            }
+          }
+          EOF
+
+      - name: Run construction step (claude-code-action)
+        uses: anthropics/claude-code-action@v1
+        with:
+          # Org secret — provisioned ONCE by the founder on mixofreality-studio.
+          # aiarch never mints or sees this token.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Construction is ALWAYS dispatched by the aiarch GitHub App (a Bot actor);
+          # claude-code-action refuses bot-initiated runs unless the bot is allow-listed.
+          # The App slug varies per deployment, so the scaffold templates it here.
+          allowed_bots: [[.AppSlug]]
+          # Emit the full agent transcript into the job log (default truncates), so a
+          # run that stalls or fails is diagnosable without a rerun.
+          show_full_output: true
+          # Autonomous CI: the ephemeral runner is scoped to this one construction
+          # task, so skip the interactive permission gates (founder-authorized) — claude
+          # writes files, runs git/go/gh, and opens the PR without an approver.
+          # --mcp-config wires the local aiarch-state MCP server (built above) into the
+          # Claude CLI; --dangerously-skip-permissions auto-allows tool calls (incl. the
+          # MCP tools) in the unattended runner.
+          claude_args: "--dangerously-skip-permissions --mcp-config ${{ runner.temp }}/aiarch-mcp.json"
+          # Thin prompt: NO construction logic here. The intent lives entirely in the
+          # per-(type,variant,phase) command under .claude/commands/, which pulls its
+          # role agent + Method skill + the-method-project-state. The Manager computed
+          # `command`; the workflow just runs it against the component + activity ids.
+          prompt: |
+            /${{ inputs.command }} ${{ inputs.component_id }} ${{ inputs.activity_id }}
