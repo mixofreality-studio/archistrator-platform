@@ -203,6 +203,16 @@ Total critical-path duration: N days
 - ...
 ```
 
+## Draft-job doctrine (CI dispatch)
+
+This is the normative task the CI draft job (and a local `/project-design` run) executes to produce the `NormalSolution`. It is self-contained: everything a draft agent needs to design the normal option is stated here.
+
+Design the NORMAL solution: minimum staffing for unimpeded critical-path progress; set the staffing cap, calendar days/week, and per-worker-class build-cost rates. Zero schedule buffer.
+
+### Solution class rates
+
+classRates MUST be the PlanningAssumptions rateCard derivation — for each class: megatokensInPerDay×(input $/MTok) + megatokensOutPerDay×(output $/MTok) for its modelId, in USD minor units — IDENTICAL across all four solution options (the workers are AI agents; a class's day-cost does not change between options). Option economics differ ONLY through duration, staffing cap, calendar, and buffer — never through invented per-day rates.
+
 ## Exit criteria (for router)
 
 - `.aiarch/state/project.json` → `.normalSolution` holds a committed typed model with all sections

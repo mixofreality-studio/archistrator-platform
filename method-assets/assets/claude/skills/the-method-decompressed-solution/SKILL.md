@@ -210,6 +210,16 @@ Total: 130 days
 - Management's risk appetite is low and the small total-cost increase is acceptable
 ```
 
+## Draft-job doctrine (CI dispatch)
+
+This is the normative task the CI draft job (and a local `/project-design` run) executes to produce the `DecompressedSolution`. It is self-contained: everything a draft agent needs to design the decompressed-normal option is stated here.
+
+Design the DECOMPRESSED-NORMAL solution: extend the normal duration with a schedule buffer to drop criticality risk toward the ~0.5 tipping point without cutting staff (decompression buys risk down with time, never by shedding resources). Set bufferDays > 0.
+
+### Solution class rates
+
+classRates MUST be the PlanningAssumptions rateCard derivation — for each class: megatokensInPerDay×(input $/MTok) + megatokensOutPerDay×(output $/MTok) for its modelId, in USD minor units — IDENTICAL across all four solution options (the workers are AI agents; a class's day-cost does not change between options). Option economics differ ONLY through duration, staffing cap, calendar, and buffer — never through invented per-day rates.
+
 ## Exit criteria (for router)
 
 `.aiarch/state/project.json` → `.decompressedSolution` holds a committed typed model with:

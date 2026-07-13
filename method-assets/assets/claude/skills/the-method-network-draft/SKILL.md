@@ -173,6 +173,12 @@ For each activity, pre-flag:
 
 Capture these in `network_metadata.warnings[]`. They feed [[the-method-risk-modeling]].
 
+## Draft-job doctrine (CI dispatch)
+
+This is the normative task the CI draft job (and a local `/project-design` run) executes to produce the `Network`. It is self-contained: everything a draft agent needs to build the project network is stated here (the forward/backward-pass and float computations in the Procedure above are the mechanics behind it).
+
+Convert the activity list into a project network: declare each activity's predecessor dependencies and identify the critical path (the activity names on it).
+
 ## Exit criteria (for router)
 
 `.aiarch/state/project.json` → `.network` holds a committed typed model with:

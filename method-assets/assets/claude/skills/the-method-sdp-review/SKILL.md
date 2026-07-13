@@ -222,6 +222,10 @@ project:
 
 Then `AdvancePhase` moves the project into Phase 3 (or run `/implement-project` locally) to begin construction.
 
+## Draft-job doctrine (CI dispatch)
+
+Unlike the other Phase-2 artifacts, the SDP review is NOT co-authored by a CI draft job. The Phase-2 co-author spine REJECTS `SdpReview` at its entry — "the SDP review is assembled, not co-authored; use RequestSDPCommit" — and the per-kind draft-task table falls `SdpReview` through to the generic "draft the artifact." fallback precisely because no draft job ever runs for it. The SDP review is DETERMINISTICALLY ASSEMBLED by the server from the already-committed Phase-2 slots (`.planningAssumptions`, `.activityList`, `.network`, the four solution options, and `.riskModel`, plus `.mission` and `.systemDesign`) via `RequestSDPCommit`, then staged for the human review gate. There is no per-kind draft prompt to make self-contained here; the assembly reads the committed slots directly. The Procedure above is the specification the assembler (and a local `/sdp-review` run) follows.
+
 ## Exit criteria (for router)
 
 - `.aiarch/state/project.json` → `.sdpReview` holds a committed typed model with all sections

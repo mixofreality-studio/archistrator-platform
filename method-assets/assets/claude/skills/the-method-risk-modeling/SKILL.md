@@ -203,6 +203,12 @@ Cost minimum: ~120 days, 36 mm. Decompressed-normal at 130 days / 37 mm is the c
 - (If geometric used: justify here — see ch. 12 §4)
 ```
 
+## Draft-job doctrine (CI dispatch)
+
+This is the normative task the CI draft job (and a local `/project-design` run) executes to produce the `RiskModel`. It is self-contained: everything a draft agent needs to compute the cross-option risk analytics is stated here (the per-metric formulas and exclusion bounds in the Procedure above are the mechanics behind it).
+
+Quantify and compare risk across the four options: for each, decompose criticality risk and activity risk into a composite score for the SDP-review time-risk curve.
+
 ## Exit criteria (for router)
 
 - `.aiarch/state/project.json` → `.riskModel` holds a committed typed model

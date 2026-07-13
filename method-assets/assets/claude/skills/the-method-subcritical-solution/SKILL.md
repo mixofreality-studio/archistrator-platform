@@ -155,6 +155,16 @@ The line between "subcritical" and "infeasible" is real. Check:
 
 If the subcritical solution is infeasible, your removal was wrong. Pick a different resource to remove.
 
+## Draft-job doctrine (CI dispatch)
+
+This is the normative task the CI draft job (and a local `/project-design` run) executes to produce the `SubcriticalSolution`. It is self-contained: everything a draft agent needs to design the subcritical option is stated here.
+
+Design the SUBCRITICAL solution: deliberately understaffed (lower the staffing cap below normal). It is counterintuitively longer, costlier, and riskier — the point is to disprove the 'fewer people = cheaper' intuition for management.
+
+### Solution class rates
+
+classRates MUST be the PlanningAssumptions rateCard derivation — for each class: megatokensInPerDay×(input $/MTok) + megatokensOutPerDay×(output $/MTok) for its modelId, in USD minor units — IDENTICAL across all four solution options (the workers are AI agents; a class's day-cost does not change between options). Option economics differ ONLY through duration, staffing cap, calendar, and buffer — never through invented per-day rates.
+
 ## Exit criteria (for router)
 
 `.aiarch/state/project.json` → `.subcriticalSolution` holds a committed typed model with the comparison table showing it's longer, costlier, and riskier than normal. Network is feasible (just suboptimal).
