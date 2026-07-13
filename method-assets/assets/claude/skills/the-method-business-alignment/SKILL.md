@@ -35,7 +35,7 @@ The model carries:
 
 1. **Vision** — exactly one sentence. Terse and legal-statement-precise. (`Vision`)
 2. **Business Objectives** — numbered list. Business perspective only. (`Objectives`, each an `Objective`)
-3. **Mission Statement** — how, expressed in components not features. (`Mission`)
+3. **Mission Statement** — how, expressed in components not features (in Löwy's book framing — the draft-job doctrine below constrains the drafted narrative to business/user language; see the reconciliation note). (`Mission`)
 4. **Traceability** — every objective maps to vision; every architectural concern will map back to an objective. (Captured in the objectives + mission; verify per Step 4.)
 
 ## Procedure
@@ -126,4 +126,4 @@ See `ch05.xhtml#ch05lev1sec3` for the full TradeMe distillation. The architect p
 - **Objectives**: 7 numbered items, all business-perspective.
 - **Mission**: "Design and build a collection of software components that the development team can assemble into applications and features."
 
-Use this as a template for cadence and tone.
+Use this as a template for cadence and tone ONLY — not vocabulary. The drafted mission text must still obey the business-and-user-language MUST-NOT rule in the draft-job doctrine above (no component / module / service / subsystem / layer terminology); see the reconciliation note.
