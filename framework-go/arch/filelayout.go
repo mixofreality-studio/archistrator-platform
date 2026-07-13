@@ -147,29 +147,41 @@ func fileHandwrittenViolations(pkgPath, base, implFile, testFile string, layer L
 				"workflow func " + wfFuncs[0] + " must live in its own per-workflow file, not " + implFile})
 		}
 	case len(wfFuncs) > 0:
-		if layer.Name != spec.TemporalLayer {
-			out = append(out, fileLayoutViolation{pkgPath, base, "workflow-func-outside-manager",
-				"workflow func " + wfFuncs[0] + " found outside the " + spec.TemporalLayer + " layer"})
-			return out
-		}
-		if len(entryFuncs) == 0 {
-			// Context-taking func(s) present, but none is a workflow ENTRY
-			// func — this is not a workflow file (e.g. a helpers-only file),
-			// so it falls into the closed set's default: file-not-allowed.
-			out = append(out, fileLayoutViolation{pkgPath, base, "file-not-allowed",
-				"handwritten files are limited to " + implFile + ", per-workflow files, " + testFile})
-			return out
-		}
-		if len(entryFuncs) > 1 {
-			out = append(out, fileLayoutViolation{pkgPath, base, "workflow-file-multiple-funcs", strings.Join(entryFuncs, ",")})
-		}
-		want := strings.ToLower(strings.TrimSuffix(entryFuncs[0], "Workflow")) + ".go"
-		if base != want {
-			out = append(out, fileLayoutViolation{pkgPath, base, "workflow-file-name", "want " + want})
-		}
+		out = append(out, workflowFileViolations(pkgPath, base, implFile, testFile, layer, spec, wfFuncs, entryFuncs)...)
 	default:
 		out = append(out, fileLayoutViolation{pkgPath, base, "file-not-allowed",
 			"handwritten files are limited to " + implFile + ", per-workflow files, " + testFile})
+	}
+	return out
+}
+
+// workflowFileViolations classifies a handwritten file that contains at least
+// one workflow.Context-taking func (wfFuncs) — the rule-2 branch of
+// fileHandwrittenViolations. It applies the workflow-func-outside-manager,
+// file-not-allowed (helpers-only file, no entry func), workflow-file-multiple-funcs,
+// and workflow-file-name checks, in that order, matching the classification
+// described in the fileHandwrittenViolations doc comment.
+func workflowFileViolations(pkgPath, base, implFile, testFile string, layer Layer, spec Spec, wfFuncs, entryFuncs []string) []fileLayoutViolation {
+	var out []fileLayoutViolation
+	if layer.Name != spec.TemporalLayer {
+		out = append(out, fileLayoutViolation{pkgPath, base, "workflow-func-outside-manager",
+			"workflow func " + wfFuncs[0] + " found outside the " + spec.TemporalLayer + " layer"})
+		return out
+	}
+	if len(entryFuncs) == 0 {
+		// Context-taking func(s) present, but none is a workflow ENTRY
+		// func — this is not a workflow file (e.g. a helpers-only file),
+		// so it falls into the closed set's default: file-not-allowed.
+		out = append(out, fileLayoutViolation{pkgPath, base, "file-not-allowed",
+			"handwritten files are limited to " + implFile + ", per-workflow files, " + testFile})
+		return out
+	}
+	if len(entryFuncs) > 1 {
+		out = append(out, fileLayoutViolation{pkgPath, base, "workflow-file-multiple-funcs", strings.Join(entryFuncs, ",")})
+	}
+	want := strings.ToLower(strings.TrimSuffix(entryFuncs[0], "Workflow")) + ".go"
+	if base != want {
+		out = append(out, fileLayoutViolation{pkgPath, base, "workflow-file-name", "want " + want})
 	}
 	return out
 }
