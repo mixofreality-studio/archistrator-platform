@@ -54,6 +54,15 @@ type Operation struct {
 	Params []Param     `json:"params"`
 	Result *SchemaNode `json:"result,omitempty"`
 	Error  bool        `json:"error"`
+	// UI optionally marks this operation as rendering an MCP App view.
+	// Ops without it stay plain tools.
+	UI *OpUI `json:"ui,omitempty"`
+}
+
+// OpUI is the MCP-Apps view annotation on a service-contract operation.
+type OpUI struct {
+	// View is the webApp view-registry id rendered when this op's tool fires.
+	View string `json:"view"`
 }
 
 // Param is one operation parameter (the layer-context first arg is already
