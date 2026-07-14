@@ -7,12 +7,12 @@ description: System Design — distill vision, business objectives, and mission 
 
 ## Canonical source
 
-**Primary:** Löwy, *Righting Software*, [Chapter 5 §3 "Business Alignment"](../../../research/rightingsoftware/OEBPS/xhtml/ch05.xhtml#ch05lev1sec3) — Vision, Objectives, Mission Statement subsections.
+**Primary:** Löwy, *Righting Software*, Chapter 5 §3 "Business Alignment" — Vision, Objectives, Mission Statement subsections.
 
 **Supporting:**
-- [Ch. 5 §3.1 "The Vision"](../../../research/rightingsoftware/OEBPS/xhtml/ch05.xhtml#ch05lev2sec8)
-- [Ch. 5 §3.2 "The Business Objectives"](../../../research/rightingsoftware/OEBPS/xhtml/ch05.xhtml#ch05lev2sec9)
-- [Ch. 5 §3.3 "Mission Statement"](../../../research/rightingsoftware/OEBPS/xhtml/ch05.xhtml#ch05lev2sec10)
+- Ch. 5 §3.1 "The Vision"
+- Ch. 5 §3.2 "The Business Objectives"
+- Ch. 5 §3.3 "Mission Statement"
 
 The TradeMe walkthrough in ch. 5 is the worked example. Re-read it if the team has not yet internalized this phase.
 
@@ -25,7 +25,7 @@ State is git-as-DB: archistrator is a single Go-server repo whose canonical proj
 
 ## Output
 
-The typed **`MissionStatement`** model (Go shape in `server/internal/resourceaccess/projectstate/models_phase1.go`: `Vision string`, `Objectives []Objective`, `Mission string`), committed to **`.aiarch/state/project.json` → `.mission`**. NOT a `mission.md` file — any markdown rendering is produced render-on-read from this slot.
+The typed **`MissionStatement`** model (Go shape in `internal/resourceaccess/projectstate/models_phase1.go`: `Vision string`, `Objectives []Objective`, `Mission string`), committed to **`.aiarch/state/project.json` → `.mission`**. NOT a `mission.md` file — any markdown rendering is produced render-on-read from this slot.
 
 Two usage patterns produce the same result:
 1. **Agentic / CI dispatch** — the agent emits the typed `MissionStatement` JSON and commits it into `.mission` on its session branch; the server reads it back and stages it (`StageArtifactForReview`) for the human review gate.
@@ -120,7 +120,7 @@ Produce the mission from the research corpus.
 
 ## TradeMe reference example
 
-See `ch05.xhtml#ch05lev1sec3` for the full TradeMe distillation. The architect produced:
+See Löwy Ch. 5 §3 for the full TradeMe distillation. The architect produced:
 
 - **Vision**: "A platform for building applications to support the TradeMe marketplace."
 - **Objectives**: 7 numbered items, all business-perspective.

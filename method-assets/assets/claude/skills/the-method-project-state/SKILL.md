@@ -5,7 +5,7 @@ description: The project.json git-as-DB driver. Use whenever a construction comm
 
 # Project State (git-as-DB)
 
-`project.json` at `.aiarch/state/project.json` is the single source of truth for the whole project. It is a typed JSON object; the Go structs in `server/internal/resourceaccess/projectstate/` are its schema of record. Never write a parallel markdown copy of state — markdown is render-on-read only.
+`project.json` at `.aiarch/state/project.json` is the single source of truth for the whole project. It is a typed JSON object; the Go structs in `internal/resourceaccess/projectstate/` are its schema of record. Never write a parallel markdown copy of state — markdown is render-on-read only.
 
 > **STATE CHANGES GO THROUGH THE `aiarch-state` MCP TOOLS — NOT hand-edits.**
 > A Method CI job — a design-rail job (job mode `draft` / `critique` / `answer`) or a construction job (job mode `construct`) — runs the `aiarch-state` MCP server. Record your phase's artifact through its tools and let `publishDraft` commit it. **Do NOT hand-edit `project.json` and do NOT run `git` yourself for state.** The tools validate every write through the full server codec **and** the Method CI rules *before* it lands, so a malformed contract/artifact is rejected in-loop with an actionable error instead of committed to stall the rail. The ambient kind/component/activity already fix your target — you never choose a slot.
@@ -79,7 +79,7 @@ When your phase produces an artifact that lives in state, record it through the 
 | service contract (detailed-design) | `recordServiceContract` | `.serviceContracts["<ambient component>"]` |
 | UI-design concept / SRS / integration note / provisioning spec / deploy note / doc outline·note | `recordPhaseArtifact` (set exactly one payload field, pass the `mapKey`) | `.phaseArtifacts.<field>["<mapKey>"]` |
 | testing plan / results (system test plan, harness, quality gate, test run, defect, audit report) | `recordTestingState` (set exactly one payload field) | `.testingState.<field>` |
-| code | *(files, not state)* | files under `server/internal/...` |
+| code | *(files, not state)* | files in the package the contract's `goPackage` names |
 
 The tool payload is the typed Go struct for that target (field names + shapes exactly — read the backing struct in `projectstate/` if unsure); the tool rejects invented/malformed fields before writing. `recordServiceContract` uses your ambient component; `recordPhaseArtifact`/`recordTestingState` use your ambient activity. A rejected write tells you exactly what to fix — correct it and call the tool again. When every artifact is recorded, call `publishDraft`.
 

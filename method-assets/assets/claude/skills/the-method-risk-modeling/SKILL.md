@@ -13,21 +13,21 @@ Per `[[the-method-doctrine]]` Directive 7, the analytics here are what let manag
 
 ## Canonical source
 
-**Primary:** Löwy, [Chapter 10 "Risk"](../../../research/rightingsoftware/OEBPS/xhtml/ch10.xhtml) in full.
+**Primary:** Löwy, Chapter 10 "Risk" in full.
 
 **Key subsections:**
-- [Ch. 10 §2 "Time-Risk Curve"](../../../research/rightingsoftware/OEBPS/xhtml/ch10.xhtml#ch10lev1sec2)
-- [Ch. 10 §3 "Risk Modeling"](../../../research/rightingsoftware/OEBPS/xhtml/ch10.xhtml#ch10lev1sec3)
-- [Ch. 10 §3.4 "Criticality Risk"](../../../research/rightingsoftware/OEBPS/xhtml/ch10.xhtml#ch10lev2sec5)
-- [Ch. 10 §3.6 "Activity Risk"](../../../research/rightingsoftware/OEBPS/xhtml/ch10.xhtml#ch10lev2sec7)
-- [Ch. 10 §4 "Compression and Risk"](../../../research/rightingsoftware/OEBPS/xhtml/ch10.xhtml#ch10lev1sec4)
-- [Ch. 10 §6 "Risk Metrics"](../../../research/rightingsoftware/OEBPS/xhtml/ch10.xhtml#ch10lev1sec6)
+- Ch. 10 §2 "Time-Risk Curve"
+- Ch. 10 §3 "Risk Modeling"
+- Ch. 10 §3.4 "Criticality Risk"
+- Ch. 10 §3.6 "Activity Risk"
+- Ch. 10 §4 "Compression and Risk"
+- Ch. 10 §6 "Risk Metrics"
 
-**Worked example:** [Ch. 11 §7 "Planning and Risk"](../../../research/rightingsoftware/OEBPS/xhtml/ch11.xhtml#ch11lev1sec7).
+**Worked example:** Ch. 11 §7 "Planning and Risk".
 
-**Advanced (optional):** [Ch. 12 §4 "Geometric Risk"](../../../research/rightingsoftware/OEBPS/xhtml/ch12.xhtml#ch12lev1sec4) for projects with god activities or heavily skewed float distributions.
+**Advanced (optional):** Ch. 12 §4 "Geometric Risk" for projects with god activities or heavily skewed float distributions.
 
-**Standard reference:** [Appendix C §4.7 "Risk"](../../../research/rightingsoftware/OEBPS/xhtml/appc.xhtml#appclev1sec4) — items 7a–7i.
+**Standard reference:** Appendix C §4.7 "Risk" — items 7a–7i.
 
 ## Input
 
@@ -236,4 +236,4 @@ For large projects or projects with god activities, ch. 12 §4 introduces geomet
 
 Geometric activity risk is also the right model when computing the decompression target on a skewed project — see `[[the-method-decompressed-solution]]` Step 5 advanced notes.
 
-Not required for typical projects. See `ch12.xhtml#ch12lev1sec4` for details.
+Not required for typical projects. See Löwy Ch. 12 §4 for details.

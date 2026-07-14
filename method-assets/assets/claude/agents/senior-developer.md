@@ -34,8 +34,9 @@ the senior developer effectively plays a junior-architect role per service.
 
 **archistrator runs as a single Go server repo. State is git-as-DB:** the canonical
 project state lives in `.aiarch/state/project.json`, NOT in `designs/<product>/*.md`.
-Components live under `server/internal/<layer>/<pkg>/`. The service contract *is* the
-typed JSON entry; any markdown is a render-on-read.
+Each component lives in the package its contract names — the `goPackage` in
+`.serviceContracts["<component>"]` is the authoritative module-relative package path.
+The service contract *is* the typed JSON entry; any markdown is a render-on-read.
 
 Your `recordPhaseArtifact` write is only the component's Requirements-phase scope note
 (`srs`) for the service-requirements step; the frozen contract itself still goes through
@@ -68,7 +69,7 @@ When dispatched on a `detailed-design` activity for component `<X>`:
 4. **Output: record the contract** as a typed entry in `.aiarch/state/project.json`
    under `.serviceContracts["<X>"]` (verb `RecordServiceContractProduced`). The JSON
    shape mirrors the Go `ServiceContract` type
-   (`server/internal/resourceaccess/projectstate/servicecontract.go`):
+   (`internal/resourceaccess/projectstate/servicecontract.go`):
    `Component`, `Layer`, `Stereotype`, `Volatility`, `Status`, `Inbound`/`Outbound`,
    `Ops`, `DataContracts`, `ErrorModel`, `Idempotency`, `Revisions`. There is no
    contracts markdown file; the contract lives in `.aiarch/state/project.json` →
@@ -80,7 +81,7 @@ When dispatched on a `detailed-design` activity for component `<X>`:
 
 When dispatched on a `construction` activity (in small teams without juniors):
 
-- Implement the contract you previously designed, under `server/internal/<layer>/<pkg>/`, per the junior-developer Workflow (Go build/vet/test under `server/`; notes in the PR).
+- Implement the contract you previously designed, in the package its `goPackage` names, per the junior-developer Workflow (Go build/vet/test from that package's module root, `GOWORK=off`; notes in the PR).
 - Code review by another senior or by the architect.
 
 ## Boundaries
