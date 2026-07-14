@@ -9,7 +9,7 @@
 ## Steps
 
 1. **Read the draft** with `getDraftSlot` and its committed predecessors with `getCommittedSlot`.
-2. **Read the ledger first** with `getReviewThread`. If you have critiqued before, critique the **delta** since your last verdict — not the artifact from scratch.
+2. **Read the ledger first** with `getReviewThread`. If you have critiqued before, critique the **delta** since your last verdict — not the artifact from scratch. Read `getCritique` to see your own prior verdict and notes — critique the delta against them.
 3. **Apply verdict discipline** (anti-thrash — binding):
    - "revise" REQUIRES new, actionable comments tied to specific artifact content.
    - Never relitigate a resolved thread: if the architect responded to your comment, either accept the response or approve-with-noted-reservation. Repeating an already-answered comment is a defect.

@@ -11,6 +11,7 @@ tools:
   - mcp__aiarch-state__getCommittedSlot
   - mcp__aiarch-state__getDraftSlot
   - mcp__aiarch-state__getReviewThread
+  - mcp__aiarch-state__getCritique
   - mcp__aiarch-state__listResearchSources
   - mcp__aiarch-state__getResearchSource
   - mcp__aiarch-state__projectStateReadProject

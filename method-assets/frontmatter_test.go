@@ -25,6 +25,25 @@ var allWrites = []string{
 	"respondToReviewComment",
 }
 
+// wantSharedReads: the aiarch-state READ verbs open to every role (spec §4 — reads are shared).
+var wantSharedReads = []string{
+	"getCommittedSlot", "getDraftSlot", "getReviewThread", "getCritique",
+	"listResearchSources", "getResearchSource", "projectStateReadProject",
+}
+
+func TestAgentSharedReads(t *testing.T) {
+	files, _ := ClaudeFiles()
+	for role := range wantWrites {
+		body := string(files[".claude/agents/"+role+".md"])
+		fm := body[:strings.Index(body, "\n---")]
+		for _, r := range wantSharedReads {
+			if !strings.Contains(fm, "mcp__aiarch-state__"+r) {
+				t.Errorf("%s: missing shared read %s", role, r)
+			}
+		}
+	}
+}
+
 func TestAgentToolScoping(t *testing.T) {
 	files, _ := ClaudeFiles()
 	for role, wants := range wantWrites {

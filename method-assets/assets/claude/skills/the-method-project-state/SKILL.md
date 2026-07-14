@@ -87,10 +87,10 @@ If a specific raw ResourceAccess/Engine operation is in your task's tool allowli
 
 ## Design-rail jobs (job modes `draft` / `critique` / `answer`)
 
-The `record*` verbs above drive Phase-3 construction. Phase-1/2 design artifacts run on the **design rail**, where the ambient `AIARCH_ARTIFACT_KIND` + `AIARCH_JOB_MODE` env fix the target slot and which verbs are in play — you never choose a slot or a kind. The reads (`getCommittedSlot`, `getDraftSlot`, `getReviewThread`) are common to every mode; the write verb is the mode's:
+The `record*` verbs above drive Phase-3 construction. Phase-1/2 design artifacts run on the **design rail**, where the ambient `AIARCH_ARTIFACT_KIND` + `AIARCH_JOB_MODE` env fix the target slot and which verbs are in play — you never choose a slot or a kind. The reads (`getCommittedSlot`, `getDraftSlot`, `getReviewThread`, `getCritique`) are common to every mode; the write verb is the mode's:
 
-- **`draft`** — read the basis with `getCommittedSlot`/`getDraftSlot` and the ledger with `getReviewThread`, then author the typed model with `putDraftModel` (it validates through the full server codec **and** the Method CI rules, returning actionable errors — fix and resubmit until accepted). Answer every open ledger comment with `respondToReviewComment`, then finish with `publishDraft` exactly once.
-- **`critique`** — record the verdict (approve/revise + comments) with `setCritiqueVerdict`. A critique **never rewrites the model** — there is no `putDraftModel` in this mode. Then `publishDraft` exactly once.
+- **`draft`** — read the basis with `getCommittedSlot`/`getDraftSlot` and the ledger with `getReviewThread` and `getCritique` (if it carries a `revise` verdict, its notes are the PM's revision guidance and your draft must address them), then author the typed model with `putDraftModel` (it validates through the full server codec **and** the Method CI rules, returning actionable errors — fix and resubmit until accepted). Answer every open ledger comment with `respondToReviewComment`, then finish with `publishDraft` exactly once.
+- **`critique`** — record the verdict (approve/revise + comments) with `setCritiqueVerdict`, which writes the carrier `getCritique` reads back. A critique **never rewrites the model** — there is no `putDraftModel` in this mode. Then `publishDraft` exactly once.
 - **`answer`** — answer the founder's open questions with `respondToReviewComment` only; no model write and no verdict. Then `publishDraft` exactly once.
 
 Same invariants as the construct rail: one `publishDraft`, never hand-edit `project.json`, never run `git` for state, never touch `.activityConstruction` / `.constructionProgress` / `.reviewPolicy`.
