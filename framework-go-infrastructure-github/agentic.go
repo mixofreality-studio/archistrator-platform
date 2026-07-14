@@ -157,6 +157,20 @@ func (c *AppClient) getRepoContentsFile(ctx context.Context, fullName, path, ins
 	return dto.SHA, decoded, true, nil
 }
 
+// GetRepoContentsFile reads the file at `path` in `fullName` via the Contents API
+// (GET .../contents/{path}) and returns its decoded content. It is a pure READ
+// primitive — the manifest fast-path's back-end: callers that only need to check
+// for/read a single file (no compare-and-write) use this instead of paying for
+// PutRepoContentsFile's overwrite-if-changed round trip.
+//
+// A 404 (absent file) is NOT an error — it returns found=false, matching
+// ProbeRepoPathExists's treatment of "missing" as a normal outcome, not a failure.
+// A non-404 non-2xx maps via ClassifyStatus.
+func (c *AppClient) GetRepoContentsFile(ctx context.Context, fullName, path, instToken string) (content []byte, found bool, err error) {
+	_, content, found, err = c.getRepoContentsFile(ctx, fullName, path, instToken)
+	return content, found, err
+}
+
 // getDefaultBranchTip resolves the current default-branch HEAD commit sha (used as
 // the no-op commit address when a contents PUT is skipped as byte-identical).
 func (c *AppClient) getDefaultBranchTip(ctx context.Context, fullName, instToken string) (string, error) {
