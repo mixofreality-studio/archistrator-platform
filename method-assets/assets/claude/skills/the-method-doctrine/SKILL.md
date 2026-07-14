@@ -21,7 +21,7 @@ A directive is a rule you should never violate — doing so is certain to cause 
 
 ## The 9 Directives
 
-From Appendix C §2 "Directives". The directive numbers and headline statements (the "Directive" column) are verbatim from the book and not negotiable. The "What it means" column is a short summary written for this skill, not book text — do not quote it as canonical. When you need the canonical wording or rationale, follow the link in the "Developed in" column.
+From Appendix C §2 "Directives". The directive numbers and headline statements (the "Directive" column) are verbatim from the book and not negotiable. The "What it means" column is a short summary written for this skill, not book text — do not quote it as canonical. When you need the canonical wording or rationale, follow the citation in the "Developed in" column.
 
 | # | Directive | What it means | Developed in |
 |---|---|---|---|
