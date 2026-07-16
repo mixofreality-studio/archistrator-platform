@@ -417,8 +417,19 @@ func stageDeletions(wt *gogit.Worktree, status gogit.Status) error {
 // as ErrEmptyCommit — the caller's idempotency probe should have short-circuited
 // before this, but if it slips through we surface it as a benign no-op signal via
 // the zero hash + a sentinel so callers can resolve the existing tip.
+//
+// The author/committer TIMESTAMP is the real wall clock. Unlike gitblob.go's
+// content-addressable path (where a FIXED epoch time is load-bearing — the
+// commit hash must be a pure function of the tree so identical re-stores
+// collapse), the CAS state path needs NO commit-hash determinism: retry
+// idempotency is the committed applied_mutations ledger the RA probes BEFORE
+// committing, the CAS itself keys off the parent hash, and the committed
+// project.json already carries a wall-clock updatedAt. A fixed epoch here
+// (the pre-2026-07-16 behavior) stamped every state commit 1970-01-01, which
+// broke recency ordering (GitSnapshot.CommitTime, catalog UpdatedAt fallback,
+// repo pushed_at heuristics) and rendered as "56 years ago" on the host UI.
 func commitWorktree(wt *gogit.Worktree, message string) (plumbing.Hash, error) {
-	sig := &object.Signature{Name: gitStoreAuthorName, Email: gitStoreAuthorEmail, When: time.Unix(0, 0).UTC()}
+	sig := &object.Signature{Name: gitStoreAuthorName, Email: gitStoreAuthorEmail, When: time.Now().UTC()}
 	hash, err := wt.Commit(message, &gogit.CommitOptions{Author: sig, Committer: sig})
 	if err != nil {
 		if errors.Is(err, gogit.ErrEmptyCommit) {
