@@ -15,10 +15,21 @@
 // dependency allowlist, both of which live in the consuming module's test where
 // any change is visible in review. There is no whitelist that quietly exempts a
 // package from layering, naming, or sideways rules — that absence is the point.
+//
+// The ONE exception to "every loaded package is classified and fully checked" is
+// STRUCTURAL, not a per-call opt-out: a package recognized as a GENERATED
+// TEST-DOUBLE (see isGeneratedTestDouble) is test-support, not a Method component,
+// and is skipped before classification — exactly like the empty-syntax skip below.
+// Both skips are recognized from properties of the code itself (no production
+// files; entirely generated + named "fake"), so neither can be named into
+// existence by a Spec field the way TemporalExemptPackages names a package — there
+// is still no whitelist that exempts a *business* package from layering, naming,
+// or sideways rules.
 package arch
 
 import (
 	"go/types"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strings"
@@ -132,7 +143,7 @@ func Check(t *testing.T, spec Spec) {
 	t.Helper()
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedImports | packages.NeedTypes |
-			packages.NeedTypesInfo | packages.NeedSyntax,
+			packages.NeedTypesInfo | packages.NeedSyntax | packages.NeedCompiledGoFiles,
 		Dir:   spec.ModuleRoot,
 		Tests: false,
 	}
@@ -210,6 +221,16 @@ func checkPackage(t *testing.T, pkg *packages.Package, spec Spec, layerIndex fun
 	if len(pkg.Syntax) == 0 {
 		return
 	}
+	// A GENERATED TEST-DOUBLE package (see isGeneratedTestDouble) is test-support,
+	// not a Method component — skip it before layer classification, exactly like
+	// the empty-syntax skip above. This is what lets a Fake<Iface> double import
+	// its own contract package (necessarily a same-layer edge, since the double
+	// lives beside the contract it fakes) without tripping the sideways-import
+	// rule, and frees it from the interface-naming rule a struct-only double could
+	// never satisfy.
+	if isGeneratedTestDouble(pkg) {
+		return
+	}
 	layer, pkgIdx, ok := layerFor(layerIndex, spec, pkg.PkgPath)
 	if !ok {
 		// Rule 0: every loaded internal package MUST classify into a declared
@@ -224,6 +245,40 @@ func checkPackage(t *testing.T, pkg *packages.Package, spec Spec, layerIndex fun
 	}
 	checkPackageImports(t, pkg, spec, pkgIdx, layer, layerIndex)
 	checkPackageInterfaces(t, pkg, layer)
+}
+
+// isGeneratedTestDouble reports whether pkg is a GENERATED TEST-DOUBLE package: a
+// STRUCTURAL category recognized from the code itself — mirroring the
+// len(pkg.Syntax)==0 skip in checkPackage — never a name-based per-call opt-out
+// (which Spec deliberately forbids; see the package doc). A package qualifies iff
+// BOTH:
+//
+//  1. its import-path leaf segment is exactly "fake" (the path ends "/fake"), AND
+//  2. every one of its compiled Go files is generated (basename matches
+//     "*.gen.go").
+//
+// Requiring ALL files generated — not just the "fake" leaf name — is what keeps a
+// HAND-WRITTEN package that happens to be named "fake" from ever qualifying: add
+// one hand file and the package falls straight back under full layer/import/naming
+// enforcement (see TestCheck_HandwrittenFakeLeafStillFails). A qualifying package
+// carries no business logic of its own: it exists purely to hold a Fake<Iface>
+// struct that names its contract's types, so it must import the contract package —
+// an edge that, sitting beside the contract in the same layer, is always a
+// sideways import — and it exposes no {Name}Access/{Name}Engine-shaped port for
+// the interface-naming rule to hold it to.
+func isGeneratedTestDouble(pkg *packages.Package) bool {
+	if !strings.HasSuffix(pkg.PkgPath, "/fake") {
+		return false
+	}
+	if len(pkg.CompiledGoFiles) == 0 {
+		return false
+	}
+	for _, f := range pkg.CompiledGoFiles {
+		if !strings.HasSuffix(filepath.Base(f), ".gen.go") {
+			return false
+		}
+	}
+	return true
 }
 
 func checkPackageImports(t *testing.T, pkg *packages.Package, spec Spec, pkgIdx int, layer Layer, layerIndex func(string) (int, bool)) {

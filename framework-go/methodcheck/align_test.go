@@ -129,6 +129,34 @@ func TestAlign_EmptyCodeDesignPhaseIsNoOp(t *testing.T) {
 	}
 }
 
+// TestAlign_GeneratedFakeSubpackageNotOrphaned PROVES absorbOwnedPackages already
+// folds a <component>/fake generated test-double sub-package under its owning
+// component instead of flagging it ALIGN-EXTRA-PKG, so the alignment pass needed
+// NO change for Task B1a: testdata/alignapp/internal/resourceaccess/stateaccess/fake
+// is a fully-generated fake.gen.go double (leaf "fake") sitting under the
+// StateAccess component's own resourceaccess/stateaccess directory. ownerKeyForPackage
+// walks pkgPath's segments deepest-first — "fake" matches no component, so it falls
+// through to "stateaccess", which DOES — and absorbOwnedPackages marks it matched
+// exactly as it would any other owned sub-package (the MCPClient shape). No
+// fake-specific code exists in align.go; this fixture would regress LOUDLY (a new
+// ALIGN-EXTRA-PKG finding) if that ownership walk ever stopped covering it.
+func TestAlign_GeneratedFakeSubpackageNotOrphaned(t *testing.T) {
+	pkgs := loadAlignPkgs(t)
+	foundFake := false
+	for _, p := range pkgs {
+		if p.leaf == "fake" && p.layer == "ResourceAccess" {
+			foundFake = true
+		}
+	}
+	if !foundFake {
+		t.Fatal("expected the stateaccess/fake generated test-double package to be loaded and classified into ResourceAccess — fixture missing or misclassified")
+	}
+	findings := alignSystemToCode(alignAppSystem(), pkgs, nil, nil)
+	if hasRuleFindings(findings, ruleAlignExtraPkg) {
+		t.Errorf("expected the stateaccess/fake sub-package to be absorbed under its owning StateAccess component (no ALIGN-EXTRA-PKG), got %+v", findings)
+	}
+}
+
 func TestAlign_CustomNormalizerOverride(t *testing.T) {
 	pkgs := loadAlignPkgs(t)
 	s := alignAppSystem()
