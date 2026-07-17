@@ -14,8 +14,10 @@ package testinfra
 import (
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1" // #nosec G505 -- git blob ids are protocol-mandated SHA-1; test fake fidelity, not security.
 	"crypto/x509"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
@@ -28,6 +30,17 @@ import (
 
 	"golang.org/x/crypto/nacl/box"
 )
+
+// gitBlobSHA mirrors git's blob object id (SHA-1 over "blob {len}\x00{content}")
+// so the fake's tree listings carry the REAL ids a client's local GitBlobSHA diff
+// computes. Kept as a local copy (not an import of the parent package) so the
+// fake stays a standalone wire double.
+func gitBlobSHA(content []byte) string {
+	h := sha1.New() // #nosec G401 -- git protocol id, not a security control.
+	_, _ = fmt.Fprintf(h, "blob %d\x00", len(content))
+	_, _ = h.Write(content)
+	return hex.EncodeToString(h.Sum(nil))
+}
 
 // GenerateAppKeyPEM returns a freshly generated 2048-bit RSA private key in
 // PKCS#1 PEM form, suitable as the GitHub App private key in tests. The App JWT
@@ -85,6 +98,10 @@ type FakeGitHub struct {
 	// against it. Lazily generated when the catalog is enabled.
 	actionsKeyID     string
 	actionsPubKeyB64 string
+
+	// gitSeq numbers synthetic git object ids (trees/commits) minted by the
+	// stateful git-data endpoints.
+	gitSeq int
 }
 
 type prefixRoute struct {
@@ -113,6 +130,68 @@ type fakeRepo struct {
 	// files is the in-memory Contents store keyed by repo path; the value is the
 	// RAW (un-encoded) file bytes the PUT decoded. Not serialized.
 	files map[string][]byte
+
+	// --- git-data (trees API) state. Not serialized. -----------------------------
+	// head is the branch-tip commit sha of the default branch ("" == unborn). The
+	// head commit's tree is served LIVE from `files` (sha "tree@"+head), so seeded
+	// files always appear in the next tree read without bookkeeping.
+	head string
+	// gitBlobs stores blobs POSTed via git/blobs, keyed by their real git blob sha.
+	gitBlobs map[string][]byte
+	// gitTrees stores trees POSTed via git/trees as FULL file snapshots keyed by a
+	// synthetic tree sha.
+	gitTrees map[string]map[string][]byte
+	// gitCommits stores commits POSTed via git/commits keyed by a synthetic sha.
+	gitCommits map[string]fakeGitCommit
+}
+
+// fakeGitCommit is one commit object created through POST git/commits.
+type fakeGitCommit struct {
+	TreeSHA string
+	Parents []string
+	Message string
+}
+
+// liveTreeSHA is the synthetic tree id of the CURRENT branch tip's tree (served
+// live from repo.files).
+func (r *fakeRepo) liveTreeSHA() string { return "tree@" + r.head }
+
+// initGitState lazily initialises the git-data maps and a synthetic head for a
+// repo seeded with commit history (a default branch).
+func (r *fakeRepo) initGitState() {
+	if r.gitBlobs == nil {
+		r.gitBlobs = map[string][]byte{}
+	}
+	if r.gitTrees == nil {
+		r.gitTrees = map[string]map[string][]byte{}
+	}
+	if r.gitCommits == nil {
+		r.gitCommits = map[string]fakeGitCommit{}
+	}
+	if r.head == "" && r.DefaultBranch != "" {
+		r.head = "commit0-" + r.FullName
+	}
+}
+
+// resolveTreeSnapshot resolves a tree sha to its full file snapshot: the live
+// tree serves the current files; a created tree serves its stored snapshot.
+func (r *fakeRepo) resolveTreeSnapshot(sha string) (map[string][]byte, bool) {
+	if r.head != "" && sha == r.liveTreeSHA() {
+		return copyFiles(r.files), true
+	}
+	snap, ok := r.gitTrees[sha]
+	if ok {
+		return copyFiles(snap), true
+	}
+	return nil, false
+}
+
+func copyFiles(in map[string][]byte) map[string][]byte {
+	out := make(map[string][]byte, len(in))
+	for k, v := range in {
+		out[k] = append([]byte(nil), v...)
+	}
+	return out
 }
 
 // Start spins up the fake and returns it. Call Close (or t.Cleanup) to stop it.
@@ -142,6 +221,15 @@ func (f *FakeGitHub) OnPrefix(method, prefix string, resp Response) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	f.prefixes = append(f.prefixes, prefixRoute{method: method, prefix: prefix, resp: resp})
+}
+
+// ClearRoute removes a scripted exact (method, path) route, letting the stateful
+// catalog serve the endpoint again. Used by interrupted-write tests: script a
+// failure, drive the fault, clear it, drive the recovery against real state.
+func (f *FakeGitHub) ClearRoute(method, path string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.routes, method+" "+path)
 }
 
 // Requests returns a copy of every request received so far (for assertions).
@@ -440,6 +528,19 @@ func (f *FakeGitHub) serveCatalog(method, path, body string) (Response, bool) {
 		}
 		return Response{Status: 201, Body: ""}, true // created
 
+	// git-data (trees API): /repos/{owner}/{name}/git/... — MUST be dispatched
+	// before the repo-commits case below ("/git/commits/{sha}" also contains
+	// "/commits/").
+	case strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/git/"):
+		idx := strings.Index(path, "/git/")
+		full := strings.TrimPrefix(path[:idx], "/repos/")
+		repo, exists := f.catalog[full]
+		if !exists {
+			return Response{Status: 404, Body: `{"message":"not found"}`}, true
+		}
+		repo.initGitState()
+		return f.serveGitData(repo, method, path[idx+len("/git/"):], body)
+
 	// Default-branch tip commit: GET /repos/{owner}/{name}/commits/{ref}
 	case method == http.MethodGet && strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/commits/"):
 		rest := strings.TrimPrefix(path, "/repos/")
@@ -491,4 +592,224 @@ func (f *FakeGitHub) serveCatalog(method, path, body string) (Response, bool) {
 		return Response{Status: 405, Body: `{"message":"method not allowed"}`}, true
 	}
 	return Response{}, false
+}
+
+// serveGitData handles the stateful git-data (trees API) endpoints for one repo.
+// `sub` is the path after "/repos/{full}/git/". Caller holds f.mu. The fake
+// mirrors real GitHub semantics faithfully enough to prove the atomic-commit
+// chain: blobs/trees/commits are staged invisibly, ONLY the ref update (PATCH
+// refs / POST refs) makes them reachable (materialising repo.files), and an
+// unforced non-fast-forward ref update is rejected 422.
+func (f *FakeGitHub) serveGitData(repo *fakeRepo, method, sub, body string) (Response, bool) {
+	switch {
+	// Read a tree (recursive listing served either way): GET git/trees/{ref}
+	case method == http.MethodGet && strings.HasPrefix(sub, "trees/"):
+		return f.serveGitTreeGet(repo, strings.TrimPrefix(sub, "trees/"))
+
+	// Create a blob: POST git/blobs
+	case method == http.MethodPost && sub == "blobs":
+		var in struct {
+			Content  string `json:"content"`
+			Encoding string `json:"encoding"`
+		}
+		_ = json.Unmarshal([]byte(body), &in)
+		raw := []byte(in.Content)
+		if in.Encoding == "base64" {
+			decoded, err := base64.StdEncoding.DecodeString(in.Content)
+			if err != nil {
+				return Response{Status: 422, Body: `{"message":"bad blob encoding"}`}, true
+			}
+			raw = decoded
+		}
+		sha := gitBlobSHA(raw)
+		repo.gitBlobs[sha] = raw
+		return JSON(201, map[string]any{"sha": sha}), true
+
+	// Create a tree: POST git/trees (base_tree + entries → new full snapshot)
+	case method == http.MethodPost && sub == "trees":
+		return f.serveGitTreePost(repo, body)
+
+	// Create a commit: POST git/commits
+	case method == http.MethodPost && sub == "commits":
+		var in struct {
+			Message string   `json:"message"`
+			Tree    string   `json:"tree"`
+			Parents []string `json:"parents"`
+		}
+		_ = json.Unmarshal([]byte(body), &in)
+		if _, ok := repo.resolveTreeSnapshot(in.Tree); !ok {
+			return Response{Status: 422, Body: `{"message":"Tree SHA does not exist"}`}, true
+		}
+		f.gitSeq++
+		sha := fmt.Sprintf("fakecommit-%d", f.gitSeq)
+		repo.gitCommits[sha] = fakeGitCommit{TreeSHA: in.Tree, Parents: append([]string(nil), in.Parents...), Message: in.Message}
+		return JSON(201, map[string]any{"sha": sha}), true
+
+	// Read a commit: GET git/commits/{sha}
+	case method == http.MethodGet && strings.HasPrefix(sub, "commits/"):
+		sha := strings.TrimPrefix(sub, "commits/")
+		if c, ok := repo.gitCommits[sha]; ok {
+			return JSON(200, map[string]any{"sha": sha, "tree": map[string]any{"sha": c.TreeSHA}}), true
+		}
+		if repo.head != "" && sha == repo.head {
+			// The seeded synthetic head: its tree is the live file set.
+			return JSON(200, map[string]any{"sha": sha, "tree": map[string]any{"sha": repo.liveTreeSHA()}}), true
+		}
+		return Response{Status: 404, Body: `{"message":"Not Found"}`}, true
+
+	// Read a ref: GET git/ref/heads/{branch}
+	case method == http.MethodGet && strings.HasPrefix(sub, "ref/heads/"):
+		branch := strings.TrimPrefix(sub, "ref/heads/")
+		if repo.head == "" || branch != repo.DefaultBranch {
+			return Response{Status: 404, Body: `{"message":"Not Found"}`}, true
+		}
+		return JSON(200, map[string]any{
+			"ref": "refs/heads/" + branch, "object": map[string]any{"sha": repo.head, "type": "commit"},
+		}), true
+
+	// Fast-forward a ref: PATCH git/refs/heads/{branch}
+	case method == http.MethodPatch && strings.HasPrefix(sub, "refs/heads/"):
+		return f.serveGitRefPatch(repo, strings.TrimPrefix(sub, "refs/heads/"), body)
+
+	// Create a ref: POST git/refs
+	case method == http.MethodPost && sub == "refs":
+		return f.serveGitRefPost(repo, body)
+	}
+	return Response{}, false
+}
+
+// serveGitTreeGet serves GET git/trees/{ref}: the branch name / head commit /
+// live tree sha resolve to the CURRENT file set (with real git blob shas); a
+// created tree or commit sha resolves to its stored snapshot.
+func (f *FakeGitHub) serveGitTreeGet(repo *fakeRepo, ref string) (Response, bool) {
+	var snap map[string][]byte
+	treeSHA := ref
+	switch {
+	case repo.head != "" && (ref == repo.DefaultBranch || ref == repo.head || ref == repo.liveTreeSHA()):
+		snap = repo.files
+		treeSHA = repo.liveTreeSHA()
+	default:
+		if s, ok := repo.gitTrees[ref]; ok {
+			snap = s
+		} else if c, ok := repo.gitCommits[ref]; ok {
+			s2, ok2 := repo.resolveTreeSnapshot(c.TreeSHA)
+			if !ok2 {
+				return Response{Status: 404, Body: `{"message":"Not Found"}`}, true
+			}
+			snap, treeSHA = s2, c.TreeSHA
+		} else {
+			return Response{Status: 404, Body: `{"message":"Not Found"}`}, true
+		}
+	}
+	paths := make([]string, 0, len(snap))
+	for p := range snap {
+		paths = append(paths, p)
+	}
+	sort.Strings(paths)
+	entries := make([]map[string]any, 0, len(paths))
+	for _, p := range paths {
+		entries = append(entries, map[string]any{
+			"path": p, "mode": "100644", "type": "blob",
+			"sha": gitBlobSHA(snap[p]), "size": len(snap[p]),
+		})
+	}
+	return JSON(200, map[string]any{"sha": treeSHA, "tree": entries, "truncated": false}), true
+}
+
+// serveGitTreePost serves POST git/trees: overlay the entries (each resolving a
+// previously created blob) onto the base tree's snapshot.
+func (f *FakeGitHub) serveGitTreePost(repo *fakeRepo, body string) (Response, bool) {
+	var in struct {
+		BaseTree string `json:"base_tree"`
+		Tree     []struct {
+			Path string `json:"path"`
+			SHA  string `json:"sha"`
+		} `json:"tree"`
+	}
+	_ = json.Unmarshal([]byte(body), &in)
+	snap := map[string][]byte{}
+	if in.BaseTree != "" {
+		base, ok := repo.resolveTreeSnapshot(in.BaseTree)
+		if !ok {
+			return Response{Status: 422, Body: `{"message":"base_tree does not exist"}`}, true
+		}
+		snap = base
+	}
+	for _, e := range in.Tree {
+		raw, ok := repo.gitBlobs[e.SHA]
+		if !ok {
+			return Response{Status: 422, Body: fmt.Sprintf(`{"message":"blob %s does not exist"}`, e.SHA)}, true
+		}
+		snap[e.Path] = append([]byte(nil), raw...)
+	}
+	f.gitSeq++
+	sha := fmt.Sprintf("faketree-%d", f.gitSeq)
+	repo.gitTrees[sha] = snap
+	return JSON(201, map[string]any{"sha": sha}), true
+}
+
+// serveGitRefPatch serves PATCH git/refs/heads/{branch}: an UNFORCED update must
+// be a fast-forward (the new commit's parent IS the current head) or it is
+// rejected 422 — the compare-and-swap the atomic commit chain relies on. On
+// success the commit's tree snapshot becomes the live file set (the commit is
+// now reachable).
+func (f *FakeGitHub) serveGitRefPatch(repo *fakeRepo, branch, body string) (Response, bool) {
+	var in struct {
+		SHA   string `json:"sha"`
+		Force bool   `json:"force"`
+	}
+	_ = json.Unmarshal([]byte(body), &in)
+	if repo.head == "" || branch != repo.DefaultBranch {
+		return Response{Status: 422, Body: `{"message":"Reference does not exist"}`}, true
+	}
+	commit, ok := repo.gitCommits[in.SHA]
+	if !ok {
+		return Response{Status: 422, Body: `{"message":"Object does not exist"}`}, true
+	}
+	fastForward := len(commit.Parents) > 0 && commit.Parents[0] == repo.head
+	if !fastForward && !in.Force {
+		return Response{Status: 422, Body: `{"message":"Update is not a fast forward"}`}, true
+	}
+	snap, ok := repo.resolveTreeSnapshot(commit.TreeSHA)
+	if !ok {
+		return Response{Status: 422, Body: `{"message":"commit tree does not exist"}`}, true
+	}
+	repo.head = in.SHA
+	repo.files = snap
+	return JSON(200, map[string]any{
+		"ref": "refs/heads/" + branch, "object": map[string]any{"sha": in.SHA, "type": "commit"},
+	}), true
+}
+
+// serveGitRefPost serves POST git/refs (create a ref). Creating the ref of an
+// UNBORN default branch with a staged commit materialises that commit (the
+// atomic chain's fresh-repo tail); creating any other branch just records the
+// name (the PR rail's CreateBranch). An existing ref is rejected 422.
+func (f *FakeGitHub) serveGitRefPost(repo *fakeRepo, body string) (Response, bool) {
+	var in struct {
+		Ref string `json:"ref"`
+		SHA string `json:"sha"`
+	}
+	_ = json.Unmarshal([]byte(body), &in)
+	branch := strings.TrimPrefix(in.Ref, "refs/heads/")
+	for _, b := range repo.branches {
+		if b == branch {
+			return Response{Status: 422, Body: `{"message":"Reference already exists"}`}, true
+		}
+	}
+	if commit, ok := repo.gitCommits[in.SHA]; ok && repo.head == "" {
+		snap, ok2 := repo.resolveTreeSnapshot(commit.TreeSHA)
+		if !ok2 {
+			return Response{Status: 422, Body: `{"message":"commit tree does not exist"}`}, true
+		}
+		repo.head = in.SHA
+		repo.files = snap
+		if repo.DefaultBranch == "" {
+			repo.DefaultBranch = branch
+		}
+	}
+	repo.branches = append(repo.branches, branch)
+	return JSON(201, map[string]any{
+		"ref": in.Ref, "object": map[string]any{"sha": in.SHA, "type": "commit"},
+	}), true
 }
