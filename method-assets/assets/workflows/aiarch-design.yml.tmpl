@@ -334,6 +334,20 @@ jobs:
           # draft that fails the required-field gate). Treat the branch as dead scratch.
           self_heal_reset "state slot could not be reconciled (stale/withdrawn draft)"
 
+      # RUNTIME PROMPT MATERIALIZATION (founder-ratified 2026-07-17). The .claude
+      # prompt surface (commands/skills/agents + seat manifest) is NOT repo-committed
+      # in operated repos: this step renders it into the RUNNER CHECKOUT from the SAME
+      # pinned module generation as the aiarch-state binary installed above — the pin
+      # IS the provenance, so the prompts this job runs can never drift from the
+      # validators that gate it. It runs AFTER the session-branch refresh/checkout so
+      # the rendered files land in the FINAL working tree, and the render force-
+      # overwrites owned paths, so a stale committed .claude copy in a legacy repo
+      # cannot shadow the current generation. Working-tree only: no git state is
+      # touched and nothing here is committed.
+      - name: Materialize the .claude prompt surface (runtime-rendered, not repo-committed)
+        run: |
+          "${{ steps.statemcp.outputs.bin }}" seat-assets --dest .
+
       # Record the base commit the draft is built on — the REFRESHED session-branch tip (so
       # the post-claude guard measures whether CLAUDE advanced the branch beyond the refresh,
       # not the refresh merge itself). See "Verify claude pushed a commit".
