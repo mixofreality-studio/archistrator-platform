@@ -171,6 +171,8 @@ This is the normative task the CI draft job (and a local `/system-design` run) e
 
 Select the CORE use cases by ABSTRACTION, not by listing what the customer asked for. For each candidate ask: does this capture the ESSENCE of the business (what differentiates it, what creates value), or is it a permutation/utility (onboarding, payment, account admin)? Could a single higher abstraction — often a NEW name not in the customer's vocabulary — subsume several raw use cases? Target 2-6 core use cases; if you have more than 6 you have not abstracted enough. Sanity check: a one-slide brochure for the system would have roughly this many bullets. Record each rejected permutation with its rejection reason and link it to the core it permutes by setting its `variationOf` to that core use case's NAME (exactly as you wrote it).
 
+EXERCISE THE VOLATILITIES: the committed `.volatilities` is an input to your flows, not a backdrop — each accepted volatility should be exercised, its seam crossed, by at least one core use case's flow, or its absence explicitly justified in the draft. Flows that exercise NO committed volatility are restating the customer's current manual process, not the product's required behavior.
+
 IDENTITY BY NAME: every use case and actor is identified by its human-readable NAME — you do NOT emit any id. Use case names must be UNIQUE; actor roles must be unique within a use case. Reference the core use case in `variationOf` by its name; the server assigns and resolves all internal ids.
 
 ### Activity diagram rules
