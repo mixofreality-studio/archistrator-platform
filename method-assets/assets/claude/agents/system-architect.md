@@ -18,6 +18,7 @@ tools:
   - mcp__aiarch-state__getResearchSource
   - mcp__aiarch-state__projectStateReadProject
   - mcp__aiarch-state__putDraftModel
+  - mcp__aiarch-state__setCritiqueVerdict
   - mcp__aiarch-state__recordServiceContract
   - mcp__aiarch-state__recordPhaseArtifact
   - mcp__aiarch-state__publishDraft

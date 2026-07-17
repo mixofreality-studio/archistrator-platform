@@ -7,7 +7,7 @@ import (
 
 // wantWrites: the exact aiarch-state WRITE verbs each role may hold (spec §4).
 var wantWrites = map[string][]string{
-	"system-architect": {"putDraftModel", "recordServiceContract", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
+	"system-architect": {"putDraftModel", "setCritiqueVerdict", "recordServiceContract", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
 	"product-manager":  {"setCritiqueVerdict", "respondToReviewComment", "publishDraft"},
 	"project-manager":  {"putDraftModel", "recordPhaseArtifact", "publishDraft"},
 	"senior-developer": {"recordServiceContract", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
