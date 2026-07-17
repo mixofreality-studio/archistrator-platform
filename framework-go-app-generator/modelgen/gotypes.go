@@ -14,6 +14,18 @@ import (
 // Generate itself never sets it, so its output is unaffected.
 var uuidAsString bool
 
+// fakeQualifyAlias, when non-empty, is the contract package's Go package
+// alias (its goPackage's last segment, e.g. "orderstate") that goType
+// prepends to a $def type name — and to a bare (package-dot-free), exported,
+// import-less x-go-type binding, e.g. a hand-written orderstate.OrderReceipt
+// — so a name that resolves bare inside the contract's own package (Generate's
+// output) instead resolves as <alias>.<Name> from the sibling <base>fake
+// package GenerateFakes emits into (see emit_fake.go). It is reset to "" at
+// the start/end of every GenerateFakes pass (the same one-pass-reset model as
+// uuidAsString/pendingImports); Generate/EmitTypes never set it, so their
+// output is completely unaffected.
+var fakeQualifyAlias string
+
 // goType maps a resolved schema node to its Go type.
 func goType(s *jsonschema.Schema) string {
 	if s == nil {
@@ -25,7 +37,11 @@ func goType(s *jsonschema.Schema) string {
 		return gt
 	}
 	if s.Ref != "" {
-		return refName(s.Ref)
+		name := refName(s.Ref)
+		if fakeQualifyAlias != "" {
+			return fakeQualifyAlias + "." + name
+		}
+		return name
 	}
 	return goTypeForType(s)
 }
@@ -47,8 +63,37 @@ func goTypeForXGoType(s *jsonschema.Schema) (string, bool) {
 	}
 	if imp, ok := s.Extra["x-go-import"].(string); ok && imp != "" {
 		pendingImports[imp] = ""
+		return gt, true
 	}
-	return gt, true
+	return qualifyBareXGoType(gt), true
+}
+
+// qualifyBareXGoType qualifies a bare (package-dot-free) x-go-type with no
+// import — a type hand-written IN the contract package itself, outside the
+// schema-first $defs (e.g. orderstate.OrderReceipt) — with the contract
+// package alias, but only during a fake pass (fakeQualifyAlias set) and only
+// for an exported name (excluding predeclared builtins like int/string/
+// []byte, which must never be package-qualified). Generate's own same-package
+// output (fakeQualifyAlias == "") always leaves gt bare. Mirrors
+// temporalgen's resolveGoType/isBareRAType.
+func qualifyBareXGoType(gt string) string {
+	if fakeQualifyAlias != "" && !strings.Contains(gt, ".") && isExportedIdent(gt) {
+		return fakeQualifyAlias + "." + gt
+	}
+	return gt
+}
+
+// isExportedIdent reports whether name's first byte is an uppercase ASCII
+// letter — the Go export rule for a package-level identifier. Used to tell an
+// exported bare x-go-type (a hand-written contract-package type) apart from a
+// predeclared builtin (int, string, []byte, ...), which must never be
+// package-qualified.
+func isExportedIdent(name string) bool {
+	if name == "" {
+		return false
+	}
+	r := name[0]
+	return r >= 'A' && r <= 'Z'
 }
 
 // goTypeForType maps a schema's JSON type (its effectiveType) to the Go type,

@@ -12,6 +12,20 @@ import (
 // decodeAndEmitInterface re-decodes the document's `interface` key into the typed
 // descriptor and emits the Go interface. Reports whether an interface was present.
 func decodeAndEmitInterface(buf *bytes.Buffer, doc *jsonschema.Schema) (Interface, bool, error) {
+	iface, ok, err := decodeInterface(doc)
+	if err != nil || !ok {
+		return iface, ok, err
+	}
+	emitInterface(buf, iface)
+	return iface, true, nil
+}
+
+// decodeInterface re-decodes the document's `interface` key into the typed
+// descriptor WITHOUT emitting anything — the decode-only half
+// decodeAndEmitInterface builds on, and the one GenerateFakes uses directly
+// (a fake never re-emits the source interface, only references it via the
+// contract package selector; see emit_fake.go).
+func decodeInterface(doc *jsonschema.Schema) (Interface, bool, error) {
 	var iface Interface
 	ix, ok := doc.Extra["interface"]
 	if !ok {
@@ -24,7 +38,6 @@ func decodeAndEmitInterface(buf *bytes.Buffer, doc *jsonschema.Schema) (Interfac
 	if err := json.Unmarshal(ib, &iface); err != nil {
 		return iface, false, fmt.Errorf("decode interface: %w", err)
 	}
-	emitInterface(buf, iface)
 	return iface, true, nil
 }
 
