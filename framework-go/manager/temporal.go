@@ -16,8 +16,8 @@ func RAErrType(k ra.Kind) string { return "ResourceAccess_" + k.String() }
 // EngineErrType is the canonical Temporal Type() string for an Engine kind.
 func EngineErrType(k eng.Kind) string { return "Engine_" + k.String() }
 
-// ManagerErrType is the canonical Temporal Type() string for a Manager kind.
-func ManagerErrType(k Kind) string { return "Manager_" + k.String() }
+// ErrType is the canonical Temporal Type() string for a Manager kind.
+func ErrType(k Kind) string { return "Manager_" + k.String() }
 
 // MapError converts any of the three layer errors into a Temporal
 // ApplicationError tagged with the canonical stable Type() and the error's
@@ -40,7 +40,7 @@ func MapError(err error) error {
 	}
 	var mge *Error
 	if errors.As(err, &mge) {
-		return tagError(err, ManagerErrType(mge.Kind), mge.Retryable)
+		return tagError(err, ErrType(mge.Kind), mge.Retryable)
 	}
 	return err
 }
@@ -68,7 +68,7 @@ func NonRetryableErrorTypes() []string {
 	}
 	for _, k := range Kinds() {
 		if !k.DefaultRetryable() {
-			out = append(out, ManagerErrType(k))
+			out = append(out, ErrType(k))
 		}
 	}
 	return out

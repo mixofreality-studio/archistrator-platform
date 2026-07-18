@@ -339,7 +339,7 @@
     }
    },
    "interface": {
-    "name": "OrderStateAccess",
+    "name": "Access",
     "layer": "resourceaccess",
     "operations": [
      {

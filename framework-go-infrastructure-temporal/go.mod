@@ -34,3 +34,9 @@ require (
 	google.golang.org/grpc v1.80.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+// framework-go is a sibling module in this repo. The replace makes the
+// standalone module build (GOWORK=off) resolve it from the local checkout
+// instead of a stale published tag — needed while a breaking framework-go
+// change (this branch) has not yet been cut as a new release.
+replace github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0 => ../framework-go

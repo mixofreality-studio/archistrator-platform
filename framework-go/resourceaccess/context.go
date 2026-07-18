@@ -14,7 +14,7 @@ import (
 type Context struct {
 	context.Context
 	// Principal is the identity on whose behalf the access is made (authz + audit).
-	Principal security.SecurityPrincipal
+	Principal security.Principal
 	// IdempotencyKey deduplicates retried writes; required for mutating ops.
 	IdempotencyKey IdempotencyKey
 }

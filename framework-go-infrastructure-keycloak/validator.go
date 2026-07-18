@@ -64,7 +64,7 @@ func NewValidator(ctx context.Context, cfg Config) (security.Validator, error) {
 //
 // ctx is unused: the signing keys are kept fresh by the background refresh bound
 // to the context passed to [NewValidator], and token verification is pure CPU.
-func (v *validator) ValidateAccessToken(_ context.Context, rawToken string) (security.SecurityPrincipal, error) {
+func (v *validator) ValidateAccessToken(_ context.Context, rawToken string) (security.Principal, error) {
 	claims := jwt.MapClaims{}
 	opts := []jwt.ParserOption{
 		jwt.WithValidMethods([]string{"RS256"}),
@@ -75,21 +75,21 @@ func (v *validator) ValidateAccessToken(_ context.Context, rawToken string) (sec
 		opts = append(opts, jwt.WithLeeway(v.leeway))
 	}
 	if _, err := jwt.ParseWithClaims(rawToken, claims, v.keyfunc, opts...); err != nil {
-		return security.SecurityPrincipal{}, security.WrapError(security.ErrUnauthenticated, err)
+		return security.Principal{}, security.WrapError(security.ErrUnauthenticated, err)
 	}
 	p := mapPrincipal(claims)
 	if p.Subject == "" {
-		return security.SecurityPrincipal{}, security.NewError(security.ErrPrincipalUnknown)
+		return security.Principal{}, security.NewError(security.ErrPrincipalUnknown)
 	}
 	return p, nil
 }
 
 // mapPrincipal translates a verified Keycloak claim set into the platform's
 // principal. It reads the keys the platform maps to identity and carries the rest
-// through verbatim in [security.SecurityPrincipal.Claims].
-func mapPrincipal(claims jwt.MapClaims) security.SecurityPrincipal {
+// through verbatim in [security.Principal.Claims].
+func mapPrincipal(claims jwt.MapClaims) security.Principal {
 	username := claimString(claims, "preferred_username")
-	return security.SecurityPrincipal{
+	return security.Principal{
 		Kind:          principalKind(username),
 		Subject:       claimString(claims, "sub"),
 		Username:      username,

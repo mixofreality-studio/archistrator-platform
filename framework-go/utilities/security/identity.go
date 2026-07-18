@@ -12,12 +12,12 @@ import (
 type ServiceAudience string
 
 // ServiceCredential is an opaque, short-lived, attachable credential plus the
-// service [SecurityPrincipal]. The credential value is never parsed by callers;
+// service [Principal]. The credential value is never parsed by callers;
 // the [ServiceIdentitySource] mints/caches/refreshes it internally near ExpiresAt.
 type ServiceCredential struct {
-	opaque    string            // attachable credential (today: a short-lived bearer); never parsed by callers
-	Principal SecurityPrincipal // the service principal, usable in Authorize
-	ExpiresAt time.Time         // callers re-request near expiry
+	opaque    string    // attachable credential (today: a short-lived bearer); never parsed by callers
+	Principal Principal // the service principal, usable in Authorize
+	ExpiresAt time.Time // callers re-request near expiry
 }
 
 // AttachableValue returns the opaque credential value to attach to an outbound
@@ -72,7 +72,7 @@ func (d inProcessIdentitySource) Mint(_ context.Context, audience ServiceAudienc
 	raw := sha256.Sum256([]byte(string(audience) + "@" + now.UTC().Format(time.RFC3339Nano)))
 	return ServiceCredential{
 		opaque: hex.EncodeToString(raw[:]),
-		Principal: SecurityPrincipal{
+		Principal: Principal{
 			Subject: "aiarch-service",
 			Kind:    PrincipalApplication,
 		},

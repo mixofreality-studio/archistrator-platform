@@ -16,5 +16,5 @@ import (
 type Context struct {
 	context.Context
 	// Principal is the identity on whose behalf the workflow runs (authz + audit).
-	Principal security.SecurityPrincipal
+	Principal security.Principal
 }

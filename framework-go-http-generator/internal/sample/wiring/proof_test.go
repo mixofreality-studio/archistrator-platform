@@ -34,11 +34,11 @@ func (stubRegistrar) Register(mux *http.ServeMux) {
 // fakeValidator accepts exactly one token and maps it to a fixed principal.
 type fakeValidator struct{}
 
-func (fakeValidator) ValidateAccessToken(_ context.Context, raw string) (security.SecurityPrincipal, error) {
+func (fakeValidator) ValidateAccessToken(_ context.Context, raw string) (security.Principal, error) {
 	if raw == "good" {
-		return security.SecurityPrincipal{Kind: security.PrincipalUser, Subject: "u-real"}, nil
+		return security.Principal{Kind: security.PrincipalUser, Subject: "u-real"}, nil
 	}
-	return security.SecurityPrincipal{}, security.NewError(security.ErrUnauthenticated)
+	return security.Principal{}, security.NewError(security.ErrUnauthenticated)
 }
 
 func TestHealthIsUnauthenticated(t *testing.T) {
@@ -72,7 +72,7 @@ func TestNilValidatorDeniesAPI(t *testing.T) {
 }
 
 func TestDevModeInjectsPrincipal(t *testing.T) {
-	dev := DevConfig{Enabled: true, Principal: security.SecurityPrincipal{Subject: "u-dev"}}
+	dev := DevConfig{Enabled: true, Principal: security.Principal{Subject: "u-dev"}}
 	srv := httptest.NewServer(NewServer(dev, nil, stubRegistrar{}))
 	defer srv.Close()
 

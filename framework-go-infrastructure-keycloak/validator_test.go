@@ -156,7 +156,7 @@ func TestVerifiedTokenWithoutSubjectIsPrincipalUnknown(t *testing.T) {
 	v := newValidator(t, jwksServer(t, &key.PublicKey))
 	raw := signToken(t, key, jwt.MapClaims{"iss": testIssuer, "exp": time.Now().Add(time.Hour).Unix()})
 	_, err := v.ValidateAccessToken(context.Background(), raw)
-	var se *security.SecurityError
+	var se *security.Error
 	if !errors.As(err, &se) || se.Kind != security.ErrPrincipalUnknown {
 		t.Fatalf("want ErrPrincipalUnknown, got %v", err)
 	}
@@ -164,7 +164,7 @@ func TestVerifiedTokenWithoutSubjectIsPrincipalUnknown(t *testing.T) {
 
 func assertUnauthenticated(t *testing.T, err error) {
 	t.Helper()
-	var se *security.SecurityError
+	var se *security.Error
 	if !errors.As(err, &se) || se.Kind != security.ErrUnauthenticated {
 		t.Fatalf("want ErrUnauthenticated, got %v", err)
 	}

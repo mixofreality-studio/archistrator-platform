@@ -138,7 +138,7 @@ func (appHooks) BillingManagerRepo() func(id managerbilling.AccountID) (repolook
 
 // FinalizeOrderStateAccess (B3): identity — no composition-root swap/wrap
 // needed for the sandbox proof.
-func (appHooks) FinalizeOrderStateAccess(cfg *Config, v orderstate.OrderStateAccess) orderstate.OrderStateAccess {
+func (appHooks) FinalizeOrderStateAccess(cfg *Config, v orderstate.Access) orderstate.Access {
 	return v
 }
 
@@ -180,15 +180,15 @@ import (
 	postgres "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres"
 )
 
-type OrderStateAccess interface{}
+type Access interface{}
 
 type stub struct{}
 
-func NewPostgresOrderStateAccess(ctx context.Context, pool *postgres.Pool) (OrderStateAccess, error) {
+func NewPostgresAccess(ctx context.Context, pool *postgres.Pool) (Access, error) {
 	return stub{}, nil
 }
 
-func NewMemoryOrderStateAccess() OrderStateAccess { return stub{} }
+func NewMemoryAccess() Access { return stub{} }
 `
 	files["internal/engine/pricing/pricing.go"] = `package pricing
 
@@ -215,7 +215,7 @@ type impl struct{}
 
 const TaskQueue = "order"
 
-func NewOrderManager(tc client.Client, orderState orderstate.OrderStateAccess, pr pricing.PricingEngine, repo func(orderID string) (repolookup.RepoRef, bool), repoBase string) OrderManager {
+func NewOrderManager(tc client.Client, orderState orderstate.Access, pr pricing.PricingEngine, repo func(orderID string) (repolookup.RepoRef, bool), repoBase string) OrderManager {
 	return impl{}
 }
 

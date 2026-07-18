@@ -196,26 +196,26 @@ func resolveManagers(m *projectmodel.Model, cfg Config) ([]*mgrInfo, error) {
 	return infos, nil
 }
 
-// Route is one entry of the emitted client's HTTP surface: the verb+path a
+// route is one entry of the emitted client's HTTP surface: the verb+path a
 // generated method binds for an operation. Path is the mounted template with
 // its query params appended as {name} placeholders, so a fidelity test can
 // byte-pin the whole route (e.g.
 // "GET /api/v1/system-design/get-session-state/{projectID}?kind={kind}").
-type Route struct {
+type route struct {
 	Manager string
 	Op      string
 	Verb    string
 	Path    string
 }
 
-// RouteTable returns the HTTP routes the SDK binds for managers, derived from
+// routeTable returns the HTTP routes the SDK binds for managers, derived from
 // the SAME httpgen.PlanOps the emitter uses — the verifiable mirror proof.
-func RouteTable(m *projectmodel.Model, managers []string) ([]Route, error) {
+func routeTable(m *projectmodel.Model, managers []string) ([]route, error) {
 	infos, err := resolveManagers(m, Config{Managers: managers, PackageName: "sdk"})
 	if err != nil {
 		return nil, err
 	}
-	var out []Route
+	var out []route
 	for _, info := range infos {
 		ops := make([]string, 0, len(info.plans))
 		for name := range info.plans {
@@ -224,7 +224,7 @@ func RouteTable(m *projectmodel.Model, managers []string) ([]Route, error) {
 		sort.Strings(ops)
 		for _, name := range ops {
 			p := info.plans[name]
-			out = append(out, Route{
+			out = append(out, route{
 				Manager: info.key,
 				Op:      name,
 				Verb:    p.Verb,

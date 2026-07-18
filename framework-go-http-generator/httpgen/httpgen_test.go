@@ -175,7 +175,7 @@ const realSecurityImport = "github.com/mixofreality-studio/archistrator-platform
 // TestGenerateWiringGolden generates the component-agnostic wiring + middleware
 // layer, asserts both files parse, that the middleware references the security
 // package API it must (Validator / WithPrincipal / Middleware / NewError /
-// SecurityPrincipal), and that the server mounts the authenticated /api/v1/ tree
+// Principal), and that the server mounts the authenticated /api/v1/ tree
 // plus the unauthenticated health probes — then matches the committed goldens.
 func TestGenerateWiringGolden(t *testing.T) {
 	res, err := httpgen.GenerateWiring(httpgen.WiringOptions{SecurityImport: realSecurityImport})
@@ -195,7 +195,7 @@ func TestGenerateWiringGolden(t *testing.T) {
 		"security.Validator",
 		"security.Middleware(validator)",
 		"security.WithPrincipal(",
-		"security.SecurityPrincipal",
+		"security.Principal",
 		"security.NewError(security.ErrUnauthenticated)",
 	} {
 		if !strings.Contains(mw, want) {

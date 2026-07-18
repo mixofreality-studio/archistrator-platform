@@ -81,7 +81,7 @@ type Hooks interface {
 	// (presence optional). Return v unchanged unless
 	// composition policy needs to swap or wrap it (e.g. a construction
 	// dry-run stub swap-in) — the identity implementation is always correct.
-	FinalizeOrderStateAccess(cfg *Config, v orderstate.OrderStateAccess) orderstate.OrderStateAccess
+	FinalizeOrderStateAccess(cfg *Config, v orderstate.Access) orderstate.Access
 
 	// OrderManagerRepo supplies a composition-root value the deployment model
 	// cannot express (a func-typed resolver, or a scalar/interface dep with no
@@ -153,17 +153,17 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 	defer pool.Close()
 
 	// ResourceAccess — one binding per component, variant-selected by profile.
-	var orderStateAccess orderstate.OrderStateAccess
+	var orderStateAccess orderstate.Access
 	switch profile {
 	case "cloud":
-		v, err := orderstate.NewPostgresOrderStateAccess(ctx, pool)
+		v, err := orderstate.NewPostgresAccess(ctx, pool)
 		if err != nil {
 			return err
 		}
 		orderStateAccess = v
 		logger.Info("orderStateAccess (postgres) ready")
 	case "local":
-		orderStateAccess = orderstate.NewMemoryOrderStateAccess()
+		orderStateAccess = orderstate.NewMemoryAccess()
 		logger.Info("orderStateAccess (memory) ready")
 	}
 	orderStateAccess = hooks.FinalizeOrderStateAccess(cfg, orderStateAccess)

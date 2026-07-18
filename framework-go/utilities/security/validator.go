@@ -3,7 +3,7 @@ package security
 import "context"
 
 // Validator is the authentication seam: it turns the raw bearer access token a
-// request carried into a typed [SecurityPrincipal]. It is the ONE place a raw
+// request carried into a typed [Principal]. It is the ONE place a raw
 // token is parsed and cryptographically verified.
 //
 // The name is mechanism-neutral on purpose. A concrete Validator verifies the
@@ -14,9 +14,9 @@ import "context"
 // authentication differently.
 //
 // A Validator MUST fail closed: any token it cannot fully verify yields a
-// *[SecurityError] of kind [ErrUnauthenticated] (or [ErrPrincipalUnknown] when a
+// *[Error] of kind [ErrUnauthenticated] (or [ErrPrincipalUnknown] when a
 // well-formed, verified token maps to no provisioned principal), never a
 // partially-trusted principal.
 type Validator interface {
-	ValidateAccessToken(ctx context.Context, rawToken string) (SecurityPrincipal, error)
+	ValidateAccessToken(ctx context.Context, rawToken string) (Principal, error)
 }

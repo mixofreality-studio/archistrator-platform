@@ -13,7 +13,7 @@ import (
 // handler returns the validated principal's identity claims as JSON (the SPA's
 // session probe — GTD parity).
 func TestUserInfoHandlerReturnsPrincipalClaims(t *testing.T) {
-	want := security.SecurityPrincipal{
+	want := security.Principal{
 		Kind:          security.PrincipalUser,
 		Subject:       "u-1",
 		Username:      "ada",

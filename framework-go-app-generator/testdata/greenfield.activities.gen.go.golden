@@ -18,7 +18,7 @@ import (
 // ResourceAccess component dependency — the manager's architecture-approved
 // call surface. Fields are the contract interfaces, threaded by RegisterWorker.
 type genActivities struct {
-	OrderState orderstate.OrderStateAccess
+	OrderState orderstate.Access
 }
 
 // genActivityIdempotencyKey derives the run-scoped 3-part key

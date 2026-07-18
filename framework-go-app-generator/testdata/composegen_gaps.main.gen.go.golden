@@ -90,7 +90,7 @@ type Hooks interface {
 	// (presence optional-dormant). Return v unchanged unless
 	// composition policy needs to swap or wrap it (e.g. a construction
 	// dry-run stub swap-in) — the identity implementation is always correct.
-	FinalizeOrderStateAccess(cfg *Config, v orderstate.OrderStateAccess) orderstate.OrderStateAccess
+	FinalizeOrderStateAccess(cfg *Config, v orderstate.Access) orderstate.Access
 
 	// RegisterOrderManagerWorker reports whether to register the OrderManager
 	// Temporal Worker. The manager has ≥1 optional-dormant dependency, so its
@@ -177,17 +177,17 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 	ledgerStateAccess := ledgerstate.NewLedgerStateAccess()
 	logger.Info("ledgerStateAccess (stub) ready")
 	ledgerStateAccess = hooks.FinalizeLedgerStateAccess(cfg, ledgerStateAccess)
-	var orderStateAccess orderstate.OrderStateAccess
+	var orderStateAccess orderstate.Access
 	switch profile {
 	case "cloud":
-		v, err := orderstate.NewPostgresOrderStateAccess(ctx, pool)
+		v, err := orderstate.NewPostgresAccess(ctx, pool)
 		if err != nil {
 			return err
 		}
 		orderStateAccess = v
 		logger.Info("orderStateAccess (postgres) ready")
 	case "local":
-		orderStateAccess = orderstate.NewMemoryOrderStateAccess()
+		orderStateAccess = orderstate.NewMemoryAccess()
 		logger.Info("orderStateAccess (memory) ready")
 	}
 	orderStateAccess = hooks.FinalizeOrderStateAccess(cfg, orderStateAccess)

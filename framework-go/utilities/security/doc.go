@@ -7,7 +7,7 @@
 // authorization, webhook-signature and service-identity concerns. Two halves:
 //
 //   - Authentication (the edge half). A [Validator] turns the bearer access
-//     token an HTTP request carries into a typed [SecurityPrincipal]; the
+//     token an HTTP request carries into a typed [Principal]; the
 //     [Middleware] wraps any net/http handler to do that and stash the principal
 //     on the request context (401 on failure). The concrete token-validation
 //     mechanism (JWKS signature check, issuer/expiry verification, IdP claim
@@ -31,7 +31,7 @@
 // Layer rules ([[the-method-layers]]): a Utility imports NO Temporal, publishes
 // and subscribes to NO events, and is synchronous/in-process. It is called from
 // Client request-handling code before any workflow is started. Propagating a
-// [SecurityPrincipal] THROUGH Temporal is therefore not this package's concern —
+// [Principal] THROUGH Temporal is therefore not this package's concern —
 // that lives in the Temporal infrastructure satellite, which depends on this
 // package for the principal type but keeps the Temporal SDK out of here.
 package security

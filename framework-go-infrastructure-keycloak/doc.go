@@ -9,7 +9,7 @@
 // signature against the realm's JWKS, checks the issuer and expiry, and maps the
 // Keycloak claim shape (preferred_username, email, realm_access.roles, the
 // organization claim, the service-account convention for application principals)
-// onto a framework [security.SecurityPrincipal]. Audience is deliberately NOT
+// onto a framework [security.Principal]. Audience is deliberately NOT
 // checked — Keycloak access tokens carry the client in azp, and aud is an
 // array/absent — matching how the platform's other servers treat these tokens.
 //

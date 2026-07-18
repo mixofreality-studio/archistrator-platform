@@ -18,24 +18,24 @@ type Security interface {
 	// Authorize answers "may this principal take this action on this resource?".
 	// It returns a Permit/Deny [Decision] with an opaque, non-leaking reason.
 	//
-	// FAIL-CLOSED: on *[SecurityError]{[ErrPolicyUnavailable]} (the decision
+	// FAIL-CLOSED: on *[Error]{[ErrPolicyUnavailable]} (the decision
 	// engine is unreachable, Retryable=true) the caller MUST treat the outcome as
 	// DENY, never permit.
-	Authorize(ctx context.Context, principal SecurityPrincipal, action Action, resource ResourceRef) (Decision, error)
+	Authorize(ctx context.Context, principal Principal, action Action, resource ResourceRef) (Decision, error)
 
 	// VerifyWebhookSignature returns nil iff the presented signature is valid for
 	// the exact raw body on the given channel; otherwise a typed error and the
 	// caller drops the request. rawBody must be the EXACT unparsed bytes the
 	// signature was computed over.
 	//
-	// FAIL-CLOSED: any *[SecurityError] ([ErrSignatureInvalid] — terminal;
+	// FAIL-CLOSED: any *[Error] ([ErrSignatureInvalid] — terminal;
 	// [ErrSigningKeyUnavailable] — transient) MUST be treated as REJECT.
 	VerifyWebhookSignature(ctx context.Context, channel WebhookChannel, rawBody []byte, presentedSignature SignatureMaterial) error
 
 	// ObtainServiceIdentity mints/returns the platform's own short-lived service
 	// credential for the named downstream audience, plus the service principal.
 	//
-	// Errors: *[SecurityError]{[ErrIdentityUnavailable]} when the identity source
+	// Errors: *[Error]{[ErrIdentityUnavailable]} when the identity source
 	// is unreachable (Retryable=true).
 	ObtainServiceIdentity(ctx context.Context, audience ServiceAudience) (ServiceCredential, error)
 }
@@ -96,7 +96,7 @@ func New(opts ...Option) Security {
 	return s
 }
 
-func (s *service) Authorize(ctx context.Context, principal SecurityPrincipal, action Action, resource ResourceRef) (Decision, error) {
+func (s *service) Authorize(ctx context.Context, principal Principal, action Action, resource ResourceRef) (Decision, error) {
 	permit, err := s.pdp.Decide(ctx, principal, action, resource)
 	if err != nil {
 		// The decision engine was unreachable. Do NOT emit a permit. The contract

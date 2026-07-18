@@ -422,176 +422,273 @@ func (f *FakeGitHub) handle(w http.ResponseWriter, r *http.Request) {
 
 // serveCatalog handles the stateful repo endpoints from in-memory state. Caller
 // holds f.mu. Returns (response, true) if it handled the route.
+//
+// The route table is a small ordered predicate/handler list (rather than one
+// large boolean switch) so this dispatcher's own cyclomatic complexity stays
+// low: each route's (method, path) match lives in its own tiny isXRoute
+// predicate, and each route's logic lives in its own serveCatalogX handler.
+// Order matters and mirrors the original routing exactly — in particular the
+// git-data route MUST be checked before the commit-tip route below it
+// ("/git/commits/{sha}" also contains "/commits/").
 func (f *FakeGitHub) serveCatalog(method, path, body string) (Response, bool) {
 	switch {
-	// Create a repo under an org: POST /orgs/{org}/repos
-	case method == http.MethodPost && strings.HasPrefix(path, "/orgs/") && strings.HasSuffix(path, "/repos"):
-		org := strings.TrimSuffix(strings.TrimPrefix(path, "/orgs/"), "/repos")
-		var in struct {
-			Name        string `json:"name"`
-			Description string `json:"description"`
-			Private     bool   `json:"private"`
-		}
-		_ = json.Unmarshal([]byte(body), &in)
-		full := org + "/" + in.Name
-		if _, exists := f.catalog[full]; exists {
-			return Response{Status: 422, Body: `{"message":"name already exists on this account"}`}, true
-		}
-		repo := &fakeRepo{
-			Name: in.Name, FullName: full, Description: in.Description,
-			Topics: []string{}, Private: in.Private,
-			DefaultBranch: "main", branches: []string{"main"},
-			secrets: map[string]string{}, files: map[string][]byte{},
-		}
-		f.catalog[full] = repo
-		return JSON(201, repo), true
-
-	// Set topics: PUT /repos/{owner}/{name}/topics
-	case method == http.MethodPut && strings.HasPrefix(path, "/repos/") && strings.HasSuffix(path, "/topics"):
-		full := strings.TrimSuffix(strings.TrimPrefix(path, "/repos/"), "/topics")
-		repo, exists := f.catalog[full]
-		if !exists {
-			return Response{Status: 404, Body: `{"message":"not found"}`}, true
-		}
-		var in struct {
-			Names []string `json:"names"`
-		}
-		_ = json.Unmarshal([]byte(body), &in)
-		repo.Topics = append([]string(nil), in.Names...)
-		return JSON(200, map[string]any{"names": repo.Topics}), true
-
-	// Get a single repo: GET /repos/{owner}/{name}
-	case method == http.MethodGet && strings.HasPrefix(path, "/repos/") && strings.Count(strings.TrimPrefix(path, "/repos/"), "/") == 1:
-		full := strings.TrimPrefix(path, "/repos/")
-		repo, exists := f.catalog[full]
-		if !exists {
-			return Response{Status: 404, Body: `{"message":"not found"}`}, true
-		}
-		return JSON(200, repo), true
-
-	// List installation repos: GET /installation/repositories
-	case method == http.MethodGet && path == "/installation/repositories":
-		fulls := make([]string, 0, len(f.catalog))
-		for k := range f.catalog {
-			fulls = append(fulls, k)
-		}
-		sort.Strings(fulls)
-		repos := make([]*fakeRepo, 0, len(fulls))
-		for _, k := range fulls {
-			repos = append(repos, f.catalog[k])
-		}
-		return JSON(200, map[string]any{"total_count": len(repos), "repositories": repos}), true
-
-	// List branches: GET /repos/{owner}/{name}/branches
-	case method == http.MethodGet && strings.HasPrefix(path, "/repos/") && strings.HasSuffix(path, "/branches"):
-		full := strings.TrimSuffix(strings.TrimPrefix(path, "/repos/"), "/branches")
-		repo, exists := f.catalog[full]
-		if !exists {
-			return Response{Status: 404, Body: `{"message":"not found"}`}, true
-		}
-		out := make([]map[string]any, 0, len(repo.branches))
-		for _, b := range repo.branches {
-			out = append(out, map[string]any{"name": b})
-		}
-		return JSON(200, out), true
-
-	// Actions secret public key: GET /repos/{owner}/{name}/actions/secrets/public-key
-	case method == http.MethodGet && strings.HasPrefix(path, "/repos/") && strings.HasSuffix(path, "/actions/secrets/public-key"):
-		full := strings.TrimSuffix(strings.TrimPrefix(path, "/repos/"), "/actions/secrets/public-key")
-		if _, exists := f.catalog[full]; !exists {
-			return Response{Status: 404, Body: `{"message":"not found"}`}, true
-		}
-		return JSON(200, map[string]any{"key_id": f.actionsKeyID, "key": f.actionsPubKeyB64}), true
-
-	// Write/upsert an Actions secret: PUT /repos/{owner}/{name}/actions/secrets/{secretName}
-	case method == http.MethodPut && strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/actions/secrets/"):
-		rest := strings.TrimPrefix(path, "/repos/")
-		idx := strings.Index(rest, "/actions/secrets/")
-		full := rest[:idx]
-		secretName := rest[idx+len("/actions/secrets/"):]
-		repo, exists := f.catalog[full]
-		if !exists {
-			return Response{Status: 404, Body: `{"message":"not found"}`}, true
-		}
-		var in struct {
-			EncryptedValue string `json:"encrypted_value"`
-			KeyID          string `json:"key_id"`
-		}
-		_ = json.Unmarshal([]byte(body), &in)
-		if repo.secrets == nil {
-			repo.secrets = map[string]string{}
-		}
-		_, existed := repo.secrets[secretName]
-		repo.secrets[secretName] = in.EncryptedValue // stores ONLY the sealed value
-		if existed {
-			return Response{Status: 204, Body: ""}, true // updated
-		}
-		return Response{Status: 201, Body: ""}, true // created
-
-	// git-data (trees API): /repos/{owner}/{name}/git/... — MUST be dispatched
-	// before the repo-commits case below ("/git/commits/{sha}" also contains
-	// "/commits/").
-	case strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/git/"):
-		idx := strings.Index(path, "/git/")
-		full := strings.TrimPrefix(path[:idx], "/repos/")
-		repo, exists := f.catalog[full]
-		if !exists {
-			return Response{Status: 404, Body: `{"message":"not found"}`}, true
-		}
-		repo.initGitState()
-		return f.serveGitData(repo, method, path[idx+len("/git/"):], body)
-
-	// Default-branch tip commit: GET /repos/{owner}/{name}/commits/{ref}
-	case method == http.MethodGet && strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/commits/"):
-		rest := strings.TrimPrefix(path, "/repos/")
-		idx := strings.Index(rest, "/commits/")
-		full := rest[:idx]
-		if _, exists := f.catalog[full]; !exists {
-			return Response{Status: 404, Body: `{"message":"not found"}`}, true
-		}
-		return JSON(200, map[string]any{"sha": "tipsha-" + full}), true
-
-	// Contents API (GET existing file / PUT create-or-update):
-	//   GET|PUT /repos/{owner}/{name}/contents/{path...}
-	case strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/contents/"):
-		rest := strings.TrimPrefix(path, "/repos/")
-		idx := strings.Index(rest, "/contents/")
-		full := rest[:idx]
-		filePath := rest[idx+len("/contents/"):]
-		repo, exists := f.catalog[full]
-		if !exists {
-			return Response{Status: 404, Body: `{"message":"not found"}`}, true
-		}
-		switch method {
-		case http.MethodGet:
-			raw, ok := repo.files[filePath]
-			if !ok {
-				return Response{Status: 404, Body: `{"message":"Not Found"}`}, true
-			}
-			return JSON(200, map[string]any{
-				"sha":     "blobsha-" + filePath,
-				"content": base64.StdEncoding.EncodeToString(raw),
-			}), true
-		case http.MethodPut:
-			var in struct {
-				Message string `json:"message"`
-				Content string `json:"content"`
-				SHA     string `json:"sha"`
-			}
-			_ = json.Unmarshal([]byte(body), &in)
-			decoded, derr := base64.StdEncoding.DecodeString(in.Content)
-			if derr != nil {
-				return Response{Status: 422, Body: `{"message":"bad content"}`}, true
-			}
-			if repo.files == nil {
-				repo.files = map[string][]byte{}
-			}
-			repo.files[filePath] = decoded
-			return JSON(201, map[string]any{"commit": map[string]any{"sha": "commitsha-" + filePath}}), true
-		}
-		return Response{Status: 405, Body: `{"message":"method not allowed"}`}, true
+	case isCreateRepoRoute(method, path):
+		return f.serveCatalogCreateRepo(path, body)
+	case isSetTopicsRoute(method, path):
+		return f.serveCatalogSetTopics(path, body)
+	case isGetRepoRoute(method, path):
+		return f.serveCatalogGetRepo(path)
+	case isListInstallationReposRoute(method, path):
+		return f.serveCatalogListRepos()
+	case isListBranchesRoute(method, path):
+		return f.serveCatalogListBranches(path)
+	case isActionsPublicKeyRoute(method, path):
+		return f.serveCatalogActionsPublicKey(path)
+	case isWriteSecretRoute(method, path):
+		return f.serveCatalogWriteSecret(path, body)
+	case isGitDataRoute(path):
+		return f.serveCatalogGitData(method, path, body)
+	case isCommitTipRoute(method, path):
+		return f.serveCatalogCommitTip(path)
+	case isContentsRoute(path):
+		return f.serveCatalogContents(method, path, body)
 	}
 	return Response{}, false
+}
+
+// --- route predicates ---------------------------------------------------
+
+func isCreateRepoRoute(method, path string) bool {
+	return method == http.MethodPost && strings.HasPrefix(path, "/orgs/") && strings.HasSuffix(path, "/repos")
+}
+
+func isSetTopicsRoute(method, path string) bool {
+	return method == http.MethodPut && strings.HasPrefix(path, "/repos/") && strings.HasSuffix(path, "/topics")
+}
+
+func isGetRepoRoute(method, path string) bool {
+	return method == http.MethodGet && strings.HasPrefix(path, "/repos/") &&
+		strings.Count(strings.TrimPrefix(path, "/repos/"), "/") == 1
+}
+
+func isListInstallationReposRoute(method, path string) bool {
+	return method == http.MethodGet && path == "/installation/repositories"
+}
+
+func isListBranchesRoute(method, path string) bool {
+	return method == http.MethodGet && strings.HasPrefix(path, "/repos/") && strings.HasSuffix(path, "/branches")
+}
+
+func isActionsPublicKeyRoute(method, path string) bool {
+	return method == http.MethodGet && strings.HasPrefix(path, "/repos/") &&
+		strings.HasSuffix(path, "/actions/secrets/public-key")
+}
+
+func isWriteSecretRoute(method, path string) bool {
+	return method == http.MethodPut && strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/actions/secrets/")
+}
+
+func isGitDataRoute(path string) bool {
+	return strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/git/")
+}
+
+func isCommitTipRoute(method, path string) bool {
+	return method == http.MethodGet && strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/commits/")
+}
+
+func isContentsRoute(path string) bool {
+	return strings.HasPrefix(path, "/repos/") && strings.Contains(path, "/contents/")
+}
+
+// --- route handlers -------------------------------------------------------
+
+// serveCatalogCreateRepo handles POST /orgs/{org}/repos.
+func (f *FakeGitHub) serveCatalogCreateRepo(path, body string) (Response, bool) {
+	org := strings.TrimSuffix(strings.TrimPrefix(path, "/orgs/"), "/repos")
+	var in struct {
+		Name        string `json:"name"`
+		Description string `json:"description"`
+		Private     bool   `json:"private"`
+	}
+	_ = json.Unmarshal([]byte(body), &in)
+	full := org + "/" + in.Name
+	if _, exists := f.catalog[full]; exists {
+		return Response{Status: 422, Body: `{"message":"name already exists on this account"}`}, true
+	}
+	repo := &fakeRepo{
+		Name: in.Name, FullName: full, Description: in.Description,
+		Topics: []string{}, Private: in.Private,
+		DefaultBranch: "main", branches: []string{"main"},
+		secrets: map[string]string{}, files: map[string][]byte{},
+	}
+	f.catalog[full] = repo
+	return JSON(201, repo), true
+}
+
+// serveCatalogSetTopics handles PUT /repos/{owner}/{name}/topics.
+func (f *FakeGitHub) serveCatalogSetTopics(path, body string) (Response, bool) {
+	full := strings.TrimSuffix(strings.TrimPrefix(path, "/repos/"), "/topics")
+	repo, exists := f.catalog[full]
+	if !exists {
+		return Response{Status: 404, Body: `{"message":"not found"}`}, true
+	}
+	var in struct {
+		Names []string `json:"names"`
+	}
+	_ = json.Unmarshal([]byte(body), &in)
+	repo.Topics = append([]string(nil), in.Names...)
+	return JSON(200, map[string]any{"names": repo.Topics}), true
+}
+
+// serveCatalogGetRepo handles GET /repos/{owner}/{name}.
+func (f *FakeGitHub) serveCatalogGetRepo(path string) (Response, bool) {
+	full := strings.TrimPrefix(path, "/repos/")
+	repo, exists := f.catalog[full]
+	if !exists {
+		return Response{Status: 404, Body: `{"message":"not found"}`}, true
+	}
+	return JSON(200, repo), true
+}
+
+// serveCatalogListRepos handles GET /installation/repositories.
+func (f *FakeGitHub) serveCatalogListRepos() (Response, bool) {
+	fulls := make([]string, 0, len(f.catalog))
+	for k := range f.catalog {
+		fulls = append(fulls, k)
+	}
+	sort.Strings(fulls)
+	repos := make([]*fakeRepo, 0, len(fulls))
+	for _, k := range fulls {
+		repos = append(repos, f.catalog[k])
+	}
+	return JSON(200, map[string]any{"total_count": len(repos), "repositories": repos}), true
+}
+
+// serveCatalogListBranches handles GET /repos/{owner}/{name}/branches.
+func (f *FakeGitHub) serveCatalogListBranches(path string) (Response, bool) {
+	full := strings.TrimSuffix(strings.TrimPrefix(path, "/repos/"), "/branches")
+	repo, exists := f.catalog[full]
+	if !exists {
+		return Response{Status: 404, Body: `{"message":"not found"}`}, true
+	}
+	out := make([]map[string]any, 0, len(repo.branches))
+	for _, b := range repo.branches {
+		out = append(out, map[string]any{"name": b})
+	}
+	return JSON(200, out), true
+}
+
+// serveCatalogActionsPublicKey handles
+// GET /repos/{owner}/{name}/actions/secrets/public-key.
+func (f *FakeGitHub) serveCatalogActionsPublicKey(path string) (Response, bool) {
+	full := strings.TrimSuffix(strings.TrimPrefix(path, "/repos/"), "/actions/secrets/public-key")
+	if _, exists := f.catalog[full]; !exists {
+		return Response{Status: 404, Body: `{"message":"not found"}`}, true
+	}
+	return JSON(200, map[string]any{"key_id": f.actionsKeyID, "key": f.actionsPubKeyB64}), true
+}
+
+// serveCatalogWriteSecret handles
+// PUT /repos/{owner}/{name}/actions/secrets/{secretName}.
+func (f *FakeGitHub) serveCatalogWriteSecret(path, body string) (Response, bool) {
+	rest := strings.TrimPrefix(path, "/repos/")
+	idx := strings.Index(rest, "/actions/secrets/")
+	full := rest[:idx]
+	secretName := rest[idx+len("/actions/secrets/"):]
+	repo, exists := f.catalog[full]
+	if !exists {
+		return Response{Status: 404, Body: `{"message":"not found"}`}, true
+	}
+	var in struct {
+		EncryptedValue string `json:"encrypted_value"`
+		KeyID          string `json:"key_id"`
+	}
+	_ = json.Unmarshal([]byte(body), &in)
+	if repo.secrets == nil {
+		repo.secrets = map[string]string{}
+	}
+	_, existed := repo.secrets[secretName]
+	repo.secrets[secretName] = in.EncryptedValue // stores ONLY the sealed value
+	if existed {
+		return Response{Status: 204, Body: ""}, true // updated
+	}
+	return Response{Status: 201, Body: ""}, true // created
+}
+
+// serveCatalogGitData handles /repos/{owner}/{name}/git/... (any method) by
+// resolving the owning repo and delegating to serveGitData.
+func (f *FakeGitHub) serveCatalogGitData(method, path, body string) (Response, bool) {
+	idx := strings.Index(path, "/git/")
+	full := strings.TrimPrefix(path[:idx], "/repos/")
+	repo, exists := f.catalog[full]
+	if !exists {
+		return Response{Status: 404, Body: `{"message":"not found"}`}, true
+	}
+	repo.initGitState()
+	return f.serveGitData(repo, method, path[idx+len("/git/"):], body)
+}
+
+// serveCatalogCommitTip handles GET /repos/{owner}/{name}/commits/{ref} (the
+// default-branch tip commit).
+func (f *FakeGitHub) serveCatalogCommitTip(path string) (Response, bool) {
+	rest := strings.TrimPrefix(path, "/repos/")
+	idx := strings.Index(rest, "/commits/")
+	full := rest[:idx]
+	if _, exists := f.catalog[full]; !exists {
+		return Response{Status: 404, Body: `{"message":"not found"}`}, true
+	}
+	return JSON(200, map[string]any{"sha": "tipsha-" + full}), true
+}
+
+// serveCatalogContents handles the Contents API:
+// GET|PUT /repos/{owner}/{name}/contents/{path...}.
+func (f *FakeGitHub) serveCatalogContents(method, path, body string) (Response, bool) {
+	rest := strings.TrimPrefix(path, "/repos/")
+	idx := strings.Index(rest, "/contents/")
+	full := rest[:idx]
+	filePath := rest[idx+len("/contents/"):]
+	repo, exists := f.catalog[full]
+	if !exists {
+		return Response{Status: 404, Body: `{"message":"not found"}`}, true
+	}
+	switch method {
+	case http.MethodGet:
+		return serveCatalogContentsGet(repo, filePath)
+	case http.MethodPut:
+		return serveCatalogContentsPut(repo, filePath, body)
+	}
+	return Response{Status: 405, Body: `{"message":"method not allowed"}`}, true
+}
+
+// serveCatalogContentsGet handles GET .../contents/{path...}.
+func serveCatalogContentsGet(repo *fakeRepo, filePath string) (Response, bool) {
+	raw, ok := repo.files[filePath]
+	if !ok {
+		return Response{Status: 404, Body: `{"message":"Not Found"}`}, true
+	}
+	return JSON(200, map[string]any{
+		"sha":     "blobsha-" + filePath,
+		"content": base64.StdEncoding.EncodeToString(raw),
+	}), true
+}
+
+// serveCatalogContentsPut handles PUT .../contents/{path...}.
+func serveCatalogContentsPut(repo *fakeRepo, filePath, body string) (Response, bool) {
+	var in struct {
+		Message string `json:"message"`
+		Content string `json:"content"`
+		SHA     string `json:"sha"`
+	}
+	_ = json.Unmarshal([]byte(body), &in)
+	decoded, derr := base64.StdEncoding.DecodeString(in.Content)
+	if derr != nil {
+		return Response{Status: 422, Body: `{"message":"bad content"}`}, true
+	}
+	if repo.files == nil {
+		repo.files = map[string][]byte{}
+	}
+	repo.files[filePath] = decoded
+	return JSON(201, map[string]any{"commit": map[string]any{"sha": "commitsha-" + filePath}}), true
 }
 
 // serveGitData handles the stateful git-data (trees API) endpoints for one repo.
@@ -600,80 +697,124 @@ func (f *FakeGitHub) serveCatalog(method, path, body string) (Response, bool) {
 // chain: blobs/trees/commits are staged invisibly, ONLY the ref update (PATCH
 // refs / POST refs) makes them reachable (materialising repo.files), and an
 // unforced non-fast-forward ref update is rejected 422.
+//
+// Dispatch is two levels (by method, then by sub-path) so each level's own
+// cyclomatic complexity stays low, matching serveCatalog's pattern.
 func (f *FakeGitHub) serveGitData(repo *fakeRepo, method, sub, body string) (Response, bool) {
+	switch method {
+	case http.MethodGet:
+		return f.serveGitDataGet(repo, sub)
+	case http.MethodPost:
+		return f.serveGitDataPost(repo, sub, body)
+	case http.MethodPatch:
+		return f.serveGitDataPatch(repo, sub, body)
+	}
+	return Response{}, false
+}
+
+// serveGitDataGet dispatches the GET git-data sub-routes: read a tree, read a
+// commit, or read a ref.
+func (f *FakeGitHub) serveGitDataGet(repo *fakeRepo, sub string) (Response, bool) {
 	switch {
 	// Read a tree (recursive listing served either way): GET git/trees/{ref}
-	case method == http.MethodGet && strings.HasPrefix(sub, "trees/"):
+	case strings.HasPrefix(sub, "trees/"):
 		return f.serveGitTreeGet(repo, strings.TrimPrefix(sub, "trees/"))
-
-	// Create a blob: POST git/blobs
-	case method == http.MethodPost && sub == "blobs":
-		var in struct {
-			Content  string `json:"content"`
-			Encoding string `json:"encoding"`
-		}
-		_ = json.Unmarshal([]byte(body), &in)
-		raw := []byte(in.Content)
-		if in.Encoding == "base64" {
-			decoded, err := base64.StdEncoding.DecodeString(in.Content)
-			if err != nil {
-				return Response{Status: 422, Body: `{"message":"bad blob encoding"}`}, true
-			}
-			raw = decoded
-		}
-		sha := gitBlobSHA(raw)
-		repo.gitBlobs[sha] = raw
-		return JSON(201, map[string]any{"sha": sha}), true
-
-	// Create a tree: POST git/trees (base_tree + entries → new full snapshot)
-	case method == http.MethodPost && sub == "trees":
-		return f.serveGitTreePost(repo, body)
-
-	// Create a commit: POST git/commits
-	case method == http.MethodPost && sub == "commits":
-		var in struct {
-			Message string   `json:"message"`
-			Tree    string   `json:"tree"`
-			Parents []string `json:"parents"`
-		}
-		_ = json.Unmarshal([]byte(body), &in)
-		if _, ok := repo.resolveTreeSnapshot(in.Tree); !ok {
-			return Response{Status: 422, Body: `{"message":"Tree SHA does not exist"}`}, true
-		}
-		f.gitSeq++
-		sha := fmt.Sprintf("fakecommit-%d", f.gitSeq)
-		repo.gitCommits[sha] = fakeGitCommit{TreeSHA: in.Tree, Parents: append([]string(nil), in.Parents...), Message: in.Message}
-		return JSON(201, map[string]any{"sha": sha}), true
-
 	// Read a commit: GET git/commits/{sha}
-	case method == http.MethodGet && strings.HasPrefix(sub, "commits/"):
-		sha := strings.TrimPrefix(sub, "commits/")
-		if c, ok := repo.gitCommits[sha]; ok {
-			return JSON(200, map[string]any{"sha": sha, "tree": map[string]any{"sha": c.TreeSHA}}), true
-		}
-		if repo.head != "" && sha == repo.head {
-			// The seeded synthetic head: its tree is the live file set.
-			return JSON(200, map[string]any{"sha": sha, "tree": map[string]any{"sha": repo.liveTreeSHA()}}), true
-		}
-		return Response{Status: 404, Body: `{"message":"Not Found"}`}, true
-
+	case strings.HasPrefix(sub, "commits/"):
+		return serveGitCommitGet(repo, strings.TrimPrefix(sub, "commits/"))
 	// Read a ref: GET git/ref/heads/{branch}
-	case method == http.MethodGet && strings.HasPrefix(sub, "ref/heads/"):
-		branch := strings.TrimPrefix(sub, "ref/heads/")
-		if repo.head == "" || branch != repo.DefaultBranch {
-			return Response{Status: 404, Body: `{"message":"Not Found"}`}, true
-		}
-		return JSON(200, map[string]any{
-			"ref": "refs/heads/" + branch, "object": map[string]any{"sha": repo.head, "type": "commit"},
-		}), true
+	case strings.HasPrefix(sub, "ref/heads/"):
+		return serveGitRefGet(repo, strings.TrimPrefix(sub, "ref/heads/"))
+	}
+	return Response{}, false
+}
 
-	// Fast-forward a ref: PATCH git/refs/heads/{branch}
-	case method == http.MethodPatch && strings.HasPrefix(sub, "refs/heads/"):
-		return f.serveGitRefPatch(repo, strings.TrimPrefix(sub, "refs/heads/"), body)
+// serveGitCommitGet serves GET git/commits/{sha}: a created commit reads back
+// its tree; the seeded synthetic head reads back the live tree.
+func serveGitCommitGet(repo *fakeRepo, sha string) (Response, bool) {
+	if c, ok := repo.gitCommits[sha]; ok {
+		return JSON(200, map[string]any{"sha": sha, "tree": map[string]any{"sha": c.TreeSHA}}), true
+	}
+	if repo.head != "" && sha == repo.head {
+		// The seeded synthetic head: its tree is the live file set.
+		return JSON(200, map[string]any{"sha": sha, "tree": map[string]any{"sha": repo.liveTreeSHA()}}), true
+	}
+	return Response{Status: 404, Body: `{"message":"Not Found"}`}, true
+}
 
+// serveGitRefGet serves GET git/ref/heads/{branch}.
+func serveGitRefGet(repo *fakeRepo, branch string) (Response, bool) {
+	if repo.head == "" || branch != repo.DefaultBranch {
+		return Response{Status: 404, Body: `{"message":"Not Found"}`}, true
+	}
+	return JSON(200, map[string]any{
+		"ref": "refs/heads/" + branch, "object": map[string]any{"sha": repo.head, "type": "commit"},
+	}), true
+}
+
+// serveGitDataPost dispatches the POST git-data sub-routes: create a blob,
+// tree, commit, or ref.
+func (f *FakeGitHub) serveGitDataPost(repo *fakeRepo, sub, body string) (Response, bool) {
+	switch sub {
+	// Create a blob: POST git/blobs
+	case "blobs":
+		return serveGitBlobPost(repo, body)
+	// Create a tree: POST git/trees (base_tree + entries → new full snapshot)
+	case "trees":
+		return f.serveGitTreePost(repo, body)
+	// Create a commit: POST git/commits
+	case "commits":
+		return f.serveGitCommitPost(repo, body)
 	// Create a ref: POST git/refs
-	case method == http.MethodPost && sub == "refs":
+	case "refs":
 		return f.serveGitRefPost(repo, body)
+	}
+	return Response{}, false
+}
+
+// serveGitBlobPost serves POST git/blobs.
+func serveGitBlobPost(repo *fakeRepo, body string) (Response, bool) {
+	var in struct {
+		Content  string `json:"content"`
+		Encoding string `json:"encoding"`
+	}
+	_ = json.Unmarshal([]byte(body), &in)
+	raw := []byte(in.Content)
+	if in.Encoding == "base64" {
+		decoded, err := base64.StdEncoding.DecodeString(in.Content)
+		if err != nil {
+			return Response{Status: 422, Body: `{"message":"bad blob encoding"}`}, true
+		}
+		raw = decoded
+	}
+	sha := gitBlobSHA(raw)
+	repo.gitBlobs[sha] = raw
+	return JSON(201, map[string]any{"sha": sha}), true
+}
+
+// serveGitCommitPost serves POST git/commits.
+func (f *FakeGitHub) serveGitCommitPost(repo *fakeRepo, body string) (Response, bool) {
+	var in struct {
+		Message string   `json:"message"`
+		Tree    string   `json:"tree"`
+		Parents []string `json:"parents"`
+	}
+	_ = json.Unmarshal([]byte(body), &in)
+	if _, ok := repo.resolveTreeSnapshot(in.Tree); !ok {
+		return Response{Status: 422, Body: `{"message":"Tree SHA does not exist"}`}, true
+	}
+	f.gitSeq++
+	sha := fmt.Sprintf("fakecommit-%d", f.gitSeq)
+	repo.gitCommits[sha] = fakeGitCommit{TreeSHA: in.Tree, Parents: append([]string(nil), in.Parents...), Message: in.Message}
+	return JSON(201, map[string]any{"sha": sha}), true
+}
+
+// serveGitDataPatch dispatches the PATCH git-data sub-routes: fast-forward a
+// ref.
+func (f *FakeGitHub) serveGitDataPatch(repo *fakeRepo, sub, body string) (Response, bool) {
+	// Fast-forward a ref: PATCH git/refs/heads/{branch}
+	if strings.HasPrefix(sub, "refs/heads/") {
+		return f.serveGitRefPatch(repo, strings.TrimPrefix(sub, "refs/heads/"), body)
 	}
 	return Response{}, false
 }

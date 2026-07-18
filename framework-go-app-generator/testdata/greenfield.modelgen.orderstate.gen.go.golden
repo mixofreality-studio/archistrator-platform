@@ -20,8 +20,8 @@ type OrderID string
 
 type Version int64
 
-// OrderStateAccess is the generated service-contract interface for this component.
-type OrderStateAccess interface {
+// Access is the generated service-contract interface for this component.
+type Access interface {
 	ReadOrder(rc fwra.Context, orderID OrderID) (Order, error)
 	PutOrder(rc fwra.Context, orderID OrderID, expectedVersion Version, order Order) (Version, error)
 	CancelOrder(rc fwra.Context, orderID OrderID, expectedVersion Version, reason string) (Version, error)
@@ -31,9 +31,9 @@ type OrderStateAccess interface {
 	ReceiptForOrder(rc fwra.Context, orderID OrderID) (OrderReceipt, error)
 }
 
-// NewPostgresOrderStateAccess constructs the Postgres-backed OrderStateAccess, delegating to the hand-written,
-// unexported builder newPostgresOrderStateAccess in the RA package (which owns the stateful setup).
+// NewPostgresAccess constructs the Postgres-backed Access, delegating to the hand-written,
+// unexported builder newPostgresAccess in the RA package (which owns the stateful setup).
 // The constructor returns the interface, so the concrete impl stays unexported.
-func NewPostgresOrderStateAccess(ctx context.Context, pool *pgxpool.Pool) (OrderStateAccess, error) {
-	return newPostgresOrderStateAccess(ctx, pool)
+func NewPostgresAccess(ctx context.Context, pool *pgxpool.Pool) (Access, error) {
+	return newPostgresAccess(ctx, pool)
 }

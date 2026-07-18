@@ -16,5 +16,5 @@ import (
 type Context struct {
 	context.Context
 	// Principal is the identity on whose behalf the call is made (authz + audit).
-	Principal security.SecurityPrincipal
+	Principal security.Principal
 }

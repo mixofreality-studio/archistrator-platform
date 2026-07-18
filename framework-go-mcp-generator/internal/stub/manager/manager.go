@@ -11,7 +11,7 @@ import (
 // Context is the Manager-layer call context.
 type Context struct {
 	context.Context
-	Principal security.SecurityPrincipal
+	Principal security.Principal
 }
 
 // Kind is the façade error classification.

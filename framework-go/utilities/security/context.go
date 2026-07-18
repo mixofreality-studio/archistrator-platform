@@ -3,7 +3,7 @@ package security
 import "context"
 
 // principalCtxKey is the unexported context key under which a validated
-// [SecurityPrincipal] is stored. Using an unexported zero-size struct type as
+// [Principal] is stored. Using an unexported zero-size struct type as
 // the key prevents collisions with any other package's context values and keeps
 // the key itself off the package surface — callers go through [WithPrincipal] /
 // [PrincipalFrom], never the raw key.
@@ -17,7 +17,7 @@ type principalCtxKey struct{}
 // WithPrincipal returns a copy of ctx carrying the validated principal. The
 // [Middleware] calls this after a successful [Validator.ValidateAccessToken];
 // downstream handlers read it back with [PrincipalFrom].
-func WithPrincipal(ctx context.Context, principal SecurityPrincipal) context.Context {
+func WithPrincipal(ctx context.Context, principal Principal) context.Context {
 	return context.WithValue(ctx, principalCtxKey{}, principal)
 }
 
@@ -26,7 +26,7 @@ func WithPrincipal(ctx context.Context, principal SecurityPrincipal) context.Con
 // without an authenticated principal (the route was not behind [Middleware], or
 // the principal was never propagated) — the caller must treat that as
 // unauthenticated, never as an anonymous allow.
-func PrincipalFrom(ctx context.Context) (SecurityPrincipal, bool) {
-	p, ok := ctx.Value(principalCtxKey{}).(SecurityPrincipal)
+func PrincipalFrom(ctx context.Context) (Principal, bool) {
+	p, ok := ctx.Value(principalCtxKey{}).(Principal)
 	return p, ok
 }

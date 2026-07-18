@@ -18,21 +18,21 @@ import (
 // known token and ErrUnauthenticated otherwise.
 type stubValidator struct {
 	good      string
-	principal security.SecurityPrincipal
+	principal security.Principal
 }
 
-func (v stubValidator) ValidateAccessToken(_ context.Context, raw string) (security.SecurityPrincipal, error) {
+func (v stubValidator) ValidateAccessToken(_ context.Context, raw string) (security.Principal, error) {
 	if raw == v.good {
 		return v.principal, nil
 	}
-	return security.SecurityPrincipal{}, security.NewError(security.ErrUnauthenticated)
+	return security.Principal{}, security.NewError(security.ErrUnauthenticated)
 }
 
 func TestMiddlewarePassesPrincipalThroughOnValidToken(t *testing.T) {
-	want := security.SecurityPrincipal{Kind: security.PrincipalUser, Subject: "u-1", Roles: []string{"drive-phase"}}
+	want := security.Principal{Kind: security.PrincipalUser, Subject: "u-1", Roles: []string{"drive-phase"}}
 	v := stubValidator{good: "tok", principal: want}
 
-	var seen security.SecurityPrincipal
+	var seen security.Principal
 	var ok bool
 	h := security.Middleware(v)(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		seen, ok = security.PrincipalFrom(r.Context())
@@ -86,7 +86,7 @@ func TestAuthorizeDefaultPDP(t *testing.T) {
 	sec := security.New()
 	ctx := context.Background()
 
-	user := security.SecurityPrincipal{
+	user := security.Principal{
 		Kind:          security.PrincipalUser,
 		Subject:       "u-1",
 		Roles:         []string{"drive-phase"},
@@ -108,7 +108,7 @@ func TestAuthorizeDefaultPDP(t *testing.T) {
 		t.Fatal("expected deny for cross-organization resource")
 	}
 	// Application principal → permit its action.
-	app := security.SecurityPrincipal{Kind: security.PrincipalApplication, Subject: "svc-1"}
+	app := security.Principal{Kind: security.PrincipalApplication, Subject: "svc-1"}
 	if d, err := sec.Authorize(ctx, app, security.Action{Verb: "settle-cycle"}, security.ResourceRef{Kind: "cycle", ID: "c-1"}); err != nil || !d.Permit {
 		t.Fatalf("expected application permit, got permit=%v err=%v", d.Permit, err)
 	}
@@ -116,17 +116,17 @@ func TestAuthorizeDefaultPDP(t *testing.T) {
 
 type unreachablePDP struct{}
 
-func (unreachablePDP) Decide(context.Context, security.SecurityPrincipal, security.Action, security.ResourceRef) (bool, error) {
+func (unreachablePDP) Decide(context.Context, security.Principal, security.Action, security.ResourceRef) (bool, error) {
 	return false, errors.New("engine down")
 }
 
 func TestAuthorizeFailsClosedOnEngineOutage(t *testing.T) {
 	sec := security.New(security.WithPolicyDecisionPoint(unreachablePDP{}))
-	d, err := sec.Authorize(context.Background(), security.SecurityPrincipal{}, security.Action{Verb: "x"}, security.ResourceRef{Kind: "y"})
+	d, err := sec.Authorize(context.Background(), security.Principal{}, security.Action{Verb: "x"}, security.ResourceRef{Kind: "y"})
 	if d.Permit {
 		t.Fatal("engine outage must not permit")
 	}
-	var se *security.SecurityError
+	var se *security.Error
 	if !errors.As(err, &se) || se.Kind != security.ErrPolicyUnavailable || !se.Retryable {
 		t.Fatalf("want retryable ErrPolicyUnavailable, got %v", err)
 	}
@@ -149,7 +149,7 @@ func TestVerifyWebhookSignature(t *testing.T) {
 
 	err := sec.VerifyWebhookSignature(context.Background(), "chan", body,
 		security.NewSignatureMaterial(map[string]string{"signature": "deadbeef"}))
-	var se *security.SecurityError
+	var se *security.Error
 	if !errors.As(err, &se) || se.Kind != security.ErrSignatureInvalid {
 		t.Fatalf("want ErrSignatureInvalid, got %v", err)
 	}

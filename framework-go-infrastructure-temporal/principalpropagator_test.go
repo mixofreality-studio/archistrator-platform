@@ -34,7 +34,7 @@ func (h *fakeHeader) ForEachKey(fn func(string, *commonpb.Payload) error) error 
 
 func TestInjectExtractRoundTrip(t *testing.T) {
 	prop := temporalprop.NewPrincipalPropagator()
-	want := security.SecurityPrincipal{
+	want := security.Principal{
 		Kind:          security.PrincipalUser,
 		Subject:       "user-123",
 		Username:      "amira",

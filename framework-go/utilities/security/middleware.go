@@ -8,7 +8,7 @@ import (
 // Middleware wraps an http.Handler so every request is authenticated before it
 // reaches the wrapped handler: it extracts the bearer token from the
 // Authorization header, runs it through v, and on success stashes the resulting
-// [SecurityPrincipal] on the request context (readable downstream with
+// [Principal] on the request context (readable downstream with
 // [PrincipalFrom]). On any failure it writes 401 and does NOT call next — the
 // handler never runs for an unauthenticated request.
 //

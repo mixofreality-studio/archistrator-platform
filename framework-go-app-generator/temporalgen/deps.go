@@ -20,7 +20,7 @@ const (
 // and its ops sorted by name.
 type raDep struct {
 	field      string // PascalCase dep name: struct field + method-name prefix
-	iface      string // RA interface type name (e.g. "OrderStateAccess")
+	iface      string // RA interface type name (e.g. "Access")
 	alias      string // RA package alias (goPackage's last segment)
 	importPath string // full RA package import path
 	component  string // dep.Component — the serviceContracts key, for ActivityName

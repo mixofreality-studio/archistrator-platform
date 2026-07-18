@@ -57,7 +57,7 @@ func (r DecisionReason) String() string {
 // [Security.Authorize] surfaces [ErrPolicyUnavailable] and the caller fails
 // closed. A reachable engine that denies returns (false, nil).
 type PolicyDecisionPoint interface {
-	Decide(ctx context.Context, principal SecurityPrincipal, action Action, resource ResourceRef) (permit bool, err error)
+	Decide(ctx context.Context, principal Principal, action Action, resource ResourceRef) (permit bool, err error)
 }
 
 // defaultPolicyDecisionPoint is a deny-by-default rules evaluator — a REAL,
@@ -73,7 +73,7 @@ type PolicyDecisionPoint interface {
 // [WithPolicyDecisionPoint].
 type defaultPolicyDecisionPoint struct{}
 
-func (defaultPolicyDecisionPoint) Decide(_ context.Context, principal SecurityPrincipal, action Action, resource ResourceRef) (bool, error) {
+func (defaultPolicyDecisionPoint) Decide(_ context.Context, principal Principal, action Action, resource ResourceRef) (bool, error) {
 	if action.Verb == "" || resource.Kind == "" {
 		return false, nil // malformed → deny (not an engine outage)
 	}
@@ -98,10 +98,10 @@ func (defaultPolicyDecisionPoint) Decide(_ context.Context, principal SecurityPr
 // and must not block. The rich "why" goes HERE, never into the caller-facing
 // [DecisionReason].
 type AuditSink interface {
-	RecordDecision(ctx context.Context, principal SecurityPrincipal, action Action, resource ResourceRef, permit bool, detail string)
+	RecordDecision(ctx context.Context, principal Principal, action Action, resource ResourceRef, permit bool, detail string)
 }
 
 type noopAuditSink struct{}
 
-func (noopAuditSink) RecordDecision(context.Context, SecurityPrincipal, Action, ResourceRef, bool, string) {
+func (noopAuditSink) RecordDecision(context.Context, Principal, Action, ResourceRef, bool, string) {
 }

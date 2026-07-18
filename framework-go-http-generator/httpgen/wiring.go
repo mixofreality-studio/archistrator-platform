@@ -22,7 +22,7 @@ type WiringOptions struct {
 	// SecurityImport is the framework-go security utility import path (default the
 	// archistrator-platform path). The emitted middleware calls into THIS package:
 	// security.Middleware / security.WithPrincipal / security.Validator /
-	// security.SecurityPrincipal / security.NewError / security.ErrUnauthenticated.
+	// security.Principal / security.NewError / security.ErrUnauthenticated.
 	SecurityImport string
 }
 
@@ -111,7 +111,7 @@ type DevConfig struct {
 	// Enabled turns on dev-mode principal injection (no token validated).
 	Enabled bool
 	// Principal is the dev identity injected on every request when Enabled.
-	Principal security.SecurityPrincipal
+	Principal security.Principal
 }
 
 // AuthMiddleware returns the middleware mounted in front of the authenticated API
@@ -143,8 +143,8 @@ func AuthMiddleware(dev DevConfig, validator security.Validator) func(http.Handl
 // validator at boot.
 type denyAllValidator struct{}
 
-func (denyAllValidator) ValidateAccessToken(context.Context, string) (security.SecurityPrincipal, error) {
-	return security.SecurityPrincipal{}, security.NewError(security.ErrUnauthenticated)
+func (denyAllValidator) ValidateAccessToken(context.Context, string) (security.Principal, error) {
+	return security.Principal{}, security.NewError(security.ErrUnauthenticated)
 }
 `
 

@@ -1,18 +1,18 @@
 package security
 
-// SecurityError is the typed error returned across the security surface.
+// Error is the typed error returned across the security surface.
 // Retryable is explicit per kind — never inferred by the caller. For [Validator],
 // [Security.Authorize] and [Security.VerifyWebhookSignature] the FAIL-CLOSED rule
-// applies: a SecurityError MUST be treated by the caller as deny/reject, never as
+// applies: an Error MUST be treated by the caller as deny/reject, never as
 // permit/accept, even when Retryable is true (a transient outage must not open
 // the gate).
-type SecurityError struct {
+type Error struct {
 	Kind      ErrorKind
 	Retryable bool
 	Cause     error // wrapped, optional
 }
 
-// ErrorKind classifies a [SecurityError]. The names are infrastructure-opaque:
+// ErrorKind classifies an [Error]. The names are infrastructure-opaque:
 // they name the security OUTCOME, never the mechanism.
 type ErrorKind int
 
@@ -58,24 +58,24 @@ func (k ErrorKind) defaultRetryable() bool {
 	}
 }
 
-// NewError builds a *[SecurityError] with Retryable seeded from the kind. It is
+// NewError builds an *[Error] with Retryable seeded from the kind. It is
 // exported so a satellite-supplied [Validator] / [PolicyDecisionPoint] /
 // [WebhookVerifier] / [ServiceIdentitySource] mints surface errors whose
 // kind/Retryable pairing stays consistent with the contract.
-func NewError(kind ErrorKind) *SecurityError {
-	return &SecurityError{Kind: kind, Retryable: kind.defaultRetryable()}
+func NewError(kind ErrorKind) *Error {
+	return &Error{Kind: kind, Retryable: kind.defaultRetryable()}
 }
 
 // WrapError is [NewError] plus a wrapped cause (surfaced through Unwrap /
 // errors.Is). The cause is internal context for logs only — it never reaches a
 // caller-facing [Decision] reason.
-func WrapError(kind ErrorKind, cause error) *SecurityError {
+func WrapError(kind ErrorKind, cause error) *Error {
 	e := NewError(kind)
 	e.Cause = cause
 	return e
 }
 
-func (e *SecurityError) Error() string {
+func (e *Error) Error() string {
 	msg := "security: " + e.Kind.String()
 	if e.Cause != nil {
 		msg += ": " + e.Cause.Error()
@@ -83,4 +83,4 @@ func (e *SecurityError) Error() string {
 	return msg
 }
 
-func (e *SecurityError) Unwrap() error { return e.Cause }
+func (e *Error) Unwrap() error { return e.Cause }
