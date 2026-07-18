@@ -10,6 +10,7 @@ package resourceaccess
 // component. Component-specific nuance lives in Error.Detail.
 type Kind int
 
+// Unknown is the zero-value Kind; a real error should never carry it.
 const (
 	Unknown        Kind = iota
 	Transient           // retryable: a transient infra blip

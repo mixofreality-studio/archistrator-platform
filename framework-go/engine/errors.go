@@ -10,6 +10,7 @@ package engine
 // non-retryable. Component-specific nuance lives in Error.Detail.
 type Kind int
 
+// Unknown is the zero-value Kind; a real error should never carry it.
 const (
 	Unknown           Kind = iota
 	ContractMisuse         // bad call shape / arguments

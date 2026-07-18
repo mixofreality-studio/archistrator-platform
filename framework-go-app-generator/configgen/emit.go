@@ -1,4 +1,3 @@
-// emit.go
 package configgen
 
 import (

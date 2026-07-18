@@ -1,4 +1,3 @@
-// validate.go
 package projectmodel
 
 import (

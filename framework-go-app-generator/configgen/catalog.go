@@ -1,4 +1,3 @@
-// catalog.go
 package configgen
 
 import "github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/deploynaming"

@@ -1,4 +1,3 @@
-// projectmodel.go
 package projectmodel
 
 import (

@@ -4,6 +4,7 @@ package methodcheck
 // or a guideline (advise; waivable).
 type AppCKind string
 
+// AppCDirective marks an App-C item that must never be violated.
 const (
 	AppCDirective AppCKind = "directive"
 	AppCGuideline AppCKind = "guideline"
@@ -12,6 +13,7 @@ const (
 // AppCClassification describes how the rule is enforced.
 type AppCClassification string
 
+// AppCAutomatedCode marks an item enforced by a code-level rule.
 const (
 	AppCAutomatedCode     AppCClassification = "automated-code"
 	AppCAutomatedDesign   AppCClassification = "automated-design"

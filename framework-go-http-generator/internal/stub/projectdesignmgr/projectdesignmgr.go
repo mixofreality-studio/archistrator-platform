@@ -8,14 +8,31 @@ import (
 	fwmanager "github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/internal/stub/manager"
 )
 
+// ProjectID identifies a project.
 type ProjectID string
+
+// PhaseAdvanceResult is a placeholder I/O type for AdvanceToConstruction.
 type PhaseAdvanceResult struct{}
+
+// ArtifactKind is a placeholder I/O type identifying an artifact kind.
 type ArtifactKind int
+
+// SessionStateView is a placeholder I/O type for GetSessionState.
 type SessionStateView struct{}
+
+// ReviewFeedback is a placeholder I/O type carrying review feedback.
 type ReviewFeedback struct{}
+
+// SessionRef is a placeholder I/O type referencing a draft session.
 type SessionRef string
+
+// ReviewDecision is a placeholder I/O type for SubmitReviewDecision.
 type ReviewDecision int
+
+// SDPDecision is a placeholder I/O type for SubmitSDPDecision.
 type SDPDecision int
+
+// OptionID identifies an SDP option.
 type OptionID string
 
 // ProjectDesignManager is the contract interface (manager layer).

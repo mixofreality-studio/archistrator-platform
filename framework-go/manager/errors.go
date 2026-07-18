@@ -11,6 +11,7 @@ package manager
 // Component-specific nuance lives in Error.Detail.
 type Kind int
 
+// Unknown is the zero-value Kind; a real error should never carry it.
 const (
 	Unknown            Kind = iota
 	ContractMisuse          // malformed request at the façade boundary

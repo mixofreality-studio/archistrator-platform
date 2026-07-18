@@ -1,4 +1,3 @@
-// naming.go
 package configgen
 
 import (

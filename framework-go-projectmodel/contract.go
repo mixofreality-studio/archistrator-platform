@@ -1,4 +1,3 @@
-// contract.go
 package projectmodel
 
 import (

@@ -10,15 +10,34 @@ import (
 	fwmanager "github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator/internal/stub/manager"
 )
 
+// DelinquencyContext is a placeholder I/O type for ApplyDelinquencyPolicy.
 type DelinquencyContext struct{}
+
+// DesiredStateChange is a placeholder I/O type for DeployAfterConstruction.
 type DesiredStateChange struct{}
+
+// DeployResult is a placeholder I/O type for DeployAfterConstruction.
 type DeployResult struct{}
+
+// ScaleWhatIfPoints is a placeholder I/O type for QueryCostProjection.
 type ScaleWhatIfPoints struct{}
+
+// CostProjectionSeam is a placeholder I/O type for QueryCostProjection.
 type CostProjectionSeam struct{}
+
+// OperatedSystemView is a placeholder I/O type for QueryOperatedSystemView.
 type OperatedSystemView struct{}
+
+// ReconcileScope is a placeholder I/O type for ReconcileOperatedState.
 type ReconcileScope struct{}
+
+// ReconcileResult is a placeholder I/O type for ReconcileOperatedState.
 type ReconcileResult struct{}
+
+// WithdrawReason is a placeholder I/O type for WithdrawSystem.
 type WithdrawReason struct{}
+
+// WithdrawResult is a placeholder I/O type for WithdrawSystem.
 type WithdrawResult struct{}
 
 // OperationsManager is the contract interface (manager layer).

@@ -20,6 +20,7 @@ package methodcheck
 // artifactValidationEngine.
 type Verdict int
 
+// VerdictUnknown is the zero-value Verdict; a real check should never carry it.
 const (
 	VerdictUnknown Verdict = iota
 	VerdictPass            // zero Error-severity findings
@@ -30,6 +31,7 @@ const (
 // Warning/Info ride along advisory. Ported verbatim.
 type Severity int
 
+// SeverityInfo is an advisory finding that does not affect the Verdict.
 const (
 	SeverityInfo Severity = iota
 	SeverityWarning

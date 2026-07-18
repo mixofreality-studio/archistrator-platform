@@ -25,6 +25,7 @@ const (
 	ProjectModelVersion  = "v0.2.1"
 )
 
+// ScaffoldData is the template data rendered into a newly seeded project repo.
 type ScaffoldData struct {
 	ModulePath string // github.com/<owner>/<repo>
 	// AppSlug is the GitHub App slug seated into aiarch-construct.yml's

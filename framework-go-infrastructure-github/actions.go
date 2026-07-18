@@ -83,13 +83,21 @@ const (
 type RunConclusion string
 
 const (
-	RunSuccess        RunConclusion = "success"
-	RunFailure        RunConclusion = "failure"
-	RunCancelled      RunConclusion = "cancelled"
-	RunSkipped        RunConclusion = "skipped"
-	RunTimedOut       RunConclusion = "timed_out"
+	// RunSuccess — the run completed with every job successful.
+	RunSuccess RunConclusion = "success"
+	// RunFailure — at least one job failed.
+	RunFailure RunConclusion = "failure"
+	// RunCancelled — the run was cancelled before completion.
+	RunCancelled RunConclusion = "cancelled"
+	// RunSkipped — the run was skipped (e.g. a job condition was not met).
+	RunSkipped RunConclusion = "skipped"
+	// RunTimedOut — the run exceeded its time limit.
+	RunTimedOut RunConclusion = "timed_out"
+	// RunActionRequired — the run needs a manual approval/action to proceed.
 	RunActionRequired RunConclusion = "action_required"
-	RunNeutral        RunConclusion = "neutral"
+	// RunNeutral — the run finished without a pass/fail verdict.
+	RunNeutral RunConclusion = "neutral"
+	// RunStartupFailure — the run failed to start (workflow file error, etc.).
 	RunStartupFailure RunConclusion = "startup_failure"
 )
 

@@ -14,6 +14,8 @@ type System struct {
 	Relationships []Relationship    `json:"relationships"`
 }
 
+// SystemComponent is one systemDesign component: a Method system building
+// block with its inventory identity, layer, and optional contract join.
 type SystemComponent struct {
 	ID    string `json:"id"`   // kebab-case ("system-design-manager")
 	Name  string `json:"name"` // PascalCase ("SystemDesignManager")
@@ -27,6 +29,7 @@ type SystemComponent struct {
 	ContractKey string `json:"contractKey,omitempty"`
 }
 
+// Relationship is one systemDesign edge between two components.
 type Relationship struct {
 	From  string `json:"from"` // kebab component id
 	To    string `json:"to"`
@@ -34,6 +37,7 @@ type Relationship struct {
 	Label string `json:"label"`
 }
 
+// ParseSystem parses a systemDesign slot model into a System.
 func ParseSystem(slotModel json.RawMessage) (*System, error) {
 	var s System
 	if err := json.Unmarshal(slotModel, &s); err != nil {

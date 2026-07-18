@@ -1,4 +1,3 @@
-// deployment.go
 package projectmodel
 
 import (

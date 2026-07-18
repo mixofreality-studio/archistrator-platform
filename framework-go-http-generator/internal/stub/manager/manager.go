@@ -19,6 +19,7 @@ type Context struct {
 // Kind is the façade error classification.
 type Kind int
 
+// Unknown is the zero-value Kind; a real error should never carry it.
 const (
 	Unknown Kind = iota
 	ContractMisuse
