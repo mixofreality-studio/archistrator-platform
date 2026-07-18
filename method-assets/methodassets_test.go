@@ -46,8 +46,8 @@ func TestClaudeFilesInventory(t *testing.T) {
 	if commands != 58 {
 		t.Errorf("commands = %d, want 58", commands)
 	}
-	if len(skills) != 27 {
-		t.Errorf("skill dirs = %d, want 27", len(skills))
+	if len(skills) != 28 {
+		t.Errorf("skill dirs = %d, want 28", len(skills))
 	}
 	if skills["grillme"] {
 		t.Error("grillme must NOT be lifted (archistrator-local)")
