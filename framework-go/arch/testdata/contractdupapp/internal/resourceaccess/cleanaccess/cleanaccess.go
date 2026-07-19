@@ -12,3 +12,15 @@ func (c *cleanAccess) Store(r Record) error            { return nil }
 type recordFetcher interface {
 	Fetch(id string) (Record, error)
 }
+
+// ExportedNarrowFetcher is an EXPORTED narrow subset of the generated
+// CleanAccess contract (1 of its 2 methods, using the generated Record type
+// itself — not a mirror). Because it is exported and lives in cleanaccess (a
+// hasGeneratedFile package), it DOES reach ifaceMethodSetEqual as a rule-c
+// candidate. It must NOT fire: a subset method-NAME-SET (1 vs. 2) fails exact
+// name-set equality regardless of per-method signature equality. This proves
+// the count/name-set gate is exercised through an exported candidate, not
+// excluded purely by unexported visibility.
+type ExportedNarrowFetcher interface {
+	Fetch(id string) (Record, error)
+}

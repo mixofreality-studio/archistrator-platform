@@ -21,6 +21,18 @@ import (
 //   - strategyengine: an unexported internal strategy axis with the same
 //     method COUNT as its own generated contract, different signatures/names
 //     → must not fire (also protected by being unexported).
+//   - cleanaccess.ExportedNarrowFetcher: an EXPORTED 1-of-2-method subset of
+//     CleanAccess (same package, so it DOES reach ifaceMethodSetEqual as a
+//     rule-c candidate) → must not fire, proving the method-NAME-SET
+//     (count) gate discriminates even when visibility can't exclude it.
+//   - dupaccess.ExportedMirrorTypeAccess: an EXPORTED same-method-names
+//     interface using a local mirror type (MirrorItem) instead of the
+//     generated Item type → must not fire rule c, proving types.Identical
+//     signature equality — not a name/count-only compare — gates the match.
+//   - redeclengine.ForeignMirrorTypeAccess: the same mirror-type near-miss as
+//     above, but cross-package against sourceaccess's generated SourceAccess
+//     contract → must not fire rule d, proving the signature-equality gate
+//     also holds on the cross-package path.
 //
 // The pure core (contractDuplicationViolations) is tested directly so
 // violations are OBSERVED rather than routed to a failing t.Errorf, matching
@@ -124,6 +136,69 @@ func TestContractDup_SelfPackageStrategyDoesNotFire(t *testing.T) {
 		if strings.HasSuffix(v.Pkg, "engine/strategyengine") {
 			t.Errorf("strategyengine's own generated contract and internal strategy axis must not fire, got %+v", v)
 		}
+	}
+}
+
+// TestContractDup_ExportedNarrowSubsetDoesNotFireRuleC is the count/name-set
+// discrimination proof: ExportedNarrowFetcher is EXPORTED and lives in
+// cleanaccess (a hasGeneratedFile package), so it genuinely reaches
+// ifaceMethodSetEqual as a rule-c candidate — unlike recordFetcher, it is not
+// excluded by visibility. It has 1 of CleanAccess's 2 methods (same Record
+// type, same method name), so it must not fire: exact method-NAME-SET
+// equality (count included) is what protects it, not unexported status.
+func TestContractDup_ExportedNarrowSubsetDoesNotFireRuleC(t *testing.T) {
+	pkgs := loadContractdupPkgs(t)
+	vs := contractDuplicationViolations(pkgs)
+	for _, v := range vs {
+		if v.Iface == "ExportedNarrowFetcher" {
+			t.Errorf("exported narrow subset ExportedNarrowFetcher must not fire any rule, got %+v", v)
+		}
+	}
+}
+
+// TestContractDup_MirrorTypeSameNamesDoesNotFireRuleC is THE critical
+// signature-equality proof for rule c: ExportedMirrorTypeAccess is EXPORTED,
+// lives in dupaccess (same package as the generated DupAccess contract), and
+// has the SAME method names/arity (Fetch/Store) as DupAccess — so it reaches
+// ifaceMethodSetEqual and clears the name-set gate. It differs only in using
+// MirrorItem (a local mirror) instead of the generated Item type. It must not
+// fire: this is only possible if ifaceMethodSetEqual truly calls
+// types.Identical on parameter/result types rather than comparing names or
+// counts alone.
+func TestContractDup_MirrorTypeSameNamesDoesNotFireRuleC(t *testing.T) {
+	pkgs := loadContractdupPkgs(t)
+	vs := contractDuplicationViolations(pkgs)
+	for _, v := range vs {
+		if v.Iface == "ExportedMirrorTypeAccess" {
+			t.Errorf("exported mirror-type near-miss ExportedMirrorTypeAccess must not fire any rule, got %+v", v)
+		}
+	}
+	// Sanity: the real rogue duplicate in the same package must still fire,
+	// so this test cannot pass merely because dupaccess produces no findings.
+	if !hasContractDupViolation(vs, "resourceaccess/dupaccess", "HandDupAccess", ruleNoExportedHandIface) {
+		t.Fatalf("expected rule c on dupaccess.HandDupAccess (sanity check), got %+v", vs)
+	}
+}
+
+// TestContractDup_MirrorTypeSameNamesDoesNotFireRuleD is the cross-package
+// counterpart: ForeignMirrorTypeAccess (in redeclengine) has the same method
+// name/arity (Read) as sourceaccess's generated SourceAccess contract — so it
+// clears rule d's name-set gate and reaches ifaceMethodSetEqual — but uses
+// LocalBlob (a local mirror) instead of the generated Blob type. It must not
+// fire, proving types.Identical signature equality gates rule d's
+// cross-package match too, not just rule c's same-package one.
+func TestContractDup_MirrorTypeSameNamesDoesNotFireRuleD(t *testing.T) {
+	pkgs := loadContractdupPkgs(t)
+	vs := contractDuplicationViolations(pkgs)
+	for _, v := range vs {
+		if v.Iface == "ForeignMirrorTypeAccess" {
+			t.Errorf("exported mirror-type near-miss ForeignMirrorTypeAccess must not fire any rule, got %+v", v)
+		}
+	}
+	// Sanity: the real rogue cross-package duplicate must still fire, so this
+	// test cannot pass merely because redeclengine produces no findings.
+	if !hasContractDupViolation(vs, "engine/redeclengine", "ForeignSourceAccess", ruleNoForeignContractRedecl) {
+		t.Fatalf("expected rule d on redeclengine.ForeignSourceAccess (sanity check), got %+v", vs)
 	}
 }
 
