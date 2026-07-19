@@ -101,16 +101,30 @@ type Provider struct{}
 
 func NewProvider(ctx context.Context, opts Options) (Provider, error) { return Provider{}, nil }
 `
-	files["_stubs/postgres/go.mod"] = "module github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres\n\ngo 1.25\n"
-	files["_stubs/postgres/postgres.go"] = `package postgres
+	files["_stubs/pgxpool/go.mod"] = "module github.com/jackc/pgx/v5/pgxpool\n\ngo 1.25\n"
+	files["_stubs/pgxpool/pgxpool.go"] = `package pgxpool
 
-import "context"
-
+// Pool stands in for the real pgxpool.Pool — just enough surface
+// (Close, referenced from main.gen.go's "defer pool.Close()") for the sandbox
+// to compile the profile-gated "var pool *pgxpool.Pool" predecl.
 type Pool struct{}
 
 func (*Pool) Close() {}
+`
+	files["_stubs/postgres/go.mod"] = "module github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres\n\ngo 1.25\n"
+	files["_stubs/postgres/postgres.go"] = `package postgres
 
-func NewPool(ctx context.Context, url string) (*Pool, error) { return &Pool{}, nil }
+import (
+	"context"
+
+	"github.com/jackc/pgx/v5/pgxpool"
+)
+
+// NewPool returns *pgxpool.Pool directly, matching the REAL
+// framework-go-infrastructure-postgres.NewPool signature — main.gen.go's
+// profile-gated form spells out "var pool *pgxpool.Pool" explicitly, so the
+// stub must return the same concrete type, not a local wrapper.
+func NewPool(ctx context.Context, url string) (*pgxpool.Pool, error) { return &pgxpool.Pool{}, nil }
 `
 	files["_stubs/temporalinfra/go.mod"] = "module github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-temporal\n\ngo 1.25\n"
 	files["_stubs/temporalinfra/temporal.go"] = `package temporal

@@ -177,15 +177,68 @@ func writeTemporal(b *strings.Builder, r *resolved) {
 	b.WriteString("\tlogger.Info(\"temporal client dialed\", \"hostPort\", " + hostport + ", \"namespace\", " + namespace + ")\n\n")
 }
 
+// writePostgres emits the shared Postgres pool satellite. Whenever the
+// postgres infra key's declared Profiles are a STRICT SUBSET of the
+// deployment's full profile set (⇒ some profile — e.g. "local" — has no
+// binding that consumes it) AND a `profile` var is in scope to test
+// (needProfile), the pool build is wrapped in a runtime profile guard so the
+// dial genuinely never happens outside the profiles that need it. When
+// postgres is needed by every declared profile (the historical case), or no
+// profile var exists to gate on, the pool is built unconditionally exactly as
+// before.
 func writePostgres(b *strings.Builder, r *resolved) {
 	if !r.consumesPostgres() {
 		return
 	}
 	url := "cfg." + infraFieldName(r.postgresKey, "URL")
+	if guard, ok := r.postgresProfileGuard(); ok {
+		b.WriteString("\t// Postgres pool — the shared satellite the postgres-backed RAs are built on.\n")
+		b.WriteString("\t// Gated on the resolved profile: infra[\"" + r.postgresKey + "\"].profiles does not\n")
+		b.WriteString("\t// cover every profile, so profiles outside it never dial it.\n")
+		b.WriteString("\tvar pool *pgxpool.Pool\n")
+		b.WriteString("\tif " + guard + " {\n")
+		b.WriteString("\t\tvar err error\n")
+		b.WriteString("\t\tpool, err = postgresinfra.NewPool(ctx, " + url + ")\n")
+		b.WriteString("\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n")
+		b.WriteString("\t\tdefer pool.Close()\n")
+		b.WriteString("\t}\n\n")
+		return
+	}
 	b.WriteString("\t// Postgres pool — the shared satellite the postgres-backed RAs are built on.\n")
 	b.WriteString("\tpool, err := postgresinfra.NewPool(ctx, " + url + ")\n")
 	b.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n")
 	b.WriteString("\tdefer pool.Close()\n\n")
+}
+
+// postgresProfileGuard reports the boolean expression that gates the
+// Postgres pool's construction to the profiles the postgres infra decl
+// actually declares (e.g. `profile == "cloud"`), and whether that guard
+// applies at all. ok is false — build unconditionally — when either the
+// postgres infra key's Profiles cover the deployment's ENTIRE profile set (no
+// profile is excluded, so there's nothing to gate) or no `profile` var is in
+// scope (needProfile false: no binding switches on profile, so there is no
+// runtime signal to test against).
+func (r *resolved) postgresProfileGuard() (string, bool) {
+	if !needProfile(r) {
+		return "", false
+	}
+	declared := r.infra[r.postgresKey].Profiles
+	if len(declared) >= len(r.profiles) {
+		return "", false
+	}
+	in := make(map[string]bool, len(declared))
+	for _, p := range declared {
+		in[p] = true
+	}
+	// Render in r.profiles' canonical sorted order (not the model's declaration
+	// order) so the guard is deterministic regardless of JSON array order.
+	var parts []string
+	for _, p := range r.profiles {
+		if in[p] {
+			parts = append(parts, "profile == \""+p+"\"")
+		}
+	}
+	return strings.Join(parts, " || "), true
 }
 
 func writeEngines(b *strings.Builder, r *resolved) {

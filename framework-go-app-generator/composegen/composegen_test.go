@@ -258,6 +258,56 @@ func TestGapsGolden(t *testing.T) {
 	checkGolden(t, "../testdata/composegen_gaps.main.gen.go.golden", src)
 }
 
+// TestPostgresPoolGatedByProfile proves the shared Postgres pool satellite
+// (writePostgres) is built ONLY inside the runtime profiles that actually
+// declare the postgres infra key — not unconditionally at generation time
+// just because SOME profile (cloud) needs it. This is the root-cause fix for
+// the local-first-init-funnel plan's Task 2 finding: a local boot with no
+// Postgres reachable must never attempt the dial. The greenfield fixture is
+// exactly the target shape — postgres.profiles == ["cloud"] only,
+// orderStateAccess's "local" arm is the postgres-free "memory" variant — so
+// this is a genuine "absent for the all-no-op profile, present for cloud"
+// proof, not a synthetic one.
+func TestPostgresPoolGatedByProfile(t *testing.T) {
+	m := loadGreenfield(t)
+	got, err := composegen.Generate(m, greenfieldCfg)
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	s := string(got["main.gen.go"])
+
+	// The pool var is predeclared once, typed explicitly (so both the guarded
+	// build and any RA arm outside the guard reference the same nil-or-live
+	// var) — never built with the old unconditional "pool, err := ..." form.
+	if !strings.Contains(s, "var pool *pgxpool.Pool") {
+		t.Errorf("missing profile-gated pool predecl %q", "var pool *pgxpool.Pool")
+	}
+	if strings.Contains(s, "pool, err := postgresinfra.NewPool") {
+		t.Errorf("pool is still built unconditionally (old ungated form present) — gating regressed")
+	}
+
+	// The dial itself is nested inside a runtime profile check naming exactly
+	// the profile(s) postgres.profiles declares (here: cloud only) — so a
+	// "local" boot's control flow never reaches postgresinfra.NewPool, and
+	// therefore never dials.
+	if !strings.Contains(s, `if profile == "cloud" {`) {
+		t.Errorf("pool build is not gated on the resolved profile")
+	}
+	if !strings.Contains(s, "pool, err = postgresinfra.NewPool(ctx, cfg.PostgresURL)") {
+		t.Errorf("missing the gated pool dial call")
+	}
+
+	// Sanity anchor: the pool dial call must textually appear AFTER the guard
+	// opens and BEFORE it closes, i.e. actually nested inside the `if`, not
+	// merely present somewhere else in the file.
+	guardIdx := strings.Index(s, `if profile == "cloud" {`)
+	dialIdx := strings.Index(s, "pool, err = postgresinfra.NewPool(ctx, cfg.PostgresURL)")
+	closeIdx := strings.Index(s, "defer pool.Close()")
+	if guardIdx < 0 || dialIdx < 0 || closeIdx < 0 || !(guardIdx < dialIdx && dialIdx < closeIdx) {
+		t.Errorf("pool dial + defer Close are not nested inside the profile guard (guard=%d dial=%d close=%d)", guardIdx, dialIdx, closeIdx)
+	}
+}
+
 func loadGreenfield(t *testing.T) *projectmodel.Model {
 	t.Helper()
 	m, err := projectmodel.LoadFile("../testdata/greenfield.project.json")

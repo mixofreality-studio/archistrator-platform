@@ -81,6 +81,7 @@ func addRootModule(files map[string]string) {
 go 1.25
 
 require (
+	github.com/jackc/pgx/v5/pgxpool v0.0.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go v0.0.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-otel v0.0.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres v0.0.0
@@ -89,6 +90,7 @@ require (
 	go.temporal.io/sdk v0.0.0
 )
 
+replace github.com/jackc/pgx/v5/pgxpool => ./_stubs/pgxpool
 replace github.com/mixofreality-studio/archistrator-platform/framework-go => ./_stubs/framework-go
 replace github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-otel => ./_stubs/otel
 replace github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres => ./_stubs/postgres
@@ -177,14 +179,21 @@ func addInternalStubs(files map[string]string) {
 import (
 	"context"
 
-	postgres "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 type Access interface{}
 
 type stub struct{}
 
-func NewPostgresAccess(ctx context.Context, pool *postgres.Pool) (Access, error) {
+// NewPostgresAccess's pool param is *pgxpool.Pool — mirroring the REAL
+// archistrator RA constructors (e.g. usage.NewPostgresUsageAccess,
+// operatedsystemstate.NewPostgresOperatedSystemStateAccess), which take
+// *pgxpool.Pool directly, not a framework-go-infrastructure-postgres wrapper
+// type. This must match main.gen.go's "var pool *pgxpool.Pool" predecl
+// (composegen's profile-gated Postgres pool) exactly, or the sandbox fails to
+// compile with a type mismatch.
+func NewPostgresAccess(ctx context.Context, pool *pgxpool.Pool) (Access, error) {
 	return stub{}, nil
 }
 

@@ -21,6 +21,12 @@ const (
 	pathTemporalInfra = pathFwBase + "/framework-go-infrastructure-temporal"
 	pathSecurity      = pathFwBase + "/framework-go/utilities/security"
 	pathTelemetry     = pathFwBase + "/framework-go/utilities/telemetry"
+
+	// pathPgxPool is only imported when writePostgres emits the profile-gated
+	// form (postgresProfileGuard ok): the `var pool *pgxpool.Pool` predecl
+	// needs the concrete type spelled out, unlike the unconditional
+	// `pool, err := postgresinfra.NewPool(...)` form, which infers it.
+	pathPgxPool = "github.com/jackc/pgx/v5/pgxpool"
 )
 
 // importSpec is one import: a path with an optional explicit alias.
@@ -180,6 +186,9 @@ func (r *resolved) addInfraImports(s *importSet) {
 	}
 	if r.consumesPostgres() {
 		s.add(pathPostgresInfra, "postgresinfra")
+		if _, ok := r.postgresProfileGuard(); ok {
+			s.add(pathPgxPool, "")
+		}
 	}
 }
 
