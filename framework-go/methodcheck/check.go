@@ -154,6 +154,13 @@ func runLayerAndAlignmentChecks(t *testing.T, spec ProjectSpec, proj Project, pk
 	// FileStereotype are skipped inside the checker itself, so this call is
 	// harmless for any Spec that does not opt a layer in.
 	arch.CheckFileLayout(t, spec.Arch)
+	// (a‴) Contract-duplication gate — unconditional (default-on), same
+	// posture as CheckFileLayout: flags a hand-written interface whose method
+	// set (names + go/types signatures) fully duplicates a generated service
+	// contract, either in its own package (rule c) or a different package's
+	// (rule d). The legit-vs-violation line is purely structural, so — like
+	// file layout — there is nothing for a consuming repo to configure.
+	arch.CheckContractDuplication(t, spec.Arch)
 	// (a′) Encapsulation gate — only when the spec opts in with an allowlist.
 	// arch.CheckGeneratedSurface re-loads the module and fails any exported symbol
 	// outside the generated contract surface + allowlist.
