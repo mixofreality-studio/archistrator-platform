@@ -21,6 +21,7 @@ func TestScaffoldFiles(t *testing.T) {
 	}
 	for _, want := range []string{
 		".github/workflows/aiarch-design.yml", ".github/workflows/aiarch-construct.yml",
+		".github/workflows/go-checks.yml", ".golangci.yml",
 		"go.mod", "aiarch_method_test.go", "internal/.gitkeep",
 		".claude/agents/system-architect.md",
 	} {
@@ -49,7 +50,7 @@ func TestScaffoldFiles(t *testing.T) {
 	gomod := string(files["go.mod"])
 	for _, want := range []string{
 		"module github.com/acme/widgets",
-		"go 1.25.0",
+		"go 1.26.0",
 		"require github.com/mixofreality-studio/archistrator-platform/framework-go " + FrameworkGoVersion,
 		"tool github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/cmd/httpgen",
 		"tool github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator/cmd/mcpgen",

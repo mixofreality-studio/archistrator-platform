@@ -17,7 +17,10 @@ import (
 // here so a future platform release that ships those CLI wrappers can wire
 // the require/tool lines back in against these same pins.
 const (
-	GoVersion            = "1.25.0"
+	// GoVersion 1.26+ is required by the seated go-checks workflow's
+	// analyzer-based `go fix -diff` gate; runners resolve it via the go.mod
+	// toolchain directive / setup-go.
+	GoVersion            = "1.26.0"
 	FrameworkGoVersion   = "v0.5.2"
 	AppGeneratorVersion  = "v0.6.1"
 	HTTPGeneratorVersion = "v0.3.0"
@@ -50,8 +53,12 @@ type renderData struct {
 var renderedPaths = map[string]string{ // dest path -> template asset
 	".github/workflows/aiarch-design.yml":    "assets/workflows/aiarch-design.yml.tmpl",
 	".github/workflows/aiarch-construct.yml": "assets/workflows/aiarch-construct.yml.tmpl",
+	".github/workflows/go-checks.yml":        "assets/workflows/go-checks.yml.tmpl",
 	"go.mod":                                 "assets/scaffold/go.mod.tmpl",
 	"aiarch_method_test.go":                  "assets/scaffold/aiarch_method_test.go.tmpl",
+	// The shared archistrator lint baseline (standard set + revive + gocritic +
+	// gocyclo + gochecksumtype/gosec) the go-checks workflow runs against.
+	".golangci.yml": "assets/scaffold/golangci.yml",
 }
 
 // ScaffoldFiles renders the complete managed-scaffold file set for one app
