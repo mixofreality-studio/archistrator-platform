@@ -57,6 +57,8 @@ Read all research. Distill the system's purpose into one sentence.
 
 **Technology carve-out:** the vision names no technologies. Sole exception: when a technology IS the founder's stated product identity (the founder frames the product itself as, e.g., "an X-powered Y"), at most ONE identity qualifier may name it. Competitive differentiators otherwise inform the mission's *how* and the objectives' *why* — they do not belong in the vision sentence.
 
+**Vision agreement and its filter (ch. 5, binding):** get ALL stakeholders to agree on the vision FIRST — the vision drives everything downstream, and everything downstream must be justified by it. Once agreed, the vision REPELS irrelevant demands: per ch. 5, if something does not serve the vision, it is politics or secondary concerns — an explicit filter the architect may invoke by name. In the agentic setting, the PM/founder ratification of the mission artifact (Step 5) IS that agreement act: after ratification, a scope push that serves no objective is rejected by citing the vision, not absorbed.
+
 ### Step 2 — Extract objectives from vision
 
 Per ch. 5 §3.2:
@@ -69,6 +71,8 @@ Per ch. 5 §3.2:
 **Hard rule** from ch. 5: *"you must not allow the engineering or marketing people to own the conversation, or to include technology objectives or specific requirements."*
 
 If the PM or stakeholders try to inject either, push back. This conversation is business-stakeholder-led; the architect distills.
+
+**Development cost may legitimately NOT be an objective** (ch. 5). The objectives capture where the business pain actually is; when the pain lies elsewhere (time to market, customization, visibility), do not manufacture a cost objective to round out the list.
 
 ### Step 3 — Write the mission statement
 

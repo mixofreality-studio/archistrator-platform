@@ -27,7 +27,7 @@ Per Löwy, the architect owns system design. The PM is a collaborator on custome
 | Volatilities List | **Owns** | (input only) |
 | Core use cases | **Decides** which are core (ch. 4) | Co-discovers with architect; resolves customer conflicts |
 | Layered decomposition | **Owns** (Four Questions, cardinality, naming, layering rules — ch. 3) | (none) |
-| Operational concepts | **Owns** (ch. 5) | Provides business justification when asked |
+| Deployment & operations model | **Owns** (ch. 5; per-project knobs + trust summaries + deployment view — doctrine referenced) | Ratifies the customer-summary tier |
 | Call chain validation | **Owns** (ch. 4) | (none) |
 
 ## Usage
@@ -60,9 +60,9 @@ Invoke [[the-method-business-alignment]] via `system-architect`:
 
 Then ask the **Product Manager** (or the user directly) to **ratify** — does this capture the business intent? Iterate until ratified.
 
-### Step 2 — Requirements analysis: glossary + scrubbed requirements (Architect owns)
+### Step 2 — Requirements analysis: glossary + required behaviors (Architect owns)
 
-Invoke [[the-method-requirements-analysis]] via `system-architect`. This single skill covers BOTH the glossary (Four Questions) and the scrubbing of solutions-masquerading-as-requirements.
+Invoke [[the-method-requirements-analysis]] via `system-architect`. This single skill covers BOTH the glossary (Four Questions) and deriving the **Required Behaviors** by scrubbing solutions-masquerading-as-requirements.
 
 > Build the glossary by answering the Four Questions across the domain
 > (ch. 3 "What's in a Name", ch. 5 "TradeMe Glossary"):
@@ -89,12 +89,18 @@ Invoke [[the-method-requirements-analysis]] via `system-architect`. This single 
 >   - "Cooking" → strip to "feeding" → "well-being"
 >   - "We need a queue" → strip to "user must receive events in order"
 >
-> Produce the typed `ScrubbedRequirements` model (before/after for each
-> item) and commit it to `.aiarch/state/project.json` → `.scrubbedRequirements`.
-> The architect proposes; the PM ratifies because they know the customer's
-> actual need.
+> Produce the typed `ScrubbedRequirements` model — the **Required Behaviors**
+> (wire kind kept; customer label "Required Behaviors") — and commit it to
+> `.aiarch/state/project.json` → `.scrubbedRequirements`. Each item is a typed
+> `Requirement` `{id, behavior, statedAs, volatilityHint}`: ids contiguous
+> `B-01..B-NN` with NO gaps, `statedAs` populated with the raw customer ask(s)
+> each behavior was scrubbed/consolidated from (an absorbed ask leaves a
+> `statedAs` entry on the survivor, never an id gap), and `volatilityHint`
+> populated for every behavior that implies change (the seed the step-4
+> volatility identification consumes). The architect proposes; the PM ratifies
+> because they know the customer's actual need.
 
-PM reviews glossary for missing or misnamed terms and ratifies the scrubbing.
+PM reviews glossary for missing or misnamed terms and ratifies the behaviors (and that `statedAs` traces back to the customer's words).
 
 ### Step 3 — Volatility identification (Architect owns entirely)
 
@@ -224,39 +230,51 @@ Validation rules from `STRUCTURIZR-CONVENTIONS.md`:
 | Engines/ResourceAccess/Resources don't publish or subscribe to events | Decomposition wrong → iterate |
 | Cardinality limits respected | Decomposition wrong → iterate |
 
-### Step 6 — Operational concepts (Architect owns)
+### Step 6 — Deployment & Operations Model (Architect owns)
 
 Invoke [[the-method-operational-concepts]] via `system-architect`:
 
-> Produce the typed `OperationalConcepts` model and commit it to
-> `.aiarch/state/project.json` → `.operationalConcepts`. Each decision
-> MUST be justified against a business objective from the committed
-> `.mission` artifact (ch. 5, "Operational Concepts"):
+> Produce the typed `DeploymentOperationsModel` (wire kind `operationalConcepts`
+> kept; customer label "Deployment & Operations Model") and commit it to
+> `.aiarch/state/project.json` → `.operationalConcepts`. Author ONLY the
+> PER-PROJECT operational choices; the platform runtime doctrine (topology,
+> closed layering, durable-primitives-as-substrate, generated clients,
+> pricing-as-Strategy, the review-preset mechanism, facet doctrine) is FIXED and
+> lives read-only in [[platform-runtime-doctrine]] — reference it, do NOT
+> re-author it, and do NOT attach an objective claim to it.
 >
-> - **Communication topology**: Message Bus or direct calls? If Message Bus, which Utilities mediate?
-> - **Sync vs queued boundaries**: which Manager↔Manager calls are queued? Which calls within subsystems are sync?
-> - **Pub/sub edges**: who publishes events? Only Clients/Managers may publish; only Clients/Managers may subscribe. Map each edge.
-> - **Layering style**: closed (default) — confirm and state why open or semi-closed was NOT chosen.
-> - **Patterns adopted**: e.g., Workflow Manager, Message-Is-the-Application. For each, cite the business objective it serves and the team's capability to implement it (ch. 5 cautions against adopting patterns the team can't sustain).
-> - **State handling**: where do Managers persist workflow state? Stateless workflow + workflow store, or stateful sessions?
+> - **`deploymentScenario`**: `deployedNotOperated` (build & hand off) or `deployedOperated` (platform hosts & operates).
+> - **`constructionVenue`**: the customer's CI on their repo host, or their local machine (`{kind, repositoryHost, note}`).
+> - **`reviewPolicyRef`**: `vibes` / `checkpoints` / `full` — a reference to the platform preset vocabulary (the risk floor is platform-fixed, not stored).
+> - **`scalingPolicy`**: scale-to-zero + min/max/target — only when `deployedOperated`.
+> - **`infraBuildingBlocks`**: the supported blocks this app uses, from the platform-permitted set.
+> - **`trustSummaries`**: the billing / usage-metering / data-ownership plain-language customer promises.
+> - **`deploymentModel`**: the deployment-models view (OperatedRuntime is a workload node INSIDE the operated cluster, not external; the LOCAL profile tells the real local story; resources are scenario-gated).
+>
+> Link each PER-PROJECT field to a STABLE objective id. Tier every per-project surface: customer summary (ratifiable) over engineer detail.
 
-### Step 7 — System Design Standard check (final gate)
+### Step 7 — Design Health (final gate — review-policy-conditional)
 
 Invoke [[the-method-system-design-standard-check]] via `system-architect`:
 
-> Run the System Design Guidelines checklist from
-> Löwy App C §3:
+> There is NO committed `.standardCheck` artifact to draft. The Appendix-C
+> standard is enforced as **Design Health** (see the skill):
 >
-> - Requirements: behavior captured as use cases, activity diagrams where nested, solutions-masquerading scrubbed, core use cases drive validation
-> - Cardinality: limits respected
-> - Attributes: volatility/reuse direction, no encapsulation of nature-of-business, Managers expendable, symmetric, no public channels for internal calls
-> - Layers: closed; no calling up/sideways/skip; subsystems used to extend
-> - Interaction rules and don'ts: full list verified
->
-> Produce the typed `StandardCheck` model and commit it to
-> `.aiarch/state/project.json` → `.standardCheck`.
+> - The ~40 MECHANICAL rules (counts, graph/layer rules, coverage joins,
+>   contract op-counts, consistency) run LIVE render-on-read — never committed,
+>   never agent-walked. If a live rule is RED, fix the offending typed artifact.
+> - **Waivers** (conscious, justified exceptions) are recorded ON their host
+>   artifact: §2d engines-ratio + §naming → `system.waivers` on `.systemDesign`;
+>   §2h volatility count → `volatilities.waivers` on `.volatilities`. Each carries
+>   a design-specific justification AND a re-eval trigger.
+> - **Attestations** (the semantic properties a machine cannot judge — Prime
+>   Directive, D1–D4, §3a–d) are recorded as `system.attestations` on
+>   `.systemDesign`, each with REAL evidence.
+> - The phase seal is REVIEW-POLICY-CONDITIONAL: under `vibes` it seals when the
+>   live checks are green; under `checkpoints`/`full` a human ratifies the Design
+>   Health view, and a red check or an unacknowledged waiver blocks the seal.
 
-Report violations to user. Each must be either fixed or explicitly waived with justification.
+Leave the design in a sealable state: green live checks, every waiver justified with a re-eval trigger, every attestation affirmed with evidence.
 
 ### Step 8 — Wrap up
 
@@ -266,13 +284,14 @@ Show the Phase-1 slots now committed in `.aiarch/state/project.json`:
 .aiarch/state/project.json
 ├── .mission                (vision + objectives + mission statement)
 ├── .glossary               (Who/What/How/Where)
-├── .scrubbedRequirements   (before/after on solutions-masquerading)
-├── .volatilities           (the Volatilities List, grouped by axis)
+├── .scrubbedRequirements   (Required Behaviors: id/behavior/statedAs/volatilityHint, contiguous B-NN)
+├── .volatilities           (the Volatilities List, grouped by axis; traces + rejected populated)
 ├── .coreUseCases           (raw list, core list, rejections + activity diagrams)
-├── .systemDesign           (typed System: components, relationships, dynamic views — renders to architecture.dsl + sequence diagrams)
-├── .operationalConcepts    (topology, sync/queued, pub/sub, patterns)
-└── .standardCheck          (Appendix C system design checklist)
+├── .systemDesign           (typed System: components, relationships, dynamic views — renders to architecture.dsl + sequence diagrams; hosts standard-check waivers + attestations)
+└── .operationalConcepts    (Deployment & Operations Model: per-project knobs + trust summaries + deployment view; doctrine referenced from platform-runtime-doctrine)
 ```
+
+Design Health is a render-on-read view (no committed slot); the standard-check waivers/attestations live on `.systemDesign` and `.volatilities`.
 
 The Structurizr DSL and any sequence diagrams are render-on-read of these slots, produced by the server's rendering access — there are no `.dsl` or `.md` files to maintain.
 

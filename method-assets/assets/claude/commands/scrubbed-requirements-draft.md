@@ -1,6 +1,6 @@
 # /scrubbed-requirements-draft
 
-> Draft (or amend) the **Scrubbed Requirements** artifact as one design-rail CI job. The job's ambient env fixes the artifact kind and target slot.
+> Draft (or amend) the **Required Behaviors** artifact (wire kind `scrubbedRequirements` — the kind keeps its identity; the customer-facing label is "Required Behaviors") as one design-rail CI job. The job's ambient env fixes the artifact kind and target slot.
 
 **Arguments** — none. Kind, job mode, branch, and project come from the ambient `AIARCH_*` env baked into this CI run.
 
@@ -12,6 +12,6 @@
 
 1. **Read your inputs.** `getCommittedSlot` for every committed predecessor slot this artifact builds on; on an amendment, `getDraftSlot` for the current draft (basis: `.mission`, `.glossary`).
 2. **Read the review ledger** with `getReviewThread`. If open comments exist, this is a redraft: your draft MUST address every open comment. Also read `getCritique` — if it carries a `revise` verdict, its notes are the PM's revision guidance and your draft MUST address them. Also read the current draft slot's `notes` field (`getDraftSlot`) — founder rejection/send-back feedback lands THERE, not in the review thread; every point in it MUST be addressed (answer each via `respondToReviewComment` where a matching comment exists, otherwise in your `publishDraft` message).
-3. **Draft** the typed model per [[the-method-requirements-analysis]]. Submit with `putDraftModel` — it validates and returns actionable errors; fix and resubmit until accepted.
+3. **Draft** the typed model per [[the-method-requirements-analysis]] (Pass 2 + "Draft-job doctrine → Required behaviors"). Each behavior is a typed `Requirement` `{id, behavior, statedAs, volatilityHint}`: ids contiguous `B-01..B-NN` with NO gaps, `statedAs` populated with the raw customer ask(s) each behavior was scrubbed from, and `volatilityHint` populated for every behavior that implies change (the step-4 hand-off). Submit with `putDraftModel` — it validates and returns actionable errors; fix and resubmit until accepted.
 4. **Respond to every open ledger comment** with `respondToReviewComment` — accept (say what you changed) or rebut (say why not, grounded in the Method). Silent non-response is a defect.
 5. **Finish** with `publishDraft` (exactly once). Do not open PRs, do not merge, do not touch phase status — the server owns the loop. If dispatched as a redraft and you find no open review comments, no revise verdict, AND no unaddressed rejection notes on the draft slot, do not exit without publishing: re-validate the existing draft and call `publishDraft` anyway to re-affirm it. A draft job must NEVER end without calling `publishDraft` — an empty exit fails the run's silent-failure guard.

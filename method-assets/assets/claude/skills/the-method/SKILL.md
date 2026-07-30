@@ -32,12 +32,12 @@ Structurizr DSL + markdown).
 | Skill | Produces (render) | `project.json` slot |
 |---|---|---|
 | [[the-method-business-alignment]] | mission.md | `.mission` |
-| [[the-method-requirements-analysis]] | glossary.md + scrubbed-requirements.md | `.glossary` + `.scrubbedRequirements` |
+| [[the-method-requirements-analysis]] | glossary.md + required-behaviors.md | `.glossary` + `.scrubbedRequirements` (wire kind kept; customer label "Required Behaviors") |
 | [[the-method-volatility-identification]] | volatilities.md | `.volatilities` |
 | [[the-method-core-use-cases]] | core-use-cases.md | `.coreUseCases` |
 | [[the-method-architecture]] | architecture.dsl | `.systemDesign` |
-| [[the-method-operational-concepts]] | operational-concepts.md | `.operationalConcepts` |
-| [[the-method-system-design-standard-check]] | standard-checklist.md | `.standardCheck` |
+| [[the-method-operational-concepts]] | deployment-operations-model.md | `.operationalConcepts` (wire kind kept; customer label "Deployment & Operations Model") |
+| [[the-method-system-design-standard-check]] | Design Health view (render-on-read) | — no committed slot; live checks + waivers on `.systemDesign`/`.volatilities` + attestations on `.systemDesign` |
 
 ## Phase 2: Project Design
 

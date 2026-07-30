@@ -10,6 +10,7 @@ This is a pure reference skill. It holds the canonical layer model, interaction 
 Sources:
 - Ch. 3 §3 "Typical Layers" — what each layer encapsulates.
 - Ch. 3 §4 "Classification Guidelines" — naming, Four Questions, Managers-to-Engines ratio, key observations.
+- Ch. 3 §5 "Subsystems and Services" — every component as a service; internal vs external communication.
 - Ch. 3 §6 "Open and Closed Architectures" — layering rules and design "don'ts".
 - Ch. 4 §2 "Composable Design" — the smallest-set principle.
 - Appendix C §3 "System Design Guidelines" — items 2 (Cardinality), 4 (Layers), 5 (Interaction rules), 6 (Interaction don'ts).
@@ -23,11 +24,13 @@ Sources:
 | **Clients** | Entry points: end-user apps, public APIs, other systems. Encapsulates client volatility (web/mobile/desktop/agent etc.). | Form-descriptive: `WebApp`, `MobileApp`, `PublicAPI`. | React app, iOS app, REST gateway |
 | **Managers** | Workflow / sequence volatility for a *family* of related use cases. Almost expendable — orchestrate Engines + ResourceAccess. | `<Noun>Manager` — `OrderManager`, `AccountManager`. Noun describes the encapsulated workflow volatility. | OrderManager, OnboardingManager |
 | **Engines** | Business **activity** volatility — Strategy pattern. **No I/O.** Pure computation, decision, transformation. | `<Gerund>Engine` — `PricingEngine`, `MatchingEngine`, `CalculatingEngine`. Gerunds MANDATORY here and FORBIDDEN elsewhere in the business / access layers. | PricingEngine, MatchingEngine |
-| **ResourceAccess** | Atomic business verbs over a Resource — `credit`, `debit`, `match`, `assign`. **Never CRUD. Never raw I/O.** May serve more than one Resource. | `<Noun>Access` — `OrderAccess`, `AccountAccess`. Noun describes the data or business concept exposed. | OrderAccess, IdentityAccess |
+| **ResourceAccess** | Atomic business verbs over a Resource — `credit`, `debit`, `match`, `assign`. **Never CRUD. Never raw I/O.** Banned contract-operation shapes: `Select`/`Insert`/`Update`/`Delete` (betray a database) and `Open`/`Close`/`Seek`/`Read`/`Write` (betray a file) — such names couple every consumer to the resource; expose atomic business verbs instead. May serve more than one Resource. | `<Noun>Access` — `OrderAccess`, `AccountAccess`. Noun describes the data or business concept exposed. | OrderAccess, IdentityAccess |
 | **Resources** | Physical stores, queues, external systems. Internal or external to the system. | `<Noun><Technology>` — `OrderDB`, `EmailProvider`, `EventBus`. | PostgreSQL, S3, Stripe, Kafka topic |
 | **Utilities** (bar) | Cross-cutting infrastructure. Cappuccino-machine test: *"could this plausibly be used in any other system?"* If no, it is not a Utility. | Concern-descriptive: `Logging`, `Security`, `Diagnostics`, `Pub/Sub`. | Logging, Security, Pub/Sub |
 
 ### The Four Questions (Ch. 3 §4.2)
+
+The book's set is four questions — who / what / how / where. The table below is the platform's deliberate extension: "how" is split into business activity vs resource access, and a Utilities row is added.
 
 Loose mapping that initiates and validates classification:
 
@@ -94,6 +97,7 @@ From Appendix C §3.2 "Cardinality" and Ch. 3 §4.3 "Managers-to-Engines Ratio".
 (Table is illustrative — the rule of thumb is fewer Engines than Managers, not the exact counts.)
 
 - ResourceAccess components may serve more than one Resource.
+- A single Manager may support **more than one family of use cases**, expressed as separate service contracts (facets) on the one Manager — a legitimate way to reduce the number of Managers in a system.
 - **Order of magnitude: ~10 components total** across all layers (Ch. 4 §2 "The Architect's Mission" — "a dozen or two at the most"). If you have hundreds, the decomposition is wrong.
 
 **Hard fail:** ≥8 Managers (violates [Directive 1 "Avoid functional decomposition"](../the-method-doctrine/SKILL.md)). Per Ch. 3 §4.3: *"you have already failed to produce a good design"* — that many Managers indicates functional or domain decomposition. Restart.
@@ -131,6 +135,12 @@ From Appendix C §3.4 "Layers" and Ch. 3 §6.
 - Resolve apparent need to "open" the architecture by **queued calls** or **asynchronous event publishing** via a Pub/Sub Utility.
 - Extend the system by adding subsystems, not by breaking layering rules.
 
+### Internal vs external communication (Ch. 3 §5)
+
+- **Never use the same communication mechanism internally and externally.** External protocols are low-bandwidth and decoupled by design — that is their job; internal calls between components need fast, reliable channels.
+- Every Manager, Engine, and ResourceAccess component is a service in its own right — a "microservice" is not a subsystem.
+- The platform binds this principle once for every system built here: Temporal carries the internal mechanism, per [[platform-runtime-doctrine]] — "no synchronous HTTP between Managers".
+
 ## Key observations (Ch. 3 §4.3)
 
 A well-designed Method system exhibits these qualities. Deviation is a smell:
@@ -140,7 +150,14 @@ A well-designed Method system exhibits these qualities. Deviation is a smell:
 | Volatility decreases top-down | Clients are most volatile; Resources least. If a Resource is your most volatile component, reconsider. |
 | Reuse increases top-down | Clients are hardly reusable; Utilities are universally reusable. If a Utility is single-use, it is probably not a Utility. |
 | Managers are almost expendable | Each Manager's loss should leave Engines/ResourceAccess/Resources/Utilities reusable. If not, the Manager is too thick (likely functional decomposition). |
+| Engines are reused across Managers | If two Managers use two different Engines to perform the same activity, you either have functional decomposition or you missed an activity volatility. Engines are designed for reuse across Managers. |
 | Design is symmetric | Similar Managers and Engines designed similarly. If three of four use cases in a Manager publish events and the fourth does not, the asymmetry is a design smell. |
+
+**The expendability trichotomy.** "Almost expendable" is a calibrated midpoint — judge each Manager by how a required change to it feels:
+
+- **Expensive** — you fight or fear the change: the Manager is too big; functional decomposition.
+- **Expendable** — you shrug the change off: the Manager is a pass-through that exists only to satisfy these guidelines; also a design flaw.
+- **Almost expendable** — the change makes you think through the adaptations, perhaps estimate the work: the target.
 
 ## How to cite
 

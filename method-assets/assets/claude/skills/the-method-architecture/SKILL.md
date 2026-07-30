@@ -72,7 +72,7 @@ Per Ch. 3 §4.2 "The Four Questions":
 
 > *"Make a list of all the 'who' and put them in one bin as candidates for Clients. Make a list of all the 'what' and put them in another bin as candidates for Managers, and so on... The result will not be perfect... but it is a start."*
 
-Walk every entry in the committed `.volatilities` artifact. Bin it:
+Walk every entry in the committed `.volatilities` artifact. Bin it (the book's ch. 3 §4.2 set is four questions — who / what / how / where; the table below is the platform's deliberate extension, splitting "how" into business activity vs resource access and adding a Utilities row):
 
 | Question | Bin → Layer |
 |---|---|
@@ -85,11 +85,19 @@ Walk every entry in the committed `.volatilities` artifact. Bin it:
 
 If a volatility lands in two bins, it is either two volatilities or the volatility statement is ambiguous — refine the `.volatilities` artifact before proceeding. See [[the-method-layers]] for full layer identity rules.
 
+**The mapping menu (ch. 2) — not every volatility mints a component.** Per Löwy, *"the transition from the list of volatile areas to components is hardly ever one to one."* Binning a volatility does not commit you to a component for it. Each committed volatility takes exactly one of three dispositions:
+
+1. **Encapsulated by a component** — the normal case. A component encapsulates one or more volatilities (usually one; a component may encapsulate several closely related ones), and a volatility is normally owned by one component or a ratified facet group.
+2. **Encapsulated by an operational concept** — some volatilities are contained by queuing, pub/sub, or another operational pattern rather than by a box in the static model. Record an explicit deferral disposition on the draft, resolved in the `.operationalConcepts` artifact. Silence is a defect, not a disposition.
+3. **Encapsulated by a third-party service** — the volatility is bought, not built; the third party absorbs the change. Record the disposition.
+
+A committed volatility with none of the three dispositions is a coverage gap (`DH-VOL-ENCAP-MISSING`).
+
 ### Step 2 — Name and classify each candidate component
 
 For each bin entry, name the component using the conventions in [[the-method-layers]] (e.g., `<Noun>Manager`, `<Gerund>Engine`, `<Noun>Access`). Each becomes a typed `Component` (`Name`, `Kind`, `Encapsulates`, `AtomicBusinessVerbs`; `Layer` is derived server-side from `Kind`). Verify each component:
 
-- Encapsulates **exactly one** volatility from `.volatilities` (recorded in `Component.Encapsulates`).
+- Encapsulates **one or more** volatilities from `.volatilities` (usually one; a component may encapsulate several closely related ones). The human rationale goes in `Component.Encapsulates` (prose); the exact committed volatility name(s) that prose cites go in `Component.EncapsulatesVolatilities` (the typed machine join — see Step 6).
 - Sits in **exactly one** layer.
 - Passes the layer's identity test (e.g., Engines do no I/O; ResourceAccess exposes business verbs not CRUD; Utilities pass the cappuccino-machine test).
 
@@ -129,7 +137,8 @@ For each component identified in Step 2, add a typed `Component` to `System.Comp
 
 - `Name` — the component name (e.g., `OrderManager`); the server assigns `ID = Slug(Name)`.
 - `Kind` — one of the closed taxonomy (`Client`/`Manager`/`Engine`/`ResourceAccess`/`Resource`/`Utility`); the server derives `Layer` from `Kind` — you never emit a layer.
-- `Encapsulates` — the single volatility this component owns (Manager/Engine/RA); `""` for Resource/Utility. **≤ 150 characters** when it renders as the on-element description: name the volatility plus a brief verb-phrase. Implementation detail (retention, idempotency mechanics, schema, rationale) belongs in the `.operationalConcepts` artifact or the `.volatilities` artifact — NOT here. See "Description style" in `STRUCTURIZR-CONVENTIONS.md`.
+- `Encapsulates` — the volatility (usually one; occasionally several closely related ones) this component owns (Manager/Engine/RA); `""` for Resource/Utility. **≤ 150 characters** when it renders as the on-element description: name the volatility plus a brief verb-phrase. Implementation detail (retention, idempotency mechanics, schema, rationale) belongs in the `.operationalConcepts` artifact or the `.volatilities` artifact — NOT here. See "Description style" in `STRUCTURIZR-CONVENTIONS.md`.
+- `EncapsulatesVolatilities` — the typed machine join: the **exact committed volatility name(s)** from `.volatilities` that the `Encapsulates` prose cites, verbatim. The prose stays (human rationale); this list is what the server joins on. Every Manager/Engine/ResourceAccess records at least one; Resource/Utility leave it empty. A name that matches no committed volatility is a dangling reference (`DH-COMP-VOL-DANGLING`); a Manager/Engine/ResourceAccess with an empty list is `DH-COMP-NO-VOLATILITY`.
 - `AtomicBusinessVerbs` — for ResourceAccess, the atomic business verbs it exposes.
 
 Also capture every actor named in core use cases (rendered as `person` declarations).
@@ -159,6 +168,8 @@ The static-architecture view (Clients at top, Resources at bottom — the layere
 
 ### Step 9 — Author one `DynamicView` per use case (the validation)
 
+> **Composable-design caution (ch. 4 §2).** Löwy's rule: *"a composable design does not aim to satisfy any use case in particular."* The decomposition targets VOLATILITIES; the dynamic views VALIDATE that the components compose to satisfy each use case — they must never DRIVE the decomposition. Never add, split, or reshape a component so that a particular chain draws; that is functional decomposition re-entering through the validation door. The platform's every-use-case chain mandate (founder extension, below) raises the validation bar — every use case, core and non-core, must compose — but it does not change this rule: if a chain won't draw cleanly, fix the decomposition against the volatilities, don't add a use-case-shaped component.
+
 For **every** use case in the committed `.coreUseCases` — core AND every non-core variation (founder extension; see the callout under **Output**) — add a typed `DynamicView` to `System.DynamicViews` (`UseCaseID`, `Key`, `Title`, `Participants`, ordered `Edges`):
 
 - `UseCaseID` — links to the `UseCase` it validates.
@@ -175,6 +186,8 @@ For **every** use case in the committed `.coreUseCases` — core AND every non-c
 ```
 
 This is the **call chain** referenced throughout Chapter 4 and 5 of the book. The `DynamicView` IS the validation artifact — tracing it cleanly proves the decomposition supports the use case. The renderer emits each as a Structurizr `dynamic` view.
+
+**Back-populate `linkedComp` on the use-case activity nodes (required).** The committed `.coreUseCases` activity diagrams carry `linkedComp` on each node — left empty at use-case draft time because no components existed yet (see [[the-method-core-use-cases]] "LINKEDCOMP HAND-OFF"). Now that the components exist and you are drawing the call chain, close that hand-off: for every meaningful action node in each use case's activity diagram, `linkedComp` must name the component that performs that step (the same component the corresponding dynamic-view edge targets). This linkage is recorded ON the `.coreUseCases` activity nodes — a use-case amendment that fills them — since that is where the field lives; the dynamic-view call chain you draw here is the source of truth for which component each step maps to. It makes the step↔component linkage inspectable and is what lets `.coreUseCases` be validated against `.systemDesign`. Shipping the architecture with the use-case nodes' `linkedComp` still empty across the board is a rejected root-cause defect (the field the drafts never filled). Where a node is pure control flow (start/end/merge/decision/fork/join) with no performing component, leaving `linkedComp` empty is correct.
 
 **Suspend/resume use cases.** If the use case suspends (waiting for an external event) and resumes, do not draw the infrastructure's `awaitSignal` edge inside the dynamic view — the infrastructure ResourceAccess is omitted from dynamic views (see `STRUCTURIZR-CONVENTIONS.md` "Infrastructure ResourceAccess is omitted from dynamic views"). The suspension is implied by the order of edges: the Manager's last pre-suspend verb (typically `appendEvent(<Something>AwaitingReview)`) is followed by the Client's resume call (e.g., `submitReviewDecision`).
 
@@ -226,16 +239,18 @@ If a build is involved when running the server locally, the Go build is `GOWORK=
 
 This is the normative task the CI draft job (and a local `/system-design` run) executes to produce the `System`. It is self-contained: everything a draft agent needs to draft a sound architecture is stated here.
 
-Decompose the system by VOLATILITY into layered components, then validate by drawing the call chains. Bin each volatility with the Four Questions: Who -> Client, What -> Manager, How(activity) -> Engine, How(resource) -> ResourceAccess, Where(state) -> Resource, cross-cutting reuse -> Utility. Each component encapsulates EXACTLY ONE volatility and sits in EXACTLY ONE layer; Component.Layer MUST equal Component.Kind. Obey closed layering: calls go downward only, never upward, never sideways except queued Manager->Manager. REJECT functional decomposition (components named after features) and domain decomposition (components named after entities) — name components after the volatility they hide. Keep it small: order-of-magnitude ~10 components, Managers <=5, fewer Engines than Managers. Emit one dynamicView per use case — CORE and SUPPORTING (nonCore) variations ALIKE — tracing its call chain (exactly one Manager entered from the Client; every edge labelled in the destination layer's vocabulary, not infrastructure terms). FOUNDER EXTENSION (beyond Löwy, who validates only the core): EVERY use case in the committed CoreUseCases set MUST carry its own dynamic view — you may NOT ship the architecture with any use case (core or a nonCore variation) left without a call chain. If a use case cannot be drawn cleanly, the DECOMPOSITION is wrong — fix the components, not the use case.
+Decompose the system by VOLATILITY into layered components, then validate by drawing the call chains. Bin each volatility with the Four Questions: Who -> Client, What -> Manager, How(activity) -> Engine, How(resource) -> ResourceAccess, Where(state) -> Resource, cross-cutting reuse -> Utility. Each Manager/Engine/ResourceAccess component encapsulates ONE OR MORE volatilities (usually one; several only when closely related) and sits in EXACTLY ONE layer; Component.Layer MUST equal Component.Kind. The volatility-to-component transition is hardly ever one to one (ch. 2): a volatility is normally owned by one component or a ratified facet group, but it may instead be encapsulated by an OPERATIONAL CONCEPT (queuing, pub/sub — record an explicit deferral disposition on the draft, resolved in the operationalConcepts artifact) or by a THIRD-PARTY service; not every volatility mints a component, but every committed volatility must take one of those three dispositions (a gap is DH-VOL-ENCAP-MISSING). On every Manager/Engine/ResourceAccess set `encapsulatesVolatilities` to the EXACT committed volatility name(s) its Encapsulates prose cites — the prose is the human rationale, the typed list is the machine join (a name matching no committed volatility is DH-COMP-VOL-DANGLING; an empty list on a Manager/Engine/ResourceAccess is DH-COMP-NO-VOLATILITY). Obey closed layering: calls go downward only, never upward, never sideways except queued Manager->Manager. REJECT functional decomposition (components named after features) and domain decomposition (components named after entities) — name components after the volatility they hide. Keep it small: order-of-magnitude ~10 components, Managers <=5, fewer Engines than Managers. Emit one dynamicView per use case — CORE and SUPPORTING (nonCore) variations ALIKE — tracing its call chain (exactly one Manager entered from the Client; every edge labelled in the destination layer's vocabulary, not infrastructure terms). FOUNDER EXTENSION (beyond Löwy, who validates only the core): EVERY use case in the committed CoreUseCases set MUST carry its own dynamic view — you may NOT ship the architecture with any use case (core or a nonCore variation) left without a call chain. If a use case cannot be drawn cleanly, the DECOMPOSITION is wrong — fix the components, not the use case.
 
 IDENTITY BY NAME: every component is identified by its NAME — you do NOT emit any id, and you do NOT emit a component's layer (it is fixed by its kind and the server derives it). Component names must be UNIQUE. In `relationships` and a dynamic view's `participants`/`edges`, reference components by their NAME (the from/to are component names). In each dynamic view set `useCase` to that use case's NAME (exactly as it appears in the CoreUseCases context — core OR nonCore) — do NOT emit a view key; the server derives it. The server resolves every name to its internal id and rejects any name that does not match a component or use case.
 
 ## Exit criteria
 
 - `.aiarch/state/project.json` → `.systemDesign` holds the typed `System` model, and it renders to Structurizr DSL that parses cleanly (no parser errors, no ERROR-level log lines) during server-side artifact validation.
-- Every `Component` cites a volatility from `.volatilities` in its `Encapsulates`.
+- Every Manager/Engine/ResourceAccess `Component` records `encapsulatesVolatilities` — the exact committed volatility name(s) from `.volatilities` its `Encapsulates` prose cites, verbatim (a name matching no committed volatility is `DH-COMP-VOL-DANGLING`; an empty list on a Manager/Engine/ResourceAccess is `DH-COMP-NO-VOLATILITY`).
+- Every committed volatility has a disposition: encapsulated by a component (normally one, or a ratified facet group), explicitly deferred to an operational concept (recorded on the draft, resolved in `.operationalConcepts`), or delegated to a third-party service. A volatility with none is `DH-VOL-ENCAP-MISSING`.
 - Cardinality limits respected (see [[the-method-layers]]).
 - **Every** use case from `.coreUseCases` — core AND every non-core variation — has a `DynamicView` that traces cleanly through the layers (founder extension; enforced by `USECASE-DYNAMIC-MISSING`). No use case ships without a call chain.
+- Every meaningful action node in the `.coreUseCases` activity diagrams has its `linkedComp` back-populated to the performing component (Step 9 hand-off); the step↔component linkage is not left empty across the board.
 - Sequence-diagram source is carried on any `DynamicView` where order/duration/multiplicity is non-obvious.
 
 Move to `the-method-operational-concepts`.
@@ -249,7 +264,7 @@ Move to `the-method-operational-concepts`.
 - **Sequence diagrams in place of call chains for simple flows** — over-spec; call chain suffices.
 - **No supplementary sequence diagram where multi-party order matters** — under-spec; reader cannot reconstruct the flow.
 - **Mermaid `flowchart` or `sequenceDiagram`** — both are deprecated for Method artifacts; use PlantUML activity (new syntax) for use-case activity diagrams and PlantUML sequence for supplementary sequence diagrams. The PlantUML hook validates every block on save.
-- **A component with an empty `Encapsulates` where one is required (or a feature-name in it)** — usually means it was named before the volatility was clear.
+- **A component with an empty `Encapsulates` where one is required (or a feature-name in it)** — usually means it was named before the volatility was clear. The same goes for an empty `EncapsulatesVolatilities` on a Manager/Engine/ResourceAccess (`DH-COMP-NO-VOLATILITY`), or a typed entry that does not match a committed volatility name verbatim (`DH-COMP-VOL-DANGLING`).
 - **An `Encapsulates` over 150 characters, or one that documents retention / persistence schema / idempotency mechanics / rationale** — that detail belongs in the `.operationalConcepts` or `.volatilities` artifact. The rendered on-element description names the encapsulated volatility and the role; nothing more.
 
 ## TradeMe reference
@@ -258,8 +273,8 @@ Re-read Ch. 5 §6 for the worked example: the architect validated 8 use cases �
 
 ## Common failure modes
 
-- **A volatility maps to two components.** One of them is unnecessary, or the volatility was poorly stated. Resolve in the `.volatilities` artifact first, then redo Step 1.
-- **A component has no volatility from `.volatilities` behind it.** Drop the component.
+- **A volatility maps to two components without a ratified facet group.** A volatility is normally owned by one component (or a ratified facet group). Two independent claimants means one of them is unnecessary, or the volatility was poorly stated — resolve in the `.volatilities` artifact first, then redo Step 1.
+- **A component has no volatility from `.volatilities` behind it.** Drop the component (`DH-COMP-NO-VOLATILITY`).
 - **Manager-to-Engine ratio wrong (too few Engines).** Either Managers are too thick — extract Engines — or there are too few Engines because business activities are buried inside Managers. Refactor.
 - **A Utility doesn't pass the cappuccino-machine test.** It is not a Utility. Reclassify (often as ResourceAccess or Engine) or remove.
 - **A core use case won't draw.** The decomposition is wrong. Do not weaken the use case to fit; revise the decomposition.

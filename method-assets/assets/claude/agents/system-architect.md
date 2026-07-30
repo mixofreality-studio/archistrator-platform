@@ -167,7 +167,7 @@ Per ch. 3.
 - Managers almost expendable
 - Symmetric design
 
-**Layering:** prefer closed. No calling up, no sideways (except queued M↔M / M→E), no skipping layers.
+**Layering:** prefer closed. No calling up, no calling sideways within a layer (the ONLY sideways carve-out is queued Manager → Manager), no skipping layers. Manager → Engine is an ordinary downward call — Engines sit below Managers, on an orthogonal plane per the Strategy pattern — not a sideways exception.
 
 **Anti-patterns to reject and re-run:**
 - Functional decomposition (`OrderProcessing`, `Reporting`)

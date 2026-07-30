@@ -43,8 +43,8 @@ func TestClaudeFilesInventory(t *testing.T) {
 	if agents != 10 {
 		t.Errorf("agents = %d, want 10", agents)
 	}
-	if commands != 58 {
-		t.Errorf("commands = %d, want 58", commands)
+	if commands != 59 {
+		t.Errorf("commands = %d, want 59", commands)
 	}
 	if len(skills) != 28 {
 		t.Errorf("skill dirs = %d, want 28", len(skills))
@@ -81,7 +81,7 @@ func TestDesignReviewCommandsExist(t *testing.T) {
 	for _, name := range []string{
 		"mission-critique", "glossary-critique",
 		"scrubbed-requirements-critique", "core-use-cases-critique",
-		"system-critique",
+		"volatilities-critique", "system-critique",
 		"design-answer", "design-answer-pm",
 	} {
 		if _, ok := files[".claude/commands/"+name+".md"]; !ok {

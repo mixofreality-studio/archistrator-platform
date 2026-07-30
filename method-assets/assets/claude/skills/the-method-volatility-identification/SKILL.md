@@ -28,7 +28,7 @@ State is git-as-DB: archistrator is a single Go-server repo whose canonical proj
 
 - The committed **mission** artifact → `.aiarch/state/project.json` → `.mission`
 - The committed **glossary** artifact → `.glossary`
-- The committed **scrubbedRequirements** artifact → `.scrubbedRequirements` — the underlying-volatility hint on each entry is your starting list of candidate volatilities
+- The committed **Required Behaviors** artifact → `.scrubbedRequirements` (wire kind kept; customer label "Required Behaviors") — each behavior's `volatilityHint` is your starting list of candidate volatilities, and its `id` (`B-NN`) is what your accepted entries `traces` back to
 - The research corpus in `project.json` (re-read for context)
 
 ## Output
@@ -45,7 +45,7 @@ The architect owns this phase. **The PM is not involved in authoring.** They may
 
 Volatility identification is an explicit three-stage flow. A rejected candidate with a recorded reason is a design decision; a silently omitted one is a defect. Steps 1–7 below are the detailed mechanics; they execute inside this flow.
 
-**Step A — PROPOSE: brainstorm candidates wide.** Brainstorm candidate volatilities from every scrubbed requirement (start from its underlying-volatility hint), every glossary term, the mission's business objectives, and the carry-forwards from earlier phases — check the mission co-author thread and publishDraft notes for excluded founder constraints; deployment/operations constraints are volatility input. Aim wide: 15–30 candidates. Do NOT filter while proposing.
+**Step A — PROPOSE: brainstorm candidates wide.** Brainstorm candidate volatilities from every Required Behavior (start from its `volatilityHint`), every glossary term, the mission's business objectives, and the carry-forwards from earlier phases — check the mission co-author thread and publishDraft notes for excluded founder constraints; deployment/operations constraints are volatility input. Aim wide: 15–30 candidates. Do NOT filter while proposing.
 
 **Step B — FILTER: apply the book's false-volatility filters IN ORDER (ch. 2 §3).** For each candidate:
 
@@ -54,9 +54,11 @@ Volatility identification is an explicit three-stage flow. A rejected candidate 
 3. **`speculative`** (§3.7 "Speculative Design") — no business grounding: per the book, *"simply frivolous speculation on a future change to your system (i.e., a change to the nature of the business)"* — you are designing for a hypothetical business or competitor's needs, not for changes this business's requirements evidence.
 4. **`foldedInto`** — the same underlying change as another entry; keep one entry named for the underlying change and fold the duplicates into it.
 
-**Step C — RECORD every rejection.** Every candidate that fails a filter goes into the typed model's `rejected` array: `{name, reason, class}` with class one of `variableNotVolatile | natureOfTheBusiness | speculative | foldedInto`. The reason must be candidate-specific — why THIS candidate fails — not a restatement of the class. Never silently omit a brainstormed candidate.
+**The ch. 5 challenge protocol (binding, per candidate).** For every candidate that survives the filters you must be able to state WHAT the volatility is, WHY it is volatile, and what RISK it poses in terms of LIKELIHOOD and EFFECT — per the book, *"if you cannot clearly state [these], you need to look further."* The rationale paragraph carries the likelihood-and-effect statement: which change, how often it realistically arrives, and what it would ripple through if unencapsulated. A candidate whose rationale cannot state all three is not ready to accept — keep looking.
 
-**Step D — TRACE every accepted item.** Every surviving entry carries `traces`: the ids of the scrubbed requirements it insulates (at least one). An accepted entry with no traces has no business grounding — send it back through Step B; it is probably speculative.
+**Step C — RECORD every rejection.** Every candidate that fails a filter goes into the typed model's `rejected` array: `{name, reason, class}` with class one of `variableNotVolatile | natureOfTheBusiness | speculative | foldedInto`. The reason must be candidate-specific — why THIS candidate fails — not a restatement of the class. Never silently omit a brainstormed candidate. **`rejected` MUST be populated** — the typed model supports it and the view renders it; an identification pass with an empty `rejected` array is doctrinally incomplete (a zero-rejection filter did not filter), and a known root-cause defect is exactly this array shipping empty because the draft never wrote it.
+
+**Step D — TRACE every accepted item.** Every surviving entry carries `traces`: the ids (`B-NN`) of the Required Behaviors it insulates — the back-edge that closes the loop with the behaviors' `volatilityHint` (the view renders it). Traces are expected on nearly every entry, with ONE sanctioned exception: a **longevity-grounded** entry (ch. 2, Volatility and Longevity) anticipates a change the requirements never state — its `traces` may be empty **iff** the rationale explicitly names the volatile thing, its historical change rate, and why that rate falls inside the system's lifespan horizon. An entry that is BOTH untraced AND not longevity-grounded has no grounding at all — send it back through Step B; it is probably speculative.
 
 ### Step 1 — Apply the two axes of volatility (ch. 2 §3.2)
 
@@ -145,10 +147,10 @@ Enterprise customers require SAML; consumer tier uses OAuth; some regulated cust
 
 **Format rules:**
 - Bold volatility name (Pascal-case + "volatility" suffix is the convention), named for the UNDERLYING CHANGE, never a feature or glossary term ("capture-channel volatility", not "Embedded tool volatility")
-- Rationale paragraph below
+- Rationale paragraph below — carrying the challenge-protocol risk statement (Step B): which change, how often it realistically arrives (likelihood), and what it would ripple through if unencapsulated (effect)
 - Group by axis
-- Each entry carries `traces` — the ids of the scrubbed requirements it insulates (at least one)
-- Every filtered-out candidate is recorded in the model's `rejected` array with its class and a candidate-specific reason (Step C)
+- Each entry carries `traces` — the ids (`B-NN`) of the Required Behaviors it insulates; empty only for a longevity-grounded entry whose rationale explicitly carries the change-rate grounding (Step D)
+- Every filtered-out candidate is recorded in the model's `rejected` array with its class and a candidate-specific reason (Step C); this MUST be populated
 - Aim for ~6–15 entries total
 
 ### Step 7 — Cross-check independence of axes
@@ -164,11 +166,11 @@ Identify the areas of VOLATILITY the architecture must encapsulate, along TWO in
 - Axis `sameCustomerOverTime`: for each requirement ask "what in THIS customer's business will change in 1, 3, 5 years?".
 - Axis `allCustomersAtOneTime`: ask "do ALL customers do this identically today, or do markets/regulations/languages/customer-types vary?".
 
-Work PROPOSE → FILTER → RECORD. First brainstorm candidates WIDE (15-30) from the scrubbed requirements, the glossary, the mission, and the carry-forwards — check the mission co-author thread / publishDraft notes for excluded founder constraints; deployment/operations constraints are volatility input. Then FILTER: encapsulate the open-ended (VOLATILE); REJECT anything a simple conditional handles (that is merely VARIABLE), by-reflex "Logging"/"Reporting" blocks with no business volatility, speculative "might-need-someday" encapsulation, nature-of-the-business items competitors do identically, and duplicates of another entry's underlying change. RECORD every rejection in the model's `rejected` array with its class (`variableNotVolatile|natureOfTheBusiness|speculative|foldedInto`) and a candidate-specific reason — never silently omit a candidate. Name each entry for the UNDERLYING CHANGE, never a feature or glossary term ("capture-channel volatility", not "Embedded tool volatility"). Aim for ~6-15 accepted entries, each with a rationale paragraph, its axis, and `traces` to the scrubbed-requirement ids it insulates.
+Work PROPOSE → FILTER → RECORD. First brainstorm candidates WIDE (15-30) from the Required Behaviors (each behavior's `volatilityHint`), the glossary, the mission, and the carry-forwards — check the mission co-author thread / publishDraft notes for excluded founder constraints; deployment/operations constraints are volatility input. Then FILTER: encapsulate the open-ended (VOLATILE); REJECT anything a simple conditional handles (that is merely VARIABLE), by-reflex "Logging"/"Reporting" blocks with no business volatility, speculative "might-need-someday" encapsulation, nature-of-the-business items competitors do identically, and duplicates of another entry's underlying change. RECORD every rejection in the model's `rejected` array with its class (`variableNotVolatile|natureOfTheBusiness|speculative|foldedInto`) and a candidate-specific reason — never silently omit a candidate. Name each entry for the UNDERLYING CHANGE, never a feature or glossary term ("capture-channel volatility", not "Embedded tool volatility"). For every accepted entry apply the ch. 5 challenge protocol: state WHAT the volatility is, WHY it is volatile, and its RISK as LIKELIHOOD and EFFECT — which change, how often it realistically arrives, what it would ripple through if unencapsulated; if you cannot clearly state these, look further. Aim for ~6-15 accepted entries, each with a rationale paragraph carrying that likelihood-and-effect statement, its axis, and `traces` to the Required-Behavior ids (`B-NN`) it insulates. `rejected` MUST be non-empty in the committed draft, and every entry carries `traces` unless its rationale carries an explicit longevity grounding (Step D) — the view renders both, and a draft that ships them empty without that grounding is a known root-cause defect (fields the prompt filled nowhere): an empty `rejected` means you did not record what you filtered, and an untraced, ungrounded entry has no behavior grounding.
 
 ## Exit criteria (for router)
 
-`.aiarch/state/project.json` → `.volatilities` holds the typed `Volatilities` model, grouped by axis, with ~6–15 entries. Each entry has a rationale and `traces` to scrubbed-requirement ids. No nature-of-business or speculative entries remain, and every filtered-out candidate is recorded in `rejected` with class + reason. Move to `the-method-core-use-cases`.
+`.aiarch/state/project.json` → `.volatilities` holds the typed `Volatilities` model, grouped by axis, with ~6–15 entries. Each entry has a rationale carrying the Step-B likelihood-and-effect risk statement and `traces` to Required-Behavior ids (`B-NN`) — or, for a longevity-grounded entry, a rationale that explicitly carries the change-rate grounding (Step D). No nature-of-business or speculative entries remain, and every filtered-out candidate is recorded in a **non-empty** `rejected` array with class + reason. Move to `the-method-core-use-cases`.
 
 ## Common mistakes
 
@@ -180,4 +182,4 @@ Work PROPOSE → FILTER → RECORD. First brainstorm candidates WIDE (15-30) fro
 
 ## Anchor for downstream phases
 
-Every entry in the committed `.volatilities` slot will eventually map to **at most one component** in the architecture. [[the-method-architecture]] will take this list as input. So get this right — bad volatilities → bad decomposition → bad architecture.
+Per ch. 2, *"the transition from the list of volatile areas to components is hardly ever one to one."* Every entry in the committed `.volatilities` slot will take exactly one disposition in [[the-method-architecture]]: encapsulated by **component(s)** (normally owned by one component or a ratified facet group; a component may in turn encapsulate several closely related volatilities), encapsulated by an **operational concept** (queuing, pub/sub — an explicit deferral disposition recorded on the draft, resolved in `.operationalConcepts`), or encapsulated by a **third-party service**. Not every volatility mints a component — but every committed volatility must land in one of the three. [[the-method-architecture]] will take this list as input. So get this right — bad volatilities → bad decomposition → bad architecture.

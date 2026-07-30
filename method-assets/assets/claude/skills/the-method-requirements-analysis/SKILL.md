@@ -1,6 +1,6 @@
 ---
 name: the-method-requirements-analysis
-description: System Design — build the glossary via the Four Questions and scrub solutions-masquerading-as-requirements. Architect drives both passes together. Reads the committed .mission and the research corpus from project.json. Produces the typed Glossary and ScrubbedRequirements committed to project.json → .glossary and .scrubbedRequirements. Invoke after [[the-method-business-alignment]], before [[the-method-volatility-identification]].
+description: System Design — build the glossary via the Four Questions and derive the Required Behaviors by scrubbing solutions-masquerading-as-requirements. Architect drives both passes together. Reads the committed .mission and the research corpus from project.json. Produces the typed Glossary and Required Behaviors (each behavior carries statedAs provenance + a volatilityHint hand-off to step 4) committed to project.json → .glossary and .scrubbedRequirements (the wire kind keeps its identity; the customer-facing label is "Required Behaviors"). Invoke after [[the-method-business-alignment]], before [[the-method-volatility-identification]].
 ---
 
 # Requirements Analysis (Glossary + Scrubbing)
@@ -30,7 +30,7 @@ State is git-as-DB: archistrator is a single Go-server repo whose canonical proj
 The two typed models (Go shapes in `internal/resourceaccess/projectstate/models_phase1.go`), committed to `.aiarch/state/project.json`:
 
 1. **`Glossary`** (`Items []GlossaryItem`, each `Term`/`Definition`/category) → `.glossary`
-2. **`ScrubbedRequirements`** → `.scrubbedRequirements`
+2. **`ScrubbedRequirements`** (container, unchanged shape; `Items []Requirement`) → `.scrubbedRequirements` — the customer-facing label is **"Required Behaviors"**. Each `Requirement` item is `{id, behavior, statedAs, volatilityHint}` (see Pass 2).
 
 Neither is a `*.md` file — any markdown below is a render-on-read of the typed slot. Per the two usage patterns (agentic/CI dispatch and local interactive), the agent emits each typed model and commits it into its slot in `project.json`; the server stages it (`StageArtifactForReview`) for the human review gate.
 
@@ -38,7 +38,7 @@ Neither is a `*.md` file — any markdown below is a render-on-read of the typed
 
 ### Pass 1 — Build the glossary (ch. 3)
 
-Use the **Four Questions** to canvas the domain. Per ch. 3:
+Use the **Four Questions** to canvas the domain. The book's ch. 3 §4.2 set is four questions — who / what / how / where; the table below is the platform's deliberate extension, splitting "how" into business activity vs resource access. Using these classification questions as the glossary canvassing technique is itself a deliberate founder extension — the book builds its glossary (ch. 3 §4.1, ch. 5) without this framing; we keep the practice and name it as ours.
 
 | Question | What it captures | Will later become |
 |---|---|---|
@@ -81,7 +81,7 @@ Rendered view (`Glossary` → render-on-read; the JSON is the source of truth):
 ...
 ```
 
-### Pass 2 — Scrub solutions-masquerading-as-requirements (ch. 2)
+### Pass 2 — Derive the Required Behaviors (scrub solutions-masquerading-as-requirements, ch. 2)
 
 For each requirement statement in research, drive Löwy's interrogation:
 
@@ -92,6 +92,8 @@ For each requirement statement in research, drive Löwy's interrogation:
 
 Per ch. 2: *"Start by pointing out the solutions masquerading as requirements, and ask if there are other possible solutions? If so, then what were the real requirements and the underlying volatility? Once you identify the volatility, you must determine if the need to address that volatility is a true requirement or is still a solution masquerading as a requirement. Once you have finished scrubbing away all the solutions, what you are left with are likely great candidates for volatility-based decomposition."*
 
+> **Functional decomposition as a discovery tool (ch. 2 §"When to use functional decomposition").** Driving a functional decomposition of the requirements to a fine level is a LEGITIMATE requirements-analysis technique: it uncovers hidden or implied functionality and exposes redundancies among the asks while you gather and scrub them. It must NEVER become the design — there is never a direct mapping from requirements to components. Use it to interrogate the asks here, then discard it; the architecture comes from volatility, not from this breakdown.
+
 **Examples from the book to internalize:**
 
 | Stated requirement | First scrub | Final scrub |
@@ -101,32 +103,46 @@ Per ch. 2: *"Start by pointing out the solutions masquerading as requirements, a
 | "We need a queue" | User receives events | User receives events in order |
 | "Add a notification service" | Notify users on state changes | Same — but architecture must encapsulate transport volatility |
 
-Rendered view of the typed `ScrubbedRequirements` committed to `.scrubbedRequirements` (the JSON is the source of truth; this table is render-on-read):
+The scrubbed survivors ARE the **Required Behaviors** — the typed list committed to `.scrubbedRequirements` (the wire kind keeps its identity; the customer-facing label is "Required Behaviors"). This is the last fully readable, non-technical artifact — the customer's "did the machine understand what my system must do?" checkpoint — so each behavior is one imperative sentence in business language, and the trace back to the customer's own words is preserved on the survivor.
+
+Each item is a typed `Requirement` with four fields:
+
+| Field | Meaning | Rule |
+|---|---|---|
+| `id` | stable identity — `B-01`, `B-02`, … | **contiguous — NO numeric gaps, ever.** Renumber survivors so the ids run `B-01..B-NN` with no holes. |
+| `behavior` | the scrubbed behavior, imperative business language | solution-free; what the system must do, never how |
+| `statedAs` | the raw stated ask(s) this was scrubbed/consolidated from (nullable string[]) | when several stated asks collapse into one behavior — or an ask is retired — ALL of their original phrasings live here. Provenance lives on the survivor, so an absorbed ask leaves an entry in `statedAs`, never a hole in the id sequence. |
+| `volatilityHint` | the candidate volatility name(s) this behavior implies (nullable string[]) | the **hand-off to [[the-method-volatility-identification]]** (step 4) — the seed list step 4 consumes; every behavior that implies change MUST carry it. |
+
+`statedAs` and `volatilityHint` are NOT optional decoration — the downstream view renders both columns and step 4 consumes `volatilityHint`. A draft that leaves them empty ships a visibly broken artifact (a known root-cause defect: the view rendered fields the prompt never filled). See Draft-job doctrine.
+
+Rendered view of the typed `Required Behaviors` committed to `.scrubbedRequirements` (the JSON is the source of truth; this table is render-on-read):
 
 ```markdown
-# Scrubbed Requirements
+# Required Behaviors
 
-| # | Original (from research) | Scrubbed requirement | Underlying volatility (hint for [[the-method-volatility-identification]]) |
+| id | Behavior | Stated as (customer's words) | Volatility hint (→ [[the-method-volatility-identification]]) |
 |---|---|---|---|
-| 1 | "Send confirmation email when order placed" | "Notify customer when order is placed" | Notification transport will vary by customer and over time |
-| 2 | "Use Redis cache for hot data" | "Read-heavy access must be fast" | Storage technology may change |
-| 3 | ... | ... | ... |
+| B-01 | Notify the customer when an order is placed | "Send confirmation email when order placed" | Notification transport varies by customer and over time |
+| B-02 | Serve read-heavy access fast | "Use Redis cache for hot data"; "keep the dashboard snappy" | Storage / caching technology may change |
+| B-03 | ... | ... | ... |
 ```
 
-The **third column is critical** — it's the input to [[the-method-volatility-identification]]. Each scrubbed requirement should surface a candidate volatility.
+The **volatilityHint column is critical** — it is the input to [[the-method-volatility-identification]]. Every behavior that implies change must surface a candidate volatility there; the `statedAs` column keeps the trace back to the customer's original words.
 
-### Pass 3 — Reconcile glossary and scrubbed requirements
+### Pass 3 — Reconcile glossary and required behaviors
 
 Read both typed models (the staged/committed `.glossary` and `.scrubbedRequirements` slots). Check:
-- Every actor in scrubbed requirements is in the glossary (under Who)
-- Every behavior in scrubbed requirements maps to a glossary entry (under What)
-- Where glossary terms differ from research wording, the glossary wins — revise the `ScrubbedRequirements` model to use glossary terms before committing
+- Every actor a behavior names is in the glossary (under Who)
+- Every behavior maps to a glossary entry (under What)
+- Where glossary terms differ from research wording, the glossary wins — revise the behaviors (and their `statedAs`/`volatilityHint`) to use glossary terms before committing
+- After any consolidation this pass triggers, the ids are still contiguous (`B-01..B-NN`, no gaps)
 
 ## PM role
 
 The PM is dispatched after architect produces drafts:
 - Glossary: PM flags missing terms or misnamed concepts the customer would not recognize
-- Scrubbed requirements: PM ratifies that the architect's "real requirement" still serves the customer's actual need
+- Required behaviors: PM ratifies that each scrubbed behavior still serves the customer's actual need, and that `statedAs` faithfully traces back to what the customer asked for
 
 PM does not author either model.
 
@@ -136,19 +152,28 @@ These are the normative tasks the CI draft job (and a local `/system-design` run
 
 ### Glossary
 
-Extract the system's ubiquitous-language terms, each categorised by the Four Questions: Who interacts with the system, What is required of it, How (the business activity), Where (state lives). Define each term crisply in business language with NO solution/implementation wording. These terms are the shared vocabulary every later artifact must reuse verbatim.
+Extract the system's ubiquitous-language terms, each categorised by the classification categories (the book's Four Questions, extended): Who interacts with the system, What is required of it, How (the business activity), How (resource access), Where (state lives). Define each term crisply in business language with NO solution/implementation wording. These terms are the shared vocabulary every later artifact must reuse verbatim.
 
-### Scrubbed requirements
+### Required behaviors
 
-Scrub every solution out of the requirements and emit the underlying NEEDS only. A need states what the business requires; a solution states how to build it — strip the how. "Users log in with OAuth" is a solution; "the system authenticates users" is the need. Each item must be solution-free and traceable to the mission.
+Scrub every solution out of the requirements and emit the underlying behaviors only. A behavior states what the business requires; a solution states how to build it — strip the how. "Users log in with OAuth" is a solution; "the system authenticates users" is the behavior. Emit each survivor as a typed `Requirement`:
+
+- `id` — contiguous `B-01..B-NN`, NO gaps. When you consolidate several stated asks into one behavior, or retire an ask, renumber so the ids stay hole-free.
+- `behavior` — one solution-free imperative sentence in business language, traceable to the mission.
+- `statedAs` — **MUST be populated**: the raw customer ask(s) this behavior was scrubbed from (every phrasing you consolidated). This is the provenance that lets a retired/absorbed ask survive on the survivor instead of leaving an id gap.
+- `volatilityHint` — **MUST be populated** for every behavior that implies change: the candidate volatility name(s) the behavior implies. This is the seed list [[the-method-volatility-identification]] consumes; leaving it empty breaks the step-4 hand-off (a known root-cause defect — the view renders this column, so an empty draft ships a visibly broken artifact).
+
+A draft that emits behaviors with empty `statedAs`, or empty `volatilityHint` where change is implied, is incomplete and will fail review.
 
 ## Exit criteria (for router)
 
-`.aiarch/state/project.json` → `.glossary` and `.scrubbedRequirements` both hold their typed models. Glossary has entries under all five Four-Question categories. Every research requirement appears in `.scrubbedRequirements` with a candidate volatility hint. Move to `the-method-volatility-identification`.
+`.aiarch/state/project.json` → `.glossary` and `.scrubbedRequirements` both hold their typed models. Glossary has entries under every classification category (Who / What / How-activity / How-resource-access / Where). `.scrubbedRequirements` holds the Required Behaviors with **contiguous** `B-NN` ids (no gaps), every behavior carrying `statedAs` provenance and — where change is implied — a `volatilityHint`. Every research ask is accounted for: either as a survivor behavior or folded into a survivor's `statedAs`. Move to `the-method-volatility-identification`.
 
 ## Anti-patterns to reject
 
 - **CRUD-style entries** in the glossary ("create order", "update user") — these are implementations, not behaviors. Restate as business verbs.
-- **Untouched requirements** in `.scrubbedRequirements` — if the "scrubbed" value matches the "original" value exactly, you didn't interrogate hard enough.
+- **Untouched behaviors** in `.scrubbedRequirements` — if a `behavior` matches its `statedAs` verbatim, you didn't interrogate hard enough.
+- **Empty `statedAs` / `volatilityHint`** — a behavior with no recorded stated-ask provenance, or (where change is implied) no candidate volatility, is an incomplete draft; the view renders both columns and step 4 consumes the hint.
+- **Numeric id gaps** — `B-03` then `B-05` is never acceptable; renumber survivors contiguously. Retired/absorbed asks leave a `statedAs` entry on the survivor, not a hole in the id sequence.
 - **Marketing names** in glossary — replace with operational terms.
-- **Tech-stack names** anywhere — "Redis cache" is not a requirement, "fast read access" is.
+- **Tech-stack names** anywhere — "Redis cache" is not a behavior, "fast read access" is.

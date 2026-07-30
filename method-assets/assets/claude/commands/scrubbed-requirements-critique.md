@@ -1,6 +1,6 @@
 # /scrubbed-requirements-critique
 
-> PM critique of the drafted **Scrubbed Requirements** artifact — one design-rail CI job. Verdict only; the PM never rewrites the model.
+> PM critique of the drafted **Required Behaviors** artifact (wire kind `scrubbedRequirements`) — one design-rail CI job. Verdict only; the PM never rewrites the model.
 
 **Arguments** — none. Kind, job mode, branch, and project come from the ambient `AIARCH_*` env.
 

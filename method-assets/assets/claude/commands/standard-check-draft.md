@@ -1,5 +1,7 @@
 # /standard-check-draft
 
+> **SUPERSEDED — Design Health teardown.** The committed **Design Standard Check** artifact (`.standardCheck` slot) is retired. The Appendix-C standard is now enforced as **Design Health** — see [[the-method-system-design-standard-check]]: ~40 mechanical rules run LIVE (render-on-read, never committed), waivers live on their host artifacts (`.systemDesign` / `.volatilities`), and semantic attestations live on `.systemDesign`. There is no `.standardCheck` model to draft. Do NOT author one. If the rail still dispatches this job during the transition, the work is to record any needed waivers/attestations on their host artifacts per the skill, not to emit a `.standardCheck` slot. The steps below are the legacy draft-job flow, retained only until the router stops dispatching this job.
+
 > Draft (or amend) the **Design Standard Check** artifact as one design-rail CI job. The job's ambient env fixes the artifact kind and target slot.
 
 **Arguments** — none. Kind, job mode, branch, and project come from the ambient `AIARCH_*` env baked into this CI run.

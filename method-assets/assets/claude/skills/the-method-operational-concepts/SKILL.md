@@ -1,275 +1,150 @@
 ---
 name: the-method-operational-concepts
-description: System Design — document runtime interaction decisions (sync/queued, pub/sub, layering, patterns). Each decision justified against a business objective. Reads the committed .mission and .systemDesign from project.json. Produces the typed OperationalConcepts committed to project.json → .operationalConcepts. Invoke after [[the-method-architecture]], before [[the-method-system-design-standard-check]].
+description: System Design — the Deployment & Operations Model. Select the small set of PER-PROJECT operational choices (deployment scenario, construction venue, review policy, scaling policy, infra building blocks), author the three customer trust summaries, and build the deployment-models view. The platform's fixed runtime doctrine (topology, layering, durable primitives, codegen, pricing-as-Strategy) is NOT authored here — it lives read-only in [[platform-runtime-doctrine]] and is referenced. Reads the committed .mission and .systemDesign from project.json. Produces the typed DeploymentOperationsModel committed to project.json → .operationalConcepts (wire kind kept; customer label "Deployment & Operations Model"). Invoke after [[the-method-architecture]], before [[the-method-system-design-standard-check]].
 ---
 
-# Operational Concepts
+# Deployment & Operations Model
 
-The static architecture says what exists. Operational concepts say how it runs. Each decision must trace back to a business objective from the committed `.mission` artifact — otherwise it's gratuitous complexity.
+The static architecture says what exists. This artifact says how THIS project is deployed and operated — but only the parts the customer actually decides. The re-scope (founder ruling 2026-07-20) split the old "Operational Concepts" slot into two:
 
-When the chosen execution infrastructure for Managers is a durable workflow engine (Temporal is the default for this codebase), the operational concepts MUST also commit to the runtime vocabulary — Workflow / Activity / Signal / Query / Update / Timer / Schedule / ChildWorkflow / ContinueAsNew naming + edge-label grammar (Manager-layer only). That vocabulary is shared by the rendered architecture's edge labels, dynamic-view interactions, sequence diagrams, and the per-component service contracts produced in [[the-method-service-contract]].
+1. **Platform runtime doctrine** — how EVERY system built here runs (communication topology, closed layering, durable-primitives-as-substrate, generated clients, git-as-DB, pricing-as-Strategy, the review-preset mechanism, facet doctrine). archistrator DECIDES these; the customer does not ratify them. They live **read-only** in [[platform-runtime-doctrine]]. **You do NOT author them here** — you reference the asset.
+2. **Per-project operational choices** — the small ratifiable core THIS customer decides for THEIR project: deployment scenario, construction venue, review policy, scaling policy, infra building blocks, plus three customer trust summaries and the deployment-models view. **That is what this skill produces**, as the typed `DeploymentOperationsModel`.
+
+Every per-project surface is TIERED: a **customer summary** (ratifiable, plain language) over an **engineer detail** (reference). The nine doctrine decisions render ONLY as the read-only "how systems built here run" one-liners from the asset — no engineer tier is surfaced to the customer for those.
 
 ## Canonical source
 
-**Primary:** Löwy, Ch. 5 §4.3a "Operational Concepts" — the TradeMe walkthrough.
+**Primary:** Löwy, Ch. 5 §4.3a "Operational Concepts" — the TradeMe walkthrough (the conceptual origin of this artifact).
 
 **Supporting:**
-- Ch. 3 §6 "Open and Closed Architectures" — layering style decision
-- Ch. 3 §6.4 "Relaxing the Rules" — when to deviate from closed
+- Ch. 3 §6 "Open and Closed Architectures" — layering style (now platform doctrine; see the asset)
 - Ch. 3 §5 "Subsystems and Services" — subsystem boundaries
-- Ch. 3 §3.5 "Utilities Bar" — Message Bus, etc.
 
-**Temporal vocabulary (when applicable):**
-- Workflow / Activity / Signal / Query / Update / Timer / Schedule / ChildWorkflow / ContinueAsNew — the canonical naming + edge-label grammar (Manager-layer only)
-- Temporal Encyclopedia: https://docs.temporal.io/encyclopedia
-- Temporal Rust quickstart: https://docs.temporal.io/develop/rust/quickstart
+**Platform doctrine (referenced, not re-derived):** [[platform-runtime-doctrine]] — the nine pure-doctrine decisions + the doctrine halves of the five hybrids. When you need to state how the runtime works, LINK there; do not restate it as a per-project decision.
 
 ## Input
 
 State is git-as-DB: archistrator is a single Go-server repo whose canonical project state lives in `.aiarch/state/project.json` (a typed JSON aggregate). Markdown/DSL is a render-on-read of the typed state.
 
-- The committed **mission** artifact → `.aiarch/state/project.json` → `.mission` — every operational decision must support an objective
-- The committed **systemDesign** artifact → `.systemDesign` (the typed `System`: components, relationships, dynamic views — rendered as `architecture.dsl` for reading)
+- The committed **mission** artifact → `.mission` — every PER-PROJECT field links to a **stable objective id** (the objective's declared `number` in the committed mission, not a list position), written into the typed `objectiveLinks` map. Doctrine content carries no objective claim.
+- The committed **systemDesign** artifact → `.systemDesign` (the typed `System`)
+- [[platform-runtime-doctrine]] — the read-only doctrine asset you reference (never copy into the slot)
 
 ## Output
 
-The typed **`OperationalConcepts`** model (Go shape in `internal/resourceaccess/projectstate/models_phase1.go`), committed to **`.aiarch/state/project.json` → `.operationalConcepts`**. NOT an `operational-concepts.md` file — any markdown below is a render-on-read of this slot. Per the two usage patterns (agentic/CI dispatch and local interactive), the agent emits the typed model and commits it into `.operationalConcepts`; the server stages it (`StageArtifactForReview`) for the human review gate.
+The typed **`DeploymentOperationsModel`** (Go shape in `internal/resourceaccess/projectstate/models_phase1.go`), committed to **`.aiarch/state/project.json` → `.operationalConcepts`** (the wire kind keeps its identity; the customer-facing label is "Deployment & Operations Model"). NOT a `*.md` file — any markdown below is a render-on-read of this slot. The old `{ decisions[], deployment }` shape is gone; there is no free-form `decisions[]` array. The model carries:
+
+- `objectiveLinks` — map: per-project knob name → array of objective numbers from the committed `.mission` (the typed home of every per-project objective link; see Step 1)
+- `deploymentScenario` — `deployedNotOperated` | `deployedOperated`
+- `constructionVenue` — `{ kind (customerCI | localMachine), repositoryHost, note }`
+- `reviewPolicyRef` — `vibes` | `checkpoints` | `full` (a reference to the platform preset vocabulary; the risk floor is platform-fixed and not stored here)
+- `scalingPolicy` — `{ scaleToZero, minInstances, maxInstances, targetUtilization }` (only when `deploymentScenario == deployedOperated`)
+- `infraBuildingBlocks` — the supported building blocks THIS app uses (`{ name, category, status }`)
+- `trustSummaries` — `{ billing, usageMetering, dataOwnership }`
+- `deploymentModel` — the deployment-models view (existing `DeploymentView`/topology shape, retained)
 
 ## Procedure
 
-The architect owns this entirely. No PM input needed.
+The architect owns this entirely. No PM input needed for the mechanics; the PM ratifies the customer-summary tier.
 
-### Step 1 — Communication topology AND Manager-execution infrastructure
+### Step 1 — Select the per-project fields (link each to a stable objective id)
 
-Decide two things in this step (they constrain each other):
+For each field below, choose the value for THIS project and link it to the **stable objective id** it serves. Reference the doctrine asset for the fixed half — do not re-author it.
 
-1. **External topology** — Message Bus, direct calls, or hybrid for Clients ↔ Managers and Managers ↔ Managers?
-2. **Manager-execution infrastructure** — plain in-process request handlers, or a durable workflow engine such as **Temporal**?
+**Write every link into the typed `objectiveLinks` field** — a map from knob name to an array of objective numbers from the committed `.mission`. The "Typical objective link" column below is guidance; the committed link lives in `objectiveLinks`. Every number must resolve to a declared objective (`DH-OBJ-RESOLVE`, Error); an objective referenced by no knob surfaces as `DH-OBJ-COVERAGE` (Warning).
 
-Per ch. 5 (TradeMe): *"all communication between all Clients and all Managers takes place over the Message Bus Utility... justified by business objectives (extensibility, integration with external systems)."*
-
-For each choice, document:
-
-- **What** — the topology (direct / Message Bus / hybrid) AND the infrastructure (plain / Temporal / other durable engine)
-- **Why** — cite the specific objective(s) from the committed `.mission` artifact
-- **Cost** — what does this buy and what does it cost in team complexity? (Ch. 5 warning: *"Not every organization can justify using the pattern... calibrate to team capability."*)
-
-**Temporal as the default Manager infrastructure.** When the system has long-running flows (architect-review gates that suspend for days, multi-step settlement, retry-with-backoff against flaky external systems, scheduled sweeps), **Temporal is the recommended infrastructure**. It absorbs:
-
-- workflow checkpointing (no bespoke recovery loop)
-- Activity-level RetryPolicy with backoff
-- Signal/Query/Update message-passing into running workflow instances
-- durable Timers and Schedules (cron-style recurrences without leader election)
-- Child Workflows and ContinueAsNew for unbounded streams
-
-If the team commits to Temporal here, every downstream artifact uses the Temporal vocabulary (Workflow / Signal / Query / Update / Activity / Timer / Schedule / ChildWorkflow / ContinueAsNew) — the static-architecture relationships block, each dynamic view, the sequence diagrams, and the service contracts. Document the determinism rules (no nondeterminism inside workflow code, all I/O via Activities, versioning strategy on workflow changes) as part of the cost discussion.
-
-**Default to NOT-Temporal** for systems with no long-running flow, no scheduled work, no cross-process state recovery requirement, and tiny team. The book's plain "Workflow Manager + workflow store" is sufficient there; the Temporal vocabulary doesn't apply.
-
-### Step 2 — Sync vs queued boundaries (Temporal primitive classification)
-
-For each cross-component edge in the architecture, decide sync or queued AND — when on Temporal — name the Temporal primitive that mediates the call. The same map serves both purposes; sync/queued is the runtime mode, the Temporal primitive is the implementation.
-
-Document a small table:
-
-```markdown
-## Sync / Queued Map
-
-| From | To | Mode | Temporal primitive | Why |
-|---|---|---|---|---|
-| Client | OrderManager | Sync (caller blocks on enqueue) | `StartWorkflow(OrderWorkflow, ...)` | One inbound HTTP request → one Workflow start |
-| OrderManager (workflow) | PaymentManager | Queued (cross-Manager) | `SignalExternalWorkflow(PaymentManager.workflowId, ChargeRequestedSignal, ...)` | Decouples payment processing; replaces a bus event |
-| OrderManager (workflow) | PricingEngine | Sync, in-workflow | (none — deterministic call, not an Activity) | Same-thread pure computation |
-| OrderManager (workflow) | OrderAccess | Sync (via Activity) | `Activity: AppendOrderEvent(...)` | Every I/O-bearing call from workflow code is a Temporal Activity |
-| OrderManager (workflow) | self (sleep) | Sync, durable | `Timer(<duration>)` | Survives Worker restart |
-| OrderManager (workflow) | self (await human) | Sync, durable | `Await Signal(<SignalName>) — workflow suspends` | Architect-review gate or operator action |
-```
-
-Rule: prefer queued for Manager↔Manager (App C §4c.iv recommends resolving sideways attempts via queued or async). On Temporal, "queued cross-Manager" becomes `SignalExternalWorkflow(...)` against the target Manager's task queue — the static architecture has no sideways Manager→Manager edge; the cluster mediates the signal.
-
-### Step 3 — Pub/sub edges
-
-List every event published in the system.
-
-Per the Don'ts (App C §6, ch. 3 §6.5):
-- **Only Clients and Managers may publish events**
-- **Only Clients and Managers may subscribe**
-- Engines, ResourceAccess, Resources may neither
-
-Document each event:
-
-```markdown
-## Events
-
-| Event name | Published by | Subscribers | Purpose |
+| Field | Choose | Doctrine half (reference) | Typical objective link |
 |---|---|---|---|
-| OrderPlaced | OrderManager | NotificationManager, AnalyticsManager | Trigger downstream workflows |
-```
+| `deploymentScenario` | build-and-hand-off vs also-host-and-operate | [[platform-runtime-doctrine]] #12 | revenue-flexibility objective |
+| `constructionVenue` | the customer's CI on their repo host, or their local machine | [[platform-runtime-doctrine]] #10, #14 | revenue-flexibility objective |
+| `reviewPolicyRef` | `vibes` / `checkpoints` / `full` | [[platform-runtime-doctrine]] #13 | configurable-SDLC objective |
+| `scalingPolicy` | scale-to-zero + min/max/target (operated only) | [[platform-runtime-doctrine]] #12 | we-handle-the-hard-parts / operations objective |
+| `infraBuildingBlocks` | the supported blocks this app uses, from the platform-permitted set | [[platform-runtime-doctrine]] #9 (facet/Strategy) | non-coder-accessibility objective |
 
-If any non-Manager wants to publish or subscribe, the decomposition is wrong — return to the-method-architecture.
+`scalingPolicy` and the operate/bill infra are ABSENT when `deploymentScenario == deployedNotOperated` — the slot tolerates their absence; do not invent them for a build-and-hand-off project.
 
-### Step 4 — Layering style
+### Step 2 — Author the three customer trust summaries
 
-State the architecture's layering style: **closed** (preferred), open, or semi-closed/semi-open.
+Plain-language, ratifiable prose the non-engineer customer reads as a promise. Each has an engineer-tier detail underneath, but the summary is what is ratified.
 
-Per App C §4: prefer closed. If you deviate, document the explicit justification.
+- `trustSummaries.billing` — e.g. "We meter only what your running app consumes; that's the sole basis of your bill." (doctrine half: [[platform-runtime-doctrine]] #11).
+- `trustSummaries.usageMetering` — the Usage Log story: "The append-only record of exactly what your running app consumed — the only thing you are billed on, and readable by you at any time." The `CloudNativePG · Postgres 16` technology is engineer-tier ONLY.
+- `trustSummaries.dataOwnership` — "Your entire project — state and source — lives in your own git repo; export or leave any time." (doctrine half: [[platform-runtime-doctrine]] #5).
 
-Format:
+### Step 3 — Build the deployment-models view (`deploymentModel`)
 
-```markdown
-## Layering Style
+The deployment view is the deployment volatility made visible. Author it in the existing `DeploymentView`/topology shape, with these corrections (founder ruling §5):
 
-**Chosen: Closed.**
+- **OperatedRuntime is NOT an external service.** It is the PRODUCT the platform hosts. In the `deployedOperated`/cloud environment it is a first-class workload node INSIDE the managed cluster (the operated-tenant namespace — the `gtd namespace` is exactly "example operated-system namespace"; label it "example"). Present ONLY in `deployedOperated`. External services keep only genuine third parties: GitHub, Stripe/MerchantGateway, Keycloak, the customer's ProjectGitRepo host.
+- **The LOCAL profile tells the real local story** (read from `server/cmd/archistrator/init.go` + `serve.go`): the `archistrator-server` child process (HTTP API + `/mcp` mount + embedded SPA on `127.0.0.1:8877`), the embedded Temporal dev-server (the local DurableExecutionRuntime), the on-disk `.aiarch` git repo (the local ProjectGitRepo; first design session seeds `project.json` + the default `vibes` preset), and the local agentic runner (`claude -p` on the user's own subscription). Show the explicitly-absent pieces (no Postgres, no Keycloak, no GitHub App, no platform-held LLM key) as a "not present in local" annotation — never a blank box.
+- **Per-environment resources are env-accurate and scenario-gated.** cloud: OperatedSystemState / BillingState / UsageLog on the CloudNativePG cluster; ProjectGitRepo on the customer's GitHub. test: ephemeral stubs. local: ProjectGitRepo = on-disk `.aiarch` git ONLY — the operate/bill stores are ABSENT (local designs + constructs, it does not operate or bill). The operate/bill stores render only under `deployedOperated`; the view code reads `deploymentScenario`, it does not hardcode three tabs.
 
-Justification: closed architecture provides maximum encapsulation per The Method's default (App C §4a–c). No business objective in the committed `.mission` artifact requires relaxing closure.
+### Step 4 — Tier every per-project surface (customer summary over engineer detail)
 
-Permitted exceptions used in this design:
-- Queued calls between Managers (allowed by closed rules)
-- Async event publishing for OrderPlaced (allowed by closed rules per ch. 3 §6.4)
+Every field from Steps 1–3 renders as a **customer summary (ratifiable)** with the **engineer detail (reference, collapsed)** beneath. Examples:
 
-Explicit don'ts enforced:
-- No client calls Engine, ResourceAccess, or Resource directly
-- No upward calls
-- No skipping layers
-```
-
-### Step 5 — Patterns adopted
-
-For each higher-order pattern in use, document and justify.
-
-Common patterns from the book:
-
-- **Workflow Manager** (ch. 5) — Managers load workflow instances from a workflow store, execute, persist back. Enables long-running, multi-device workflows. When implemented on **Temporal**, the workflow store IS the Temporal cluster's history service; the bespoke `appendEvent` / `recover` loop the book describes is absorbed by the framework. Use the Temporal-flavoured patterns listed below in place of the bespoke patterns.
-- **Message-Is-the-Application** (ch. 5) — Clients send commands; Managers respond. Strong fit for Message-Bus topology, and equally for Temporal (the command becomes `StartWorkflow` / `SignalWorkflow` / `UpdateWorkflow`).
-- **Subsystems** (ch. 3 §5) — when Manager count >5 or domain warrants partition, group Managers into subsystems. On Temporal, the natural subsystem boundary is the **Task Queue** — one queue per Manager makes the future split-out a redeploy, not a refactor.
-
-Per ch. 5 caution: *"Not every organization can justify using the pattern... Always calibrate the architecture to the capability and maturity of the developers and management."*
-
-**Temporal-flavoured patterns** (use when the infrastructure decision in Step 1 commits to Temporal). Use the Temporal primitive names verbatim (Workflow / Signal / Query / Update / Activity / Timer / Schedule / ChildWorkflow / ContinueAsNew).
-
-- **Workflow Manager — on Temporal.** Each Manager use-case method is a `WorkflowType`; each ResourceAccess call from the workflow is an `Activity`. Document the determinism rules, the Activity RetryPolicy library (named policies referenced from contracts), and the versioning strategy.
-- **Signal-driven gate.** A workflow that suspends on `Await Signal(<SignalName>)` until an out-of-band caller delivers the decision via `SignalWorkflow(<workflowId>, <SignalName>, <payload>)`. Use for human-in-the-loop approvals, operator pauses, and async external-event injection. The suspend point is durable; the workflow id is the continuity token.
-- **Scheduler — Temporal Schedules.** One `Schedule[<name>]` per recurring workload; firings execute as workflows on the target Manager's task queue. Replaces leader-elected cron in the application. Idempotent at the firing level (schedule firing id = workflow id).
-- **Cross-Manager handoff — SignalExternalWorkflow.** Replaces what a Message Bus event would have been. The architecture has no Manager → Manager edge; the cluster mediates the signal.
-- **Child workflows for per-unit work.** When a parent workflow processes a stream of units (one per activity, one per cycle), spawn an `ExecuteChildWorkflow(<ChildWorkflowType>, <input>)` per unit and `ContinueAsNew` the parent to bound its event history.
-
-Format:
-
-```markdown
-## Patterns Adopted
-
-### Workflow Manager — on Temporal
-**Used in:** OrderManager, FulfillmentManager
-**Business objective served:** Quick turnaround (objective 2), Customization (objective 3), Survive infra churn (objective N)
-**Team capability:** Senior developers will lead introduction; juniors need ramp on (a) determinism rules, (b) RetryPolicy tuning, (c) versioning strategy. Capture these conventions in the `OperationalConcepts` model itself (the Temporal-determinism / RetryPolicy notes), not a separate `docs/` file.
-**Workflow store:** Temporal cluster history service (no application-managed table)
-**Business event log (separate concern):** Postgres event-sourced log appended to via `Activity: AppendEvent(...)`
-
-### Signal-driven gate
-**Used in:** OrderManager.approveOrder, FulfillmentManager.confirmShipment
-**Business objective served:** Audit & intervention (objective 7), Customer self-sufficiency (objective 4)
-**Implementation:** Workflow suspends on `Await Signal(<SignalName>)`; resumption is the gate.
-**Continuity:** Workflow id `{customerId}:{orderId}` — any Client can `SignalWorkflow` from any channel.
-
-### Scheduler — Temporal Schedules
-**Used by:** nextActivity (every 30s), shortfallSweep (every 1h), closeSettlementCycle:<customerId> (per customer)
-**Business objective served:** No leader election in app; exactly-once firing across the Worker pool.
-**Implementation:** Each schedule is registered at startup; firings appear as workflow executions on the target Manager's task queue.
-```
-
-### Step 6 — State handling
-
-For each Manager, document where workflow state lives. On Temporal, split into **technical state** (the workflow execution timeline) and **business state** (durable domain events) — they live in different stores and answer different questions.
-
-- Stateless Manager + workflow store (preferred — supports multi-device, recovery)
-- Stateful sessions (only when latency demands it; document the trade-off)
-
-Format (plain infrastructure):
-
-```markdown
-## Workflow State
-
-| Manager | Style | Storage |
+| Per-project item | Customer summary (ratifiable) | Engineer detail |
 |---|---|---|
-| OrderManager | Stateless + workflow store | Postgres workflow_instances |
-| MatchingManager | Stateless + workflow store | Same |
-```
+| `deploymentScenario` | "We build & hand off your system" / "We also host & operate it for you." | scenario flag semantics; which components instantiate |
+| `constructionVenue` | "Your code is built on <your CI / your machine>, on your own account." | `agenticJobAccess` verbs; venue mechanics |
+| `reviewPolicyRef` | "Oversight: <vibes = fully automatic / checkpoints / human at every gate>. High-risk changes always get a human." | preset routing table; risk-floor rule |
+| `scalingPolicy` | "We scale your app to demand, down to zero when idle." | AutoscalerEngine tunables |
+| `infraBuildingBlocks` | "Your app is built from these supported building blocks: …" | permitted-set membership, Strategy registrations |
+| `trustSummaries.*` | the billing / usage / data-ownership one-liners above | Postgres/git tech, ref-CAS, metering mechanics |
 
-Format (Temporal infrastructure):
+The nine doctrine decisions render ONLY as the read-only "how systems built here run" one-liners from [[platform-runtime-doctrine]] — no engineer tier is surfaced to the customer for them. For archistrator's OWN project (dogfooding), the full engineer-tier doctrine detail lives in the platform asset archistrator authors — one copy, referenced, not duplicated into the slot.
 
-```markdown
-## Workflow State
-
-| Manager | Workflow checkpoints (technical) | Business state |
-|---|---|---|
-| OrderManager | Temporal cluster history (per workflow id) via `WorkflowExecutionAccess` | Postgres event log (`OrderPlaced`, `OrderShipped`, ...) appended via `Activity: AppendEvent(...)` |
-| FulfillmentManager | Same | Same |
-
-**Separation of concerns:**
-- **Temporal cluster** holds workflow execution checkpoints — the technical timeline (which activity ran, what was returned, next decision). Replayable execution comes from here. Retention is operationally bounded (days for closed workflows).
-- **Project / domain event log** holds the system's business events. Permanent retention. A business entity's lifecycle spans many workflow executions; the log is the single place to query the cross-workflow history.
-```
-
-### Step 7 — Subsystem boundaries (if any)
-
-If the architecture has subsystems, document:
-
-- Which Managers belong to which subsystem
-- Communication style between subsystems (typically queued / event-driven)
-- Independent deployability claim per subsystem
-
-Per ch. 3 §5, subsystems should be "fairly decoupled and independent."
-
-### Step 8 — Cross-checks
-
-Walk the document and verify:
+### Step 5 — Cross-checks
 
 | Check | Action |
 |---|---|
-| Every decision cites at least one business objective from the committed `.mission` artifact | If not, drop the decision or rewrite the justification |
-| No event publisher/subscriber violates the Don'ts | Fix architecture, not the doc |
-| Layering style declared (closed/open/semi) | Add it if missing |
-| Each adopted pattern names the team-capability assessment | Add it if missing |
-| Subsystem count ≤5 (App C §2b) | Reconsider if exceeded |
-| (Temporal infrastructure) Sync/Queued Map names a Temporal primitive per row | Add the column or split into sync-mode + primitive columns |
-| (Temporal infrastructure) Determinism rules documented | Add the list (no system clock, no random IDs, all I/O via Activities, versioning policy) |
-| (Temporal infrastructure) External-system idempotency boundaries enumerated per Activity | Add the per-Activity dedup-key table (Stripe Idempotency-Key, k8s manifest name, gateway event id, etc.) |
-| (Temporal infrastructure) Workflow checkpoint store distinguished from business event log | Add the table — they are separate concerns |
+| Every PER-PROJECT field links to a stable objective id in the typed `objectiveLinks` map (knob → objective numbers; `DH-OBJ-RESOLVE` Error on a dangling number, `DH-OBJ-COVERAGE` Warning on an unreferenced objective) | Write the link into `objectiveLinks` or drop the field |
+| No doctrine decision is re-authored in the slot | Move it out — reference [[platform-runtime-doctrine]] instead |
+| Doctrine content carries NO objective claim | Strip any objective link that crept onto a doctrine reference |
+| `scalingPolicy` / operate-bill infra absent when `deployedNotOperated` | Remove them; the slot tolerates absence |
+| Deployment view: OperatedRuntime inside the cluster (not external), local story real, resources scenario-gated | Fix the view |
+| Every per-project surface has a customer summary over engineer detail | Add the tier |
 
 ## Draft-job doctrine (CI dispatch)
 
-This is the normative task the CI draft job (and a local `/system-design` run) executes to produce the `OperationalConcepts`. It is self-contained: everything a draft agent needs to draft sound operational concepts — including the deployment topology — is stated here.
+This is the normative task the CI draft job (and a local `/system-design` run) executes to produce the `DeploymentOperationsModel`. It is self-contained.
 
-Document the runtime/operational decisions that bring the static architecture to life: communication topology (direct vs message bus), manager-execution infrastructure (in-process vs durable workflow engine), the sync-vs-queued boundary for each cross-component edge (prefer queued for Manager<->Manager), and every pub/sub event (only Clients and Managers may publish or subscribe). Each decision MUST cite the numbered mission objective it serves and state its cost; if a decision cannot be justified against an objective, cut it as gratuitous complexity.
+Do NOT author the platform runtime doctrine (topology, layering, durable primitives, codegen, pricing-as-Strategy, the review-preset mechanism, facet doctrine) — that is fixed platform doctrine and lives read-only in [[platform-runtime-doctrine]]; REFERENCE it. Author ONLY the per-project operational choices:
 
-Then populate the deployment topology in C4-container shape. First declare the system's deliveryStyle (cloud, local, or both). The set of deployment environments is DERIVED from it and a test profile is ALWAYS present: cloud -> {cloud, test}; local -> {local, test}; both -> {cloud, local, test}. Emit exactly that set of environments — no more, no fewer. Next declare the top-level `containers` array — the deployable UNITS, not the components — each with a `key`, `name`, `technology`, `description`, and `components` listing the exact NAMES of the System components it packages (e.g. an application-server container packages the Managers, Engines, ResourceAccess, and Utilities; a web/SPA container packages the web Client). Every CODE component — every Client, Manager, Engine, and ResourceAccess, plus every Utility — MUST be packaged into EXACTLY ONE container; none may be left out and none may appear in two containers. Resources are NOT container members — they are deployment INFRASTRUCTURE, never packaged: model each Resource (database, queue, external API) as an infrastructureNode (a self-describing name/technology/description) or, for a genuinely external third-party system, as a softwareSystemInstance. The SAME logical Resource may be realized differently per environment (a managed Postgres cluster in cloud vs a local docker/sqlite instance in test) — that per-profile realization detail belongs on the infrastructure node, never on the abstract Resource. Each environment nests deploymentNodes (e.g. cluster -> namespace -> deployment) whose containerInstances reference a declared container BY ITS `containerKey` (not a component name) and set an `instances` integer for its replica count (e.g. 2); put infrastructureNodes and softwareSystemInstances on whichever deploymentNode they run alongside. CROSS-PROFILE INVARIANT: operating mode is configuration, not architecture — the set of deployed CONTAINERS MUST be IDENTICAL across the cloud and local environments (the underlying infrastructure MAY legitimately differ per profile — a managed database in cloud vs a local one in test is exactly the point of separate environments, not a violation). The test environment MUST instance EVERY container so every code component is covered; represent external systems and resources there as stubs. Reference containers in a deploymentNode's containerInstances by `containerKey`, and reference System components inside a container's `components` list by their NAME exactly as they appear in the System context — you do NOT emit any id for either; the server resolves both by name/key.
+- Select `deploymentScenario` (`deployedNotOperated` | `deployedOperated`), `constructionVenue` (`{kind, repositoryHost, note}`), `reviewPolicyRef` (`vibes` | `checkpoints` | `full`, a reference to the platform preset vocabulary — the risk floor is platform-fixed, not stored), `scalingPolicy` (only under `deployedOperated`), and `infraBuildingBlocks` (from the platform-permitted set). WRITE each per-project field's objective link into the typed `objectiveLinks` map (knob name → array of objective numbers from the committed `.mission`): every number must resolve to a declared objective (`DH-OBJ-RESOLVE`, Error) and an objective referenced by no knob surfaces as `DH-OBJ-COVERAGE` (Warning). Doctrine content carries NO objective claim and never appears in `objectiveLinks`.
+- Author the three `trustSummaries` (billing / usageMetering / dataOwnership) as plain-language customer promises.
+- Every per-project surface is TIERED: a ratifiable customer summary over an engineer-tier detail.
+
+Then populate the deployment-models view (`deploymentModel`) in C4-container shape. The set of deployment environments is DERIVED from `deploymentScenario` and a test profile is ALWAYS present. Declare the top-level `containers` array — the deployable UNITS, not the components — each with a `key`, `name`, `technology`, `description`, and `components` listing the exact NAMES of the System components it packages. Every CODE component — every Client, Manager, Engine, and ResourceAccess, plus every Utility — MUST be packaged into EXACTLY ONE container. Resources are NOT container members — model each as an infrastructureNode (a self-describing name/technology/description) or, for a genuinely external third party, as a softwareSystemInstance. Each environment nests deploymentNodes whose containerInstances reference a declared container BY ITS `containerKey` and set an `instances` integer. CROSS-PROFILE INVARIANT: operating mode is configuration, not architecture — the set of deployed CONTAINERS MUST be IDENTICAL across environments (the underlying infrastructure MAY legitimately differ per profile). Apply the §5 view corrections: OperatedRuntime is a workload node INSIDE the operated cluster (present only under `deployedOperated`), NOT an external service; the LOCAL profile shows the real local story (archistrator-server child process, embedded Temporal, on-disk `.aiarch` git, local `claude -p` runner) with an explicit "not present in local" annotation for the absent Postgres/Keycloak/GitHub-App/LLM-key; per-environment resources are env-accurate and scenario-gated (operate/bill stores appear only under `deployedOperated`). Reference containers by `containerKey` and System components by NAME.
 
 ### Operating-model deployment constraint
 
-The project's operating model constrains the deployment topology the design may model. There are two cases:
+`deploymentScenario` constrains the deployment topology the view may model:
 
-**self-operated (`selfOperated`, the default).** The customer runs the built app in their OWN infrastructure, so today's OPEN guidance stands — no extra deployment constraint is imposed. The draft prompt emits nothing beyond the standard deployment-topology guidance.
+**`deployedNotOperated` (build & hand off).** The customer runs the built app in their OWN infrastructure, so the OPEN deployment guidance stands — no extra constraint. The operate/bill stores and `scalingPolicy` are ABSENT.
 
-**archistrator-operated (`archistratorOperated`).** OPERATING MODEL — ARCHISTRATOR-OPERATED (platform-constrained deployment). This project is OPERATED BY ARCHISTRATOR on the shared platform, so the deployment topology is CONSTRAINED to the archistrator-platform infrastructure ONLY. Model the deployment using EXACTLY these platform building blocks and do NOT introduce any bespoke or third-party cloud infrastructure:
+**`deployedOperated` (platform-hosted & operated).** The deployment is CONSTRAINED to the archistrator-platform infrastructure ONLY. Model the deployment using EXACTLY these platform building blocks; do NOT introduce bespoke or third-party cloud infrastructure:
 
 - Data / persistence: CloudNativePG (CNPG) Postgres — the framework-go-infrastructure-postgres module. Model every relational Resource as a CNPG Postgres cluster infrastructureNode.
-- Workflows / durable execution: Temporal — the framework-go-infrastructure-temporal module (the SHARED platform Temporal at software/k8s/shared/temporal). Do NOT model a bespoke queue or worker pool.
-- Authentication / identity: Keycloak — the framework-go-infrastructure-keycloak module (the archistrator auth platform lib, software/k8s/argocd/auth).
+- Workflows / durable execution: Temporal — the framework-go-infrastructure-temporal module (the SHARED platform Temporal at software/k8s/shared/temporal).
+- Authentication / identity: Keycloak — the framework-go-infrastructure-keycloak module.
 - Observability: the OpenTelemetry stack — the framework-go-infrastructure-otel module.
-- Deploy target: the platform Kubernetes cluster via the ArgoCD stack at software/k8s (namespaces/apps under k8s/argocd/applications). deliveryStyle MUST be cloud; every container is a Kubernetes Deployment in the platform cluster and every infrastructureNode names the exact framework-go-infrastructure-* module above.
+- Deploy target: the platform Kubernetes cluster via the ArgoCD stack at software/k8s; every container is a Kubernetes Deployment in the platform cluster and every infrastructureNode names the exact framework-go-infrastructure-* module above.
 
-FORBIDDEN for this operating model: AWS (RDS, EKS, ECS, CloudFront, S3, Lambda), GCP, Azure, or any other bespoke / self-managed / third-party-managed cloud infrastructure — those are legitimate ONLY for self-operated projects. If a Resource needs a database it is CNPG Postgres; if it needs workflows it is Temporal; if it needs auth it is Keycloak; if it needs telemetry it is the otel stack.
+FORBIDDEN for `deployedOperated`: AWS (RDS, EKS, ECS, CloudFront, S3, Lambda), GCP, Azure, or any other bespoke / self-managed / third-party-managed cloud infrastructure — those are legitimate ONLY for `deployedNotOperated` projects the customer runs themselves.
 
 ## Exit criteria (for router)
 
-`.aiarch/state/project.json` → `.operationalConcepts` holds the typed `OperationalConcepts` model with all eight sections. Each operational decision cites a `.mission` objective. No Don'ts are violated.
+`.aiarch/state/project.json` → `.operationalConcepts` holds the typed `DeploymentOperationsModel`: the per-project fields chosen (each linked to a stable objective id via the typed `objectiveLinks` map), the three trust summaries authored, and the deployment-models view built with the §5 corrections. No platform-doctrine decision is authored in the slot — doctrine is referenced from [[platform-runtime-doctrine]]. Every per-project surface is tiered (customer summary over engineer detail).
 
 Move to `the-method-system-design-standard-check`.
 
 ## Anti-patterns to reject
 
-- **"Because everyone does it"** justification — not in the book; not acceptable.
-- **Message Bus without a supporting objective** — strip or justify against actual business need.
-- **Workflow Manager pattern when no long-running workflow exists** — over-engineering.
-- **Stateful Managers without latency justification** — gives up multi-device support; default to stateless.
-- **Open architecture by default** — closed is the book's preferred style; explicit justification required to deviate.
+- **Re-authoring platform doctrine in the slot** — topology, layering, durable-primitives, codegen, pricing-as-Strategy, review-preset mechanism, facet doctrine are FIXED and live in [[platform-runtime-doctrine]]; reference them, never re-decide them per project.
+- **An objective claim on doctrine content** — doctrine carries no business-objective link; that was the rubber-stamp defect. Only per-project fields link to objectives.
+- **Position-based objective links** — `objectiveLinks` values are the objectives' declared `number`s in the committed `.mission` (their stable ids), never list positions; a dangling number is `DH-OBJ-RESOLVE` (Error).
+- **OperatedRuntime as an external service** — category error; it is the product, a workload node inside the operated cluster, present only under `deployedOperated`.
+- **An empty "developer laptop" box for local** — tell the real local story; annotate the absent pieces.
+- **Postgres/operate-bill boxes in a `deployedNotOperated` or local view** — those stores exist only under `deployedOperated`; scenario-gate them.
+- **A per-project surface with no customer summary** — every ratifiable field needs the plain-language tier over its engineer detail.

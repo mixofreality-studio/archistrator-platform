@@ -28,6 +28,8 @@ State is git-as-DB: archistrator is a single Go-server repo whose canonical proj
 - The committed **scrubbedRequirements** artifact → `.scrubbedRequirements`
 - The research corpus in `project.json`
 
+**The futility of requirements (ch. 4 §1.3).** The use-case corpus is ALWAYS incomplete, duplicated, and partly contradictory — that is expected and fine, not a defect to remediate before starting. Per Löwy, *"you can design valid systems even with grossly impaired requirements."* Do not stall waiting for the corpus to be complete, and do not demand exhaustive requirements before proceeding: a composable design (the smallest set of components that satisfies the core, ch. 4 §2) makes the completeness of the corpus irrelevant to the validity of the decomposition. Work with the corpus you have; abstraction, not enumeration, is what makes the core use cases right.
+
 ## Output
 
 The typed **`CoreUseCases`** model (Go shape in `internal/resourceaccess/projectstate/models_phase1.go`), committed to **`.aiarch/state/project.json` → `.coreUseCases`** — NOT a `core-use-cases.md` file; any markdown is a render-on-read of this slot. Per the two usage patterns (agentic/CI dispatch and local interactive), the agent emits the typed model and commits it into `.coreUseCases`; the server stages it (`StageArtifactForReview`) for the human review gate.
@@ -36,8 +38,9 @@ The model carries:
 
 1. The **full raw list** of all use cases mentioned in research
 2. The **2–6 core use cases** with behavior descriptions
-3. **Rejection reasons** for each non-core use case
-4. **Activity diagrams** (PlantUML activity diagrams, new syntax) for use cases with nested conditions, **using role-based swimlanes when the use case crosses multiple roles/areas of interest, and fork bars when paths execute concurrently** — carried as diagram source on the typed use-case entries (the renderer emits them; they are not separate files)
+3. An **essence rationale** (`essenceRationale`) on every CORE decision — the essence-of-the-business argument for why this use case is core (see Step 2); the symmetric twin of the non-core rejection reason
+4. **Rejection reasons** for each non-core use case
+5. **Activity diagrams** (PlantUML activity diagrams, new syntax) for use cases with nested conditions, **using role-based swimlanes when the use case crosses multiple roles/areas of interest, and fork bars when paths execute concurrently** — carried as diagram source on the typed use-case entries (the renderer emits them; they are not separate files)
 
 ## Procedure
 
@@ -73,6 +76,8 @@ Look at TradeMe (ch. 5) as the worked example. Customer gave 8 use cases; archit
 - Several customer-stated use cases were actually variations of matching under different conditions
 
 Per ch. 4: *"A core use case will almost always be some kind of an abstraction of other use cases, and it may even require a new term or name to differentiate it from the rest."*
+
+**Record the essence argument on every CORE decision.** Each use case you classify as core carries the typed `essenceRationale` field (nullable string, on the `UseCaseDecision`) — the symmetric twin of the non-core `rejectionReason` (Step 5). It states WHY this use case is the essence of the business per ch. 4 §2.1: shared by all customers, nearly immutable over time, differentiating — an abstraction, not a feature. A rationale that merely restates the feature ("the system matches tradesmen") is vacuous; the rationale must argue essence ("matching is what every customer buys, survives every requirements change, and is what competitors cannot do"). A core decision with a missing or empty `essenceRationale` is flagged by the machine backstop `DH-UC-ESSENCE-MISSING` (Warning) — but the backstop only catches absence; YOU are responsible for the rationale being a real essence argument.
 
 ### Step 3 — Target 2–6 core use cases
 
@@ -169,7 +174,7 @@ If they cannot agree, the dispute usually means one of:
 
 This is the normative task the CI draft job (and a local `/system-design` run) executes to produce the `CoreUseCases`. It is self-contained: everything a draft agent needs to draft a sound set of core use cases — including how to compose each use case's typed activity diagram — is stated here.
 
-Select the CORE use cases by ABSTRACTION, not by listing what the customer asked for. For each candidate ask: does this capture the ESSENCE of the business (what differentiates it, what creates value), or is it a permutation/utility (onboarding, payment, account admin)? Could a single higher abstraction — often a NEW name not in the customer's vocabulary — subsume several raw use cases? Target 2-6 core use cases; if you have more than 6 you have not abstracted enough. Sanity check: a one-slide brochure for the system would have roughly this many bullets. Record each rejected permutation with its rejection reason and link it to the core it permutes by setting its `variationOf` to that core use case's NAME (exactly as you wrote it).
+Select the CORE use cases by ABSTRACTION, not by listing what the customer asked for. For each candidate ask: does this capture the ESSENCE of the business (what differentiates it, what creates value), or is it a permutation/utility (onboarding, payment, account admin)? Could a single higher abstraction — often a NEW name not in the customer's vocabulary — subsume several raw use cases? Target 2-6 core use cases; if you have more than 6 you have not abstracted enough. Sanity check: a one-slide brochure for the system would have roughly this many bullets. Record each rejected permutation with its rejection reason and link it to the core it permutes by setting its `variationOf` to that core use case's NAME (exactly as you wrote it). Record on each CORE decision its `essenceRationale` — the symmetric twin of the nonCore rejection reason: WHY this use case is the essence of the business (shared by all customers, nearly immutable, differentiating — an abstraction, not a feature). A core decision without one is flagged `DH-UC-ESSENCE-MISSING` (Warning); a rationale that just restates the feature is vacuous and will be sent back in critique.
 
 EXERCISE THE VOLATILITIES: the committed `.volatilities` is an input to your flows, not a backdrop — each accepted volatility should be exercised, its seam crossed, by at least one core use case's flow, or its absence explicitly justified in the draft. Flows that exercise NO committed volatility are restating the customer's current manual process, not the product's required behavior.
 
@@ -181,7 +186,9 @@ The CI draft job emits each use case's `activity` as a typed node/edge model (no
 
 ACTIVITY DIAGRAM: EVERY use case — CORE and SUPPORTING (nonCore) alike — MUST carry a NON-EMPTY `activity`: a WELL-FORMED UML activity diagram, a graph of `nodes` (each `{ref, kind, label, roleName, linkedActor, linkedComp}`) and `edges` (each `{from, to, kind, guard}`). There is NO "purely linear, so leave it null" exemption — a use case with a null or empty `activity` (missing `nodes` or `edges`) is an INCOMPLETE DRAFT and will be rejected. At an ABSOLUTE MINIMUM the diagram has a start node, at least one action node, and an end node wired start -> action -> end; a use case that branches or runs steps concurrently adds decision/merge or fork/join per the rules below. Walk the use case's real flow — do not stub a placeholder one-action diagram to satisfy the rule when the use case genuinely has steps. NEVER emit a bare string for `activity` — it is always a non-empty object with `nodes` and `edges`.
 
-IDENTITY BY NAME (no ids): you NEVER emit any opaque id or uuid. Give each node a short `ref` slug of your own (e.g. `n1`, `n2`) UNIQUE within the diagram; edges reference nodes by that `ref` in `from`/`to`. `linkedActor` (optional) is an actor's ROLE name from this use case; `linkedComp` (optional) is a System component NAME. The server resolves all of these by name.
+IDENTITY BY NAME (no ids): you NEVER emit any opaque id or uuid. Give each node a short `ref` slug of your own (e.g. `n1`, `n2`) UNIQUE within the diagram; edges reference nodes by that `ref` in `from`/`to`. `linkedActor` (optional) is an actor's ROLE name from this use case; `linkedComp` is the System component NAME that performs this step. The server resolves all of these by name.
+
+LINKEDCOMP HAND-OFF: at THIS step (core use cases, before architecture exists) there are no components yet, so `linkedComp` is legitimately empty on first draft. It is REQUIRED to be back-populated during [[the-method-architecture]] — when each use case's dynamic view maps its steps onto the component call chain, set every meaningful action node's `linkedComp` to the component that performs it, so the step↔component linkage is inspectable. An architecture that ships with every use-case node's `linkedComp` still empty has an un-inspectable step↔component gap (a known root-cause defect — the field the drafts never filled). See [[the-method-architecture]] Step 9.
 
 Node kinds and their edge cardinality:
 - start: one per diagram; 0 incoming, exactly 1 outgoing.
@@ -232,6 +239,7 @@ while-loop — a decision back-edges to the loop-head merge:
 `.aiarch/state/project.json` → `.coreUseCases` holds the typed `CoreUseCases` model with:
 - Raw list (complete)
 - 2–6 core use cases (each with actor, trigger, outcome, paths, optional activity diagram)
+- An `essenceRationale` on every core decision — a real essence-of-the-business argument, not a feature restatement (machine backstop: `DH-UC-ESSENCE-MISSING`, Warning)
 - Rejection table for non-core
 - PM ratification noted
 
@@ -244,4 +252,5 @@ Move to `the-method-architecture`.
 - **CRUD as core** ("Create Order", "Update Order") — these are mechanics, never core.
 - **No activity diagram** for a use case that has alternative paths — App C requires it. Activity diagrams use PlantUML new syntax; Mermaid `flowchart` is no longer accepted.
 - **Rejections without reasons** — every non-core needs a one-line justification.
+- **Core decisions without an essence argument** — every core needs an `essenceRationale` that argues essence (shared by all customers, nearly immutable, differentiating), not one that restates the feature. Machine backstop: `DH-UC-ESSENCE-MISSING` (Warning).
 - **Missing swimlanes on a multi-role use case** — any use case that crosses more than one role or area of interest must have swimlanes. Omitting them loses the clarity that Löwy shows as essential for *"transform, clarify, and consolidate the raw data"* (Ch. 5 §1.4, "Simplifying the Use Cases"). Note: lanes here are labeled by area of interest/role, not by subsystem (that remapping happens in Pass 2 during [[the-method-architecture]]).
