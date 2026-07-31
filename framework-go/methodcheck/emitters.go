@@ -30,16 +30,23 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleSystemLayerDegenerate,
 
 		// ---- State-validation twins (rules_statevalidation.go) ----
-		ruleSysRAOrphan, ruleSysEncapsulates, ruleSysRelDup, ruleDVChainConn,
+		ruleSysRAOrphan, ruleSysEncapsulates, ruleSysRelDup,
 		ruleUCActPresent, ruleUCGuardLabel, ruleUCVariationRef,
 		ruleVolAxisExplicit, ruleStdStatusExplicit, ruleStdFailOpen,
 		ruleGlossFourQ, ruleSRIDUnique, ruleOPCTopicCoverage,
 
 		// ---- Dynamic views (rules_dynamic.go) ----
-		ruleDVPartExist, ruleDVEdgeEnds, ruleDVEdgeInModel, ruleDVSingleMgr,
+		// DV-PART-EXIST / DV-PART-USED / DV-CHAIN-CONNECTED were RETIRED 2026-07-30
+		// (callchain-realization Task 5) — the CC-* family below subsumes all three.
+		ruleDVEdgeEnds, ruleDVEdgeInModel, ruleDVSingleMgr,
 		ruleDVMode, ruleDVKeyUnique,
-		ruleDVStaticCoverage, ruleDVRelCoverage, ruleDVPartUsed,
+		ruleDVStaticCoverage, ruleDVRelCoverage,
 		ruleDVPlannedSkipped,
+
+		// ---- Call-chain correspondence (rules_callchain.go) ----
+		ruleCCStepNode, ruleCCStepUnique, ruleCCCoverage, ruleCCStepNonempty,
+		ruleCCEndpoint, ruleCCActorEdge, ruleCCActorLane, ruleCCTriggerEvent,
+		ruleCCPathConnected,
 
 		// ---- Deployment (rules_deployment.go) ----
 		ruleDepContainerRef, ruleDepMemberExist, ruleDepProfileSet,

@@ -94,8 +94,8 @@ func validateArchitecture(s System, c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, raOrphan(s)...)
 	findings = append(findings, encapsulates(s)...)
 	findings = append(findings, relDup(s)...)
-	findings = append(findings, dvChainConnected(s)...)
-	findings = append(findings, dynamicViewConsistency(s)...)
+	findings = append(findings, dynamicViewConsistency(s, c)...)
+	findings = append(findings, callChainRules(s, c)...)
 	return finalize(findings), nil
 }
 

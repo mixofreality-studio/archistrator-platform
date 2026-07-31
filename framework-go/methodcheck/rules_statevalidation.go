@@ -2,7 +2,6 @@ package methodcheck
 
 import (
 	"fmt"
-	"sort"
 	"strings"
 )
 
@@ -30,7 +29,6 @@ const (
 	ruleSysRAOrphan     RuleID = "SYS-RA-ORPHAN"
 	ruleSysEncapsulates RuleID = "SYS-ENCAPSULATES"
 	ruleSysRelDup       RuleID = "SYS-REL-DUP"
-	ruleDVChainConn     RuleID = "DV-CHAIN-CONNECTED"
 
 	// CoreUseCases twins.
 	ruleUCActPresent   RuleID = "UC-ACT-PRESENT"
@@ -202,87 +200,23 @@ func pairHasExactDup(from, to string, s System, exact map[string]int) bool {
 	return false
 }
 
-// dvChainConnected — DV-CHAIN-CONNECTED (warning). Twin of systemdesign.dvChainFindings.
-// Each dynamic view's edges should form a connected chain rooted at a Client participant:
-// every participant must be reachable by following the directed edges out of some
-// Client-kind participant. An unrooted or disconnected call chain is a modeling smell.
-func dvChainConnected(s System) []Finding {
-	idx := componentIndex(s)
-	var out []Finding
-	for i, dv := range s.DynamicViews {
-		if len(participantIDs(dv)) <= 1 {
-			continue
-		}
-		out = append(out, dvChainFindingsFor(dv, idx, i)...)
-	}
-	return out
-}
-
-func dvChainFindingsFor(dv DynamicView, idx map[string]Component, i int) []Finding {
-	label := viewLabel(dv)
-	roots := clientRoots(dv, idx)
-	if len(roots) == 0 {
-		return []Finding{{
-			RuleID:   ruleDVChainConn,
-			Severity: SeverityWarning,
-			Message:  fmt.Sprintf("dynamic view %q has no Client participant to root its call chain; a use-case call chain should originate at a Client", label),
-			Location: loc(i+1, "dynamic view "+label),
-		}}
-	}
-	unreached := unreachedParticipants(dv, roots)
-	if len(unreached) == 0 {
-		return nil
-	}
-	sort.Strings(unreached)
-	return []Finding{{
-		RuleID:   ruleDVChainConn,
-		Severity: SeverityWarning,
-		Message:  fmt.Sprintf("dynamic view %q is not a connected chain from its Client root(s): %s unreachable via its edges", label, strings.Join(unreached, ", ")),
-		Location: loc(i+1, "dynamic view "+label),
-	}}
-}
-
-func clientRoots(dv DynamicView, idx map[string]Component) []string {
-	var roots []string
-	for _, pid := range participantIDs(dv) {
-		if idx[pid].Kind == kindClient {
-			roots = append(roots, pid)
-		}
-	}
-	return roots
-}
-
-func unreachedParticipants(dv DynamicView, roots []string) []string {
-	adj := map[string][]string{}
-	for _, e := range stepCalls(dv) {
-		adj[e.From] = append(adj[e.From], e.To)
-	}
-	seen := map[string]bool{}
-	stack := append([]string{}, roots...)
-	for len(stack) > 0 {
-		n := stack[len(stack)-1]
-		stack = stack[:len(stack)-1]
-		if seen[n] {
-			continue
-		}
-		seen[n] = true
-		stack = append(stack, adj[n]...)
-	}
-	var out []string
-	for _, pid := range participantIDs(dv) {
-		if !seen[pid] {
-			out = append(out, pid)
-		}
-	}
-	return out
-}
+// DV-CHAIN-CONNECTED (dvChainConnected + clientRoots + unreachedParticipants) was
+// RETIRED 2026-07-30 (callchain-realization Task 5). CC-PATH-CONNECTED
+// (rules_callchain.go) subsumes it and strictly strengthens it: where this rule
+// flattened a whole view's calls into one "is every participant reachable from SOME
+// Client" question, CC-PATH-CONNECTED walks each activity-diagram PATH in declared
+// order and requires every call fragment to be legally ROOTED (actor→Client, or the
+// path entry's own root shape) or to continue from a component already reached ON THAT
+// PATH — so a fragment reachable only on a different branch no longer excuses a
+// disconnect, and an actor-rooted chain is recognized as rooted rather than flagged as
+// having "no Client root".
 
 // ===================== CoreUseCases twins =====================
 
 // ucActPresent — UC-ACT-PRESENT (error). Twin of the PROMOTED app-side rule (a19a25b
 // promoted the advisory USECASE-ACTIVITY-MISSING finding to a write-path block). Every
-// use case — core AND nonCore variation — must carry a non-null activity diagram with at
-// least one start node and at least one action step.
+// use case — core AND nonCore variation — must carry a non-null activity diagram with an
+// ENTRY (see activityHasEntryAndAction) and at least one action step.
 func ucActPresent(c CoreUseCases) []Finding {
 	var out []Finding
 	for i, d := range c.Decisions {
@@ -292,16 +226,16 @@ func ucActPresent(c CoreUseCases) []Finding {
 			out = append(out, Finding{
 				RuleID:   ruleUCActPresent,
 				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s is missing its required activity diagram; every use case must carry a non-empty activity diagram with a start node and at least one action step", section),
+				Message:  fmt.Sprintf("%s is missing its required activity diagram; every use case must carry a non-empty activity diagram with an entry (a start node, or a timeEvent/acceptEvent entry) and at least one action step", section),
 				Location: loc(i+1, section),
 			})
 			continue
 		}
-		if !activityHasStartAndAction(uc.Activity) {
+		if !activityHasEntryAndAction(uc.Activity) {
 			out = append(out, Finding{
 				RuleID:   ruleUCActPresent,
 				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s activity diagram is structurally empty; it must contain at least one start node and at least one action step", section),
+				Message:  fmt.Sprintf("%s activity diagram is structurally empty; it must contain an entry (a start node, or a timeEvent/acceptEvent node with no incoming edge) and at least one action step", section),
 				Location: loc(i+1, section),
 			})
 		}
@@ -309,17 +243,31 @@ func ucActPresent(c CoreUseCases) []Finding {
 	return out
 }
 
-func activityHasStartAndAction(a *ActivityDiagram) bool {
-	hasStart, hasAction := false, false
+// activityHasEntryAndAction reports whether a diagram has an ENTRY and at least one
+// action. An entry is a literal `start` node OR a UML event node (timeEvent /
+// acceptEvent) with no incoming edge — the standard alternative ingress for a
+// scheduled or message-driven use case (2026-07-30 callchain-realization). Requiring a
+// literal start node would have made every event-triggered use case fail this gate
+// before the CC-* correspondence family could ever evaluate its diagram.
+func activityHasEntryAndAction(a *ActivityDiagram) bool {
+	incoming := make(map[string]int, len(a.Nodes))
+	for _, e := range a.Edges {
+		incoming[e.To]++
+	}
+	hasEntry, hasAction := false, false
 	for _, n := range a.Nodes {
 		switch n.Kind {
 		case nodeStart:
-			hasStart = true
+			hasEntry = true
+		case kindTimeEvent, kindAcceptEvent:
+			if incoming[n.ID] == 0 {
+				hasEntry = true
+			}
 		case nodeAction:
 			hasAction = true
 		}
 	}
-	return hasStart && hasAction
+	return hasEntry && hasAction
 }
 
 // ucGuardLabel — UC-GUARD-LABEL (error). Twin of the app-side write-path block: a

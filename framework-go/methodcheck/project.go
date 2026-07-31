@@ -67,6 +67,17 @@ const (
 	nodeFork     = "fork"
 	nodeJoin     = "join"
 	nodeEnd      = "end"
+	nodeSwitch   = "switch"
+)
+
+// UseCase trigger wire names (the `trigger` field of a use case). They are the CC-*
+// family's alignment key against the activity diagram's entry nodes: a timer-triggered
+// use case must enter on a timeEvent, a busMessage one on an acceptEvent, and a
+// clientAction one on neither (see ccTriggerEvent in rules_callchain.go).
+const (
+	triggerClientAction = "clientAction"
+	triggerTimer        = "timer"
+	triggerBusMessage   = "busMessage"
 )
 
 // UML event node kinds (standard UML alternative diagram entries alongside a plain

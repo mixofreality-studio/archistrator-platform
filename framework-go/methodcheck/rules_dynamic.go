@@ -5,22 +5,24 @@ import (
 	"sort"
 )
 
-// rules_dynamic.go ports the dynamic-view consistency suite owned by
-// ValidateArchitecture, FAITHFULLY from predicates_dynamic.go. Rule IDs /
-// severities / messages are byte-identical. DV-LAYER reuses edgeLegality, so it
-// emits the SYS-* ids against a dynamic-view Location exactly as the original.
+// rules_dynamic.go holds the dynamic-view consistency suite owned by
+// ValidateArchitecture, ported from predicates_dynamic.go and RETARGETED onto the
+// step-keyed DynamicView (2026-07-30 callchain-realization Task 5). DV-LAYER reuses
+// edgeLegality, so it emits the SYS-* ids against a dynamic-view Location exactly as
+// the original.
 //
-// The suite below still speaks in terms of a flat "participants" list and a flat
-// "edges" list, which is the PRE-step-keyed shape ported from predicates_dynamic.go.
-// The step-keyed DynamicView (Steps []CallStep) carries neither field directly, so
-// stepCalls/participantIDs below derive an equivalent flat view over Steps: this is
-// an INTERIM compile-compatibility shim (2026-07-30 callchain-realization Task 3) —
-// the real per-rule retargeting onto Steps (including anything that should key off
-// CallStep.ActivityNodeID) is Task 5's job. One structural consequence worth flagging
-// now: because participantIDs is derived FROM the calls, a "participant declared but
-// touched by no call" can no longer be constructed — DV-PART-USED (checkParticipantsUsed)
-// is consequently unreachable until Task 5 gives participant identity an independent
-// source again (see the rules_dynamic_test.go comment on the untouched-participant test).
+// The suite reasons over the UNION of a view's per-step calls (stepCalls) — these are
+// whole-view invariants (is this call in the static model? does the Client enter one
+// Manager?) that hold regardless of which step a call sits in. The rules that DO key
+// off CallStep.ActivityNodeID are the CC-* family in rules_callchain.go.
+//
+// RETIREMENTS (Task 5): DV-PART-EXIST and DV-PART-USED are GONE. Under the step-keyed
+// model participant identity is DERIVED from the calls (participantIDs), which made
+// DV-PART-USED ("a declared participant no call touches") mathematically dead, and made
+// DV-PART-EXIST a duplicate of DV-EDGE-ENDS' surviving branch. CC-ENDPOINT-RESOLVES now
+// owns endpoint resolution and additionally resolves ACTORS, which a call chain may now
+// name as endpoints — which is also why the rules below take the CoreUseCases: an actor
+// endpoint is legal, and legality is relative to the view's OWNING use case.
 func stepCalls(dv DynamicView) []Relationship {
 	var out []Relationship
 	for _, s := range dv.Steps {
@@ -47,7 +49,6 @@ func participantIDs(dv DynamicView) []string {
 }
 
 const (
-	ruleDVPartExist      RuleID = "DV-PART-EXIST"
 	ruleDVEdgeEnds       RuleID = "DV-EDGE-ENDS"
 	ruleDVEdgeInModel    RuleID = "DV-EDGE-IN-MODEL"
 	ruleDVSingleMgr      RuleID = "DV-SINGLE-MGR"
@@ -55,7 +56,6 @@ const (
 	ruleDVKeyUnique      RuleID = "DV-KEY-UNIQUE"
 	ruleDVStaticCoverage RuleID = "DV-STATIC-COVERAGE"
 	ruleDVRelCoverage    RuleID = "DV-REL-COVERAGE"
-	ruleDVPartUsed       RuleID = "DV-PART-USED"
 	// ruleDVPlannedSkipped (Info) lists the planned components DV-STATIC-COVERAGE
 	// deliberately skipped — a planned component cannot yet appear in a call chain, so
 	// it is exempt, but the exemption is surfaced (not silent) so it stays visible.
@@ -67,9 +67,19 @@ type relPairKey struct {
 	to   string
 }
 
-func dynamicViewConsistency(s System) []Finding {
+// relCallKey identifies a CALL: the (from,to) pair AND the mode it is made under.
+// DV-EDGE-IN-MODEL matches on this triple, so realizing a declared sync relationship
+// as a queued call is caught as the static/dynamic drift it is.
+type relCallKey struct {
+	from string
+	to   string
+	mode string
+}
+
+func dynamicViewConsistency(s System, c CoreUseCases) []Finding {
 	idx := componentIndex(s)
-	staticPairs := buildStaticPairs(s)
+	staticCalls := buildStaticCalls(s)
+	ucByID := useCaseIndex(c)
 	var out []Finding
 	seenKeys := make(map[string]bool, len(s.DynamicViews))
 	for i, dv := range s.DynamicViews {
@@ -92,48 +102,26 @@ func dynamicViewConsistency(s System) []Finding {
 				Location: loc(ordinal, section),
 			})
 		}
-		participantSet, pFindings := checkDynamicViewParticipants(dv, idx, section, ordinal)
-		out = append(out, pFindings...)
-		out = append(out, checkRelationships(dv, idx, participantSet, staticPairs, section, ordinal)...)
-		out = append(out, checkParticipantsUsed(dv, section, ordinal)...)
+		out = append(out, checkRelationships(dv, idx, actorIDs(ucByID[dv.UseCaseID]), staticCalls, section, ordinal)...)
 	}
 	out = append(out, checkStaticParticipationCoverage(s)...)
 	out = append(out, checkRelationshipCoverage(s, idx)...)
 	return out
 }
 
-// checkParticipantsUsed emits DV-PART-USED (Error) for every declared participant
-// of a view that no edge of that view touches — a participant that takes part in
-// no call is dead weight in the call chain.
-func checkParticipantsUsed(dv DynamicView, section string, ordinal int) []Finding {
-	calls := stepCalls(dv)
-	used := make(map[string]bool, len(calls)*2)
-	for _, e := range calls {
-		used[e.From] = true
-		used[e.To] = true
-	}
-	var out []Finding
-	for _, pid := range participantIDs(dv) {
-		if !used[pid] {
-			out = append(out, Finding{
-				RuleID:   ruleDVPartUsed,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: participant %s appears in no edge of the view; every declared participant must take part in ≥1 call", section, pid),
-				Location: loc(ordinal, section),
-			})
-		}
-	}
-	return out
-}
-
-// checkStaticParticipationCoverage emits DV-STATIC-COVERAGE (Error) for every
-// core (Client/Manager/Engine/ResourceAccess) component that participates in no
+// checkStaticParticipationCoverage emits DV-STATIC-COVERAGE for every core
+// (Client/Manager/Engine/ResourceAccess) component that participates in no
 // dynamic view. This is the founder's bidirectional static↔dynamic requirement in
 // the static→dynamic direction: a component that exists in the static architecture
 // but appears in no call chain is unexplained. Resources and Utilities are exempt
 // (isCoreComponentKind — the shared exemption). Gated on ≥1 dynamic view existing:
 // before any call chains are drawn there is nothing to be covered by, and
 // ARCH-CHAINCOV separately requires a view per core use case.
+//
+// SEVERITY (2026-07-30 Task 5): this rule and DV-REL-COVERAGE are the two
+// static↔dynamic COVERAGE rules, so they ride ccGateSeverity with the CC-* family —
+// coverage becomes enforceable exactly when the correspondence family it depends on
+// does. The post-QA rollout flips ccGateSeverity to SeverityError for all of them.
 func checkStaticParticipationCoverage(s System) []Finding {
 	if len(s.DynamicViews) == 0 {
 		return nil
@@ -158,7 +146,7 @@ func checkStaticParticipationCoverage(s System) []Finding {
 		section := fmt.Sprintf("component %d (%s)", i+1, c.Name)
 		out = append(out, Finding{
 			RuleID:   ruleDVStaticCoverage,
-			Severity: SeverityError,
+			Severity: ccGateSeverity,
 			Message:  fmt.Sprintf("%s is a %s in the static architecture but participates in no dynamic view; every Client/Manager/Engine/ResourceAccess component must appear in ≥1 call chain (static/dynamic drift)", section, c.Kind),
 			Location: loc(i+1, section),
 		})
@@ -183,10 +171,15 @@ func plannedSkippedInfo(id RuleID, what string, planned []string) []Finding {
 	}}
 }
 
-// checkRelationshipCoverage emits DV-REL-COVERAGE (Warning) for every static
-// relationship carrying a call mode (sync/queued) that appears in no dynamic-view
-// edge — a declared call the dynamic views never exercise. Pub/sub relationships
-// are exempt (they are not call-chain edges). Gated on ≥1 dynamic view existing.
+// checkRelationshipCoverage emits DV-REL-COVERAGE for every static relationship
+// carrying a call mode (sync/queued) that appears in no dynamic-view call — a declared
+// call the dynamic views never exercise. Pub/sub relationships are exempt (they are not
+// call-chain edges). Gated on ≥1 dynamic view existing. Carries ccGateSeverity (see
+// checkStaticParticipationCoverage — the two coverage rules move together).
+//
+// Deliberately matched on (from,to) and NOT on mode, unlike DV-EDGE-IN-MODEL: the
+// question here is "is this declared call exercised AT ALL", and a mode mismatch on an
+// otherwise-exercised pair is already reported, precisely, by DV-EDGE-IN-MODEL.
 func checkRelationshipCoverage(s System, idx map[string]Component) []Finding {
 	if len(s.DynamicViews) == 0 {
 		return nil
@@ -208,7 +201,7 @@ func checkRelationshipCoverage(s System, idx map[string]Component) []Finding {
 		section := relationshipSection(rel, idx)
 		out = append(out, Finding{
 			RuleID:   ruleDVRelCoverage,
-			Severity: SeverityWarning,
+			Severity: ccGateSeverity,
 			Message:  fmt.Sprintf("%s: static %s relationship appears in no dynamic-view edge; a declared call the call chains never exercise (static/dynamic drift)", section, rel.Mode),
 			Location: loc(i+1, section),
 		})
@@ -227,6 +220,9 @@ func relationshipSection(rel Relationship, idx map[string]Component) string {
 	return fmt.Sprintf("Relationship %s→%s", rel.From, rel.To)
 }
 
+// buildStaticPairs indexes the declared relationships by (from,to) alone — the
+// mode-agnostic key the code↔model conformance pass matches against (a Go import edge
+// carries no call mode).
 func buildStaticPairs(s System) map[relPairKey]bool {
 	pairs := make(map[relPairKey]bool, len(s.Relationships))
 	for _, rel := range s.Relationships {
@@ -235,36 +231,34 @@ func buildStaticPairs(s System) map[relPairKey]bool {
 	return pairs
 }
 
-func checkDynamicViewParticipants(dv DynamicView, idx map[string]Component, section string, ordinal int) (map[string]bool, []Finding) {
-	ids := participantIDs(dv)
-	participantSet := make(map[string]bool, len(ids))
-	var out []Finding
-	for _, pid := range ids {
-		if _, ok := idx[pid]; !ok {
-			out = append(out, Finding{
-				RuleID:   ruleDVPartExist,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: participant %s is not a System Component", section, pid),
-				Location: loc(ordinal, section),
-			})
-		}
-		participantSet[pid] = true
+// buildStaticCalls indexes the declared relationships by (from,to,mode) — the key
+// DV-EDGE-IN-MODEL matches a realized call against.
+func buildStaticCalls(s System) map[relCallKey]bool {
+	calls := make(map[relCallKey]bool, len(s.Relationships))
+	for _, rel := range s.Relationships {
+		calls[relCallKey{from: rel.From, to: rel.To, mode: rel.Mode}] = true
 	}
-	return participantSet, out
+	return calls
 }
 
-func checkRelationships(dv DynamicView, idx map[string]Component, participantSet map[string]bool, staticPairs map[relPairKey]bool, section string, ordinal int) []Finding {
+// checkRelationships runs the per-call DV rules over the UNION of a view's step calls,
+// plus the whole-view DV-SINGLE-MGR. actors is the OWNING use case's actor-id set (empty
+// when the view's use case is unknown) — actor endpoints are legal call ends, so they
+// resolve for DV-EDGE-ENDS and are exempt from DV-EDGE-IN-MODEL (an actor interaction
+// is not a component-to-component relationship and is never declared as one).
+func checkRelationships(dv DynamicView, idx map[string]Component, actors map[string]bool, staticCalls map[relCallKey]bool, section string, ordinal int) []Finding {
 	var out []Finding
 	enteredManagers := make(map[string]bool)
 	for _, e := range stepCalls(dv) {
-		from, fromOK := idx[e.From]
-		to, toOK := idx[e.To]
-		eFindings, enteredMgr := checkSingleDynamicEdge(e, from, fromOK, to, toOK, participantSet, staticPairs, section, ordinal)
+		eFindings, enteredMgr := checkSingleDynamicEdge(e, idx, actors, staticCalls, section, ordinal)
 		out = append(out, eFindings...)
 		if enteredMgr != "" {
 			enteredManagers[enteredMgr] = true
 		}
 	}
+	// Counting DISTINCT Managers entered (not distinct entering Clients) is what keeps
+	// "several Clients entering ONE Manager" legal while "one use case entering two
+	// Managers" is not.
 	if len(enteredManagers) > 1 {
 		out = append(out, Finding{
 			RuleID:   ruleDVSingleMgr,
@@ -276,29 +270,49 @@ func checkRelationships(dv DynamicView, idx map[string]Component, participantSet
 	return out
 }
 
-func checkSingleDynamicEdge(e Relationship, from Component, fromOK bool, to Component, toOK bool, participantSet map[string]bool, staticPairs map[relPairKey]bool, section string, ordinal int) ([]Finding, string) {
+func checkSingleDynamicEdge(e Relationship, idx map[string]Component, actors map[string]bool, staticCalls map[relCallKey]bool, section string, ordinal int) ([]Finding, string) {
+	from, fromOK := idx[e.From]
+	to, toOK := idx[e.To]
+	out := dvEdgeEndFindings(e, fromOK, toOK, actors, section, ordinal)
+	out = append(out, dvEdgeShapeFindings(e, actors, staticCalls, section, ordinal)...)
+	legalFindings, enteredMgr := checkEdgeLegalityAndEntry(e, from, to, fromOK && toOK, section, ordinal)
+	return append(out, legalFindings...), enteredMgr
+}
+
+// dvEdgeEndFindings is DV-EDGE-ENDS: each end of a call must resolve to a System
+// Component OR to an actor of the view's owning use case.
+func dvEdgeEndFindings(e Relationship, fromOK, toOK bool, actors map[string]bool, section string, ordinal int) []Finding {
 	var out []Finding
-	if !fromOK || !participantSet[e.From] {
+	if !fromOK && !actors[e.From] {
 		out = append(out, Finding{
 			RuleID:   ruleDVEdgeEnds,
 			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: edge source %s is not a real Component declared as a participant", section, e.From),
+			Message:  fmt.Sprintf("%s: call source %s is neither a System Component nor an actor of the view's use case", section, e.From),
 			Location: loc(ordinal, section),
 		})
 	}
-	if !toOK || !participantSet[e.To] {
+	if !toOK && !actors[e.To] {
 		out = append(out, Finding{
 			RuleID:   ruleDVEdgeEnds,
 			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: edge target %s is not a real Component declared as a participant", section, e.To),
+			Message:  fmt.Sprintf("%s: call target %s is neither a System Component nor an actor of the view's use case", section, e.To),
 			Location: loc(ordinal, section),
 		})
 	}
-	if !staticPairs[relPairKey{from: e.From, to: e.To}] {
+	return out
+}
+
+// dvEdgeShapeFindings is DV-EDGE-IN-MODEL + DV-MODE: a component-to-component call must
+// be declared statically under the SAME mode, and every call must use a call mode.
+// Calls with an actor end are exempt from the static match — an actor interaction is not
+// a System.Relationships edge (CC-ACTOR-EDGE governs its legality instead).
+func dvEdgeShapeFindings(e Relationship, actors map[string]bool, staticCalls map[relCallKey]bool, section string, ordinal int) []Finding {
+	var out []Finding
+	if !actors[e.From] && !actors[e.To] && !staticCalls[relCallKey{from: e.From, to: e.To, mode: e.Mode}] {
 		out = append(out, Finding{
 			RuleID:   ruleDVEdgeInModel,
 			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: dynamic edge %s→%s has no matching static System.Relationships pair (static/dynamic drift)", section, e.From, e.To),
+			Message:  fmt.Sprintf("%s: dynamic call %s→%s (%s) has no matching static System.Relationships entry (static/dynamic drift)", section, e.From, e.To, e.Mode),
 			Location: loc(ordinal, section),
 		})
 	}
@@ -310,8 +324,7 @@ func checkSingleDynamicEdge(e Relationship, from Component, fromOK bool, to Comp
 			Location: loc(ordinal, section),
 		})
 	}
-	legalFindings, enteredMgr := checkEdgeLegalityAndEntry(e, from, to, fromOK && toOK, section, ordinal)
-	return append(out, legalFindings...), enteredMgr
+	return out
 }
 
 func checkEdgeLegalityAndEntry(e Relationship, from, to Component, bothOK bool, section string, ordinal int) ([]Finding, string) {

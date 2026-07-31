@@ -121,54 +121,13 @@ func TestRelDup_SingleEdgePasses(t *testing.T) {
 	}
 }
 
-// ---- DV-CHAIN-CONNECTED ----
-
-func TestDVChain_NoClientRootWarns(t *testing.T) {
-	mgr := comp(t, "M", kindManager)
-	eng := comp(t, "E", kindEngine)
-	s := System{
-		Components:   []Component{mgr, eng},
-		DynamicViews: []DynamicView{{Key: "uc1", Steps: []CallStep{{Calls: []Relationship{{From: mgr.ID, To: eng.ID, Mode: modeSync}}}}}},
-	}
-	sev, ok := findingSeverity(dvChainConnected(s), ruleDVChainConn)
-	if !ok || sev != SeverityWarning {
-		t.Fatalf("a chain with no Client root must warn DV-CHAIN-CONNECTED")
-	}
-}
-
-func TestDVChain_DisconnectedWarns(t *testing.T) {
-	client := comp(t, "C", kindClient)
-	mgr := comp(t, "M", kindManager)
-	eng := comp(t, "E", kindEngine)
-	s := System{
-		Components: []Component{client, mgr, eng},
-		DynamicViews: []DynamicView{{Key: "uc1",
-			Steps: []CallStep{{Calls: []Relationship{
-				{From: client.ID, To: mgr.ID, Mode: modeSync},
-				// eng is unreachable from the client root: a self-loop is the only way
-				// under the step-keyed model to make eng a participant (participantIDs
-				// derives identity purely from call endpoints) while keeping it outside
-				// the client-rooted reachable set.
-				{From: eng.ID, To: eng.ID, Mode: modeSync},
-			}}},
-		}},
-	}
-	if !hasRuleFindings(dvChainConnected(s), ruleDVChainConn) {
-		t.Fatalf("an unreachable participant must warn DV-CHAIN-CONNECTED")
-	}
-}
-
-func TestDVChain_ConnectedPasses(t *testing.T) {
-	client := comp(t, "C", kindClient)
-	mgr := comp(t, "M", kindManager)
-	s := System{
-		Components:   []Component{client, mgr},
-		DynamicViews: []DynamicView{{Key: "uc1", Steps: []CallStep{{Calls: []Relationship{{From: client.ID, To: mgr.ID, Mode: modeSync}}}}}},
-	}
-	if out := dvChainConnected(s); len(out) != 0 {
-		t.Fatalf("a connected chain must not warn, got %+v", out)
-	}
-}
+// DV-CHAIN-CONNECTED and its tests were RETIRED by the 2026-07-30
+// callchain-realization work: CC-PATH-CONNECTED (rules_callchain.go) subsumes it and
+// strictly strengthens it — where DV-CHAIN-CONNECTED asked only that every participant
+// be reachable from SOME Client in the flattened union of a view's calls,
+// CC-PATH-CONNECTED walks each activity-diagram path in order and demands every call
+// fragment be rooted legally (actor→Client, or the entry-kind's root shape) or continue
+// from an already-reached component. See rules_callchain_test.go.
 
 // ---- UC-ACT-PRESENT ----
 
@@ -191,6 +150,28 @@ func TestUCActPresent_ValidPasses(t *testing.T) {
 	c := CoreUseCases{Decisions: []UseCaseDecision{coreUC("X")}} // coreUC carries a minimal activity
 	if out := ucActPresent(c); len(out) != 0 {
 		t.Fatalf("a start+action activity must pass, got %+v", out)
+	}
+}
+
+// TestUCActPresent_EventEntryOnlyDiagramPasses pins the 2026-07-30
+// callchain-realization relaxation: a diagram whose only ingress is a UML event node
+// (timeEvent/acceptEvent with no incoming edge) is a well-formed entry and needs no
+// literal "start" node. Without it every event-triggered use case failed the pipeline
+// at UC-ACT-PRESENT before the CC-* correspondence rules could ever see the diagram.
+func TestUCActPresent_EventEntryOnlyDiagramPasses(t *testing.T) {
+	c := CoreUseCases{Decisions: []UseCaseDecision{{UseCase: UseCase{
+		Name: "Sweep", Classification: classCore, Trigger: triggerTimer,
+		Activity: &ActivityDiagram{
+			Nodes: []ActivityNode{
+				{ID: "tick", Kind: kindTimeEvent, Label: "period elapses"},
+				{ID: "act", Kind: nodeAction, Label: "run sweep"},
+				{ID: "e", Kind: nodeEnd},
+			},
+			Edges: []ActivityEdge{{From: "tick", To: "act"}, {From: "act", To: "e"}},
+		},
+	}}}}
+	if out := ucActPresent(c); len(out) != 0 {
+		t.Fatalf("an event-entry-only diagram with an action must pass UC-ACT-PRESENT, got %+v", out)
 	}
 }
 
