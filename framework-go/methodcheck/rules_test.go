@@ -323,6 +323,38 @@ func TestValidateCoreUseCases_GuardedEdgeFromNonDecisionFails(t *testing.T) {
 	}
 }
 
+// TestUCActDiag_EventEntryWithoutIncomingEdgeIsLegal proves the UML-event-node
+// relaxation (2026-07-30 callchain-realization Task 3): a timeEvent/acceptEvent node
+// with NO incoming edge is a standard UML alternative diagram entry, not an orphan.
+// Reading ucActivityDiagram (rules.go) shows it has NO orphan/unreachable check at
+// all — it only inspects decision/fork/merge/join node cardinalities — so a
+// kindTimeEvent entry node was ALREADY well-formed against UC-ACTDIAG specifically
+// before this task; this test pins that (already-correct) behavior so it can't
+// silently regress once Task 5 adds real per-node validation. (A SEPARATE rule,
+// UC-ACT-PRESENT, still requires a literal "start" node and is unaffected here — see
+// the Task-3 report's Concerns section.)
+func TestUCActDiag_EventEntryWithoutIncomingEdgeIsLegal(t *testing.T) {
+	uc := UseCaseDecision{UseCase: UseCase{
+		ID: Slug("Sweep"), Name: "Sweep", Classification: classCore, Trigger: "timer",
+		Activity: &ActivityDiagram{
+			Nodes: []ActivityNode{
+				{ID: "tick", Kind: kindTimeEvent, Label: "period elapses"},
+				{ID: "act", Kind: "action", Label: "run sweep"},
+				{ID: "end", Kind: "end"},
+			},
+			Edges: []ActivityEdge{{From: "tick", To: "act"}, {From: "act", To: "end"}},
+		},
+	}}
+	c := CoreUseCases{Decisions: []UseCaseDecision{uc, coreUC("Other")}}
+	res, err := validateCoreUseCases(c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hasRule(res, ruleUcActDiagram) {
+		t.Fatalf("edge-less event entry must be well-formed against UC-ACTDIAG, got %+v", res.Findings)
+	}
+}
+
 func TestValidateCoreUseCases_DuplicateUseCaseNameFails(t *testing.T) {
 	c := CoreUseCases{Decisions: []UseCaseDecision{
 		coreUC("Co-author artifact"), coreUC("Co-author artifact"), coreUC("Render artifact"),
@@ -390,16 +422,15 @@ func passingSystem(t *testing.T, ucID string) System {
 	// The primary view exercises the full chain so every core component participates
 	// (DV-STATIC-COVERAGE) and every sync relationship is covered (DV-REL-COVERAGE).
 	dvs := []DynamicView{{
-		UseCaseID:    ucID,
-		Key:          "uc1",
-		Title:        "Core flow",
-		Participants: []string{client.ID, mgr.ID, eng.ID, ra.ID, res.ID},
-		Edges: []Relationship{
+		UseCaseID: ucID,
+		Key:       "uc1",
+		Title:     "Core flow",
+		Steps: []CallStep{{Calls: []Relationship{
 			{From: client.ID, To: mgr.ID, Mode: modeSync},
 			{From: mgr.ID, To: eng.ID, Mode: modeSync},
 			{From: mgr.ID, To: ra.ID, Mode: modeSync},
 			{From: ra.ID, To: res.ID, Mode: modeSync},
-		},
+		}}},
 	}}
 	return System{Components: []Component{client, mgr, eng, ra, res}, Relationships: rels, DynamicViews: dvs}
 }
@@ -666,14 +697,13 @@ func TestValidateArchitecture_UseCaseDynamicMissing_AllCoveredPasses(t *testing.
 	ucID := nid()
 	s := passingSystem(t, ucID)
 	variationID := nid()
-	// Add a second view for the nonCore variation, reusing the same participants/edges.
+	// Add a second view for the nonCore variation, reusing the same steps/calls.
 	primary := s.DynamicViews[0]
 	s.DynamicViews = append(s.DynamicViews, DynamicView{
-		UseCaseID:    variationID,
-		Key:          "uc2",
-		Title:        "Variation flow",
-		Participants: primary.Participants,
-		Edges:        primary.Edges,
+		UseCaseID: variationID,
+		Key:       "uc2",
+		Title:     "Variation flow",
+		Steps:     primary.Steps,
 	})
 	variationOf := ucID
 	c := CoreUseCases{Decisions: []UseCaseDecision{

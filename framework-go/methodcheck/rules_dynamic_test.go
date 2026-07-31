@@ -18,16 +18,15 @@ func dynamicBaseSystem(t *testing.T) System {
 		{From: ra.ID, To: store.ID, Mode: modeSync},
 	}
 	dv := DynamicView{
-		UseCaseID:    nid(),
-		Key:          "uc1-core-flow",
-		Title:        "Core flow",
-		Participants: []string{client.ID, mgr.ID, eng.ID, ra.ID, store.ID},
-		Edges: []Relationship{
+		UseCaseID: nid(),
+		Key:       "uc1-core-flow",
+		Title:     "Core flow",
+		Steps: []CallStep{{Calls: []Relationship{
 			{From: client.ID, To: mgr.ID, Mode: modeSync},
 			{From: mgr.ID, To: eng.ID, Mode: modeSync},
 			{From: mgr.ID, To: ra.ID, Mode: modeSync},
 			{From: ra.ID, To: store.ID, Mode: modeSync},
-		},
+		}}},
 	}
 	return System{Components: []Component{client, mgr, eng, ra, store}, Relationships: rels, DynamicViews: []DynamicView{dv}}
 }
@@ -38,24 +37,35 @@ func TestDynamicViewConsistency_ValidBaseHasNoFindings(t *testing.T) {
 	}
 }
 
+// TestDynamicViewConsistency_PartExist: under the step-keyed model, participant
+// identity is derived purely from call endpoints (participantIDs) — there is no
+// longer an independent Participants list to append a bogus id to. The equivalent
+// construction is a call edge that NAMES an id the System does not declare as a
+// Component; participantIDs surfaces it exactly the same way DV-PART-EXIST expects.
 func TestDynamicViewConsistency_PartExist(t *testing.T) {
 	s := dynamicBaseSystem(t)
-	s.DynamicViews[0].Participants = append(s.DynamicViews[0].Participants, nid())
+	clientID := s.Components[0].ID
+	s.DynamicViews[0].Steps = append(s.DynamicViews[0].Steps, CallStep{
+		Calls: []Relationship{{From: clientID, To: nid(), Mode: modeSync}},
+	})
 	if !hasRuleFindings(dynamicViewConsistency(s), ruleDVPartExist) {
 		t.Fatalf("expected DV-PART-EXIST")
 	}
 }
 
+// TestDynamicViewConsistency_EdgeEnds_NotAParticipant: the original scenario (an edge
+// whose endpoint IS a real Component, deliberately dropped from a separately-declared
+// Participants list) can no longer be constructed — Participants no longer exists
+// independently of the calls, so "declared participant" and "edge endpoint" are now
+// the SAME derived set by construction. DV-EDGE-ENDS' "not a real Component" half
+// remains reachable via an edge naming an undeclared id (this is now the same
+// construction as DV-PART-EXIST above; both rules legitimately fire together on it).
 func TestDynamicViewConsistency_EdgeEnds_NotAParticipant(t *testing.T) {
 	s := dynamicBaseSystem(t)
-	mgrID := s.Components[1].ID
-	var trimmed []string
-	for _, p := range s.DynamicViews[0].Participants {
-		if p != mgrID {
-			trimmed = append(trimmed, p)
-		}
-	}
-	s.DynamicViews[0].Participants = trimmed
+	clientID := s.Components[0].ID
+	s.DynamicViews[0].Steps = append(s.DynamicViews[0].Steps, CallStep{
+		Calls: []Relationship{{From: clientID, To: nid(), Mode: modeSync}},
+	})
 	if !hasRuleFindings(dynamicViewConsistency(s), ruleDVEdgeEnds) {
 		t.Fatalf("expected DV-EDGE-ENDS")
 	}
@@ -65,7 +75,7 @@ func TestDynamicViewConsistency_EdgeInModel(t *testing.T) {
 	s := dynamicBaseSystem(t)
 	clientID := s.Components[0].ID
 	engID := s.Components[2].ID
-	s.DynamicViews[0].Edges = append(s.DynamicViews[0].Edges, Relationship{From: clientID, To: engID, Mode: modeSync})
+	s.DynamicViews[0].Steps[0].Calls = append(s.DynamicViews[0].Steps[0].Calls, Relationship{From: clientID, To: engID, Mode: modeSync})
 	if !hasRuleFindings(dynamicViewConsistency(s), ruleDVEdgeInModel) {
 		t.Fatalf("expected DV-EDGE-IN-MODEL")
 	}
@@ -79,7 +89,7 @@ func TestDynamicViewConsistency_Layer(t *testing.T) {
 		Components:    []Component{mgr, ra},
 		Relationships: []Relationship{rel},
 		DynamicViews: []DynamicView{{
-			UseCaseID: nid(), Key: "uc-up", Participants: []string{mgr.ID, ra.ID}, Edges: []Relationship{rel},
+			UseCaseID: nid(), Key: "uc-up", Steps: []CallStep{{Calls: []Relationship{rel}}},
 		}},
 	}
 	if !hasRuleFindings(dynamicViewConsistency(s), ruleSysNoUp) {
@@ -97,7 +107,7 @@ func TestDynamicViewConsistency_SingleMgr(t *testing.T) {
 		Components:    []Component{client, m1, m2},
 		Relationships: []Relationship{r1, r2},
 		DynamicViews: []DynamicView{{
-			UseCaseID: nid(), Key: "uc-two-mgrs", Participants: []string{client.ID, m1.ID, m2.ID}, Edges: []Relationship{r1, r2},
+			UseCaseID: nid(), Key: "uc-two-mgrs", Steps: []CallStep{{Calls: []Relationship{r1, r2}}},
 		}},
 	}
 	if !hasRuleFindings(dynamicViewConsistency(s), ruleDVSingleMgr) {
@@ -107,7 +117,7 @@ func TestDynamicViewConsistency_SingleMgr(t *testing.T) {
 
 func TestDynamicViewConsistency_Mode(t *testing.T) {
 	s := dynamicBaseSystem(t)
-	s.DynamicViews[0].Edges[0].Mode = modeEventPubSub
+	s.DynamicViews[0].Steps[0].Calls[0].Mode = modeEventPubSub
 	if !hasRuleFindings(dynamicViewConsistency(s), ruleDVMode) {
 		t.Fatalf("expected DV-MODE")
 	}
@@ -184,18 +194,31 @@ func TestDynamicViewConsistency_RelCoverage_UncoveredSyncRelWarns(t *testing.T) 
 	}
 }
 
-func TestDynamicViewConsistency_PartUsed_UntouchedParticipantFails(t *testing.T) {
+// TestDynamicViewConsistency_PartUsed_NoLongerConstructible documents a KNOWN,
+// DELIBERATE regression introduced by this task's minimal step-keyed compile shim
+// (2026-07-30 callchain-realization Task 3): DV-PART-USED (checkParticipantsUsed)
+// used to fire for a participant DECLARED on the view's (independent) Participants
+// list that no edge touched. The step-keyed DynamicView carries no independent
+// participant list — participantIDs derives participation FROM the calls — so a
+// "participant no call touches" can no longer exist: whatever participantIDs
+// returns is, by construction, already the "used" set checkParticipantsUsed computes
+// from the same calls. DV-PART-USED is consequently unreachable (dead) until Task 5's
+// real per-rule retargeting gives participant identity an independent source again
+// (e.g. via CallStep.ActivityNodeID / the activity diagram). This test is INVERTED
+// on purpose — it pins the current (temporary) no-finding behavior so a future
+// accidental revival of the check is visible in the diff — rather than deleting
+// coverage silently.
+func TestDynamicViewConsistency_PartUsed_NoLongerConstructible(t *testing.T) {
 	s := dynamicBaseSystem(t)
-	// Add an extra component, declare it a participant of the view but wire no edge to it.
 	extra := comp(t, "LonelyEngine", kindEngine)
 	s.Components = append(s.Components, extra)
-	s.DynamicViews[0].Participants = append(s.DynamicViews[0].Participants, extra.ID)
-	sev, ok := findingSeverity(dynamicViewConsistency(s), ruleDVPartUsed)
-	if !ok {
-		t.Fatalf("expected DV-PART-USED for a participant no edge touches")
-	}
-	if sev != SeverityError {
-		t.Fatalf("DV-PART-USED must be Error, got %v", sev)
+	// Even a self-loop touching extra makes it "used" — there is no way, via the calls
+	// alone, to declare extra as a participant while leaving it untouched.
+	s.DynamicViews[0].Steps = append(s.DynamicViews[0].Steps, CallStep{
+		Calls: []Relationship{{From: extra.ID, To: extra.ID, Mode: modeSync}},
+	})
+	if hasRuleFindings(dynamicViewConsistency(s), ruleDVPartUsed) {
+		t.Fatalf("DV-PART-USED is expected to be unreachable under the Task-3 derived model; got a finding — see Task 5 retargeting")
 	}
 }
 

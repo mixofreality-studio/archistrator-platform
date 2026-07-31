@@ -128,7 +128,7 @@ func TestDVChain_NoClientRootWarns(t *testing.T) {
 	eng := comp(t, "E", kindEngine)
 	s := System{
 		Components:   []Component{mgr, eng},
-		DynamicViews: []DynamicView{{Key: "uc1", Participants: []string{mgr.ID, eng.ID}, Edges: []Relationship{{From: mgr.ID, To: eng.ID, Mode: modeSync}}}},
+		DynamicViews: []DynamicView{{Key: "uc1", Steps: []CallStep{{Calls: []Relationship{{From: mgr.ID, To: eng.ID, Mode: modeSync}}}}}},
 	}
 	sev, ok := findingSeverity(dvChainConnected(s), ruleDVChainConn)
 	if !ok || sev != SeverityWarning {
@@ -143,8 +143,14 @@ func TestDVChain_DisconnectedWarns(t *testing.T) {
 	s := System{
 		Components: []Component{client, mgr, eng},
 		DynamicViews: []DynamicView{{Key: "uc1",
-			Participants: []string{client.ID, mgr.ID, eng.ID},
-			Edges:        []Relationship{{From: client.ID, To: mgr.ID, Mode: modeSync}}, // eng unreachable
+			Steps: []CallStep{{Calls: []Relationship{
+				{From: client.ID, To: mgr.ID, Mode: modeSync},
+				// eng is unreachable from the client root: a self-loop is the only way
+				// under the step-keyed model to make eng a participant (participantIDs
+				// derives identity purely from call endpoints) while keeping it outside
+				// the client-rooted reachable set.
+				{From: eng.ID, To: eng.ID, Mode: modeSync},
+			}}},
 		}},
 	}
 	if !hasRuleFindings(dvChainConnected(s), ruleDVChainConn) {
@@ -157,7 +163,7 @@ func TestDVChain_ConnectedPasses(t *testing.T) {
 	mgr := comp(t, "M", kindManager)
 	s := System{
 		Components:   []Component{client, mgr},
-		DynamicViews: []DynamicView{{Key: "uc1", Participants: []string{client.ID, mgr.ID}, Edges: []Relationship{{From: client.ID, To: mgr.ID, Mode: modeSync}}}},
+		DynamicViews: []DynamicView{{Key: "uc1", Steps: []CallStep{{Calls: []Relationship{{From: client.ID, To: mgr.ID, Mode: modeSync}}}}}},
 	}
 	if out := dvChainConnected(s); len(out) != 0 {
 		t.Fatalf("a connected chain must not warn, got %+v", out)

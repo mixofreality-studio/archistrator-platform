@@ -210,7 +210,7 @@ func dvChainConnected(s System) []Finding {
 	idx := componentIndex(s)
 	var out []Finding
 	for i, dv := range s.DynamicViews {
-		if len(dv.Participants) <= 1 {
+		if len(participantIDs(dv)) <= 1 {
 			continue
 		}
 		out = append(out, dvChainFindingsFor(dv, idx, i)...)
@@ -244,7 +244,7 @@ func dvChainFindingsFor(dv DynamicView, idx map[string]Component, i int) []Findi
 
 func clientRoots(dv DynamicView, idx map[string]Component) []string {
 	var roots []string
-	for _, pid := range dv.Participants {
+	for _, pid := range participantIDs(dv) {
 		if idx[pid].Kind == kindClient {
 			roots = append(roots, pid)
 		}
@@ -254,7 +254,7 @@ func clientRoots(dv DynamicView, idx map[string]Component) []string {
 
 func unreachedParticipants(dv DynamicView, roots []string) []string {
 	adj := map[string][]string{}
-	for _, e := range dv.Edges {
+	for _, e := range stepCalls(dv) {
 		adj[e.From] = append(adj[e.From], e.To)
 	}
 	seen := map[string]bool{}
@@ -269,7 +269,7 @@ func unreachedParticipants(dv DynamicView, roots []string) []string {
 		stack = append(stack, adj[n]...)
 	}
 	var out []string
-	for _, pid := range dv.Participants {
+	for _, pid := range participantIDs(dv) {
 		if !seen[pid] {
 			out = append(out, pid)
 		}

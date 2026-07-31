@@ -187,37 +187,35 @@
             "useCaseId": "decide",
             "key": "uc1",
             "title": "Core",
-            "participants": [
-              "appclient",
-              "designmanager",
-              "validatingengine",
-              "stateaccess",
-              "statedb"
-            ],
-            "edges": [
+            "steps": [
               {
-                "from": "appclient",
-                "to": "designmanager",
-                "mode": "sync",
-                "label": ""
-              },
-              {
-                "from": "designmanager",
-                "to": "validatingengine",
-                "mode": "sync",
-                "label": ""
-              },
-              {
-                "from": "designmanager",
-                "to": "stateaccess",
-                "mode": "sync",
-                "label": ""
-              },
-              {
-                "from": "stateaccess",
-                "to": "statedb",
-                "mode": "sync",
-                "label": ""
+                "activityNodeId": "act",
+                "calls": [
+                  {
+                    "from": "appclient",
+                    "to": "designmanager",
+                    "mode": "sync",
+                    "label": ""
+                  },
+                  {
+                    "from": "designmanager",
+                    "to": "validatingengine",
+                    "mode": "sync",
+                    "label": ""
+                  },
+                  {
+                    "from": "designmanager",
+                    "to": "stateaccess",
+                    "mode": "sync",
+                    "label": ""
+                  },
+                  {
+                    "from": "stateaccess",
+                    "to": "statedb",
+                    "mode": "sync",
+                    "label": ""
+                  }
+                ]
               }
             ]
           },
@@ -225,8 +223,7 @@
             "useCaseId": "other",
             "key": "uc2",
             "title": "Other",
-            "participants": [],
-            "edges": []
+            "steps": []
           }
         ]
       }

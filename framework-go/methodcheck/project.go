@@ -67,6 +67,17 @@ const (
 	nodeJoin     = "join"
 )
 
+// UML event node kinds (standard UML alternative diagram entries alongside a plain
+// `start` node): a timeEvent fires on a schedule/timer, an acceptEvent fires on an
+// external signal. Both are legal ENTRY points for an activity diagram — a diagram
+// whose only ingress is one of these nodes is well-formed even though the node
+// itself carries no incoming edge (it is not an orphan; nothing "leads into" a
+// trigger). See ucActivityDiagram (rules.go) / ucActPresent (rules_statevalidation.go).
+const (
+	kindTimeEvent   = "timeEvent"
+	kindAcceptEvent = "acceptEvent"
+)
+
 // Classification wire names.
 const classCore = "core"
 
@@ -191,6 +202,14 @@ type ActivityNode struct {
 	ID    string `json:"id"`
 	Kind  string `json:"kind"`
 	Label string `json:"label"`
+
+	// RoleName + LinkedActorID are populated for a NodeSwimLane node: the lane's role
+	// name and an optional link to a use-case Actor. LinkedActorID mirrors the app
+	// side's nullable *string as a plain string ("" when absent) — methodcheck's
+	// structural mirrors decode nullable wire fields into their zero value rather than
+	// carrying a pointer (see BuildStatus/ContractKey elsewhere in this file).
+	RoleName      string `json:"roleName"`
+	LinkedActorID string `json:"linkedActorId"`
 }
 
 // ActivityEdge is a directed edge in an activity diagram.
@@ -243,13 +262,23 @@ type Relationship struct {
 	Label string `json:"label"`
 }
 
-// DynamicView is one call chain per use case.
+// DynamicView is one call chain per use case, keyed by step. Each step realizes one
+// activity-diagram node (Grammar B ActivityNode.ID, via CallStep.ActivityNodeID) as
+// the ordered fragment of calls that node's action makes. This mirrors the app-side
+// step-keyed model exactly (same wire names) — framework-go keeps its OWN parallel
+// string-typed struct rather than importing the app's enum-typed one.
 type DynamicView struct {
-	UseCaseID    string         `json:"useCaseId"`
-	Key          string         `json:"key"`
-	Title        string         `json:"title"`
-	Participants []string       `json:"participants"`
-	Edges        []Relationship `json:"edges"`
+	UseCaseID string     `json:"useCaseId"`
+	Key       string     `json:"key"`
+	Title     string     `json:"title"`
+	Steps     []CallStep `json:"steps"`
+}
+
+// CallStep is one realized activity-diagram node's call fragment: the node it
+// realizes (ActivityNodeID) and the ordered calls that node's action makes.
+type CallStep struct {
+	ActivityNodeID string         `json:"activityNodeId"`
+	Calls          []Relationship `json:"calls"`
 }
 
 // OperationalConcepts mirrors the OperationalConcepts slot model.

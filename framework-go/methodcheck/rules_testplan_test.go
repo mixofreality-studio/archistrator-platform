@@ -52,12 +52,11 @@ func stpParts(t *testing.T) (map[string]ServiceContract, System, CoreUseCases, *
 			{ID: "settlement-manager", Name: "SettlementManager", Kind: kindManager, Layer: layerManager},
 		},
 		DynamicViews: []DynamicView{{
-			UseCaseID:    "bill-the-user-for-usage",
-			Key:          "uc-bill",
-			Participants: []string{"scheduler-client", "settlement-manager"},
-			Edges: []Relationship{
+			UseCaseID: "bill-the-user-for-usage",
+			Key:       "uc-bill",
+			Steps: []CallStep{{Calls: []Relationship{
 				{From: "scheduler-client", To: "settlement-manager", Mode: modeSync, Label: "closeSettlementCycle(customerId, cycleId)"},
-			},
+			}}},
 		}},
 	}
 	cuc := CoreUseCases{Decisions: []UseCaseDecision{
@@ -253,7 +252,7 @@ func TestSTP_ExpectShape_VoidOpWithAssertedResult(t *testing.T) {
 // twoOpChainView rewires the baseline view to a two-entry-op chain: the scheduler
 // client drives closeSettlementCycle THEN runShortfallSweep on the settlement manager.
 func twoOpChainView(s *System) {
-	s.DynamicViews[0].Edges = []Relationship{
+	s.DynamicViews[0].Steps[0].Calls = []Relationship{
 		{From: "scheduler-client", To: "settlement-manager", Mode: modeSync, Label: "closeSettlementCycle()"},
 		{From: "scheduler-client", To: "settlement-manager", Mode: modeSync, Label: "runShortfallSweep()"},
 	}
@@ -308,8 +307,7 @@ func TestSTP_ChainCover_R4WebMcpDedupe(t *testing.T) {
 		{ID: "mcp-client", Name: "McpClient", Kind: kindClient, Layer: layerClient},
 		{ID: "settlement-manager", Name: "SettlementManager", Kind: kindManager, Layer: layerManager},
 	}
-	s.DynamicViews[0].Participants = []string{"web-client", "mcp-client", "settlement-manager"}
-	s.DynamicViews[0].Edges = []Relationship{
+	s.DynamicViews[0].Steps[0].Calls = []Relationship{
 		{From: "web-client", To: "settlement-manager", Mode: modeSync, Label: "closeSettlementCycle(customerId, cycleId)"},
 		{From: "mcp-client", To: "settlement-manager", Mode: modeSync, Label: "closeSettlementCycle(customerId, cycleId)"},
 	}
@@ -363,7 +361,7 @@ func TestSTP_WalkParticipant_ForeignComponentWarns(t *testing.T) {
 func TestSTP_WalkLegal_OutOfOrder(t *testing.T) {
 	c, s, u, p := stpParts(t)
 	// Two ops on two ordered edges; walk them in the reverse order.
-	s.DynamicViews[0].Edges = []Relationship{
+	s.DynamicViews[0].Steps[0].Calls = []Relationship{
 		{From: "scheduler-client", To: "settlement-manager", Mode: modeSync, Label: "closeSettlementCycle()"},
 		{From: "scheduler-client", To: "settlement-manager", Mode: modeSync, Label: "runShortfallSweep()"},
 	}
@@ -381,7 +379,7 @@ func TestSTP_WalkLegal_OutOfOrder(t *testing.T) {
 func TestSTP_WalkMode_QueuedAssertedSynchronously(t *testing.T) {
 	c, s, u, p := stpParts(t)
 	// The edge becomes queued; the boundary step asserts its error inline with no observe.
-	s.DynamicViews[0].Edges[0].Mode = modeQueued
+	s.DynamicViews[0].Steps[0].Calls[0].Mode = modeQueued
 	if !hasRuleFindings(runSTP(t, c, s, u, p), ruleSTPWalkMode) {
 		t.Fatalf("expected STP-WALK-MODE for a queued edge asserted synchronously")
 	}
@@ -389,8 +387,8 @@ func TestSTP_WalkMode_QueuedAssertedSynchronously(t *testing.T) {
 
 func TestSTP_WalkMode_QueuedWithObserveIsClean(t *testing.T) {
 	c, s, u, p := stpParts(t)
-	s.DynamicViews[0].Edges[0].Mode = modeQueued
-	s.DynamicViews[0].Edges = append(s.DynamicViews[0].Edges, Relationship{
+	s.DynamicViews[0].Steps[0].Calls[0].Mode = modeQueued
+	s.DynamicViews[0].Steps[0].Calls = append(s.DynamicViews[0].Steps[0].Calls, Relationship{
 		From: "scheduler-client", To: "settlement-manager", Mode: modeSync, Label: "getSettlementStatus()",
 	})
 	sc := c["settlementManager"]

@@ -400,6 +400,17 @@ func checkNodeUniqueness(n ActivityNode, seen map[string]bool, section string, u
 	return nil
 }
 
+// ucActivityDiagram is UC-ACTDIAG. UML event nodes (kindTimeEvent/kindAcceptEvent,
+// added 2026-07-30 callchain-realization Task 3) are legal diagram ENTRIES with no
+// incoming edge required — but this function never checked incoming-edge count or
+// reachability for anything other than merge/join (which already require >=2
+// incoming edges as part of their OWN node-kind check, unrelated to entry status).
+// There is no generic "every non-start node needs >=1 incoming edge" / orphan check
+// here, so a timeEvent/acceptEvent entry node was ALREADY well-formed against THIS
+// rule with zero code change — checkActivityNodes' switch simply has no case for
+// them (no-op). See TestUCActDiag_EventEntryWithoutIncomingEdgeIsLegal (pins this) and
+// the Task-3 report's Concerns section for the one rule that DOES still require a
+// literal "start" node (UC-ACT-PRESENT, rules_statevalidation.go).
 func ucActivityDiagram(c CoreUseCases) []Finding {
 	var out []Finding
 	for i, d := range c.Decisions {

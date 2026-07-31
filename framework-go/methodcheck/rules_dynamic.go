@@ -9,6 +9,42 @@ import (
 // ValidateArchitecture, FAITHFULLY from predicates_dynamic.go. Rule IDs /
 // severities / messages are byte-identical. DV-LAYER reuses edgeLegality, so it
 // emits the SYS-* ids against a dynamic-view Location exactly as the original.
+//
+// The suite below still speaks in terms of a flat "participants" list and a flat
+// "edges" list, which is the PRE-step-keyed shape ported from predicates_dynamic.go.
+// The step-keyed DynamicView (Steps []CallStep) carries neither field directly, so
+// stepCalls/participantIDs below derive an equivalent flat view over Steps: this is
+// an INTERIM compile-compatibility shim (2026-07-30 callchain-realization Task 3) —
+// the real per-rule retargeting onto Steps (including anything that should key off
+// CallStep.ActivityNodeID) is Task 5's job. One structural consequence worth flagging
+// now: because participantIDs is derived FROM the calls, a "participant declared but
+// touched by no call" can no longer be constructed — DV-PART-USED (checkParticipantsUsed)
+// is consequently unreachable until Task 5 gives participant identity an independent
+// source again (see the rules_dynamic_test.go comment on the untouched-participant test).
+func stepCalls(dv DynamicView) []Relationship {
+	var out []Relationship
+	for _, s := range dv.Steps {
+		out = append(out, s.Calls...)
+	}
+	return out
+}
+
+// participantIDs derives the distinct endpoint ids in first-appearance order.
+func participantIDs(dv DynamicView) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, s := range dv.Steps {
+		for _, c := range s.Calls {
+			for _, id := range []string{c.From, c.To} {
+				if !seen[id] {
+					seen[id] = true
+					out = append(out, id)
+				}
+			}
+		}
+	}
+	return out
+}
 
 const (
 	ruleDVPartExist      RuleID = "DV-PART-EXIST"
@@ -70,13 +106,14 @@ func dynamicViewConsistency(s System) []Finding {
 // of a view that no edge of that view touches — a participant that takes part in
 // no call is dead weight in the call chain.
 func checkParticipantsUsed(dv DynamicView, section string, ordinal int) []Finding {
-	used := make(map[string]bool, len(dv.Edges)*2)
-	for _, e := range dv.Edges {
+	calls := stepCalls(dv)
+	used := make(map[string]bool, len(calls)*2)
+	for _, e := range calls {
 		used[e.From] = true
 		used[e.To] = true
 	}
 	var out []Finding
-	for _, pid := range dv.Participants {
+	for _, pid := range participantIDs(dv) {
 		if !used[pid] {
 			out = append(out, Finding{
 				RuleID:   ruleDVPartUsed,
@@ -103,7 +140,7 @@ func checkStaticParticipationCoverage(s System) []Finding {
 	}
 	participating := make(map[string]bool)
 	for _, dv := range s.DynamicViews {
-		for _, pid := range dv.Participants {
+		for _, pid := range participantIDs(dv) {
 			participating[pid] = true
 		}
 	}
@@ -156,7 +193,7 @@ func checkRelationshipCoverage(s System, idx map[string]Component) []Finding {
 	}
 	dynEdges := make(map[relPairKey]bool)
 	for _, dv := range s.DynamicViews {
-		for _, e := range dv.Edges {
+		for _, e := range stepCalls(dv) {
 			dynEdges[relPairKey{from: e.From, to: e.To}] = true
 		}
 	}
@@ -199,9 +236,10 @@ func buildStaticPairs(s System) map[relPairKey]bool {
 }
 
 func checkDynamicViewParticipants(dv DynamicView, idx map[string]Component, section string, ordinal int) (map[string]bool, []Finding) {
-	participantSet := make(map[string]bool, len(dv.Participants))
+	ids := participantIDs(dv)
+	participantSet := make(map[string]bool, len(ids))
 	var out []Finding
-	for _, pid := range dv.Participants {
+	for _, pid := range ids {
 		if _, ok := idx[pid]; !ok {
 			out = append(out, Finding{
 				RuleID:   ruleDVPartExist,
@@ -218,7 +256,7 @@ func checkDynamicViewParticipants(dv DynamicView, idx map[string]Component, sect
 func checkRelationships(dv DynamicView, idx map[string]Component, participantSet map[string]bool, staticPairs map[relPairKey]bool, section string, ordinal int) []Finding {
 	var out []Finding
 	enteredManagers := make(map[string]bool)
-	for _, e := range dv.Edges {
+	for _, e := range stepCalls(dv) {
 		from, fromOK := idx[e.From]
 		to, toOK := idx[e.To]
 		eFindings, enteredMgr := checkSingleDynamicEdge(e, from, fromOK, to, toOK, participantSet, staticPairs, section, ordinal)

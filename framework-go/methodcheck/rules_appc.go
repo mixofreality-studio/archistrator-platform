@@ -81,7 +81,7 @@ func mgrMultiQueueDonts(s System, idx map[string]Component) []Finding {
 // Managers it issues queued calls to within one dynamic-view.
 func managerQueuedManagerCalls(dv DynamicView, idx map[string]Component) map[string]map[string]bool {
 	byMgr := make(map[string]map[string]bool)
-	for _, e := range dv.Edges {
+	for _, e := range stepCalls(dv) {
 		from, fromOK := idx[e.From]
 		to, toOK := idx[e.To]
 		if !fromOK || !toOK {
@@ -130,7 +130,7 @@ func clientMultiMgrDonts(s System, idx map[string]Component) []Finding {
 func clientManagerCalls(dv DynamicView, idx map[string]Component) (string, map[string]bool) {
 	mgrsCalled := make(map[string]bool)
 	var clientID string
-	for _, e := range dv.Edges {
+	for _, e := range stepCalls(dv) {
 		from, fromOK := idx[e.From]
 		to, toOK := idx[e.To]
 		if !fromOK || !toOK {

@@ -208,12 +208,13 @@ func indexDynamicViews(ctx *stpContext, sys System) {
 // buildViewIndex derives the entry surface of one dynamic view: its entry edges (From
 // is Kind=Client), participant set, and ordered distinct entry-op list.
 func buildViewIndex(dv DynamicView, ctx stpContext) stpViewIndex {
-	vi := stpViewIndex{participants: make(map[string]bool, len(dv.Participants))}
-	for _, p := range dv.Participants {
+	ids := participantIDs(dv)
+	vi := stpViewIndex{participants: make(map[string]bool, len(ids))}
+	for _, p := range ids {
 		vi.participants[ctx.normalize(p)] = true
 	}
 	seen := make(map[string]bool)
-	for _, e := range dv.Edges {
+	for _, e := range stepCalls(dv) {
 		if ctx.kindByComp[ctx.normalize(e.From)] != kindClient {
 			continue
 		}

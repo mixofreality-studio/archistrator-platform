@@ -97,6 +97,37 @@ func TestDecodeProject_RealFixtureRoundTrip(t *testing.T) {
 	}
 }
 
+// TestDecode_StepKeyedDynamicView proves the step-keyed DynamicView model decodes the
+// wire shape the app side writes (2026-07-30 callchain-realization Task 3): a
+// dynamicViews entry keyed by `steps`, each step naming its realized activity node
+// (`activityNodeId`) and the ordered `calls` it makes.
+func TestDecode_StepKeyedDynamicView(t *testing.T) {
+	raw := []byte(`{"slots":{"5":{"kind":5,"status":2,"model":{"components":[],"relationships":[],
+	  "dynamicViews":[{"useCaseId":"uc","key":"k","title":"T",
+	    "steps":[{"activityNodeId":"n1","calls":[{"from":"a","to":"b","mode":"sync","label":"x"}]}]}]}}}}`)
+	p, ok, err := DecodeProject(raw)
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !ok {
+		t.Fatal("expected ok=true for a non-empty document")
+	}
+	sys, sysOK, err := p.system()
+	if err != nil || !sysOK {
+		t.Fatalf("system: ok=%v err=%v", sysOK, err)
+	}
+	if len(sys.DynamicViews) != 1 {
+		t.Fatalf("expected 1 dynamic view, got %+v", sys.DynamicViews)
+	}
+	dv := sys.DynamicViews[0]
+	if len(dv.Steps) != 1 || dv.Steps[0].ActivityNodeID != "n1" || len(dv.Steps[0].Calls) != 1 {
+		t.Fatalf("step-keyed shape not decoded: %+v", dv)
+	}
+	if call := dv.Steps[0].Calls[0]; call.From != "a" || call.To != "b" || call.Mode != modeSync || call.Label != "x" {
+		t.Fatalf("call not decoded: %+v", call)
+	}
+}
+
 func TestDecodeProject_EmptyIsNotAnError(t *testing.T) {
 	_, ok, err := DecodeProject(nil)
 	if err != nil {
