@@ -44,6 +44,7 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleDVPlannedSkipped,
 
 		// ---- Call-chain correspondence (rules_callchain.go) ----
+		ruleCCViewUseCase,
 		ruleCCStepNode, ruleCCStepUnique, ruleCCCoverage, ruleCCStepNonempty,
 		ruleCCEndpoint, ruleCCActorEdge, ruleCCActorLane, ruleCCTriggerEvent,
 		ruleCCPathConnected,

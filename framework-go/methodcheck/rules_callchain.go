@@ -35,6 +35,7 @@ import "fmt"
 // case and nothing in another — resolution is always relative to the view's use case.
 
 const (
+	ruleCCViewUseCase   RuleID = "CC-VIEW-USECASE"
 	ruleCCStepNode      RuleID = "CC-STEP-NODE"
 	ruleCCStepUnique    RuleID = "CC-STEP-UNIQUE"
 	ruleCCCoverage      RuleID = "CC-COVERAGE"
@@ -77,11 +78,21 @@ func callChainRules(s System, c CoreUseCases) []Finding {
 	var out []Finding
 	for i, dv := range s.DynamicViews {
 		uc, ok := ucByID[dv.UseCaseID]
-		// A view whose use case is unknown, or whose use case carries no activity
-		// diagram, has nothing to correspond TO. USECASE-DYNAMIC-MISSING covers the
-		// missing-view direction and UC-ACT-PRESENT the missing-diagram one; neither
-		// is this family's business to re-report.
-		if !ok || uc.Activity == nil {
+		if !ok {
+			// CC-VIEW-USECASE. A view whose UseCaseID resolves to NOTHING silently
+			// disables all nine correspondence rules for it, and no other rule notices:
+			// USECASE-DYNAMIC-MISSING only checks the use-case→view direction, and
+			// DV-KEY-UNIQUE only catches an EMPTY UseCaseID (on which it co-fires with
+			// this rule, from its own angle). Report the dangling join key rather than
+			// no-op'ing the whole family.
+			out = append(out, ccFinding(ruleCCViewUseCase, loc(i+1, "dynamicView "+viewLabel(dv)),
+				"dynamic view %q references useCaseId %q, which resolves to no use case in the committed set; the call chain cannot be checked against any activity diagram until the join key is fixed",
+				viewLabel(dv), dv.UseCaseID))
+			continue
+		}
+		// A use case with no activity diagram has nothing to correspond TO — that gap is
+		// UC-ACT-PRESENT's to report, not this family's to re-report.
+		if uc.Activity == nil {
 			continue
 		}
 		out = append(out, newCCContext(dv, uc, idx, i+1).findings()...)
@@ -109,16 +120,17 @@ func actorIDs(uc UseCase) map[string]bool {
 }
 
 // ccContext is one dynamic view's evaluation context: the view, its owning use case,
-// and the three indices every CC rule joins on. Bundling them keeps each rule a
-// method with no parameter train.
+// and the indices every CC rule joins on. Bundling them keeps each rule a method with
+// no parameter train.
 type ccContext struct {
-	dv      DynamicView
-	uc      UseCase
-	idx     map[string]Component    // component id → Component
-	actors  map[string]bool         // actor id (of THIS use case) → true
-	nodes   map[string]ActivityNode // activity node id → node
-	steps   map[string]CallStep     // activity node id → the step realizing it (first wins)
-	ordinal int                     // the dynamic view's 1-based position (finding order key)
+	dv       DynamicView
+	uc       UseCase
+	idx      map[string]Component    // component id → Component
+	actors   map[string]bool         // actor id (of THIS use case) → true
+	nodes    map[string]ActivityNode // activity node id → node
+	steps    map[string]CallStep     // activity node id → the step realizing it (first wins)
+	incoming map[string]int          // activity node id → count of incoming edges
+	ordinal  int                     // the dynamic view's 1-based position (finding order key)
 }
 
 func newCCContext(dv DynamicView, uc UseCase, idx map[string]Component, ordinal int) ccContext {
@@ -132,7 +144,14 @@ func newCCContext(dv DynamicView, uc UseCase, idx map[string]Component, ordinal 
 			steps[st.ActivityNodeID] = st
 		}
 	}
-	return ccContext{dv: dv, uc: uc, idx: idx, actors: actorIDs(uc), nodes: nodes, steps: steps, ordinal: ordinal}
+	incoming := make(map[string]int, len(uc.Activity.Nodes))
+	for _, e := range uc.Activity.Edges {
+		incoming[e.To]++
+	}
+	return ccContext{
+		dv: dv, uc: uc, idx: idx, actors: actorIDs(uc),
+		nodes: nodes, steps: steps, incoming: incoming, ordinal: ordinal,
+	}
 }
 
 // findings runs the whole family over one view, in stable rule order.
@@ -396,13 +415,11 @@ func (cc ccContext) triggerEvent() []Finding {
 
 // eventEntries reports whether the diagram carries a timeEvent (resp. acceptEvent)
 // node with no incoming edge — the shape that makes an event node the diagram's entry.
+// An event node WITH an incoming edge is a mid-flow event (a wait/receive inside the
+// flow), not a trigger, and does not count.
 func (cc ccContext) eventEntries() (timeEntry, acceptEntry bool) {
-	incoming := make(map[string]int, len(cc.uc.Activity.Nodes))
-	for _, e := range cc.uc.Activity.Edges {
-		incoming[e.To]++
-	}
 	for _, n := range cc.uc.Activity.Nodes {
-		if incoming[n.ID] > 0 {
+		if cc.incoming[n.ID] > 0 {
 			continue
 		}
 		switch n.Kind {
@@ -434,10 +451,25 @@ func (cc ccContext) eventEntries() (timeEntry, acceptEntry bool) {
 //
 // Findings are deduplicated across paths by (node, from, to): one disconnect reported
 // once, not once per path that happens to traverse it.
+//
+// SUFFIX PATHS ARE SKIPPED (2026-07-30 fix-round-1). activityPaths treats EVERY event
+// node as an enumeration root, wherever it sits — deliberately, and it is pinned
+// verbatim. For a MID-FLOW event (`start → a1 → ev(acceptEvent) → a2 → end`) that
+// yields the full path AND the bare suffix `[ev, a2, end]`. Walking that suffix would
+// restart with an empty reached set and first=true, so ev's step — perfectly connected
+// on the full path — would be judged against the acceptEvent ROOT shape and fire a false
+// positive that the (node,from,to) dedup cannot absorb (the full path never reported
+// it). A path whose entry node has an incoming edge is, by construction, a suffix of a
+// path already walked from a true ingress, so it carries no connectivity information of
+// its own: skip it. Genuine entries — start nodes and edge-less event nodes — always
+// have zero incoming edges and are always walked, so root-shape enforcement is intact.
 func (cc ccContext) pathConnected() []Finding {
 	var out []Finding
 	reported := map[string]bool{}
 	for _, p := range activityPaths(*cc.uc.Activity) {
+		if cc.incoming[p.Entry.NodeID] > 0 {
+			continue
+		}
 		out = append(out, cc.walkRealizedPath(p.Entry, p.Nodes, reported)...)
 	}
 	return out

@@ -175,6 +175,26 @@ func TestUCActPresent_EventEntryOnlyDiagramPasses(t *testing.T) {
 	}
 }
 
+// TestUCActPresent_EventNodeWithIncomingEdgeIsNotAnEntry is the negative half of the
+// relaxation: only an EDGE-LESS event node is an ingress. An event node reached by an
+// edge is a mid-flow wait/receive, not a trigger, so a diagram carrying only that (and
+// no start node) is still structurally entry-less and must still fire.
+func TestUCActPresent_EventNodeWithIncomingEdgeIsNotAnEntry(t *testing.T) {
+	c := CoreUseCases{Decisions: []UseCaseDecision{{UseCase: UseCase{
+		Name: "Await", Classification: classCore,
+		Activity: &ActivityDiagram{
+			Nodes: []ActivityNode{
+				{ID: "act", Kind: nodeAction, Label: "submit"},
+				{ID: "ev", Kind: kindAcceptEvent, Label: "await approval"},
+			},
+			Edges: []ActivityEdge{{From: "act", To: "ev"}},
+		},
+	}}}}
+	if !hasRuleFindings(ucActPresent(c), ruleUCActPresent) {
+		t.Fatalf("an event node WITH an incoming edge is mid-flow, not an entry; UC-ACT-PRESENT must still fire")
+	}
+}
+
 // ---- UC-GUARD-LABEL ----
 
 func TestUCGuardLabel_EmptyGuardFires(t *testing.T) {
