@@ -67,6 +67,12 @@ type activityWalk struct {
 // supported); paths terminate at end nodes or when no outgoing edge remains. The
 // full result is computed uncapped, then truncated to maxActivityPaths (see the
 // file-level comment above for why the cap is applied this way, exactly once).
+//
+// PRE-MERGE TRACKED (post-QA plan): full enumeration before truncation is
+// exponential in nested fork×decision depth; designhealth runs this
+// render-on-read on committed state, so a pathological committed diagram is a
+// CPU sink. Bound the walk (budget the recursion, not just the output) before
+// third-party/generated diagrams.
 func activityPaths(a ActivityDiagram) []struct {
 	Entry pathEntry
 	Nodes []string // node ids in walk order, Entry.NodeID first

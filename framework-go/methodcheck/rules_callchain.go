@@ -168,8 +168,16 @@ func (cc ccContext) findings() []Finding {
 	return out
 }
 
-// stepLoc is the STEP-SCOPED location grammar. The app UI joins its per-step finding
-// badges on this exact Section string — do not reshape it without the app side.
+// stepLoc is the STEP-SCOPED location grammar. This Section string is
+// gate/CI-facing prose, not a UI join key: viewLabel is title-first (title,
+// else key, else useCaseId), so it is unstable across an authoring-time title
+// edit. The webApp's Design Health surface does NOT join on it — it joins on
+// the designhealth mirror's KEY-first grammar (ccViewLabel in
+// server/internal/utility/designhealth/rules_callchain.go: key, else
+// useCaseId, title never consulted). If a post-QA plan ever aligns the two
+// grammars, the fix is to move THIS platform Section string to key-first to
+// match designhealth — never the reverse (designhealth must not become
+// title-first).
 func (cc ccContext) stepLoc(nodeID string) *Location {
 	return loc(cc.ordinal, "dynamicView "+viewLabel(cc.dv)+" step "+nodeID)
 }
