@@ -384,8 +384,9 @@ func TestCC_PathConnected_TimeEventRootClientToManagerPasses(t *testing.T) {
 // (start → a1 → ev → a2 → end) also yields the bare suffix [ev, a2, end]. Walking that
 // suffix would restart with an empty reached set and judge ev's step — connected on the
 // full path — against the acceptEvent ROOT shape, a false positive the (node,from,to)
-// dedup cannot absorb (the full path never reported the call). Paths whose entry has an
-// incoming edge are now skipped as the suffixes they are.
+// dedup cannot absorb (the full path never reported the call). An EVENT-kind entry with
+// an incoming edge is now skipped as the suffix it is (see the start-rooted companion
+// below for why the predicate is not incoming-count alone).
 func TestCC_PathConnected_MidFlowEventNodeDoesNotFire(t *testing.T) {
 	nodes := []ActivityNode{
 		{ID: "s", Kind: nodeStart},
@@ -408,6 +409,36 @@ func TestCC_PathConnected_MidFlowEventNodeDoesNotFire(t *testing.T) {
 	c := ucWith(triggerClientAction, nodes, edges, ccUser())
 	if hasRuleFindings(callChainRules(s, c), ruleCCPathConnected) {
 		t.Fatalf("a mid-flow event node on a connected chain must not fire CC-PATH-CONNECTED (its suffix path is not an ingress)")
+	}
+}
+
+// TestCC_PathConnected_StartWithBackEdgeStillWalked is fix-round-2's regression guard,
+// encoding the re-reviewer's empirical probe. A start node with a guarded back-edge into
+// it ("retry from the top") is an ordinary authored shape, and a start node is ALWAYS a
+// primary entry — never a suffix of anything. The fix-round-1 predicate skipped on
+// incoming-count ALONE, which made CC-PATH-CONNECTED silently VACUOUS for such a
+// diagram: a genuinely disconnected call produced zero findings from this rule,
+// UC-ACTDIAG and UC-ACT-PRESENT alike. The skip is now restricted to EVENT-kind entries.
+func TestCC_PathConnected_StartWithBackEdgeStillWalked(t *testing.T) {
+	nodes := []ActivityNode{
+		{ID: "s", Kind: nodeStart},
+		{ID: "a1", Kind: nodeAction, Label: "attempt"},
+		{ID: "d", Kind: nodeDecision, Label: "succeeded?"},
+		{ID: "e", Kind: nodeEnd},
+	}
+	edges := []ActivityEdge{
+		{From: "s", To: "a1"},
+		{From: "a1", To: "d"},
+		{From: "d", To: "s", Kind: edgeGuardedFlow, Guard: "[retry]"}, // back-edge INTO start
+		{From: "d", To: "e", Kind: edgeGuardedFlow, Guard: "[done]"},
+	}
+	// ra is a real component the chain never reaches — a genuine disconnect.
+	s := sysWith(ccView(
+		CallStep{ActivityNodeID: "a1", Calls: []Relationship{{From: "ra", To: "res", Mode: modeSync}}},
+	))
+	c := ucWith(triggerClientAction, nodes, edges, ccUser())
+	if !hasRuleFindings(callChainRules(s, c), ruleCCPathConnected) {
+		t.Fatalf("a start node with a back-edge is still a primary entry; a disconnected call on its path must fire CC-PATH-CONNECTED")
 	}
 }
 

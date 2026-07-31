@@ -452,27 +452,48 @@ func (cc ccContext) eventEntries() (timeEntry, acceptEntry bool) {
 // Findings are deduplicated across paths by (node, from, to): one disconnect reported
 // once, not once per path that happens to traverse it.
 //
-// SUFFIX PATHS ARE SKIPPED (2026-07-30 fix-round-1). activityPaths treats EVERY event
-// node as an enumeration root, wherever it sits — deliberately, and it is pinned
-// verbatim. For a MID-FLOW event (`start → a1 → ev(acceptEvent) → a2 → end`) that
-// yields the full path AND the bare suffix `[ev, a2, end]`. Walking that suffix would
-// restart with an empty reached set and first=true, so ev's step — perfectly connected
-// on the full path — would be judged against the acceptEvent ROOT shape and fire a false
-// positive that the (node,from,to) dedup cannot absorb (the full path never reported
-// it). A path whose entry node has an incoming edge is, by construction, a suffix of a
-// path already walked from a true ingress, so it carries no connectivity information of
-// its own: skip it. Genuine entries — start nodes and edge-less event nodes — always
-// have zero incoming edges and are always walked, so root-shape enforcement is intact.
+// EVENT-ROOTED SUFFIX PATHS ARE SKIPPED (2026-07-30 fix-round-1, narrowed in
+// fix-round-2 — see ccIsSuffixPath for the precise predicate and why it must NOT be
+// applied to start-rooted paths).
 func (cc ccContext) pathConnected() []Finding {
 	var out []Finding
 	reported := map[string]bool{}
 	for _, p := range activityPaths(*cc.uc.Activity) {
-		if cc.incoming[p.Entry.NodeID] > 0 {
+		if cc.ccIsSuffixPath(p.Entry) {
 			continue
 		}
 		out = append(out, cc.walkRealizedPath(p.Entry, p.Nodes, reported)...)
 	}
 	return out
+}
+
+// ccIsSuffixPath reports whether an enumerated path is a mere SUFFIX of another path
+// this walk already covers, and so carries no connectivity information of its own.
+//
+// activityPaths treats every EVENT node as an enumeration root, wherever it sits —
+// deliberately, and it is pinned verbatim. For a MID-FLOW event
+// (`start → a1 → ev(acceptEvent) → a2 → end`) that yields the full path AND the bare
+// suffix `[ev, a2, end]`. Walking that suffix would restart with an empty reached set
+// and first=true, so ev's step — perfectly connected on the full path — would be judged
+// against the acceptEvent ROOT shape and fire a false positive the (node,from,to) dedup
+// cannot absorb (the full path never reported the call). An event node with an incoming
+// edge is exactly that case: something leads into it, so the full path already covers it.
+//
+// A START-rooted path is NEVER a suffix, incoming edges or not: a start node is always a
+// PRIMARY entry, and an incoming edge into it is an ordinary authored shape (a guarded
+// back-edge — "retry from the top"). Applying the suffix skip to start entries (the
+// fix-round-1 predicate did, on incoming-count alone) made CC-PATH-CONNECTED silently
+// VACUOUS for any diagram with a retry loop: a genuinely disconnected call produced zero
+// findings from this rule, UC-ACTDIAG and UC-ACT-PRESENT alike. The predicate is
+// therefore membership in the EVENT kinds AND a non-zero incoming count — both, never
+// the count alone.
+func (cc ccContext) ccIsSuffixPath(entry pathEntry) bool {
+	switch entry.Kind {
+	case kindTimeEvent, kindAcceptEvent:
+		return cc.incoming[entry.NodeID] > 0
+	default: // nodeStart — always a primary entry, always walked.
+		return false
+	}
 }
 
 // ccPathWalk is the mutable state carried ALONG one path: which endpoints the chain has
