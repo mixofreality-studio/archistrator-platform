@@ -57,7 +57,8 @@ const (
 	edgeGuardedFlow = "guardedFlow"
 )
 
-// ActivityNodeKind wire names (only the ones the activity-diagram rules read).
+// ActivityNodeKind wire names (only the ones the activity-diagram rules —
+// including the path walker in activitypaths.go — read).
 const (
 	nodeStart    = "start"
 	nodeAction   = "action"
@@ -65,6 +66,7 @@ const (
 	nodeMerge    = "merge"
 	nodeFork     = "fork"
 	nodeJoin     = "join"
+	nodeEnd      = "end"
 )
 
 // UML event node kinds (standard UML alternative diagram entries alongside a plain
