@@ -308,6 +308,151 @@ func TestPostgresPoolGatedByProfile(t *testing.T) {
 	}
 }
 
+// messageBusHookFixture is a minimal project.json (Task 7c: startup
+// schedule-registration seam): one Manager (orderManager) depending on BOTH
+// the Temporal client and a Utility-layer messageBus component, whose single
+// "prod" deployment binding arm consumes the temporal infra AND is
+// VariantHookArgs-configured (its real constructor, mirroring
+// messagebus.NewTemporalMessageBus(cl, table), needs a composition-root-typed
+// table the model cannot express). Mirrors temporalgen_test.go's
+// utilityDepFixture shape, extended with the deployment section composegen
+// needs.
+const messageBusHookFixture = `{
+  "id": "messagebus-hook-fixture",
+  "version": 1,
+  "slots": {
+    "6": {
+      "kind": 6,
+      "model": {
+        "deployment": {
+          "deliveryStyle": "cloud",
+          "containers": [
+            { "key": "order-app", "name": "order-app", "components": ["orderManager", "messageBus"] }
+          ],
+          "environments": [ { "profile": "prod", "title": "Prod" } ],
+          "infrastructure": [
+            { "key": "temporal", "substrate": "temporal", "profiles": ["prod"], "presence": "required" }
+          ],
+          "bindings": [
+            {
+              "component": "messageBus",
+              "presence": "required",
+              "perProfile": { "prod": { "variant": "Temporal", "infra": ["temporal"] } }
+            }
+          ]
+        }
+      }
+    }
+  },
+  "serviceContracts": {
+    "orderManager": {
+      "component": "orderManager",
+      "layer": "Manager",
+      "goPackage": "internal/manager/order",
+      "title": "order contract",
+      "deps": [
+        { "name": "client", "goType": "client.Client", "goImport": "go.temporal.io/sdk/client" },
+        { "name": "messageBus", "component": "messageBus" }
+      ],
+      "$defs": { "OrderID": { "type": "string" } },
+      "interface": {
+        "name": "OrderManager",
+        "layer": "manager",
+        "operations": [
+          { "name": "PlaceOrder", "params": [ { "name": "id", "schema": { "$ref": "#/$defs/OrderID" } } ], "error": true }
+        ]
+      }
+    },
+    "messageBus": {
+      "component": "messageBus",
+      "layer": "Utility",
+      "goPackage": "internal/utility/messagebus",
+      "title": "messagebus contract",
+      "$defs": { "ExecutionID": { "type": "string" }, "SignalName": { "type": "string" } },
+      "interface": {
+        "name": "MessageBus",
+        "layer": "utility",
+        "operations": [
+          {
+            "name": "DeliverSignal",
+            "params": [
+              { "name": "targetExecutionID", "schema": { "$ref": "#/$defs/ExecutionID" } },
+              { "name": "signalName", "schema": { "$ref": "#/$defs/SignalName" } }
+            ],
+            "error": true
+          }
+        ]
+      }
+    }
+  }
+}`
+
+// TestMessageBusTemporalHookArgsAndScheduleRegistration is the composegen-side
+// increment for Task 7c's schedule-registration seam (companion to modelgen's
+// utility layerContext + temporalgen's activity-bearing-utility increments,
+// e9571782 / 2f5750c3): it proves the two capabilities the messageBus
+// composition needs that no PRIOR binding needed together —
+//
+//  1. A VariantHookArgs-configured arm whose bound infra resolves to an
+//     already-constructed LOCAL (temporal → tc), not a cfg field, threads that
+//     local as an EXTRA hook parameter (hooks.MessageBusTemporalArgs(cfg, tc)),
+//     with a matching Hooks-interface signature — "the hook reads its cfg"
+//     (true for every prior github-app-substrate hook-args variant) does not
+//     hold here.
+//  2. Config.VariantConstructorNoError overrides the infra-implies-error
+//     heuristic (messagebus.NewTemporalMessageBus is single-return despite
+//     consuming infra) — a plain ":=" construction, no "err :=" wrapping.
+//  3. A Manager depending on the messageBus component gets a
+//     RegisterSchedules(ctx, messageBus) call emitted immediately after its
+//     embedded Worker starts (so a Schedule can never fire against a dormant
+//     Worker).
+func TestMessageBusTemporalHookArgsAndScheduleRegistration(t *testing.T) {
+	m, err := projectmodel.Load([]byte(messageBusHookFixture))
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	got, err := composegen.Generate(m, composegen.Config{
+		ContainerKey: "order-app",
+		ModulePath:   "example.com/messagebushook/server",
+		PackageName:  "main",
+		EnvPrefix:    "ORDERAPP",
+		VariantHookArgs: map[string][]composegen.HookArgType{
+			"messageBus/Temporal": {{GoType: "map[string]int"}},
+		},
+		VariantConstructorNoError: map[string]bool{
+			"messageBus/Temporal": true,
+		},
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	src := got["main.gen.go"]
+	if _, err := parser.ParseFile(token.NewFileSet(), "main.gen.go", src, parser.AllErrors); err != nil {
+		t.Fatalf("emitted main.gen.go does not parse: %v\n%s", err, src)
+	}
+	s := string(src)
+
+	for _, anchor := range []string{
+		// 1: tc threaded as an extra hook call-site + interface param.
+		"messageBus := messagebus.NewTemporalMessageBus(hooks.MessageBusTemporalArgs(cfg, tc))",
+		"MessageBusTemporalArgs(cfg *Config, tc client.Client) map[string]int",
+		// 3: the startup Schedule-registration call, right after the Worker starts.
+		"logger.Info(\"embedded temporal worker started\", \"taskQueue\", order.TaskQueue)\n\tif err := order.RegisterSchedules(ctx, messageBus); err != nil {\n\t\treturn err\n\t}\n\tlogger.Info(\"orderManager Temporal Schedules registered\")",
+	} {
+		if !strings.Contains(s, anchor) {
+			t.Errorf("emitted main.gen.go missing expected anchor %q\nfull src:\n%s", anchor, s)
+		}
+	}
+	// 2: single-return construction — no err-wrapping for messageBus specifically.
+	if strings.Contains(s, "messageBus, err := messagebus.NewTemporalMessageBus") {
+		t.Error("messageBus construction is err-wrapped despite VariantConstructorNoError override")
+	}
+	// The manager's own constructor receives the REAL messageBus var, not nil.
+	if !strings.Contains(s, "order.NewOrderManager(tc, messageBus)") {
+		t.Errorf("orderManager constructor does not receive the real messageBus var; full src:\n%s", s)
+	}
+}
+
 func loadGreenfield(t *testing.T) *projectmodel.Model {
 	t.Helper()
 	m, err := projectmodel.LoadFile("../testdata/greenfield.project.json")

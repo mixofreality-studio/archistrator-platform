@@ -103,10 +103,10 @@ func writeManagers(b *strings.Builder, r *resolved) {
 	for _, mc := range r.managers {
 		b.WriteString("\t" + mc.varName + " := " + mc.ctor + "(" + strings.Join(mc.ctorArgs, ", ") + ")\n")
 		if mc.gated {
-			writeGatedWorker(b, mc)
+			writeGatedWorker(b, r, mc)
 			continue
 		}
-		writeWorker(b, "\t", mc)
+		writeWorker(b, r, "\t", mc)
 	}
 	b.WriteString("\n")
 }
@@ -115,21 +115,29 @@ func writeManagers(b *strings.Builder, r *resolved) {
 // Register<Iface>Worker(cfg) gate hook (G6b) — the Worker runs only when the
 // composition root says so (optional-dormant deps present / a dry-run stub filled
 // them), else a dormancy warning.
-func writeGatedWorker(b *strings.Builder, mc managerComp) {
+func writeGatedWorker(b *strings.Builder, r *resolved, mc managerComp) {
 	b.WriteString("\tif hooks.Register" + mc.iface + "Worker(cfg) {\n")
-	writeWorker(b, "\t\t", mc)
+	writeWorker(b, r, "\t\t", mc)
 	b.WriteString("\t} else {\n")
 	b.WriteString("\t\tlogger.Warn(\"" + mc.key + " Worker NOT registered — optional-dormant dependencies absent (Register" + mc.iface + "Worker gate returned false)\")\n")
 	b.WriteString("\t}\n")
 }
 
 // writeWorker emits one manager's Worker registration + start + deferred stop at
-// the given indent.
-func writeWorker(b *strings.Builder, indent string, mc managerComp) {
+// the given indent, followed — for a manager depending on messageBus (Task 7c)
+// — by its startup Schedule registration call. A Schedule is only ever
+// registered once its owning Worker has actually started, so a re-firing
+// Schedule always finds a live Worker on the other end.
+func writeWorker(b *strings.Builder, r *resolved, indent string, mc managerComp) {
 	w := "w" + upperFirst(mc.varName)
 	b.WriteString(indent + w + " := worker.New(tc, " + mc.alias + ".TaskQueue, worker.Options{})\n")
 	b.WriteString(indent + mc.alias + ".RegisterManagerWorker(" + w + ", " + mc.varName + ")\n")
 	b.WriteString(indent + "if err := " + w + ".Start(); err != nil {\n" + indent + "\treturn err\n" + indent + "}\n")
 	b.WriteString(indent + "defer " + w + ".Stop()\n")
 	b.WriteString(indent + "logger.Info(\"embedded temporal worker started\", \"taskQueue\", " + mc.alias + ".TaskQueue)\n")
+	if mc.registersSchedules {
+		busVar := r.localVar[messageBusComponentKey]
+		b.WriteString(indent + "if err := " + mc.alias + ".RegisterSchedules(ctx, " + busVar + "); err != nil {\n" + indent + "\treturn err\n" + indent + "}\n")
+		b.WriteString(indent + "logger.Info(\"" + mc.key + " Temporal Schedules registered\")\n")
+	}
 }

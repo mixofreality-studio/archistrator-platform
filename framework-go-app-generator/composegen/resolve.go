@@ -134,7 +134,25 @@ type managerComp struct {
 	// Register<Iface>Worker(cfg) bool hook (G6b) — it has ≥1 optional-dormant
 	// component dep, so whether its Worker runs is composition-root policy.
 	gated bool
+	// registersSchedules marks a manager whose Deps include the messageBus
+	// component (composegen: startup schedule-registration seam, Task 7c) —
+	// its package is expected to export
+	// RegisterSchedules(ctx context.Context, bus messagebus.MessageBus) error.
+	// The emitter calls it once, immediately after the manager's embedded
+	// Worker starts (inside the same Register<Iface>Worker(cfg) gate when
+	// gated), so a Schedule is never registered against a dormant Worker.
+	registersSchedules bool
 }
+
+// messageBusComponentKey is the fixed component key the emitter recognizes for
+// the startup schedule-registration seam (Task 7c) — a manager depending on
+// this EXACT component gets a RegisterSchedules(ctx, messageBus) call emitted
+// after its Worker starts. Not driver-configurable: unlike VariantHookArgs
+// (per-binding construction the model cannot express), this is a fixed
+// naming convention the generator enforces structurally — a manager declaring
+// the dep without actually exporting RegisterSchedules simply fails to
+// compile (an undefined-symbol error), exactly like any other generated call.
+const messageBusComponentKey = "messageBus"
 
 // resolve builds the composition plan.
 func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
@@ -354,26 +372,34 @@ func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding,
 }
 
 // resolveArm resolves one profile's variant to a New<Variant><Interface> call.
-// When the variant is registered in Config.VariantHookArgs (G3), the WHOLE arg
-// list is a single spread call hooks.<Comp><Variant>Args(cfg) — the model can't
-// supply those args (composition-root ports / typed values), so the emitter
-// delegates them to a typed hook and threads no infra/settings. Otherwise the
-// positional convention applies: infra values (per the substrate catalog) then
-// binding settings; a variant that consumes any infra returns (Interface,
-// error), an infra-free variant (memory/dry-run) returns the interface alone.
+// When the variant is registered in Config.VariantHookArgs (G3), the arg list
+// is a single spread call hooks.<Comp><Variant>Args(cfg[, extraParams...]) —
+// the model can't supply those args (composition-root ports / typed values),
+// so the emitter delegates them to a typed hook. Bound infra whose substrate
+// resolves to a cfg-field value (github-app, keycloak, ...) threads nothing
+// extra — the hook already reads cfg directly (unchanged behavior); infra
+// resolving to an already-CONSTRUCTED LOCAL the hook cannot otherwise reach
+// (today: the temporal substrate's dialed client `tc`) is threaded as an
+// EXTRA hook parameter via hookExtraArgs, since "the hook reads its cfg" does
+// not hold for those. Otherwise (no hook) the positional convention applies:
+// infra values (per the substrate catalog) then binding settings; a variant
+// that consumes any infra returns (Interface, error) UNLESS overridden by
+// Config.VariantConstructorNoError (messagebus.NewTemporalMessageBus is
+// single-return despite consuming the temporal infra) — an infra-free variant
+// (memory/dry-run) returns the interface alone.
 func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.BindingVariant, settings []projectmodel.Setting) variantArm {
 	ctor := rb.alias + ".New" + variantToken(pv.Variant) + rb.iface
+	returnsError := len(pv.Infra) > 0 && !r.cfg.VariantConstructorNoError[rb.key+"/"+pv.Variant]
 	if specs, ok := r.cfg.VariantHookArgs[rb.key+"/"+pv.Variant]; ok {
-		for _, ik := range pv.Infra {
-			r.consumedKeys[ik] = true // still a consumed substrate (the hook reads its cfg)
-		}
-		r.addVariantHook(rb, pv.Variant, specs)
+		callArgs, params := r.hookExtraArgs(pv.Infra)
+		r.addVariantHook(rb, pv.Variant, specs, params)
+		args := append([]string{"cfg"}, callArgs...)
 		return variantArm{
 			profile:      profile,
 			variant:      pv.Variant,
 			ctor:         ctor,
-			args:         []string{"hooks." + variantHookName(rb.key, pv.Variant) + "(cfg)"},
-			returnsError: len(pv.Infra) > 0,
+			args:         []string{"hooks." + variantHookName(rb.key, pv.Variant) + "(" + strings.Join(args, ", ") + ")"},
+			returnsError: returnsError,
 		}
 	}
 	var args []string
@@ -390,8 +416,28 @@ func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.Bind
 		variant:      pv.Variant,
 		ctor:         ctor,
 		args:         args,
-		returnsError: len(pv.Infra) > 0,
+		returnsError: returnsError,
 	}
+}
+
+// hookExtraArgs computes, for a VariantHookArgs-configured arm's bound infra,
+// the call-site arg expressions and matching Hooks-interface parameter tokens
+// for any infra key whose substrate resolves to an already-constructed LOCAL
+// (not a cfg field) — today only "temporal" (the dialed `tc`). Every infra key
+// is still marked consumed (bookkeeping) regardless. Postgres-substrate +
+// hook-args is unimplemented (no bound variant needs it today); extend the
+// switch here (ctx, *pgxpool.Pool) if one ever does.
+func (r *resolved) hookExtraArgs(infraKeys []string) (callArgs, params []string) {
+	for _, ik := range infraKeys {
+		decl := r.infra[ik]
+		r.consumedKeys[ik] = true
+		if decl.Substrate == "temporal" {
+			callArgs = append(callArgs, "tc")
+			params = append(params, "tc client.Client")
+			r.variantHookImports = append(r.variantHookImports, "go.temporal.io/sdk/client")
+		}
+	}
+	return callArgs, params
 }
 
 // resolveEngines constructs every engine-layer contract via its pure
@@ -464,6 +510,9 @@ func (r *resolved) resolveManager(m *projectmodel.Model, key string, c *projectm
 		// manager's Worker registration composition-root policy.
 		if dep.Component != "" && r.optDormant[dep.Component] {
 			mc.gated = true
+		}
+		if dep.Component == messageBusComponentKey {
+			mc.registersSchedules = true
 		}
 	}
 	if mc.gated {

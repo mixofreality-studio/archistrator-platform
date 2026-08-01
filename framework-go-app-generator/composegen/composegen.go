@@ -65,6 +65,16 @@ type Config struct {
 	// listed, its substrate-arg/setting threading is REPLACED by the single hook
 	// call (the hook impl reads cfg itself).
 	VariantHookArgs map[string][]HookArgType
+	// VariantConstructorNoError overrides the returnsError heuristic (does this
+	// arm's real New<Variant><Interface> constructor return an error?) for a
+	// binding/variant that consumes infra but whose constructor is single-return
+	// — every infra-consuming variant seen before Task 7c's messageBus increment
+	// happened to return an error, so the heuristic was simply
+	// "len(pv.Infra) > 0"; messagebus.NewTemporalMessageBus(cl, table) is the
+	// first that is not. Keyed identically to VariantHookArgs
+	// ("<component>/<variant>"); a variant NOT listed keeps the existing
+	// infra-implies-error heuristic unchanged.
+	VariantConstructorNoError map[string]bool
 	// WebExposedManagers, when non-nil, REPLACES the System-relationship-derived
 	// web-exposed manager set (isWebExposed) with exactly this component-key
 	// set — e.g. archistrator's billingManager carries a web-client relationship

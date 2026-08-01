@@ -52,11 +52,20 @@ func variantHookName(component, variant string) string {
 }
 
 // addVariantHook records the per-variant args Hooks method (G3) for a bound
-// variant listed in Config.VariantHookArgs: <Comp><Variant>Args(cfg *Config)
-// returns the ordered driver-supplied Go types the variant constructor consumes
-// verbatim. The emitter stays policy-free — it emits only the typed seam; the
-// hand hooks.go reads cfg and builds the composition-root ports/values.
-func (r *resolved) addVariantHook(rb raBinding, variant string, specs []HookArgType) {
+// variant listed in Config.VariantHookArgs: <Comp><Variant>Args(cfg *Config[,
+// extraParams...]) returns the ordered driver-supplied Go types the variant
+// constructor consumes verbatim. The emitter stays policy-free — it emits only
+// the typed seam; the hand hooks.go reads cfg (+ any threaded extraParams) and
+// builds the composition-root ports/values.
+//
+// extraParams is empty for every hook-args variant whose bound infra resolves
+// to cfg-field values the hook already reads directly (e.g. github-app,
+// keycloak) — unchanged behavior. It carries "<name> <Type>" tokens ONLY when
+// the bound infra resolves to an already-CONSTRUCTED LOCAL the hook has no
+// other way to reach (today: the temporal substrate's dialed client `tc` —
+// see resolveArm) — "the hook reads its cfg" is simply false for those, so the
+// composition root must thread the local in.
+func (r *resolved) addVariantHook(rb raBinding, variant string, specs []HookArgType, extraParams []string) {
 	types := make([]string, 0, len(specs))
 	for _, s := range specs {
 		types = append(types, s.GoType)
@@ -65,14 +74,22 @@ func (r *resolved) addVariantHook(rb raBinding, variant string, specs []HookArgT
 		}
 	}
 	name := variantHookName(rb.key, variant)
+	params := append([]string{"cfg *Config"}, extraParams...)
+	doc := []string{
+		name + " supplies the " + rb.key + " " + variant + " variant's constructor",
+		"arguments the deployment model cannot express (composition-root ports /",
+		"typed values). Read from cfg; the returned tuple is spread into the",
+		"generated variant constructor call.",
+	}
+	if len(extraParams) > 0 {
+		doc = append(doc,
+			"The bound infra resolves to an already-constructed local the hook cannot",
+			"otherwise reach (e.g. the Temporal client) — threaded as an additional",
+			"parameter alongside cfg.")
+	}
 	r.variantHooks = append(r.variantHooks, hookMethod{
-		doc: []string{
-			name + " supplies the " + rb.key + " " + variant + " variant's constructor",
-			"arguments the deployment model cannot express (composition-root ports /",
-			"typed values). Read from cfg; the returned tuple is spread into the",
-			"generated variant constructor call.",
-		},
-		line: name + "(cfg *Config) (" + strings.Join(types, ", ") + ")",
+		doc:  doc,
+		line: name + "(" + strings.Join(params, ", ") + ") (" + strings.Join(types, ", ") + ")",
 	})
 }
 
