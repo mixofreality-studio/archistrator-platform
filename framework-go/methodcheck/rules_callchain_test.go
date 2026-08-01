@@ -63,8 +63,8 @@ func ccLinearEdges() []ActivityEdge {
 }
 
 // ccActorEntry is the canonical legal chain root: the user actor enters the Client.
-func ccActorEntry() Relationship {
-	return Relationship{From: "user", To: "web-client", Mode: modeSync}
+func ccActorEntry() TraceCall {
+	return TraceCall{From: "user", To: "web-client", Mode: modeSync}
 }
 
 func ccUser() Actor { return Actor{ID: "user", Role: "User"} }
@@ -72,7 +72,7 @@ func ccUser() Actor { return Actor{ID: "user", Role: "User"} }
 // ---- CC-STEP-NODE / CC-STEP-UNIQUE ----
 
 func TestCC_StepNodeDanglingFires(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "ghost-node", Calls: []Relationship{
+	s := sysWith(ccView(CallStep{ActivityNodeID: "ghost-node", Calls: []TraceCall{
 		ccActorEntry(), {From: "web-client", To: "mgr", Mode: modeSync},
 	}}))
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
@@ -83,8 +83,8 @@ func TestCC_StepNodeDanglingFires(t *testing.T) {
 
 func TestCC_StepUniqueDuplicateFires(t *testing.T) {
 	s := sysWith(ccView(
-		CallStep{ActivityNodeID: "act", Calls: []Relationship{ccActorEntry()}},
-		CallStep{ActivityNodeID: "act", Calls: []Relationship{{From: "web-client", To: "mgr", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "act", Calls: []TraceCall{ccActorEntry()}},
+		CallStep{ActivityNodeID: "act", Calls: []TraceCall{{From: "web-client", To: "mgr", Mode: modeSync}}},
 	))
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
 	if !hasRuleFindings(callChainRules(s, c), ruleCCStepUnique) {
@@ -102,7 +102,7 @@ func TestCC_CoverageActionWithoutStepFires(t *testing.T) {
 		{ID: "e", Kind: nodeEnd},
 	}
 	edges := []ActivityEdge{{From: "s", To: "a1"}, {From: "a1", To: "a2"}, {From: "a2", To: "e"}}
-	s := sysWith(ccView(CallStep{ActivityNodeID: "a1", Calls: []Relationship{ccActorEntry()}}))
+	s := sysWith(ccView(CallStep{ActivityNodeID: "a1", Calls: []TraceCall{ccActorEntry()}}))
 	c := ucWith(triggerClientAction, nodes, edges, ccUser())
 	if !hasRuleFindings(callChainRules(s, c), ruleCCCoverage) {
 		t.Fatalf("an action node realized by no step must fire CC-COVERAGE")
@@ -125,9 +125,9 @@ func TestCC_CoverageStepOnMergeFires(t *testing.T) {
 		{From: "a1", To: "m"}, {From: "a2", To: "m"}, {From: "m", To: "e"},
 	}
 	s := sysWith(ccView(
-		CallStep{ActivityNodeID: "a1", Calls: []Relationship{ccActorEntry()}},
-		CallStep{ActivityNodeID: "a2", Calls: []Relationship{ccActorEntry()}},
-		CallStep{ActivityNodeID: "m", Calls: []Relationship{{From: "web-client", To: "mgr", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "a1", Calls: []TraceCall{ccActorEntry()}},
+		CallStep{ActivityNodeID: "a2", Calls: []TraceCall{ccActorEntry()}},
+		CallStep{ActivityNodeID: "m", Calls: []TraceCall{{From: "web-client", To: "mgr", Mode: modeSync}}},
 	))
 	c := ucWith(triggerClientAction, nodes, edges, ccUser())
 	if !hasRuleFindings(callChainRules(s, c), ruleCCCoverage) {
@@ -154,17 +154,17 @@ func TestCC_CoverageDecisionStepOptional(t *testing.T) {
 	c := ucWith(triggerClientAction, nodes, edges, ccUser())
 
 	without := sysWith(ccView(
-		CallStep{ActivityNodeID: "a1", Calls: []Relationship{ccActorEntry()}},
-		CallStep{ActivityNodeID: "a2", Calls: []Relationship{ccActorEntry()}},
+		CallStep{ActivityNodeID: "a1", Calls: []TraceCall{ccActorEntry()}},
+		CallStep{ActivityNodeID: "a2", Calls: []TraceCall{ccActorEntry()}},
 	))
 	if hasRuleFindings(callChainRules(without, c), ruleCCCoverage) {
 		t.Fatalf("a decision node WITHOUT a step must not fire CC-COVERAGE (mayHaveStep)")
 	}
 
 	with := sysWith(ccView(
-		CallStep{ActivityNodeID: "d", Calls: []Relationship{ccActorEntry()}},
-		CallStep{ActivityNodeID: "a1", Calls: []Relationship{{From: "web-client", To: "mgr", Mode: modeSync}}},
-		CallStep{ActivityNodeID: "a2", Calls: []Relationship{{From: "web-client", To: "mgr", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "d", Calls: []TraceCall{ccActorEntry()}},
+		CallStep{ActivityNodeID: "a1", Calls: []TraceCall{{From: "web-client", To: "mgr", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "a2", Calls: []TraceCall{{From: "web-client", To: "mgr", Mode: modeSync}}},
 	))
 	if hasRuleFindings(callChainRules(with, c), ruleCCCoverage) {
 		t.Fatalf("a decision node WITH a step must not fire CC-COVERAGE (mayHaveStep)")
@@ -174,7 +174,7 @@ func TestCC_CoverageDecisionStepOptional(t *testing.T) {
 // ---- CC-STEP-NONEMPTY ----
 
 func TestCC_StepNonemptyFires(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{}}))
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{}}))
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
 	if !hasRuleFindings(callChainRules(s, c), ruleCCStepNonempty) {
 		t.Fatalf("a realized step that makes no call must fire CC-STEP-NONEMPTY")
@@ -184,7 +184,7 @@ func TestCC_StepNonemptyFires(t *testing.T) {
 // ---- CC-ENDPOINT-RESOLVES ----
 
 func TestCC_EndpointResolvesUnknownFires(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{
 		ccActorEntry(), {From: "web-client", To: "ghost-component", Mode: modeSync},
 	}}))
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
@@ -196,7 +196,7 @@ func TestCC_EndpointResolvesUnknownFires(t *testing.T) {
 // TestCC_EndpointActorResolves: an actor id drawn from the OWNING use case's
 // Actors list is a legal call endpoint — it must not be reported as unresolved.
 func TestCC_EndpointActorResolves(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{
 		ccActorEntry(), {From: "web-client", To: "mgr", Mode: modeSync},
 	}}))
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
@@ -208,7 +208,7 @@ func TestCC_EndpointActorResolves(t *testing.T) {
 // ---- CC-ACTOR-EDGE ----
 
 func TestCC_ActorEdgeNonClientFires(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{
 		{From: "user", To: "mgr", Mode: modeSync},
 	}}))
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
@@ -218,7 +218,7 @@ func TestCC_ActorEdgeNonClientFires(t *testing.T) {
 }
 
 func TestCC_ActorEdgeQueuedFires(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{
 		{From: "user", To: "web-client", Mode: modeQueued},
 	}}))
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
@@ -228,7 +228,7 @@ func TestCC_ActorEdgeQueuedFires(t *testing.T) {
 }
 
 func TestCC_ActorToActorFires(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{
 		{From: "user", To: "approver", Mode: modeSync},
 	}}))
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(),
@@ -247,7 +247,7 @@ func TestCC_ActorLaneMismatchFires(t *testing.T) {
 		{ID: "e", Kind: nodeEnd},
 	}
 	// The step realizing the user-laned node never touches the user actor.
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{
 		{From: "web-client", To: "mgr", Mode: modeSync},
 	}}))
 	c := ucWith(triggerClientAction, nodes, ccLinearEdges(), ccUser())
@@ -259,7 +259,7 @@ func TestCC_ActorLaneMismatchFires(t *testing.T) {
 // ---- CC-TRIGGER-EVENT ----
 
 func TestCC_TriggerEventTimerWithoutTimeEventFires(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{
 		{From: "web-client", To: "mgr", Mode: modeSync},
 	}}))
 	c := ucWith(triggerTimer, ccLinearNodes(), ccLinearEdges())
@@ -276,8 +276,8 @@ func TestCC_TriggerEventClientActionWithEventEntryFires(t *testing.T) {
 	}
 	edges := []ActivityEdge{{From: "tick", To: "act"}, {From: "act", To: "e"}}
 	s := sysWith(ccView(
-		CallStep{ActivityNodeID: "tick", Calls: []Relationship{{From: "web-client", To: "mgr", Mode: modeSync}}},
-		CallStep{ActivityNodeID: "act", Calls: []Relationship{{From: "mgr", To: "ra", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "tick", Calls: []TraceCall{{From: "web-client", To: "mgr", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "act", Calls: []TraceCall{{From: "mgr", To: "ra", Mode: modeSync}}},
 	))
 	c := ucWith(triggerClientAction, nodes, edges)
 	if !hasRuleFindings(callChainRules(s, c), ruleCCTriggerEvent) {
@@ -296,10 +296,10 @@ func TestCC_PathConnected_HappyChainPasses(t *testing.T) {
 	}
 	edges := []ActivityEdge{{From: "s", To: "a1"}, {From: "a1", To: "a2"}, {From: "a2", To: "e"}}
 	s := sysWith(ccView(
-		CallStep{ActivityNodeID: "a1", Calls: []Relationship{
+		CallStep{ActivityNodeID: "a1", Calls: []TraceCall{
 			ccActorEntry(), {From: "web-client", To: "mgr", Mode: modeSync},
 		}},
-		CallStep{ActivityNodeID: "a2", Calls: []Relationship{{From: "mgr", To: "ra", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "a2", Calls: []TraceCall{{From: "mgr", To: "ra", Mode: modeSync}}},
 	))
 	c := ucWith(triggerClientAction, nodes, edges, ccUser())
 	if hasRuleFindings(callChainRules(s, c), ruleCCPathConnected) {
@@ -316,11 +316,11 @@ func TestCC_PathConnected_DisconnectedFromFires(t *testing.T) {
 	}
 	edges := []ActivityEdge{{From: "s", To: "a1"}, {From: "a1", To: "a2"}, {From: "a2", To: "e"}}
 	s := sysWith(ccView(
-		CallStep{ActivityNodeID: "a1", Calls: []Relationship{
+		CallStep{ActivityNodeID: "a1", Calls: []TraceCall{
 			ccActorEntry(), {From: "web-client", To: "mgr", Mode: modeSync},
 		}},
 		// ra was never reached by the first step's fragment.
-		CallStep{ActivityNodeID: "a2", Calls: []Relationship{{From: "ra", To: "res", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "a2", Calls: []TraceCall{{From: "ra", To: "res", Mode: modeSync}}},
 	))
 	c := ucWith(triggerClientAction, nodes, edges, ccUser())
 	if !hasRuleFindings(callChainRules(s, c), ruleCCPathConnected) {
@@ -340,10 +340,10 @@ func TestCC_PathConnected_MidChainActorReentryPasses(t *testing.T) {
 	}
 	edges := []ActivityEdge{{From: "s", To: "a1"}, {From: "a1", To: "a2"}, {From: "a2", To: "e"}}
 	s := sysWith(ccView(
-		CallStep{ActivityNodeID: "a1", Calls: []Relationship{
+		CallStep{ActivityNodeID: "a1", Calls: []TraceCall{
 			ccActorEntry(), {From: "web-client", To: "mgr", Mode: modeSync},
 		}},
-		CallStep{ActivityNodeID: "a2", Calls: []Relationship{
+		CallStep{ActivityNodeID: "a2", Calls: []TraceCall{
 			{From: "approver", To: "web-client", Mode: modeSync},
 			{From: "web-client", To: "mgr", Mode: modeSync},
 		}},
@@ -365,8 +365,8 @@ func TestCC_PathConnected_TimeEventRootClientToManagerPasses(t *testing.T) {
 	}
 	edges := []ActivityEdge{{From: "tick", To: "act"}, {From: "act", To: "e"}}
 	s := sysWith(ccView(
-		CallStep{ActivityNodeID: "tick", Calls: []Relationship{{From: "sched-client", To: "mgr", Mode: modeSync}}},
-		CallStep{ActivityNodeID: "act", Calls: []Relationship{{From: "mgr", To: "ra", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "tick", Calls: []TraceCall{{From: "sched-client", To: "mgr", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "act", Calls: []TraceCall{{From: "mgr", To: "ra", Mode: modeSync}}},
 	))
 	s.Components = append(s.Components, Component{
 		ID: "sched-client", Name: "SchedulerClient", Kind: kindClient, Layer: layerClient,
@@ -399,12 +399,12 @@ func TestCC_PathConnected_MidFlowEventNodeDoesNotFire(t *testing.T) {
 		{From: "s", To: "a1"}, {From: "a1", To: "ev"}, {From: "ev", To: "a2"}, {From: "a2", To: "e"},
 	}
 	s := sysWith(ccView(
-		CallStep{ActivityNodeID: "a1", Calls: []Relationship{
+		CallStep{ActivityNodeID: "a1", Calls: []TraceCall{
 			ccActorEntry(), {From: "web-client", To: "mgr", Mode: modeSync},
 		}},
 		// Perfectly connected on the full path: mgr was reached by a1's fragment.
-		CallStep{ActivityNodeID: "ev", Calls: []Relationship{{From: "mgr", To: "ra", Mode: modeSync}}},
-		CallStep{ActivityNodeID: "a2", Calls: []Relationship{{From: "ra", To: "res", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "ev", Calls: []TraceCall{{From: "mgr", To: "ra", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "a2", Calls: []TraceCall{{From: "ra", To: "res", Mode: modeSync}}},
 	))
 	c := ucWith(triggerClientAction, nodes, edges, ccUser())
 	if hasRuleFindings(callChainRules(s, c), ruleCCPathConnected) {
@@ -434,7 +434,7 @@ func TestCC_PathConnected_StartWithBackEdgeStillWalked(t *testing.T) {
 	}
 	// ra is a real component the chain never reaches — a genuine disconnect.
 	s := sysWith(ccView(
-		CallStep{ActivityNodeID: "a1", Calls: []Relationship{{From: "ra", To: "res", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "a1", Calls: []TraceCall{{From: "ra", To: "res", Mode: modeSync}}},
 	))
 	c := ucWith(triggerClientAction, nodes, edges, ccUser())
 	if !hasRuleFindings(callChainRules(s, c), ruleCCPathConnected) {
@@ -476,8 +476,8 @@ func ccAcceptEventFixture(mode string) (System, CoreUseCases) {
 	}
 	edges := []ActivityEdge{{From: "msg", To: "act"}, {From: "act", To: "e"}}
 	s := sysWith(ccView(
-		CallStep{ActivityNodeID: "msg", Calls: []Relationship{{From: "web-client", To: "mgr", Mode: mode}}},
-		CallStep{ActivityNodeID: "act", Calls: []Relationship{{From: "mgr", To: "ra", Mode: modeSync}}},
+		CallStep{ActivityNodeID: "msg", Calls: []TraceCall{{From: "web-client", To: "mgr", Mode: mode}}},
+		CallStep{ActivityNodeID: "act", Calls: []TraceCall{{From: "mgr", To: "ra", Mode: modeSync}}},
 	))
 	return s, ucWith(triggerBusMessage, nodes, edges)
 }
@@ -489,7 +489,7 @@ func ccAcceptEventFixture(mode string) (System, CoreUseCases) {
 // MISSING only checks the use-case→view direction, and DV-KEY-UNIQUE only catches an
 // EMPTY id. The dangling join key is now reported.
 func TestCC_ViewUseCaseUnresolvableFires(t *testing.T) {
-	dv := ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{ccActorEntry()}})
+	dv := ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{ccActorEntry()}})
 	dv.UseCaseID = "uc-ccc" // typo'd — no such use case
 	s := sysWith(dv)
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
@@ -502,7 +502,7 @@ func TestCC_ViewUseCaseUnresolvableFires(t *testing.T) {
 // guard: a RESOLVABLE use case that simply carries no activity diagram is
 // UC-ACT-PRESENT's finding to make, not this family's — CC stays silent on it.
 func TestCC_ViewUseCaseNilActivityStaysDelegated(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{ccActorEntry()}}))
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{ccActorEntry()}}))
 	c := ucWith(triggerClientAction, nil, nil, ccUser())
 	c.Decisions[0].UseCase.Activity = nil
 	if out := callChainRules(s, c); len(out) != 0 {
@@ -516,7 +516,7 @@ func TestCC_ViewUseCaseNilActivityStaysDelegated(t *testing.T) {
 // the owning use case is ambiguous. Asserted as EXACTLY ONE finding even though two
 // calls name the id — resolution is reported once per distinct id per view.
 func TestCC_EndpointResolvesAmbiguousFires(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{
 		{From: "web-client", To: "mgr", Mode: modeSync},
 		{From: "mgr", To: "web-client", Mode: modeSync},
 	}}))
@@ -536,7 +536,7 @@ func TestCC_EndpointResolvesAmbiguousFires(t *testing.T) {
 // ---- CC-TRIGGER-EVENT: the busMessage branch ----
 
 func TestCC_TriggerEventBusMessageWithoutAcceptEventFires(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []Relationship{
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{
 		{From: "web-client", To: "mgr", Mode: modeSync},
 	}}))
 	c := ucWith(triggerBusMessage, ccLinearNodes(), ccLinearEdges())
@@ -551,7 +551,7 @@ func TestCC_TriggerEventBusMessageWithoutAcceptEventFires(t *testing.T) {
 // ADVISORY for the PoC (the post-QA rollout flips it to SeverityError), so a firing
 // CC rule must never fail the verdict.
 func TestCC_AllRulesAreWarningSeverityInPoC(t *testing.T) {
-	s := sysWith(ccView(CallStep{ActivityNodeID: "ghost-node", Calls: []Relationship{ccActorEntry()}}))
+	s := sysWith(ccView(CallStep{ActivityNodeID: "ghost-node", Calls: []TraceCall{ccActorEntry()}}))
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
 	sev, ok := findingSeverity(callChainRules(s, c), ruleCCStepNode)
 	if !ok {
@@ -559,5 +559,153 @@ func TestCC_AllRulesAreWarningSeverityInPoC(t *testing.T) {
 	}
 	if sev != ccGateSeverity || ccGateSeverity != SeverityWarning {
 		t.Fatalf("every CC-* rule must be advisory (SeverityWarning) in the PoC, got %v", sev)
+	}
+}
+
+// ---- CC-DECIDED-BY ----
+
+// ccDecidedDiagram is the smallest DECISION-carrying diagram — s → d → {a1|a2} → e —
+// with decidedBy attached to the node named by attachTo: a decision node when the test
+// is about RESOLUTION, an action node when it is about PLACEMENT.
+func ccDecidedDiagram(attachTo, decidedBy string) ([]ActivityNode, []ActivityEdge) {
+	nodes := []ActivityNode{
+		{ID: "s", Kind: nodeStart},
+		{ID: "d", Kind: nodeDecision, Label: "route?"},
+		{ID: "a1", Kind: nodeAction, Label: "accept"},
+		{ID: "a2", Kind: nodeAction, Label: "reject"},
+		{ID: "e", Kind: nodeEnd},
+	}
+	for i := range nodes {
+		if nodes[i].ID == attachTo {
+			nodes[i].DecidedBy = decidedBy
+		}
+	}
+	edges := []ActivityEdge{
+		{From: "s", To: "d"},
+		{From: "d", To: "a1", Kind: edgeGuardedFlow, Guard: "[yes]"},
+		{From: "d", To: "a2", Kind: edgeGuardedFlow, Guard: "[no]"},
+		{From: "a1", To: "e"}, {From: "a2", To: "e"},
+	}
+	return nodes, edges
+}
+
+// ccDecidedView realizes both arms of ccDecidedDiagram, so a decidedBy fixture trips
+// nothing else in the family.
+func ccDecidedView() DynamicView {
+	return ccView(
+		CallStep{ActivityNodeID: "a1", Calls: []TraceCall{ccActorEntry()}},
+		CallStep{ActivityNodeID: "a2", Calls: []TraceCall{ccActorEntry()}},
+	)
+}
+
+// TestCC_DecidedByUnresolvableFires: a decider names WHO resolves the branch, and it
+// resolves in exactly the two namespaces a call endpoint does. A value naming neither
+// is a dangling attribution — the reader cannot tell who decides.
+func TestCC_DecidedByUnresolvableFires(t *testing.T) {
+	nodes, edges := ccDecidedDiagram("d", "nobody")
+	s := sysWith(ccDecidedView())
+	c := ucWith(triggerClientAction, nodes, edges, ccUser())
+	out := callChainRules(s, c)
+	if !hasRuleFindings(out, ruleCCDecidedBy) {
+		t.Fatalf("a decidedBy resolving to neither a Component nor an actor must fire CC-DECIDED-BY, got %+v", out)
+	}
+	for _, f := range out {
+		if f.RuleID == ruleCCDecidedBy && f.Location.Section != "useCase "+ccUseCaseID {
+			t.Fatalf("CC-DECIDED-BY is use-case-scoped (section %q), got %q", "useCase "+ccUseCaseID, f.Location.Section)
+		}
+	}
+}
+
+// TestCC_DecidedByOnActionKindFires is the PLACEMENT half: only a decision/switch
+// resolves a branch, so a decidedBy anywhere else is misplaced — even when the value
+// itself resolves perfectly well.
+func TestCC_DecidedByOnActionKindFires(t *testing.T) {
+	nodes, edges := ccDecidedDiagram("a1", "mgr")
+	s := sysWith(ccDecidedView())
+	c := ucWith(triggerClientAction, nodes, edges, ccUser())
+	if !hasRuleFindings(callChainRules(s, c), ruleCCDecidedBy) {
+		t.Fatalf("a decidedBy on a non-decision/switch node must fire CC-DECIDED-BY")
+	}
+}
+
+// TestCC_DecidedByResolvesToActorPasses: a human decider (the architect approving a
+// draft) is named by the owning use case's actor id.
+func TestCC_DecidedByResolvesToActorPasses(t *testing.T) {
+	nodes, edges := ccDecidedDiagram("d", "user")
+	s := sysWith(ccDecidedView())
+	c := ucWith(triggerClientAction, nodes, edges, ccUser())
+	if hasRuleFindings(callChainRules(s, c), ruleCCDecidedBy) {
+		t.Fatalf("a decidedBy naming an actor of the owning use case must resolve; got CC-DECIDED-BY")
+	}
+}
+
+// TestCC_DecidedByResolvesToComponentPasses: a code decider (the Manager branching on
+// an Engine's verdict) is named by its component id.
+func TestCC_DecidedByResolvesToComponentPasses(t *testing.T) {
+	nodes, edges := ccDecidedDiagram("d", "mgr")
+	s := sysWith(ccDecidedView())
+	c := ucWith(triggerClientAction, nodes, edges, ccUser())
+	if hasRuleFindings(callChainRules(s, c), ruleCCDecidedBy) {
+		t.Fatalf("a decidedBy naming a System Component must resolve; got CC-DECIDED-BY")
+	}
+}
+
+// TestCC_DecidedByAmbiguousFires mirrors CC-ENDPOINT-RESOLVES' ambiguity branch: an id
+// naming BOTH a Component and an actor leaves the reader unable to tell whether the
+// person or the code decides.
+func TestCC_DecidedByAmbiguousFires(t *testing.T) {
+	nodes, edges := ccDecidedDiagram("d", "web-client")
+	s := sysWith(ccDecidedView())
+	// The actor id deliberately collides with the Client component's id.
+	c := ucWith(triggerClientAction, nodes, edges, Actor{ID: "web-client", Role: "Web User"})
+	if !hasRuleFindings(callChainRules(s, c), ruleCCDecidedBy) {
+		t.Fatalf("a decidedBy resolving to BOTH a Component and an actor must fire CC-DECIDED-BY")
+	}
+}
+
+// ---- section grammar ----
+
+// TestCC_SectionsAreKeyFirst pins the key-first Section grammar both tiers share
+// (rollout rulings 2026-07-31): a Section is a join key, so it is minted from the
+// view's stable KEY, never from its authoring-time title. The fixture's title
+// ("CC flow") differs from its key ("cc") precisely so a title-first regression shows
+// up here.
+func TestCC_SectionsAreKeyFirst(t *testing.T) {
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{}}))
+	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
+	var section string
+	for _, f := range callChainRules(s, c) {
+		if f.RuleID == ruleCCStepNonempty {
+			section = f.Location.Section
+		}
+	}
+	if want := "dynamicView cc step act"; section != want {
+		t.Fatalf("step-scoped section must be key-first %q, got %q", want, section)
+	}
+}
+
+// ---- CC-PATH-CONNECTED: alternative groups ----
+
+// TestCC_PathConnected_AltGroupBothSeedReached pins that alternative groups are a
+// PRESENTATION grouping and change no verdict: every call of an alt group seeds the
+// reached set, so a later call continuing from EITHER alternative's endpoint is
+// connected. The fixture enters through two equivalent surfaces (web + MCP) tagged as
+// one alt group, then calls the Manager from each — if an alternative failed to seed,
+// the second entry's continuation would be reported as a disconnect.
+func TestCC_PathConnected_AltGroupBothSeedReached(t *testing.T) {
+	s := sysWith(ccView(CallStep{ActivityNodeID: "act", Calls: []TraceCall{
+		{From: "user", To: "web-client", Mode: modeSync, Alt: "entry"},
+		{From: "user", To: "mcp-client", Mode: modeSync, Alt: "entry"},
+		{From: "web-client", To: "mgr", Mode: modeSync, Alt: "drive"},
+		{From: "mcp-client", To: "mgr", Mode: modeSync, Alt: "drive"},
+	}}))
+	s.Components = append(s.Components, Component{
+		ID: "mcp-client", Name: "McpClient", Kind: kindClient, Layer: layerClient,
+		Encapsulates: "the MCP entry point",
+	})
+	s.Relationships = append(s.Relationships, Relationship{From: "mcp-client", To: "mgr", Mode: modeSync})
+	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
+	if out := callChainRules(s, c); len(out) != 0 {
+		t.Fatalf("an alt-grouped both-surface entry is fully connected; CC must stay silent, got %+v", out)
 	}
 }

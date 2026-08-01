@@ -81,6 +81,13 @@ func comp(t *testing.T, name, kind string) Component {
 	return Component{ID: Slug(name), Name: name, Kind: kind, Layer: layer, Encapsulates: name + " volatility"}
 }
 
+// traceOf projects a DECLARED static relationship onto the realized call a step
+// carries. The fixtures that realize a relationship they also declare build the
+// call from the same value, so the two sides cannot drift apart by a typo.
+func traceOf(r Relationship) TraceCall {
+	return TraceCall{From: r.From, To: r.To, Mode: r.Mode, Label: r.Label}
+}
+
 // ---- ValidateVolatilities ----
 
 func TestValidateVolatilities_Pass(t *testing.T) {
@@ -381,6 +388,47 @@ func TestValidateCoreUseCases_DuplicateActorRoleWithinUseCaseFails(t *testing.T)
 	}
 }
 
+// ---- CUC-ACTOR-REQUIRED ----
+
+// TestCUCActorRequired_ClientActionWithoutActorFires pins founder ruling R-A
+// (rollout rulings 2026-07-31): a clientAction use case is, by definition, started
+// by SOMEBODY, so it must name that somebody. Without an actor the use case has no
+// legal call-chain root either (CC-PATH-CONNECTED's clientAction shape is
+// actor→Client), which is why the gap is worth its own rule rather than being left
+// to surface as a downstream connectivity finding.
+func TestCUCActorRequired_ClientActionWithoutActorFires(t *testing.T) {
+	uc := coreUC("Co-author artifact")
+	uc.UseCase.Trigger = triggerClientAction
+	uc.UseCase.Actors = nil
+	c := CoreUseCases{Decisions: []UseCaseDecision{uc, coreUC("Other")}}
+	res, _ := validateCoreUseCases(c)
+	if !hasRuleFindings(res.Findings, ruleCucActorReq) {
+		t.Fatalf("a clientAction use case with zero actors must fire CUC-ACTOR-REQUIRED, got %+v", res.Findings)
+	}
+	if sev, _ := findingSeverity(res.Findings, ruleCucActorReq); sev != ccGateSeverity {
+		t.Fatalf("CUC-ACTOR-REQUIRED must ride ccGateSeverity (%v), got %v", ccGateSeverity, sev)
+	}
+	for _, f := range res.Findings {
+		if f.RuleID == ruleCucActorReq && f.Location.Section != "useCase "+uc.UseCase.ID {
+			t.Fatalf("CUC-ACTOR-REQUIRED section must be the use-case grammar %q, got %q", "useCase "+uc.UseCase.ID, f.Location.Section)
+		}
+	}
+}
+
+// TestCUCActorRequired_TimerWithoutActorPasses is the rule's other half: a
+// SCHEDULED use case is started by the clock, not by a person, so zero actors is
+// the ordinary shape and must stay silent.
+func TestCUCActorRequired_TimerWithoutActorPasses(t *testing.T) {
+	uc := coreUC("Sweep balances")
+	uc.UseCase.Trigger = triggerTimer
+	uc.UseCase.Actors = nil
+	c := CoreUseCases{Decisions: []UseCaseDecision{uc, coreUC("Other")}}
+	res, _ := validateCoreUseCases(c)
+	if hasRuleFindings(res.Findings, ruleCucActorReq) {
+		t.Fatalf("a timer-triggered use case needs no actor; CUC-ACTOR-REQUIRED must stay silent, got %+v", res.Findings)
+	}
+}
+
 func TestValidateCoreUseCases_DuplicateActivityNodeIDFails(t *testing.T) {
 	uc := coreUC("Co-author artifact")
 	uc.UseCase.Activity = &ActivityDiagram{Nodes: []ActivityNode{
@@ -425,7 +473,7 @@ func passingSystem(t *testing.T, ucID string) System {
 		UseCaseID: ucID,
 		Key:       "uc1",
 		Title:     "Core flow",
-		Steps: []CallStep{{Calls: []Relationship{
+		Steps: []CallStep{{Calls: []TraceCall{
 			{From: client.ID, To: mgr.ID, Mode: modeSync},
 			{From: mgr.ID, To: eng.ID, Mode: modeSync},
 			{From: mgr.ID, To: ra.ID, Mode: modeSync},

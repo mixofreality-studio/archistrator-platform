@@ -21,7 +21,7 @@ func dynamicBaseSystem(t *testing.T) System {
 		UseCaseID: nid(),
 		Key:       "uc1-core-flow",
 		Title:     "Core flow",
-		Steps: []CallStep{{Calls: []Relationship{
+		Steps: []CallStep{{Calls: []TraceCall{
 			{From: client.ID, To: mgr.ID, Mode: modeSync},
 			{From: mgr.ID, To: eng.ID, Mode: modeSync},
 			{From: mgr.ID, To: ra.ID, Mode: modeSync},
@@ -45,7 +45,7 @@ func TestDynamicViewConsistency_EdgeEnds_UnresolvableEndpoint(t *testing.T) {
 	s := dynamicBaseSystem(t)
 	clientID := s.Components[0].ID
 	s.DynamicViews[0].Steps = append(s.DynamicViews[0].Steps, CallStep{
-		Calls: []Relationship{{From: clientID, To: nid(), Mode: modeSync}},
+		Calls: []TraceCall{{From: clientID, To: nid(), Mode: modeSync}},
 	})
 	if !hasRuleFindings(dynamicViewConsistency(s, CoreUseCases{}), ruleDVEdgeEnds) {
 		t.Fatalf("expected DV-EDGE-ENDS")
@@ -59,7 +59,7 @@ func TestDynamicViewConsistency_EdgeEnds_ActorEndpointResolves(t *testing.T) {
 	s := dynamicBaseSystem(t)
 	clientID := s.Components[0].ID
 	ucID := s.DynamicViews[0].UseCaseID
-	s.DynamicViews[0].Steps[0].Calls = append([]Relationship{{From: "user", To: clientID, Mode: modeSync}},
+	s.DynamicViews[0].Steps[0].Calls = append([]TraceCall{{From: "user", To: clientID, Mode: modeSync}},
 		s.DynamicViews[0].Steps[0].Calls...)
 	c := CoreUseCases{Decisions: []UseCaseDecision{{UseCase: UseCase{
 		ID: ucID, Name: "Core flow", Classification: classCore,
@@ -74,7 +74,7 @@ func TestDynamicViewConsistency_EdgeInModel(t *testing.T) {
 	s := dynamicBaseSystem(t)
 	clientID := s.Components[0].ID
 	engID := s.Components[2].ID
-	s.DynamicViews[0].Steps[0].Calls = append(s.DynamicViews[0].Steps[0].Calls, Relationship{From: clientID, To: engID, Mode: modeSync})
+	s.DynamicViews[0].Steps[0].Calls = append(s.DynamicViews[0].Steps[0].Calls, TraceCall{From: clientID, To: engID, Mode: modeSync})
 	if !hasRuleFindings(dynamicViewConsistency(s, CoreUseCases{}), ruleDVEdgeInModel) {
 		t.Fatalf("expected DV-EDGE-IN-MODEL")
 	}
@@ -100,7 +100,7 @@ func TestDynamicViewConsistency_Layer(t *testing.T) {
 		Components:    []Component{mgr, ra},
 		Relationships: []Relationship{rel},
 		DynamicViews: []DynamicView{{
-			UseCaseID: nid(), Key: "uc-up", Steps: []CallStep{{Calls: []Relationship{rel}}},
+			UseCaseID: nid(), Key: "uc-up", Steps: []CallStep{{Calls: []TraceCall{traceOf(rel)}}},
 		}},
 	}
 	if !hasRuleFindings(dynamicViewConsistency(s, CoreUseCases{}), ruleSysNoUp) {
@@ -118,7 +118,7 @@ func TestDynamicViewConsistency_SingleMgr(t *testing.T) {
 		Components:    []Component{client, m1, m2},
 		Relationships: []Relationship{r1, r2},
 		DynamicViews: []DynamicView{{
-			UseCaseID: nid(), Key: "uc-two-mgrs", Steps: []CallStep{{Calls: []Relationship{r1, r2}}},
+			UseCaseID: nid(), Key: "uc-two-mgrs", Steps: []CallStep{{Calls: []TraceCall{traceOf(r1), traceOf(r2)}}},
 		}},
 	}
 	if !hasRuleFindings(dynamicViewConsistency(s, CoreUseCases{}), ruleDVSingleMgr) {

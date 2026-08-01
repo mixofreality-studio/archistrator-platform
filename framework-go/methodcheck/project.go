@@ -223,6 +223,14 @@ type ActivityNode struct {
 	// carrying a pointer (see BuildStatus/ContractKey elsewhere in this file).
 	RoleName      string `json:"roleName"`
 	LinkedActorID string `json:"linkedActorId"`
+
+	// DecidedBy names WHO resolves this node's branch (rollout rulings 2026-07-31).
+	// It is legal ONLY on a decision/switch kind, and it resolves exactly like a call
+	// endpoint: against the System's components UNION the owning use case's actors.
+	// Empty means absent (the shape every pre-rulings committed node has) — same
+	// zero-value mirroring as LinkedActorID above. CC-DECIDED-BY (rules_callchain.go)
+	// checks both halves; nothing here enforces them.
+	DecidedBy string `json:"decidedBy"`
 }
 
 // ActivityEdge is a directed edge in an activity diagram.
@@ -290,8 +298,36 @@ type DynamicView struct {
 // CallStep is one realized activity-diagram node's call fragment: the node it
 // realizes (ActivityNodeID) and the ordered calls that node's action makes.
 type CallStep struct {
-	ActivityNodeID string         `json:"activityNodeId"`
-	Calls          []Relationship `json:"calls"`
+	ActivityNodeID string      `json:"activityNodeId"`
+	Calls          []TraceCall `json:"calls"`
+}
+
+// TraceCall is one call inside a realized step (rollout rulings 2026-07-31): the
+// same directed, moded edge a Relationship carries, PLUS an optional alternative-
+// group tag. Calls in ONE step sharing an Alt value are surface-ALTERNATIVES —
+// equivalent entries into the same chain (the two surfaces a use case can be
+// entered from, say), not a sequence. Alt is presentation-and-grouping only: it
+// changes no CC-* verdict (every alternative still seeds CC-PATH-CONNECTED's
+// reached set), which is exactly why nothing below branches on it.
+//
+// Empty Alt means absent — methodcheck's structural mirror decodes the app's
+// nullable `alt` into its zero value rather than carrying a pointer (see
+// ActivityNode.LinkedActorID / Component.BuildStatus for the same convention).
+type TraceCall struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Mode  string `json:"mode"`
+	Label string `json:"label"`
+	Alt   string `json:"alt"`
+}
+
+// relationship projects a trace call onto the plain directed edge the WHOLE-VIEW
+// suites reason about (DV-*, App-C, STP-*): those rules ask only "which endpoints,
+// which mode", and an alternative-group tag has no bearing on static-edge legality.
+// The CC-* family, which is the one that cares about a call's position in a step,
+// consumes TraceCall directly.
+func (tc TraceCall) relationship() Relationship {
+	return Relationship{From: tc.From, To: tc.To, Mode: tc.Mode, Label: tc.Label}
 }
 
 // OperationalConcepts mirrors the OperationalConcepts slot model.

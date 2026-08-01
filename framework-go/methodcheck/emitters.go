@@ -18,7 +18,8 @@ func emittedRuleIDs() map[RuleID]bool {
 	ids := []RuleID{
 		// ---- Phase-1 design predicates (rules.go) ----
 		ruleVolTrace, ruleVolGloss, ruleVolAxis, ruleVolNOB,
-		ruleCucCard, ruleUcActDiagram, ruleCucNameUniq, ruleCucActorUniq, ruleUcNodeIDUniq,
+		ruleCucCard, ruleUcActDiagram, ruleCucNameUniq, ruleCucActorUniq, ruleCucActorReq,
+		ruleUcNodeIDUniq,
 		ruleOpcObjRef,
 		ruleStdWaive,
 
@@ -47,7 +48,7 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleCCViewUseCase,
 		ruleCCStepNode, ruleCCStepUnique, ruleCCCoverage, ruleCCStepNonempty,
 		ruleCCEndpoint, ruleCCActorEdge, ruleCCActorLane, ruleCCTriggerEvent,
-		ruleCCPathConnected,
+		ruleCCPathConnected, ruleCCDecidedBy,
 
 		// ---- Deployment (rules_deployment.go) ----
 		ruleDepContainerRef, ruleDepMemberExist, ruleDepProfileSet,

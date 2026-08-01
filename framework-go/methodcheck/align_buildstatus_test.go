@@ -194,7 +194,7 @@ func TestDVStaticCoverage_PlannedSkipped(t *testing.T) {
 		// A self-loop step marks mgr as a step-keyed model "participant" (participantIDs
 		// derives participation from call endpoints, not a separate declared list) without
 		// asserting anything about mgr's own coverage — this fixture only isolates eng.
-		DynamicViews: []DynamicView{{Key: "k1", UseCaseID: "u1", Steps: []CallStep{{Calls: []Relationship{{From: mgr.ID, To: mgr.ID, Mode: modeSync}}}}}},
+		DynamicViews: []DynamicView{{Key: "k1", UseCaseID: "u1", Steps: []CallStep{{Calls: []TraceCall{{From: mgr.ID, To: mgr.ID, Mode: modeSync}}}}}},
 	}
 	got := checkStaticParticipationCoverage(s)
 	if hasRuleFindings(got, ruleDVStaticCoverage) {
@@ -219,7 +219,7 @@ func TestDVStaticCoverage_BuiltStillFlagged(t *testing.T) {
 		// A self-loop step marks mgr as a step-keyed model "participant" (participantIDs
 		// derives participation from call endpoints, not a separate declared list) without
 		// asserting anything about mgr's own coverage — this fixture only isolates eng.
-		DynamicViews: []DynamicView{{Key: "k1", UseCaseID: "u1", Steps: []CallStep{{Calls: []Relationship{{From: mgr.ID, To: mgr.ID, Mode: modeSync}}}}}},
+		DynamicViews: []DynamicView{{Key: "k1", UseCaseID: "u1", Steps: []CallStep{{Calls: []TraceCall{{From: mgr.ID, To: mgr.ID, Mode: modeSync}}}}}},
 	}
 	got := checkStaticParticipationCoverage(s)
 	if !hasRuleFindings(got, ruleDVStaticCoverage) {

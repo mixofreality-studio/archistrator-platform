@@ -26,6 +26,7 @@ const (
 	ruleUcActDiagram RuleID = "UC-ACTDIAG"
 	ruleCucNameUniq  RuleID = "CUC-NAME-UNIQUE"
 	ruleCucActorUniq RuleID = "CUC-ACTOR-UNIQUE"
+	ruleCucActorReq  RuleID = "CUC-ACTOR-REQUIRED"
 	ruleUcNodeIDUniq RuleID = "UC-NODE-UNIQUE"
 
 	ruleOpcObjRef RuleID = "OPC-OBJREF"
@@ -74,6 +75,7 @@ func validateCoreUseCases(c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, cucCardinality(c)...)
 	findings = append(findings, useCaseNameUnique(c)...)
 	findings = append(findings, actorNamesUnique(c)...)
+	findings = append(findings, actorRequired(c)...)
 	findings = append(findings, activityNodeIDsUnique(c)...)
 	findings = append(findings, ucActivityDiagram(c)...)
 	findings = append(findings, ucActPresent(c)...)
@@ -357,6 +359,33 @@ func actorNamesUnique(c CoreUseCases) []Finding {
 			}
 			seen[key] = true
 		}
+	}
+	return out
+}
+
+// actorRequired — CUC-ACTOR-REQUIRED (founder ruling R-A, rollout rulings
+// 2026-07-31). A clientAction use case is, by definition, initiated BY somebody:
+// declaring zero actors leaves the initiator unnamed, and leaves the realization
+// with no legal chain root either (CC-PATH-CONNECTED roots a clientAction path on
+// actor→Client). Timer- and busMessage-triggered use cases are started by the clock
+// or the bus and legitimately declare none.
+//
+// This is the CoreUseCases-attributed member of the rollout's two new rules (its
+// sibling CC-DECIDED-BY needs the System roster and so lives in the CC family), but
+// it rides the same ccGateSeverity so both flip to Error together.
+func actorRequired(c CoreUseCases) []Finding {
+	var out []Finding
+	for i, d := range c.Decisions {
+		uc := d.UseCase
+		if uc.Trigger != triggerClientAction || len(uc.Actors) > 0 {
+			continue
+		}
+		out = append(out, Finding{
+			RuleID:   ruleCucActorReq,
+			Severity: ccGateSeverity,
+			Message:  fmt.Sprintf("use case %s (%s) is clientAction-triggered but declares no actors; a client-initiated use case must name who initiates it (and its call chain needs that actor as its root)", uc.ID, uc.Name),
+			Location: loc(i+1, "useCase "+uc.ID),
+		})
 	}
 	return out
 }

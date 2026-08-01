@@ -26,7 +26,9 @@ import (
 func stepCalls(dv DynamicView) []Relationship {
 	var out []Relationship
 	for _, s := range dv.Steps {
-		out = append(out, s.Calls...)
+		for _, c := range s.Calls {
+			out = append(out, c.relationship())
+		}
 	}
 	return out
 }

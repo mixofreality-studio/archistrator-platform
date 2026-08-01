@@ -23,6 +23,7 @@ import "fmt"
 //	CC-ACTOR-LANE      a lane-linked node's step must touch that actor
 //	CC-TRIGGER-EVENT   the use-case trigger and the diagram's entry nodes agree
 //	CC-PATH-CONNECTED  every activity-diagram PATH is realized as a connected chain
+//	CC-DECIDED-BY      a node's decider sits on a branching node and resolves
 //
 // SUBSUMPTION: this family retires three rules whose job it now does strictly better —
 // DV-PART-EXIST (subsumed by CC-ENDPOINT-RESOLVES, which additionally resolves actors),
@@ -33,6 +34,9 @@ import "fmt"
 // ACTORS: an endpoint id is resolved against the component index UNION the OWNING use
 // case's Actors. Actors are per-use-case, so the same id may name an actor in one use
 // case and nothing in another — resolution is always relative to the view's use case.
+// ActivityNode.DecidedBy resolves in exactly the same two namespaces, which is why
+// CC-DECIDED-BY lives here (with the System roster in hand) rather than with the
+// CoreUseCases rules that own the rest of the activity diagram.
 
 const (
 	ruleCCViewUseCase   RuleID = "CC-VIEW-USECASE"
@@ -45,6 +49,7 @@ const (
 	ruleCCActorLane     RuleID = "CC-ACTOR-LANE"
 	ruleCCTriggerEvent  RuleID = "CC-TRIGGER-EVENT"
 	ruleCCPathConnected RuleID = "CC-PATH-CONNECTED"
+	ruleCCDecidedBy     RuleID = "CC-DECIDED-BY"
 )
 
 // ccGateSeverity is the PoC-advisory severity for the correspondence family and
@@ -85,7 +90,7 @@ func callChainRules(s System, c CoreUseCases) []Finding {
 			// DV-KEY-UNIQUE only catches an EMPTY UseCaseID (on which it co-fires with
 			// this rule, from its own angle). Report the dangling join key rather than
 			// no-op'ing the whole family.
-			out = append(out, ccFinding(ruleCCViewUseCase, loc(i+1, "dynamicView "+viewLabel(dv)),
+			out = append(out, ccFinding(ruleCCViewUseCase, loc(i+1, "dynamicView "+ccKeyLabel(dv)),
 				"dynamic view %q references useCaseId %q, which resolves to no use case in the committed set; the call chain cannot be checked against any activity diagram until the join key is fixed",
 				viewLabel(dv), dv.UseCaseID))
 			continue
@@ -108,6 +113,20 @@ func useCaseIndex(c CoreUseCases) map[string]UseCase {
 		idx[d.UseCase.ID] = d.UseCase
 	}
 	return idx
+}
+
+// ccKeyLabel is the CC-* SECTION-grammar view identifier: the view's Key, falling
+// back to its UseCaseID only when Key is empty. It is deliberately NOT viewLabel
+// (title, else key, else useCaseId), which reads well in a MESSAGE but is unstable
+// across an authoring-time title edit — a Section is the string the webApp's Design
+// Health surface joins findings on, so it must key off the stable identifier. This
+// is byte-identical to the designhealth mirror's ccViewLabel; the two tiers' Section
+// strings must stay interchangeable.
+func ccKeyLabel(dv DynamicView) string {
+	if dv.Key != "" {
+		return dv.Key
+	}
+	return dv.UseCaseID
 }
 
 // actorIDs returns the id set of a use case's declared actors.
@@ -163,23 +182,17 @@ func (cc ccContext) findings() []Finding {
 	out = append(out, cc.endpointResolves()...)
 	out = append(out, cc.actorEdges()...)
 	out = append(out, cc.actorLane()...)
+	out = append(out, cc.decidedBy()...)
 	out = append(out, cc.triggerEvent()...)
 	out = append(out, cc.pathConnected()...)
 	return out
 }
 
-// stepLoc is the STEP-SCOPED location grammar. This Section string is
-// gate/CI-facing prose, not a UI join key: viewLabel is title-first (title,
-// else key, else useCaseId), so it is unstable across an authoring-time title
-// edit. The webApp's Design Health surface does NOT join on it — it joins on
-// the designhealth mirror's KEY-first grammar (ccViewLabel in
-// server/internal/utility/designhealth/rules_callchain.go: key, else
-// useCaseId, title never consulted). If a post-QA plan ever aligns the two
-// grammars, the fix is to move THIS platform Section string to key-first to
-// match designhealth — never the reverse (designhealth must not become
-// title-first).
+// stepLoc is the STEP-SCOPED location grammar. Both tiers share the key-first
+// grammar (rollout rulings 2026-07-31): a Section is a join key, so it is minted
+// from ccKeyLabel, never from the authoring-time title.
 func (cc ccContext) stepLoc(nodeID string) *Location {
-	return loc(cc.ordinal, "dynamicView "+viewLabel(cc.dv)+" step "+nodeID)
+	return loc(cc.ordinal, "dynamicView "+ccKeyLabel(cc.dv)+" step "+nodeID)
 }
 
 // ucLoc is the USE-CASE-SCOPED location grammar (coverage + trigger findings, which
@@ -284,7 +297,7 @@ func (cc ccContext) endpointResolves() []Finding {
 
 // callEndpointFindings resolves one call's two ends, skipping ids already reported for
 // this view.
-func (cc ccContext) callEndpointFindings(call Relationship, nodeID string, reported map[string]bool) []Finding {
+func (cc ccContext) callEndpointFindings(call TraceCall, nodeID string, reported map[string]bool) []Finding {
 	var out []Finding
 	for _, id := range []string{call.From, call.To} {
 		if reported[id] {
@@ -329,7 +342,7 @@ func (cc ccContext) actorEdges() []Finding {
 	return out
 }
 
-func (cc ccContext) actorEdgeFindings(call Relationship, nodeID string) []Finding {
+func (cc ccContext) actorEdgeFindings(call TraceCall, nodeID string) []Finding {
 	fromActor, toActor := cc.actors[call.From], cc.actors[call.To]
 	if !fromActor && !toActor {
 		return nil
@@ -388,6 +401,66 @@ func stepTouches(st CallStep, id string) bool {
 		}
 	}
 	return false
+}
+
+// ---- CC-DECIDED-BY ----
+
+// decidedBy checks the optional decider attribution an activity node may carry
+// (rollout rulings 2026-07-31), in its two halves:
+//
+//   - PLACEMENT: only a decision/switch RESOLVES a branch, so only those kinds can
+//     name who resolves it. A decidedBy anywhere else is misplaced even when its
+//     value resolves perfectly well.
+//   - RESOLUTION: the value resolves exactly like a call endpoint — against the
+//     System's components UNION the owning use case's actors. Naming neither is a
+//     dangling attribution; naming BOTH is ambiguous, and is a finding for the same
+//     reason CC-ENDPOINT-RESOLVES treats a both-match as one (the reader cannot tell
+//     whether the person or the code decides).
+//
+// The rule is USE-CASE-scoped: it validates the coreUseCases diagram against the
+// System roster, and a node is not a step, so there is no step Section to hang it on.
+func (cc ccContext) decidedBy() []Finding {
+	var out []Finding
+	for _, n := range cc.uc.Activity.Nodes {
+		if n.DecidedBy == "" {
+			continue
+		}
+		if !ccResolvesBranch(n.Kind) {
+			out = append(out, ccFinding(ruleCCDecidedBy, cc.ucLoc(),
+				"activity node %q (%s) of use case %s carries decidedBy %q; only a decision/switch node resolves a branch, so only those kinds may name who resolves it",
+				n.ID, n.Kind, cc.uc.ID, n.DecidedBy))
+			continue
+		}
+		if f, bad := cc.decidedByResolution(n); bad {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+// ccResolvesBranch reports whether a node kind resolves a branch — the only kinds a
+// decidedBy may sit on. It coincides with the ccMayHaveStep set, but for a different
+// reason (that set is about carrying CALLS), so the two are kept apart.
+func ccResolvesBranch(kind string) bool {
+	return kind == nodeDecision || kind == nodeSwitch
+}
+
+// decidedByResolution resolves one branching node's decider against the two
+// namespaces, mirroring endpointFinding.
+func (cc ccContext) decidedByResolution(n ActivityNode) (Finding, bool) {
+	_, isComponent := cc.idx[n.DecidedBy]
+	isActor := cc.actors[n.DecidedBy]
+	switch {
+	case isComponent && isActor:
+		return ccFinding(ruleCCDecidedBy, cc.ucLoc(),
+			"activity node %q of use case %s is decidedBy %q, which resolves to BOTH a System Component and an actor of that use case; a decider id must denote exactly one of them",
+			n.ID, cc.uc.ID, n.DecidedBy), true
+	case !isComponent && !isActor:
+		return ccFinding(ruleCCDecidedBy, cc.ucLoc(),
+			"activity node %q of use case %s is decidedBy %q, which is neither a System Component nor an actor of that use case; name the component or the person who resolves the branch",
+			n.ID, cc.uc.ID, n.DecidedBy), true
+	}
+	return Finding{}, false
 }
 
 // ---- CC-TRIGGER-EVENT ----
@@ -545,7 +618,7 @@ func (cc ccContext) walkStepCalls(st CallStep, nodeID string, entry pathEntry, w
 // disconnectFinding builds the CC-PATH-CONNECTED finding for one disconnected call,
 // returning fresh=false when this (node, from, to) was already reported on an earlier
 // path (the same disconnect is one finding, not one per traversing path).
-func (cc ccContext) disconnectFinding(call Relationship, nodeID string, entry pathEntry, reported map[string]bool) (Finding, bool) {
+func (cc ccContext) disconnectFinding(call TraceCall, nodeID string, entry pathEntry, reported map[string]bool) (Finding, bool) {
 	key := nodeID + "\x00" + call.From + "\x00" + call.To
 	if reported[key] {
 		return Finding{}, false
@@ -556,7 +629,7 @@ func (cc ccContext) disconnectFinding(call Relationship, nodeID string, entry pa
 		viewLabel(cc.dv), nodeID, call.From, call.To, call.From, entry.NodeID), true
 }
 
-func (cc ccContext) callConnects(call Relationship, entry pathEntry, first bool, reached map[string]bool) bool {
+func (cc ccContext) callConnects(call TraceCall, entry pathEntry, first bool, reached map[string]bool) bool {
 	if cc.isActorToClient(call) {
 		return true
 	}
@@ -568,7 +641,7 @@ func (cc ccContext) callConnects(call Relationship, entry pathEntry, first bool,
 
 // isActorToClient reports the always-legal chain root: an actor of this use case
 // entering a Client component.
-func (cc ccContext) isActorToClient(call Relationship) bool {
+func (cc ccContext) isActorToClient(call TraceCall) bool {
 	if !cc.actors[call.From] {
 		return false
 	}
@@ -579,7 +652,7 @@ func (cc ccContext) isActorToClient(call Relationship) bool {
 // rootsEntry reports whether a path's FIRST call is a legal root for that path's entry
 // kind. A start entry (the clientAction shape) has only ONE legal root — the
 // actor→Client call callConnects already accepted — so it is false here.
-func (cc ccContext) rootsEntry(call Relationship, entry pathEntry) bool {
+func (cc ccContext) rootsEntry(call TraceCall, entry pathEntry) bool {
 	from, fromOK := cc.idx[call.From]
 	to, toOK := cc.idx[call.To]
 	switch entry.Kind {

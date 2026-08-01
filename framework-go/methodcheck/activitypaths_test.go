@@ -295,3 +295,70 @@ func equalStrings(a, b []string) bool {
 	}
 	return true
 }
+
+// TestPaths_BudgetBoundsNestedForkDecision is the compute-bound regression: a
+// nested fork×decision diagram — ONE fork of 8 branches, each branch its own 5-way
+// decision — whose complete cross-product is 5^8 = 390,625 combinations, ~760x the
+// output cap. Truncating the FULL result at the end (the pre-bound behavior) means
+// materializing all 390,625 first, which is the CPU/memory sink designhealth would
+// hit render-on-read on a pathological committed diagram. The walker must instead
+// stop WORKING once the budget is spent: the assertion is that the budget actually
+// bound (exhausted), that the output still honors the cap, and that the paths
+// completed BEFORE the blowup — here the start-rooted entry, declared first — are
+// returned rather than lost.
+func TestPaths_BudgetBoundsNestedForkDecision(t *testing.T) {
+	nodes := []ActivityNode{
+		{ID: "s", Kind: nodeStart}, {ID: "sa", Kind: nodeAction}, {ID: "se", Kind: nodeEnd},
+		{ID: "tick", Kind: kindTimeEvent}, {ID: "f", Kind: nodeFork},
+	}
+	edges := []ActivityEdge{{From: "s", To: "sa"}, {From: "sa", To: "se"}, {From: "tick", To: "f"}}
+	for b := 0; b < 8; b++ {
+		d := fmt.Sprintf("d%d", b)
+		nodes = append(nodes, ActivityNode{ID: d, Kind: nodeDecision, Label: "branch?"})
+		edges = append(edges, ActivityEdge{From: "f", To: d})
+		for i := 0; i < 5; i++ {
+			leaf := fmt.Sprintf("a%d-%d", b, i)
+			nodes = append(nodes, ActivityNode{ID: leaf, Kind: nodeAction, Label: leaf})
+			edges = append(edges, ActivityEdge{From: d, To: leaf, Kind: edgeGuardedFlow, Guard: "[g]"})
+		}
+	}
+
+	got, exhausted := boundedActivityPaths(ActivityDiagram{Nodes: nodes, Edges: edges})
+	if !exhausted {
+		t.Fatalf("a 5^8 cross-product must exhaust the %d-step budget; it enumerated fully instead", maxWalkWork)
+	}
+	if len(got) > maxActivityPaths {
+		t.Fatalf("want at most the cap (%d) paths, got %d", maxActivityPaths, len(got))
+	}
+	if len(got) == 0 || !equalStrings(got[0].Nodes, []string{"s", "sa", "se"}) {
+		t.Fatalf("the entry completed BEFORE the blowup must survive the budget; got %+v", got)
+	}
+}
+
+// TestPaths_BudgetDoesNotBindOnOrdinaryDiagram is the other half of the bound: a
+// diagram of the shape real authoring produces — a 3-way fork whose branches each
+// carry their own 3-way decision, 27 complete combinations — must enumerate FULLY,
+// with the budget untouched. The bound exists to stop pathological blowups, not to
+// silently truncate ordinary designs.
+func TestPaths_BudgetDoesNotBindOnOrdinaryDiagram(t *testing.T) {
+	nodes := []ActivityNode{{ID: "s", Kind: nodeStart}, {ID: "f", Kind: nodeFork}}
+	edges := []ActivityEdge{{From: "s", To: "f"}}
+	for b := 0; b < 3; b++ {
+		d := fmt.Sprintf("d%d", b)
+		nodes = append(nodes, ActivityNode{ID: d, Kind: nodeDecision, Label: "branch?"})
+		edges = append(edges, ActivityEdge{From: "f", To: d})
+		for i := 0; i < 3; i++ {
+			leaf := fmt.Sprintf("a%d-%d", b, i)
+			nodes = append(nodes, ActivityNode{ID: leaf, Kind: nodeAction, Label: leaf})
+			edges = append(edges, ActivityEdge{From: d, To: leaf, Kind: edgeGuardedFlow, Guard: "[g]"})
+		}
+	}
+
+	got, exhausted := boundedActivityPaths(ActivityDiagram{Nodes: nodes, Edges: edges})
+	if exhausted {
+		t.Fatalf("an ordinary 27-combination diagram must not exhaust the budget")
+	}
+	if len(got) != 27 {
+		t.Fatalf("want all 27 cross-producted combinations, got %d", len(got))
+	}
+}

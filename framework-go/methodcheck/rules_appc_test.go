@@ -13,7 +13,7 @@ func TestAppCDont_ClientCallsMultipleManagers_Fails(t *testing.T) {
 	m2 := comp(t, "BuildManager", kindManager)
 	dv := DynamicView{
 		UseCaseID: "uc1",
-		Steps: []CallStep{{Calls: []Relationship{
+		Steps: []CallStep{{Calls: []TraceCall{
 			{From: cli.ID, To: m1.ID, Mode: modeSync},
 			{From: cli.ID, To: m2.ID, Mode: modeSync},
 		}}},
@@ -91,7 +91,7 @@ func TestAppCDont_ManagerQueuesMultipleManagers_Fails(t *testing.T) {
 	m2 := comp(t, "OpsManager", kindManager)
 	dv := DynamicView{
 		UseCaseID: "uc1",
-		Steps: []CallStep{{Calls: []Relationship{
+		Steps: []CallStep{{Calls: []TraceCall{
 			{From: m0.ID, To: m1.ID, Mode: modeQueued},
 			{From: m0.ID, To: m2.ID, Mode: modeQueued},
 		}}},
@@ -112,7 +112,7 @@ func TestAppCDont_ManagerQueuesSingleManager_OK(t *testing.T) {
 	m1 := comp(t, "BillingManager", kindManager)
 	dv := DynamicView{
 		UseCaseID: "uc1",
-		Steps:     []CallStep{{Calls: []Relationship{{From: m0.ID, To: m1.ID, Mode: modeQueued}}}},
+		Steps:     []CallStep{{Calls: []TraceCall{{From: m0.ID, To: m1.ID, Mode: modeQueued}}}},
 	}
 	s := System{Components: []Component{m0, m1}, DynamicViews: []DynamicView{dv}}
 	if hasRuleFindings(appCInteractionDonts(s), ruleAppcDontMgrMultiQueue) {
