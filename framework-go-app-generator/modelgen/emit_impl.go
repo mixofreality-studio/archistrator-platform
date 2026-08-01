@@ -24,7 +24,12 @@ func emitImplSurface(buf *bytes.Buffer, iface Interface, meta contractMeta, modu
 		// layer's not-implemented error) so the package compiles; as it is built
 		// later these bodies are replaced and the stub flag cleared.
 		emitStubImpl(buf, iface)
-	case iface.Layer == "resourceaccess":
+	case usesRAContext(iface.Layer):
+		// ResourceAccess and Utility share the infra-impl shape: both front a
+		// concrete piece of infrastructure behind a generated port, so both emit
+		// the per-infra <Infra><Component> struct/constructor (and both take the
+		// fwra call Context — see layerContext). A Utility WITHOUT infra, like an
+		// RA without infra, keeps only its generated interface.
 		return emitRAImplIfInfra(buf, iface, meta.Infra)
 	case iface.Layer == "engine":
 		if allow[meta.Component] {
@@ -305,14 +310,24 @@ func emitStubMethod(buf *bytes.Buffer, struct_, layer string, lc struct{ alias, 
 }
 
 // notImplementedExpr renders the layer-appropriate not-implemented error
-// expression for a stub method body. ResourceAccess stubs use the framework RA
-// error (fwra.New); the fwra import is already present (every RA method takes the
-// rc fwra.Context). Other layers fall back to a plain errors.New so modelgen does
-// not have to guess each framework's error API (no non-RA stubs exist today).
+// expression for a stub method body. ResourceAccess (and Utility, which shares
+// its call Context) stubs use the framework RA error (fwra.New); the fwra import
+// is already present (every such method takes the rc fwra.Context). Other layers
+// fall back to a plain errors.New so modelgen does not have to guess each
+// framework's error API (no non-RA stubs exist today).
 func notImplementedExpr(layer string) string {
-	if layer == "resourceaccess" {
+	if usesRAContext(layer) {
 		return `fwra.New(fwra.Unknown, "not implemented")`
 	}
 	pendingImports["errors"] = ""
 	return `errors.New("not implemented")`
+}
+
+// usesRAContext reports whether a Method layer's generated methods take the
+// ResourceAccess call Context (fwra.Context) — ResourceAccess itself and
+// Utility, which reuses it (see layerContext's rationale). It is the single
+// predicate behind the infra-impl emission and the stub error expression, so the
+// two can never disagree about which layers are fwra-shaped.
+func usesRAContext(layer string) bool {
+	return layer == "resourceaccess" || layer == "utility"
 }

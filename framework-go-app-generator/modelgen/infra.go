@@ -2,9 +2,22 @@ package modelgen
 
 // layerContext maps a Method layer to the per-layer call Context the generator
 // prepends to every interface method (aliased import + Go type).
+//
+// UTILITY shares the ResourceAccess call Context deliberately. A Utility whose
+// verbs perform I/O (a message bus delivering a signal or registering a
+// recurring schedule) makes retried, mutating calls that need exactly what an RA
+// call needs: the Principal on whose behalf the call runs and the
+// IdempotencyKey that makes a re-delivery or a schedule re-registration
+// converge (last-writer-wins) instead of duplicating. Rather than mint a
+// near-identical fwutil.Context — and force every hand-written seam to re-sign —
+// the Utility layer reuses fwra.Context. A dedicated utility context is future
+// work; when it lands it is a one-line change here plus a mechanical seam
+// re-signing. Pure (no-I/O) utilities carry no generated contract at all, so
+// this mapping only ever binds the I/O kind.
 var layerContext = map[string]struct{ alias, path, typ string }{
 	"engine":         {"fweng", "github.com/mixofreality-studio/archistrator-platform/framework-go/engine", "fweng.Context"},
 	"resourceaccess": {"fwra", "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess", "fwra.Context"},
+	"utility":        {"fwra", "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess", "fwra.Context"},
 	"manager":        {"fwm", "github.com/mixofreality-studio/archistrator-platform/framework-go/manager", "fwm.Context"},
 	"client":         {"fwc", "github.com/mixofreality-studio/archistrator-platform/framework-go/client", "fwc.Context"},
 }
