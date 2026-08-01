@@ -221,9 +221,12 @@ func checkGolden(t *testing.T, path string, got []byte) {
 }
 
 // utilityDepFixture is a minimal project.json with a Manager depending on a
-// UTILITY-layer contract (a message bus). The manager's OTHER dep is an Engine,
-// which must stay out of the activity surface — so the fixture proves the
-// layer filter admits Utility without admitting Engine.
+// UTILITY-layer contract (a message bus). Its other two deps are the cases that
+// must NOT reach the activity surface: an Engine (pure computation, called
+// in-process by value) and an EXTERNAL utility — a Security contract with real
+// operations but goPackage null, because the component is a third-party service
+// this codebase never compiles. So the fixture proves the filter admits a BUILT
+// Utility without admitting either an Engine or an unbuilt one.
 const utilityDepFixture = `{
   "serviceContracts": {
     "orderManager": {
@@ -233,7 +236,8 @@ const utilityDepFixture = `{
       "title": "order contract",
       "deps": [
         { "name": "messageBus", "component": "messageBus" },
-        { "name": "pricing", "component": "pricingEngine" }
+        { "name": "pricing", "component": "pricingEngine" },
+        { "name": "security", "component": "security" }
       ],
       "$defs": { "OrderID": { "type": "string" } },
       "interface": {
@@ -263,6 +267,21 @@ const utilityDepFixture = `{
             ],
             "error": true
           }
+        ]
+      }
+    },
+    "security": {
+      "component": "security",
+      "layer": "Utility",
+      "goPackage": null,
+      "title": "security contract",
+      "$defs": { "Principal": { "type": "string" } },
+      "interface": {
+        "name": "Security",
+        "layer": "utility",
+        "operations": [
+          { "name": "ResolvePrincipal", "params": [], "result": { "$ref": "#/$defs/Principal" }, "error": true },
+          { "name": "Authorize", "params": [ { "name": "principal", "schema": { "$ref": "#/$defs/Principal" } } ], "error": true }
         ]
       }
     },
@@ -312,6 +331,20 @@ func TestGenerateUtilityDepBecomesActivity(t *testing.T) {
 	}
 	if strings.Contains(acts, "Pricing") {
 		t.Errorf("engine dep must not become an Activity, got:\n%s", acts)
+	}
+	// The built-guard: an activity-bearing LAYER with no goPackage emits nothing.
+	// A leaked Security dep would show up as `path.Base("") == "."` and an import
+	// path ending in a bare slash, so assert on both the symbol and the artefacts
+	// of the unbuilt path.
+	for _, forbidden := range []string{"Security", `"example.com/orders/"`, `"."`} {
+		if strings.Contains(acts, forbidden) {
+			t.Errorf("unbuilt (goPackage null) utility dep must emit nothing; found %q in:\n%s", forbidden, acts)
+		}
+	}
+	for name, src := range got {
+		if strings.Contains(string(src), "Security") {
+			t.Errorf("unbuilt utility dep leaked into %s:\n%s", name, src)
+		}
 	}
 
 	if w := string(got["worker.gen.go"]); !strings.Contains(w, `Name: "messageBus.deliverSignal"`) {

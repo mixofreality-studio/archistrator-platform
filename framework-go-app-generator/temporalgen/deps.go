@@ -37,13 +37,26 @@ type raDep struct {
 // RPC — is indistinguishable from an RA at this layer: same fwra call Context
 // (see modelgen's layerContext), same idempotency-key threading, same
 // must-not-run-inside-replay constraint. Engine deps are pure computation the
-// workflow calls in-process by value; plain deps are config. A pure utility
-// carries no service contract at all, so it never reaches this resolver.
+// workflow calls in-process by value; plain deps are config.
+//
+// Layer membership alone is NOT sufficient — see the built-guard in resolveRADeps.
 var activityBearingLayers = map[string]bool{"ResourceAccess": true, "Utility": true}
 
 // resolveRADeps resolves the manager's activity-bearing component deps in
-// contract order (see activityBearingLayers). Engine deps and plain deps are
-// skipped.
+// contract order. A dep qualifies only when it is BOTH in an activity-bearing
+// layer (see activityBearingLayers) AND BUILT — a non-empty goPackage, the same
+// "built" selection modelgen makes when deciding which contracts to emit. Engine
+// deps and plain deps are skipped.
+//
+// The built-guard is load-bearing, not defensive. A contract can sit in an
+// activity-bearing layer and have no Go package at all, and an EXTERNAL utility is
+// the standard case: a Security contract declaring resolvePrincipal / authorize /
+// verifyWebhookSignature is layer Utility with real operations, but the component
+// is a third-party service this codebase never compiles, so it carries goPackage
+// null. Without the guard, a manager declaring such a dep would emit one Activity
+// per op against path.Base("") == "." with an import path ending in a bare slash —
+// uncompilable generated code from a perfectly legal model. The layer says "this
+// would need an Activity if we built it"; goPackage says "we built it".
 func resolveRADeps(ec emitContext) []raDep {
 	var out []raDep
 	for _, dep := range ec.mgr.Deps {
@@ -51,7 +64,7 @@ func resolveRADeps(ec emitContext) []raDep {
 			continue
 		}
 		c, ok := ec.model.Contracts[dep.Component]
-		if !ok || !activityBearingLayers[c.Layer] {
+		if !ok || !activityBearingLayers[c.Layer] || c.GoPackage == "" {
 			continue
 		}
 		ops := append([]projectmodel.Operation(nil), c.Doc.Interface.Operations...)
