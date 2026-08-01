@@ -1,6 +1,6 @@
 // Package temporalgen generates the Temporal activities/invokers/worker
 // wiring for a Manager component's dependencies: one Temporal Activity per
-// ResourceAccess dep operation, the Manager-side invoker functions that call
+// activity-bearing dep operation, the Manager-side invoker functions that call
 // them via workflow.ExecuteActivity, and the worker main that registers them
 // on the interface's task queue.
 //
@@ -47,8 +47,8 @@ type emitContext struct {
 // files keyed by name: "activities.gen.go", "invokers.gen.go",
 // "worker.gen.go".
 //
-// activities.gen.go gets one Temporal Activity per ResourceAccess dep
-// operation; invokers.gen.go gets the workflow-side typed ExecuteActivity
+// activities.gen.go gets one Temporal Activity per activity-bearing dep
+// operation (ResourceAccess + contract-bearing Utility); invokers.gen.go gets the workflow-side typed ExecuteActivity
 // callers. worker.gen.go (Task 7) still emits a skeleton — it grows the
 // worker main that registers them on TaskQueueName(mgr.Doc.Interface.Name).
 func Generate(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
@@ -95,7 +95,7 @@ func Generate(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
 }
 
 // ActivityName is the Temporal activity name registered for one
-// ResourceAccess dependency operation: "<depComponentKey>.<lowerFirst(opName)>"
+// activity-bearing dependency operation: "<depComponentKey>.<lowerFirst(opName)>"
 // (e.g. "orderStateAccess.readOrder").
 func ActivityName(depComponentKey, opName string) string {
 	return depComponentKey + "." + projectmodel.LowerFirst(opName)

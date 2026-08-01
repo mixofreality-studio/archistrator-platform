@@ -219,3 +219,111 @@ func checkGolden(t *testing.T, path string, got []byte) {
 		t.Errorf("output mismatch for %s (run with -update to refresh)", path)
 	}
 }
+
+// utilityDepFixture is a minimal project.json with a Manager depending on a
+// UTILITY-layer contract (a message bus). The manager's OTHER dep is an Engine,
+// which must stay out of the activity surface — so the fixture proves the
+// layer filter admits Utility without admitting Engine.
+const utilityDepFixture = `{
+  "serviceContracts": {
+    "orderManager": {
+      "component": "orderManager",
+      "layer": "Manager",
+      "goPackage": "internal/manager/order",
+      "title": "order contract",
+      "deps": [
+        { "name": "messageBus", "component": "messageBus" },
+        { "name": "pricing", "component": "pricingEngine" }
+      ],
+      "$defs": { "OrderID": { "type": "string" } },
+      "interface": {
+        "name": "OrderManager",
+        "layer": "manager",
+        "operations": [
+          { "name": "PlaceOrder", "params": [ { "name": "id", "schema": { "$ref": "#/$defs/OrderID" } } ], "error": true }
+        ]
+      }
+    },
+    "messageBus": {
+      "component": "messageBus",
+      "layer": "Utility",
+      "goPackage": "internal/utility/messagebus",
+      "infra": ["Temporal"],
+      "title": "messagebus contract",
+      "$defs": { "ExecutionID": { "type": "string" }, "SignalName": { "type": "string" } },
+      "interface": {
+        "name": "MessageBus",
+        "layer": "utility",
+        "operations": [
+          {
+            "name": "DeliverSignal",
+            "params": [
+              { "name": "targetExecutionID", "schema": { "$ref": "#/$defs/ExecutionID" } },
+              { "name": "signalName", "schema": { "$ref": "#/$defs/SignalName" } }
+            ],
+            "error": true
+          }
+        ]
+      }
+    },
+    "pricingEngine": {
+      "component": "pricingEngine",
+      "layer": "Engine",
+      "goPackage": "internal/engine/pricing",
+      "title": "pricing contract",
+      "$defs": { "Money": { "type": "integer" } },
+      "interface": {
+        "name": "PricingEngine",
+        "layer": "engine",
+        "operations": [ { "name": "Price", "params": [], "result": { "$ref": "#/$defs/Money" }, "error": true } ]
+      }
+    }
+  }
+}`
+
+// TestGenerateUtilityDepBecomesActivity asserts a Manager's UTILITY-layer
+// component dep is activity-bearing: its ops become Temporal Activities
+// registered under "<contractKey>.<op>", with a workflow-side invoker — the same
+// treatment a ResourceAccess dep gets, because an I/O utility's verbs are
+// control-plane RPC that must not run inside the replay context. The Engine dep
+// in the same fixture must NOT appear (engines are called in-process by value).
+func TestGenerateUtilityDepBecomesActivity(t *testing.T) {
+	m, err := projectmodel.Load([]byte(utilityDepFixture))
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	got, err := temporalgen.Generate(m, temporalgen.Config{
+		ModulePath: "example.com/orders",
+		ManagerKey: "orderManager",
+	})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+
+	acts := string(got["activities.gen.go"])
+	for _, want := range []string{
+		"MessageBus messagebus.MessageBus",
+		"func (a *genActivities) MessageBusDeliverSignal(",
+		`"example.com/orders/internal/utility/messagebus"`,
+	} {
+		if !strings.Contains(acts, want) {
+			t.Errorf("activities.gen.go missing %q, got:\n%s", want, acts)
+		}
+	}
+	if strings.Contains(acts, "Pricing") {
+		t.Errorf("engine dep must not become an Activity, got:\n%s", acts)
+	}
+
+	if w := string(got["worker.gen.go"]); !strings.Contains(w, `Name: "messageBus.deliverSignal"`) {
+		t.Errorf("worker.gen.go missing the messageBus.deliverSignal registration, got:\n%s", w)
+	}
+	if inv := string(got["invokers.gen.go"]); !strings.Contains(inv, "MessageBusDeliverSignal(ctx workflow.Context") {
+		t.Errorf("invokers.gen.go missing the workflow-side MessageBus invoker, got:\n%s", inv)
+	}
+
+	for name, src := range got {
+		if _, err := parser.ParseFile(token.NewFileSet(), name, src, parser.AllErrors); err != nil {
+			t.Errorf("emitted %s does not parse: %v", name, err)
+		}
+	}
+}
