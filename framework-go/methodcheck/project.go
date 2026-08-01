@@ -306,9 +306,19 @@ type CallStep struct {
 // same directed, moded edge a Relationship carries, PLUS an optional alternative-
 // group tag. Calls in ONE step sharing an Alt value are surface-ALTERNATIVES —
 // equivalent entries into the same chain (the two surfaces a use case can be
-// entered from, say), not a sequence. Alt is presentation-and-grouping only: it
-// changes no CC-* verdict (every alternative still seeds CC-PATH-CONNECTED's
-// reached set), which is exactly why nothing below branches on it.
+// entered from, say), not a sequence.
+//
+// WHAT ALT DOES NOT CHANGE: any CC-* verdict, and any PER-EDGE legality rule. Every
+// alternative still seeds CC-PATH-CONNECTED's reached set, and each is checked as an
+// ordinary call — which is exactly why no rule branches on Alt.
+//
+// WHAT ALT STILL HAS TO OBEY: the PER-VIEW CARDINALITY rules, which read a view's
+// calls as concurrent and do not exempt a group of alternatives. DV-SINGLE-MGR,
+// APPC-INT-CLIENT-MULTI-MGR and APPC-INT-MGR-MULTI-QUEUE all see two alternatives
+// entering two different Managers as one Client driving two Managers, and fire at
+// Error. Alternatives must therefore target the SAME Manager: they are two doors
+// into one chain, not two chains. Pinned by
+// TestDynamicViewConsistency_AltGroupToDifferentManagersFires.
 //
 // Empty Alt means absent — methodcheck's structural mirror decodes the app's
 // nullable `alt` into its zero value rather than carrying a pointer (see
@@ -322,10 +332,12 @@ type TraceCall struct {
 }
 
 // relationship projects a trace call onto the plain directed edge the WHOLE-VIEW
-// suites reason about (DV-*, App-C, STP-*): those rules ask only "which endpoints,
-// which mode", and an alternative-group tag has no bearing on static-edge legality.
-// The CC-* family, which is the one that cares about a call's position in a step,
-// consumes TraceCall directly.
+// suites reason about (DV-*, App-C, STP-*). Those rules ask "which endpoints, which
+// mode" — per edge, and in aggregate per view — and neither question reads the
+// alternative-group tag: an alternative is checked exactly like any other call, which
+// is what makes an alt group subject to the per-view cardinality rules (see
+// TraceCall). The CC-* family, which is the one that cares about a call's position in
+// a step, consumes TraceCall directly.
 func (tc TraceCall) relationship() Relationship {
 	return Relationship{From: tc.From, To: tc.To, Mode: tc.Mode, Label: tc.Label}
 }

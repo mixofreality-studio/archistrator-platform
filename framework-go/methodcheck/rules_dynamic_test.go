@@ -126,6 +126,32 @@ func TestDynamicViewConsistency_SingleMgr(t *testing.T) {
 	}
 }
 
+// TestDynamicViewConsistency_AltGroupToDifferentManagersFires pins the one thing an
+// alternative group does NOT get to do (rollout rulings 2026-07-31). Alt is inert for
+// the CC-* verdicts and for per-EDGE legality, but the per-VIEW cardinality rules read
+// a view's calls as concurrent: two alternatives entering two different Managers is
+// one Client driving two Managers, and DV-SINGLE-MGR says so. Alternatives are two
+// doors into ONE chain — same Manager — not two chains.
+func TestDynamicViewConsistency_AltGroupToDifferentManagersFires(t *testing.T) {
+	client := comp(t, "AppClient", kindClient)
+	m1 := comp(t, "AManager", kindManager)
+	m2 := comp(t, "BManager", kindManager)
+	r1 := Relationship{From: client.ID, To: m1.ID, Mode: modeSync}
+	r2 := Relationship{From: client.ID, To: m2.ID, Mode: modeSync}
+	alt1, alt2 := traceOf(r1), traceOf(r2)
+	alt1.Alt, alt2.Alt = "entry", "entry" // ONE alternative group
+	s := System{
+		Components:    []Component{client, m1, m2},
+		Relationships: []Relationship{r1, r2},
+		DynamicViews: []DynamicView{{
+			UseCaseID: nid(), Key: "uc-alt-two-mgrs", Steps: []CallStep{{Calls: []TraceCall{alt1, alt2}}},
+		}},
+	}
+	if !hasRuleFindings(dynamicViewConsistency(s, CoreUseCases{}), ruleDVSingleMgr) {
+		t.Fatalf("an alt group entering two different Managers must still fire DV-SINGLE-MGR")
+	}
+}
+
 func TestDynamicViewConsistency_Mode(t *testing.T) {
 	s := dynamicBaseSystem(t)
 	s.DynamicViews[0].Steps[0].Calls[0].Mode = modeEventPubSub

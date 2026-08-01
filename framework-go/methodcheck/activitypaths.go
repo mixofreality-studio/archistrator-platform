@@ -42,34 +42,57 @@ package methodcheck
 //     complete result first, which is exponential in nested fork×decision depth —
 //     and designhealth runs this render-on-read over committed state, so one
 //     pathological diagram is a CPU/memory sink. The budget is charged per WALK-STEP
-//     (see walker.spend), never per final path, so it cannot repeat the fix-round-1
-//     asymmetry: it measures work actually done rather than results produced.
+//     (one node id materialized into a sequence — see spend/carry), never per
+//     final path, so it cannot repeat the fix-round-1 asymmetry: it measures work
+//     actually done rather than results produced.
 //
-// On exhaustion the walk stops EXPLORING and returns the paths it had already
-// completed — assembling those upward costs no further budget, so a blowup degrades
-// to a smaller answer instead of an empty or fabricated one. The degradation is
-// deterministic (entries in declared order, branches in declared edge order) and
-// only ever UNDER-approximates: every returned path is a real, complete path of the
-// diagram, so CC-PATH-CONNECTED can lose a finding to a pathological diagram but can
-// never gain a false one.
+// On exhaustion the walk stops EXPLORING; the walks it had already COMPLETED are
+// still carried up to the caller, capped at maxActivityPaths per level (carry), so a
+// blowup degrades to a smaller — often still cap-sized — answer instead of an empty
+// or fabricated one. The degradation is deterministic (entries in declared order,
+// branches in declared edge order) and only ever UNDER-approximates: every returned
+// path is a real, complete path of the diagram, so CC-PATH-CONNECTED can lose a
+// finding to a pathological diagram but can never gain a false one. For the shape
+// that actually dominates real data — decisions, not forks — the returned set is in
+// fact the EXACT prefix the output cap would have returned had the walk been
+// unbounded (pinned by TestPaths_BudgetTruncationMatchesTheCapPrefix).
 
 // maxActivityPaths caps the total number of enumerated paths per diagram.
 const maxActivityPaths = 512
 
-// maxWalkWork caps the enumeration's WALK-STEPS per diagram (see walker.spend for
-// what one step buys).
+// maxWalkWork caps the enumeration's WALK-STEPS per diagram. One step is one node id
+// MATERIALIZED into a walk sequence — see spend and carry, which between them
+// charge every sequence the walk builds, both where one is created and where one is
+// COPIED a level up. Charging the copies is what makes the budget a memory bound and
+// not merely a CPU one: the charged phase materializes maxWalkWork node ids, full
+// stop, rather than maxWalkWork walks each carrying a whole path.
 //
-// SIZING. The walker's own output cap is maxActivityPaths (512) and an authored
-// activity diagram runs to a few dozen nodes, so a diagram whose COMPLETE
-// enumeration fits the cap costs, at the absolute worst: 512 paths x 40 nodes of
-// node-visit steps (~20k) plus, for the widest fan the design guide admits (7
-// parallel branches), 7 folds x 512 combinations x 40 nodes of combination steps
-// (~143k) — call it 165k against a 250k budget. Every real diagram is far cheaper
-// (the committed views enumerate a handful of paths each, costing well under 2k),
-// so the budget cannot bind on real data. A nested fork×decision blowup, by
-// contrast, runs to 10^5–10^9 combinations and trips the budget after a few
-// thousand of them, returning in milliseconds.
-const maxWalkWork = 250_000
+// SIZING (measured 2026-07-31, fix round 1 — the numbers, not a rule of thumb):
+//
+//   - Committed data is the anchor: the most expensive of the 16 committed activity
+//     diagrams (drive-system-design, 25 nodes, 22 paths) costs 2,605 steps and every
+//     other one is under 1,900. The budget is ~380x the worst real diagram. Node count
+//     alone bounds nothing — the adversarial fixtures below are 50-70 nodes — which is
+//     why the honest claim is stated in terms of the OUTPUT CAP:
+//   - any diagram whose COMPLETE enumeration would fit the cap (<=512 paths, <=40
+//     nodes deep, widest admitted fan) costs at most ~550k steps, so it is never
+//     budget-truncated: its result is bit-identical to an unbounded walk's.
+//   - Blowups measured at this budget: a 22-decision reconverging chain (4.2M true
+//     paths) returns a full 512 paths having allocated 63MB (peak heap 4MB); an
+//     8-branch fork of 5-way decisions (5^8 = 390,625 combinations) trips the budget
+//     having allocated 92MB (peak heap 73MB). Both in well under a second. Before the
+//     copies were charged, the SAME decision-shaped chain spiked ~280MB peak heap and
+//     >1GB allocated inside a 250k budget — the budget bounded walk COUNT while each
+//     walk carried a whole path, and decision-shaped diagrams are the realistic case
+//     (37 decision nodes vs 1 fork across the committed data).
+//
+// Raising the budget further is not free: the fork shape allocates ~70 bytes per step
+// (each combination unions two visited-edge SETS) against the decision shape's ~4, so
+// a budget generous enough to fully enumerate, say, a 4,096-path chain (3.0M steps)
+// would put the fork-shaped worst case back over 250MB of peak heap — the very sink
+// this bound exists to prevent. That trade costs nothing real: such a diagram is
+// truncated to 512 paths anyway, and the 512 it returns are the same 512.
+const maxWalkWork = 1_000_000
 
 // pathEntry describes one enumeration root of an activity diagram.
 type pathEntry struct {
@@ -163,13 +186,12 @@ func diagramEntries(a ActivityDiagram) []pathEntry {
 	return entries
 }
 
-// spend charges n walk-steps and reports whether the budget covered them. A step is
-// one node-id the enumeration MATERIALIZES: one per node visited on a walk, and one
-// per node a fork combination copies into a new sequence (a combination visits no
-// new node, but copying is exactly where a cross-product blowup shows up, so it is
-// charged by length). Refusal is sticky — once the budget is out the walk stops
-// exploring for good, so the result cannot depend on the order in which the
-// remainder of the recursion happened to ask.
+// spend charges n walk-steps of MATERIALIZATION — a terminal walk, a fork
+// combination, or (through carry) a completed sub-walk copied a level up. Every
+// sequence the walk builds goes through here, which is what makes the budget a memory
+// bound and not merely a CPU one. Refusal is sticky — once the walk is out of budget
+// it stays out, so the result cannot depend on the order in which the remainder of
+// the recursion happened to ask.
 func (w *walker) spend(n int) bool {
 	if w.exhausted || w.remaining < n {
 		w.exhausted = true
@@ -179,13 +201,37 @@ func (w *walker) spend(n int) bool {
 	return true
 }
 
+// carry charges n walk-steps of ASSEMBLY — copying an ALREADY-COMPLETED sub-walk up
+// one level — where assembled is how many walks this level has carried so far.
+//
+// While the budget holds, assembly is charged exactly like exploration: the copy is
+// real materialization, and NOT charging it was the fix-round-1 defect (the budget
+// bounded walk COUNT while each walk carried a whole path, so a decision-shaped
+// blowup spiked ~280MB of heap inside a 250k budget).
+//
+// Once exploration is exhausted, assembly continues UNBUDGETED but capped at
+// maxActivityPaths per level. That is the graceful-degradation half: the walks
+// already completed must be able to reach the caller instead of being stranded one
+// frame below it, and carrying more than the output cap is pure waste because the
+// caller truncates to it anyway. The escape hatch is structurally bounded — at most
+// cap x depth node ids per level, over at most depth levels — so it cannot reopen
+// the memory hole the charging closed.
+func (w *walker) carry(assembled, n int) bool {
+	if !w.exhausted && w.spend(n) {
+		return true
+	}
+	return assembled < maxActivityPaths
+}
+
 // walkFrom performs the recursive DFS described on activityPaths, returning every
 // completed walk starting at nodeID given the edges already visited on the path so
-// far. An EMPTY return means the budget ran out (an unexhausted walk always yields
-// at least one walk: worst case, the terminal one) — callers rely on that invariant
-// to tell "nothing left to explore" from "no more budget to explore with".
+// far. An EMPTY return means the budget ran out before ANYTHING below this node
+// completed (an unexhausted walk always yields at least one walk — worst case, the
+// terminal one — and an exhausted one still carries up whatever did complete).
+// walkFork relies on that invariant to tell "this branch contributed nothing" from
+// "this branch contributed fewer alternatives than it would have".
 func (w *walker) walkFrom(nodeID string, visited map[int]bool) []activityWalk {
-	if !w.spend(1) {
+	if w.exhausted {
 		return nil
 	}
 	eligible := eligibleEdges(nodeID, w.edgesByFrom, visited)
@@ -194,6 +240,9 @@ func (w *walker) walkFrom(nodeID string, visited map[int]bool) []activityWalk {
 	// otherwise, a node with no eligible (unvisited) outgoing edge left terminates
 	// too — this is what bounds a loop to being traversed at most once.
 	if w.kindByID[nodeID] == nodeEnd || len(eligible) == 0 {
+		if !w.spend(1) {
+			return nil
+		}
 		return []activityWalk{{seq: []string{nodeID}, visited: visited}}
 	}
 
@@ -228,13 +277,16 @@ func eligibleEdges(nodeID string, edgesByFrom map[string][]int, visited map[int]
 // A branch that comes back empty is one the budget cut short; its already-completed
 // siblings are kept and returned. That is the graceful half of exhaustion: a
 // decision blowup returns the alternatives enumerated before the budget ran out, in
-// declared order.
+// declared order, truncated to what carry still allows.
 func (w *walker) branchOverEdges(nodeID string, eligible []int, visited map[int]bool) []activityWalk {
 	var out []activityWalk
 	for _, idx := range eligible {
 		v := cloneVisited(visited)
 		v[idx] = true
 		for _, sub := range w.walkFrom(w.edges[idx].To, v) {
+			if !w.carry(len(out), 1+len(sub.seq)) {
+				return out
+			}
 			out = append(out, activityWalk{seq: append([]string{nodeID}, sub.seq...), visited: sub.visited})
 		}
 	}
@@ -258,11 +310,14 @@ func (w *walker) branchOverEdges(nodeID string, eligible []int, visited map[int]
 // cross-producting makes the work depend only on the true number of alternatives
 // per branch, not on evaluation order.
 //
-// Exhaustion is ALL-OR-NOTHING here, unlike a decision's graceful truncation: a
-// fork path is only a real path of the diagram once EVERY branch is folded into it,
-// so a fork the budget cut short contributes no path at all rather than a fabricated
-// one missing a parallel branch (which could make a perfectly connected call chain
-// look disconnected to CC-PATH-CONNECTED).
+// Exhaustion is ALL-OR-NOTHING at the BRANCH level, unlike a decision's graceful
+// truncation: a fork path is only a real path of the diagram once EVERY branch is
+// folded into it, so a fork whose branch (or whose fold) came back with NOTHING
+// contributes no path at all, rather than a fabricated one missing a parallel branch
+// (which could make a perfectly connected call chain look disconnected to
+// CC-PATH-CONNECTED). A branch or fold that came back TRUNCATED but non-empty is a
+// different matter: every walk in it is a complete walk of that branch, so folding
+// them yields complete — merely fewer — combinations.
 func (w *walker) walkFork(nodeID string, eligible []int, visited map[int]bool) []activityWalk {
 	partials := []activityWalk{{seq: nil, visited: visited}}
 	for _, idx := range eligible {
@@ -280,6 +335,9 @@ func (w *walker) walkFork(nodeID string, eligible []int, visited map[int]bool) [
 
 	out := make([]activityWalk, 0, len(partials))
 	for _, p := range partials {
+		if !w.carry(len(out), 1+len(p.seq)) {
+			break
+		}
 		out = append(out, activityWalk{seq: append([]string{nodeID}, p.seq...), visited: p.visited})
 	}
 	return out

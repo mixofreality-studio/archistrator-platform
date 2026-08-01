@@ -2,6 +2,7 @@ package methodcheck
 
 import (
 	"fmt"
+	"runtime"
 	"testing"
 )
 
@@ -332,6 +333,113 @@ func TestPaths_BudgetBoundsNestedForkDecision(t *testing.T) {
 	}
 	if len(got) == 0 || !equalStrings(got[0].Nodes, []string{"s", "sa", "se"}) {
 		t.Fatalf("the entry completed BEFORE the blowup must survive the budget; got %+v", got)
+	}
+}
+
+// decisionChainDiagram builds the DECISION-shaped blowup: stages reconverging 2-way
+// decisions in a row (d → {a|b} → m → next d), so the true path count is 2^stages and
+// every path runs the full length of the chain. This is the shape that dominates real
+// data — 37 decision nodes against 1 fork across the committed diagrams — and the one
+// a fork-only adversarial test misses entirely.
+func decisionChainDiagram(stages int) ActivityDiagram {
+	nodes := []ActivityNode{{ID: "s", Kind: nodeStart}}
+	var edges []ActivityEdge
+	prev := "s"
+	for i := 0; i < stages; i++ {
+		d, a, b, m := fmt.Sprintf("d%d", i), fmt.Sprintf("a%d", i), fmt.Sprintf("b%d", i), fmt.Sprintf("m%d", i)
+		nodes = append(nodes,
+			ActivityNode{ID: d, Kind: nodeDecision, Label: "branch?"},
+			ActivityNode{ID: a, Kind: nodeAction, Label: a},
+			ActivityNode{ID: b, Kind: nodeAction, Label: b},
+			ActivityNode{ID: m, Kind: nodeMerge})
+		edges = append(edges,
+			ActivityEdge{From: prev, To: d},
+			ActivityEdge{From: d, To: a, Kind: edgeGuardedFlow, Guard: "[y]"},
+			ActivityEdge{From: d, To: b, Kind: edgeGuardedFlow, Guard: "[n]"},
+			ActivityEdge{From: a, To: m}, ActivityEdge{From: b, To: m})
+		prev = m
+	}
+	nodes = append(nodes, ActivityNode{ID: "e", Kind: nodeEnd})
+	edges = append(edges, ActivityEdge{From: prev, To: "e"})
+	return ActivityDiagram{Nodes: nodes, Edges: edges}
+}
+
+// allocatedBytes reports how many bytes fn allocated. Coarse by design — the numbers
+// it guards differ by an order of magnitude, not by a few percent.
+func allocatedBytes(fn func()) uint64 {
+	var before, after runtime.MemStats
+	runtime.GC()
+	runtime.ReadMemStats(&before)
+	fn()
+	runtime.ReadMemStats(&after)
+	return after.TotalAlloc - before.TotalAlloc
+}
+
+// TestPaths_BudgetBoundsDecisionChain is the DECISION-shaped counterpart to the fork
+// test above, and the regression for fix-round-1 finding I1. The budget used to charge
+// ONE step per sub-walk carried up a level, while the copy that step paid for was a
+// whole path long — so this diagram (22 reconverging decisions, 4.2M true paths, no
+// fork anywhere) spiked ~280MB of peak heap and allocated >1GB inside a 250k budget,
+// with CPU never looking alarming. Charging the copies BY LENGTH makes materialization
+// scale with the budget instead of with budget x path-length x depth: measured after
+// the fix, 63MB allocated and 4MB peak heap, and the walk still returns a full
+// cap-sized answer. The ceiling asserted here is deliberately loose — an order of
+// magnitude under the pre-fix >1GB, several times over the measured 63MB — so it
+// catches the regression CLASS without pinning an allocator profile.
+func TestPaths_BudgetBoundsDecisionChain(t *testing.T) {
+	a := decisionChainDiagram(22)
+	var got []activityPath
+	var exhausted bool
+	alloc := allocatedBytes(func() { got, exhausted = boundedActivityPaths(a) })
+
+	if !exhausted {
+		t.Fatalf("2^22 paths must exhaust the %d-step budget; it enumerated fully instead", maxWalkWork)
+	}
+	if len(got) > maxActivityPaths {
+		t.Fatalf("want at most the cap (%d) paths, got %d", maxActivityPaths, len(got))
+	}
+	if len(got) == 0 {
+		t.Fatalf("a decision blowup must still return the paths it completed, got none")
+	}
+	const ceiling = 256 << 20
+	if alloc > ceiling {
+		t.Fatalf("a decision-shaped blowup allocated %dMB, over the %dMB ceiling; the budget is bounding walk COUNT again rather than materialization",
+			alloc>>20, uint64(ceiling)>>20)
+	}
+}
+
+// TestPaths_BudgetTruncationMatchesTheCapPrefix pins what a budget-truncated answer
+// costs the caller on that same realistic shape: nothing. A 12-decision chain has
+// 4,096 true paths — 8x the output cap — and enumerating it fully costs 3.0M steps, so
+// the budget truncates it. The paths it returns are nevertheless bit-identical to the
+// first maxActivityPaths of the unbounded enumeration: same answer, less work. Only
+// the `exhausted` verdict distinguishes the two.
+func TestPaths_BudgetTruncationMatchesTheCapPrefix(t *testing.T) {
+	a := decisionChainDiagram(12)
+
+	unbounded := newWalker(a)
+	unbounded.remaining = 1 << 40 // effectively unbudgeted
+	var full []activityPath
+	for _, entry := range diagramEntries(a) {
+		for _, walk := range unbounded.walkFrom(entry.NodeID, map[int]bool{}) {
+			full = append(full, activityPath{Entry: entry, Nodes: walk.seq})
+		}
+	}
+	if len(full) != 4096 {
+		t.Fatalf("fixture: want 4096 true paths, got %d", len(full))
+	}
+
+	got, exhausted := boundedActivityPaths(a)
+	if !exhausted {
+		t.Fatalf("fixture: a 3.0M-step enumeration must trip the %d-step budget", maxWalkWork)
+	}
+	if len(got) != maxActivityPaths {
+		t.Fatalf("a budget-truncated decision chain must still fill the cap, got %d paths", len(got))
+	}
+	for i := range got {
+		if !equalStrings(got[i].Nodes, full[i].Nodes) {
+			t.Fatalf("path %d differs from the unbounded prefix:\n got %v\nwant %v", i, got[i].Nodes, full[i].Nodes)
+		}
 	}
 }
 
