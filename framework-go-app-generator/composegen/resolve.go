@@ -101,6 +101,11 @@ type raBinding struct {
 	arms       []variantArm
 	switched   bool
 	stub       bool
+	// layer is the contract's declared layer verbatim (e.g. "ResourceAccess",
+	// "Utility") — used ONLY to keep the required-binding boot-error message
+	// layer-accurate (fix round 1, Task 7c live-firing review, MINOR #8): a
+	// binding is not always a ResourceAccess (messageBus is a Utility).
+	layer string
 }
 
 // variantArm is one profile's variant construction for a binding.
@@ -138,25 +143,15 @@ type managerComp struct {
 	// Register<Iface>Worker(cfg) bool hook (G6b) — it has ≥1 optional-dormant
 	// component dep, so whether its Worker runs is composition-root policy.
 	gated bool
-	// registersSchedules marks a manager whose Deps include the messageBus
-	// component (composegen: startup schedule-registration seam, Task 7c) —
-	// its package is expected to export
+	// registersSchedules marks a manager whose Deps include the driver-named
+	// Config.ScheduleRegistrarComponent (composegen: startup
+	// schedule-registration seam, Task 7c) — its package is expected to export
 	// RegisterSchedules(ctx context.Context, bus messagebus.MessageBus) error.
 	// The emitter calls it once, immediately after the manager's embedded
 	// Worker starts (inside the same Register<Iface>Worker(cfg) gate when
 	// gated), so a Schedule is never registered against a dormant Worker.
 	registersSchedules bool
 }
-
-// messageBusComponentKey is the fixed component key the emitter recognizes for
-// the startup schedule-registration seam (Task 7c) — a manager depending on
-// this EXACT component gets a RegisterSchedules(ctx, messageBus) call emitted
-// after its Worker starts. Not driver-configurable: unlike VariantHookArgs
-// (per-binding construction the model cannot express), this is a fixed
-// naming convention the generator enforces structurally — a manager declaring
-// the dep without actually exporting RegisterSchedules simply fails to
-// compile (an undefined-symbol error), exactly like any other generated call.
-const messageBusComponentKey = "messageBus"
 
 // resolve builds the composition plan.
 func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
@@ -186,8 +181,38 @@ func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
 	if err := r.resolveManagers(m); err != nil {
 		return nil, err
 	}
+	if err := r.validateScheduleRegistrar(); err != nil {
+		return nil, err
+	}
 	r.hooks = deriveHooks(r)
 	return r, nil
+}
+
+// validateScheduleRegistrar fails Generate with a named, actionable error
+// (fix round 1, Task 7c live-firing review, FINDING 4) instead of silently
+// emitting RegisterSchedules(ctx, nil) — the driver-named
+// Config.ScheduleRegistrarComponent resolving to "nil" means the deployment
+// model declares NO real binding arm for it (an arm-less optional/dormant
+// component), so every manager depending on it would call RegisterSchedules
+// against a nil messagebus.MessageBus, panicking the moment that manager's
+// Worker starts. A silent nil here is strictly worse than a generate-time
+// failure: it would compile clean and only blow up at runtime, the exact
+// class of bug this task's own live-firing review exists to catch.
+func (r *resolved) validateScheduleRegistrar() error {
+	if r.cfg.ScheduleRegistrarComponent == "" {
+		return nil // feature off — no manager was marked registersSchedules either (see resolveManager)
+	}
+	if r.localVar[r.cfg.ScheduleRegistrarComponent] != "nil" {
+		return nil // resolved to a real constructed binding — nothing to guard
+	}
+	for _, mc := range r.managers {
+		if mc.registersSchedules {
+			return fmt.Errorf(
+				"composegen: manager %q depends on schedule-registrar component %q, but it resolved to nil (no deployment binding arm) — RegisterSchedules would be called with a nil bus",
+				mc.key, r.cfg.ScheduleRegistrarComponent)
+		}
+	}
+	return nil
 }
 
 // resolveAliases computes the import alias for every component package the walk
@@ -364,6 +389,7 @@ func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding,
 		alias:      r.aliasFor(c.GoPackage),
 		importPath: r.cfg.ModulePath + "/" + c.GoPackage,
 		presence:   b.Presence,
+		layer:      c.Layer,
 	}
 	for _, profile := range r.profiles {
 		pv, ok := b.PerProfile[profile]
@@ -516,14 +542,7 @@ func (r *resolved) resolveManager(m *projectmodel.Model, key string, c *projectm
 			return managerComp{}, fmt.Errorf("composegen: manager %q: %w", key, err)
 		}
 		mc.ctorArgs = append(mc.ctorArgs, arg)
-		// G6b: a component dep bound to an optional-dormant RA makes this
-		// manager's Worker registration composition-root policy.
-		if dep.Component != "" && r.optDormant[dep.Component] {
-			mc.gated = true
-		}
-		if dep.Component == messageBusComponentKey {
-			mc.registersSchedules = true
-		}
+		r.applyDepFlags(&mc, dep)
 	}
 	if mc.gated {
 		r.workerGateHooks = append(r.workerGateHooks, workerGateHook(mc.iface))
@@ -534,6 +553,23 @@ func (r *resolved) resolveManager(m *projectmodel.Model, key string, c *projectm
 		mc.webImport = r.cfg.ModulePath + "/internal/client/web/" + webPkgBase(c.GoPackage)
 	}
 	return mc, nil
+}
+
+// applyDepFlags sets the two per-dep managerComp flags a component dep can
+// trigger (split out of resolveManager's loop body to keep its cognitive
+// complexity down): G6b's Worker-registration gate (a dep bound to an
+// optional-dormant RA), and Task 7c's schedule-registrar marker (a dep bound
+// to the driver-named Config.ScheduleRegistrarComponent).
+func (r *resolved) applyDepFlags(mc *managerComp, dep projectmodel.Dep) {
+	if dep.Component == "" {
+		return
+	}
+	if r.optDormant[dep.Component] {
+		mc.gated = true
+	}
+	if r.cfg.ScheduleRegistrarComponent != "" && dep.Component == r.cfg.ScheduleRegistrarComponent {
+		mc.registersSchedules = true
+	}
 }
 
 // managerIsWebExposed decides whether a manager is web-exposed (B1). When the

@@ -75,6 +75,22 @@ type Config struct {
 	// ("<component>/<variant>"); a variant NOT listed keeps the existing
 	// infra-implies-error heuristic unchanged.
 	VariantConstructorNoError map[string]bool
+	// ScheduleRegistrarComponent names the component key (fix round 1, Task 7c
+	// live-firing review, FINDING 4 — replaces the earlier hard-coded
+	// "messageBus" constant) whose Manager dependents get a startup
+	// RegisterSchedules(ctx, bus) call emitted immediately after their embedded
+	// Worker starts: any manager whose Deps include a component dep with this
+	// EXACT key is expected to export
+	// RegisterSchedules(ctx context.Context, bus <IfaceType>) error — a fixed
+	// naming convention the generator enforces structurally (not a driver value
+	// choice the way VariantHookArgs's types are): a manager declaring the dep
+	// without exporting that func simply fails to compile. Empty (the default)
+	// disables the feature entirely — no manager is marked registersSchedules.
+	// If the named component resolves to a nil local var (an arm-less
+	// optional/dormant binding with no real deployment arm), Generate FAILS
+	// with a named error naming the manager + component, rather than silently
+	// emitting RegisterSchedules(ctx, nil) — see validateScheduleRegistrar.
+	ScheduleRegistrarComponent string
 	// WebExposedManagers, when non-nil, REPLACES the System-relationship-derived
 	// web-exposed manager set (isWebExposed) with exactly this component-key
 	// set — e.g. archistrator's billingManager carries a web-client relationship

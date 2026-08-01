@@ -56,6 +56,18 @@ func writeSingleArm(b *strings.Builder, ra raBinding) {
 	writeReadyLog(b, "\t", ra.key, arm.variant)
 }
 
+// bindingLayerLabel returns the binding's declared layer for the required-arm
+// boot-error message (fix round 1, Task 7c live-firing review, MINOR #8): a
+// binding is not always a ResourceAccess (e.g. messageBus is a Utility) — an
+// empty layer (a fixture/contract that omits it) falls back to the prior
+// literal so no existing message goes blank.
+func bindingLayerLabel(layer string) string {
+	if layer == "" {
+		return "ResourceAccess"
+	}
+	return layer
+}
+
 // writeReadyLog emits the boot-log parity line for one constructed binding arm
 // (run()'s "<componentKey> (<variant>) ready" convention, e.g. "artifactAccess
 // (github) ready").
@@ -74,7 +86,7 @@ func writeSwitchArms(b *strings.Builder, ra raBinding) {
 	}
 	if strings.EqualFold(ra.presence, "required") {
 		b.WriteString("\tdefault:\n")
-		b.WriteString("\t\treturn errors.New(\"" + ra.key + ": no ResourceAccess variant for the active profile\")\n")
+		b.WriteString("\t\treturn errors.New(\"" + ra.key + ": no " + bindingLayerLabel(ra.layer) + " variant for the active profile\")\n")
 	}
 	b.WriteString("\t}\n")
 }
@@ -124,10 +136,11 @@ func writeGatedWorker(b *strings.Builder, r *resolved, mc managerComp) {
 }
 
 // writeWorker emits one manager's Worker registration + start + deferred stop at
-// the given indent, followed — for a manager depending on messageBus (Task 7c)
-// — by its startup Schedule registration call. A Schedule is only ever
-// registered once its owning Worker has actually started, so a re-firing
-// Schedule always finds a live Worker on the other end.
+// the given indent, followed — for a manager depending on
+// Config.ScheduleRegistrarComponent (Task 7c) — by its startup Schedule
+// registration call. A Schedule is only ever registered once its owning
+// Worker has actually started, so a re-firing Schedule always finds a live
+// Worker on the other end.
 func writeWorker(b *strings.Builder, r *resolved, indent string, mc managerComp) {
 	w := "w" + upperFirst(mc.varName)
 	b.WriteString(indent + w + " := worker.New(tc, " + mc.alias + ".TaskQueue, worker.Options{})\n")
@@ -136,7 +149,7 @@ func writeWorker(b *strings.Builder, r *resolved, indent string, mc managerComp)
 	b.WriteString(indent + "defer " + w + ".Stop()\n")
 	b.WriteString(indent + "logger.Info(\"embedded temporal worker started\", \"taskQueue\", " + mc.alias + ".TaskQueue)\n")
 	if mc.registersSchedules {
-		busVar := r.localVar[messageBusComponentKey]
+		busVar := r.localVar[r.cfg.ScheduleRegistrarComponent]
 		b.WriteString(indent + "if err := " + mc.alias + ".RegisterSchedules(ctx, " + busVar + "); err != nil {\n" + indent + "\treturn err\n" + indent + "}\n")
 		b.WriteString(indent + "logger.Info(\"" + mc.key + " Temporal Schedules registered\")\n")
 	}
