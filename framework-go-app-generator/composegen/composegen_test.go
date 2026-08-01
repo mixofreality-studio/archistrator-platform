@@ -433,9 +433,10 @@ func TestMessageBusTemporalHookArgsAndScheduleRegistration(t *testing.T) {
 	s := string(src)
 
 	for _, anchor := range []string{
-		// 1: tc threaded as an extra hook call-site + interface param.
-		"messageBus := messagebus.NewTemporalMessageBus(hooks.MessageBusTemporalArgs(cfg, tc))",
-		"MessageBusTemporalArgs(cfg *Config, tc client.Client) map[string]int",
+		// 1: tc threaded as an extra POSITIONAL arg ahead of the (unchanged-
+		// signature) hook call — not folded into the hook call itself.
+		"messageBus := messagebus.NewTemporalMessageBus(tc, hooks.MessageBusTemporalArgs(cfg))",
+		"MessageBusTemporalArgs(cfg *Config) map[string]int",
 		// 3: the startup Schedule-registration call, right after the Worker starts.
 		"logger.Info(\"embedded temporal worker started\", \"taskQueue\", order.TaskQueue)\n\tif err := order.RegisterSchedules(ctx, messageBus); err != nil {\n\t\treturn err\n\t}\n\tlogger.Info(\"orderManager Temporal Schedules registered\")",
 	} {
@@ -446,6 +447,12 @@ func TestMessageBusTemporalHookArgsAndScheduleRegistration(t *testing.T) {
 	// 2: single-return construction — no err-wrapping for messageBus specifically.
 	if strings.Contains(s, "messageBus, err := messagebus.NewTemporalMessageBus") {
 		t.Error("messageBus construction is err-wrapped despite VariantConstructorNoError override")
+	}
+	// The hook interface method must appear EXACTLY ONCE — messageBus's
+	// "Temporal" variant binds BOTH the local and cloud profiles, and a naive
+	// per-arm append would emit a duplicate (uncompilable) interface method.
+	if n := strings.Count(s, "MessageBusTemporalArgs(cfg *Config)"); n != 1 {
+		t.Errorf("want exactly 1 MessageBusTemporalArgs hook method declaration, got %d", n)
 	}
 	// The manager's own constructor receives the REAL messageBus var, not nil.
 	if !strings.Contains(s, "order.NewOrderManager(tc, messageBus)") {

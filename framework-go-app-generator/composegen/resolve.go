@@ -42,6 +42,10 @@ type resolved struct {
 	// variantHookImports are the import paths the variant-arg hook return types
 	// reference (e.g. the projectstate package for the catalog/minter ports).
 	variantHookImports []string
+	// variantHookSeen dedupes addVariantHook by hook name: a variant bound by
+	// multiple profiles (messageBus's "Temporal" variant binds both local and
+	// cloud) must still emit exactly ONE Hooks-interface method.
+	variantHookSeen map[string]bool
 	// workerGateHooks are the conditional-worker-registration gates (G6b) —
 	// Register<Iface>Worker — collected during manager resolution, in manager
 	// order.
@@ -372,33 +376,39 @@ func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding,
 }
 
 // resolveArm resolves one profile's variant to a New<Variant><Interface> call.
-// When the variant is registered in Config.VariantHookArgs (G3), the arg list
-// is a single spread call hooks.<Comp><Variant>Args(cfg[, extraParams...]) —
-// the model can't supply those args (composition-root ports / typed values),
-// so the emitter delegates them to a typed hook. Bound infra whose substrate
-// resolves to a cfg-field value (github-app, keycloak, ...) threads nothing
-// extra — the hook already reads cfg directly (unchanged behavior); infra
-// resolving to an already-CONSTRUCTED LOCAL the hook cannot otherwise reach
-// (today: the temporal substrate's dialed client `tc`) is threaded as an
-// EXTRA hook parameter via hookExtraArgs, since "the hook reads its cfg" does
-// not hold for those. Otherwise (no hook) the positional convention applies:
-// infra values (per the substrate catalog) then binding settings; a variant
-// that consumes any infra returns (Interface, error) UNLESS overridden by
-// Config.VariantConstructorNoError (messagebus.NewTemporalMessageBus is
-// single-return despite consuming the temporal infra) — an infra-free variant
-// (memory/dry-run) returns the interface alone.
+// When the variant is registered in Config.VariantHookArgs (G3), the hook call
+// hooks.<Comp><Variant>Args(cfg) supplies the args the model can't express
+// (composition-root ports / typed values) — its OWN signature stays cfg-only:
+// "the hook reads its cfg" holds for every existing hook-args variant
+// (github-app, keycloak substrates). Bound infra resolving to an
+// already-CONSTRUCTED LOCAL the hook cannot reach that way (today: the
+// temporal substrate's dialed client `tc`) is instead threaded as an EXTRA
+// POSITIONAL ARG to the SURROUNDING constructor call, ahead of the hook call
+// (hookExtraCtorArgs) — e.g.
+// messagebus.NewTemporalMessageBus(tc, hooks.MessageBusTemporalArgs(cfg)). This
+// is a plain multi-arg Go call (not the f(g()) sole-arg spread), so it
+// composes cleanly with a hook that itself returns multiple values. A
+// hook-args variant is registered ONCE regardless of how many profiles bind it
+// (messageBus's "Temporal" variant binds BOTH local and cloud) —
+// addVariantHook dedupes by name. Otherwise (no hook) the positional
+// convention applies: infra values (per the substrate catalog) then binding
+// settings; a variant that consumes any infra returns (Interface, error)
+// UNLESS overridden by Config.VariantConstructorNoError
+// (messagebus.NewTemporalMessageBus is single-return despite consuming the
+// temporal infra) — an infra-free variant (memory/dry-run) returns the
+// interface alone.
 func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.BindingVariant, settings []projectmodel.Setting) variantArm {
 	ctor := rb.alias + ".New" + variantToken(pv.Variant) + rb.iface
 	returnsError := len(pv.Infra) > 0 && !r.cfg.VariantConstructorNoError[rb.key+"/"+pv.Variant]
 	if specs, ok := r.cfg.VariantHookArgs[rb.key+"/"+pv.Variant]; ok {
-		callArgs, params := r.hookExtraArgs(pv.Infra)
-		r.addVariantHook(rb, pv.Variant, specs, params)
-		args := append([]string{"cfg"}, callArgs...)
+		extraCtorArgs := r.hookExtraCtorArgs(pv.Infra)
+		r.addVariantHook(rb, pv.Variant, specs)
+		args := append(extraCtorArgs, "hooks."+variantHookName(rb.key, pv.Variant)+"(cfg)")
 		return variantArm{
 			profile:      profile,
 			variant:      pv.Variant,
 			ctor:         ctor,
-			args:         []string{"hooks." + variantHookName(rb.key, pv.Variant) + "(" + strings.Join(args, ", ") + ")"},
+			args:         args,
 			returnsError: returnsError,
 		}
 	}
@@ -420,24 +430,24 @@ func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.Bind
 	}
 }
 
-// hookExtraArgs computes, for a VariantHookArgs-configured arm's bound infra,
-// the call-site arg expressions and matching Hooks-interface parameter tokens
-// for any infra key whose substrate resolves to an already-constructed LOCAL
-// (not a cfg field) — today only "temporal" (the dialed `tc`). Every infra key
-// is still marked consumed (bookkeeping) regardless. Postgres-substrate +
-// hook-args is unimplemented (no bound variant needs it today); extend the
-// switch here (ctx, *pgxpool.Pool) if one ever does.
-func (r *resolved) hookExtraArgs(infraKeys []string) (callArgs, params []string) {
+// hookExtraCtorArgs computes, for a VariantHookArgs-configured arm's bound
+// infra, the EXTRA positional arg expressions the surrounding
+// New<Variant><Interface> call needs ahead of the hook call, for any infra key
+// whose substrate resolves to an already-constructed LOCAL (not a cfg field)
+// — today only "temporal" (the dialed `tc`). Every infra key is still marked
+// consumed (bookkeeping) regardless of whether it contributes an arg.
+// Postgres-substrate + hook-args is unimplemented (no bound variant needs it
+// today); extend the switch here (ctx, *pgxpool.Pool) if one ever does.
+func (r *resolved) hookExtraCtorArgs(infraKeys []string) []string {
+	var args []string
 	for _, ik := range infraKeys {
 		decl := r.infra[ik]
 		r.consumedKeys[ik] = true
 		if decl.Substrate == "temporal" {
-			callArgs = append(callArgs, "tc")
-			params = append(params, "tc client.Client")
-			r.variantHookImports = append(r.variantHookImports, "go.temporal.io/sdk/client")
+			args = append(args, "tc")
 		}
 	}
-	return callArgs, params
+	return args
 }
 
 // resolveEngines constructs every engine-layer contract via its pure
