@@ -104,27 +104,25 @@ From Appendix C §3.2 "Cardinality" and Ch. 3 §4.3 "Managers-to-Engines Ratio".
 
 ## Temporal mapping (when Managers run on Temporal)
 
-When the operational concepts commit to Temporal as the Manager-execution infrastructure (see [[the-method-operational-concepts]] Step 1), each interaction rule above maps to a specific Temporal primitive. Edge labels in the rendered architecture and steps in sequence diagrams use these primitive names verbatim: Workflow / Signal / Query / Update / Activity / Timer / Schedule / ChildWorkflow / ContinueAsNew (Manager-layer only).
+When the operational concepts commit to Temporal as the Manager-execution infrastructure (see [[the-method-operational-concepts]] Step 1), each interaction rule above maps to a specific Temporal primitive. **This table is a CONSTRUCTION mapping, not a labelling vocabulary.** The primitive names below belong in code and in the committed `.operationalConcepts` artifact; they must NEVER appear in an architecture edge label or a realization call label, which use the destination layer's own vocabulary (see [[the-method-architecture]] Step 7 and `STRUCTURIZR-CONVENTIONS.md`). The substrate is how a Manager RUNS, not a component it calls: `Activity:`, `StartWorkflow(`, `SignalExternalWorkflow` in a label is a leak, and a Manager's own timers, awaits, and child workflows are edges nowhere.
 
 **Temporal lives only in the Manager layer.** Engines, ResourceAccess, Resources, and Utilities import no Temporal and contain no Temporal types. The mapping below is written from the Manager's perspective: when a Manager workflow needs to make a ResourceAccess call (which does I/O), the **Manager defines and registers a Temporal Activity** whose body delegates to the plain ResourceAccess method — the Activity, its `RetryPolicy`, and its timeouts all belong to the Manager. Engine calls are deterministic, so the Manager invokes them directly from workflow code with no Activity. A ResourceAccess or Engine package that imports Temporal is a layer violation.
 
-| Method interaction | Temporal primitive | Edge-label form |
+| Method interaction | Temporal primitive (construction) | Model edge + its label vocabulary |
 |---|---|---|
-| Client → Manager (start a use case) | Start a Workflow | `StartWorkflow(<WorkflowType>, <workflowId>, <input>)` |
-| Client → Manager (deliver a decision to a running workflow) | Signal a Workflow | `SignalWorkflow(<workflowId>, <SignalName>, <payload>)` |
-| Client → Manager (read state without mutation) | Query a Workflow | `QueryWorkflow(<workflowId>, <QueryName>) → <result>` |
-| Client → Manager (synchronous tracked write) | Update a Workflow | `UpdateWorkflow(<workflowId>, <UpdateName>, <payload>) → <result>` |
-| SchedulerClient → Manager (recurring) | Temporal Schedule | `Schedule[<name>] → executes <WorkflowType>` |
-| Manager → Engine | Deterministic in-workflow call (NOT an Activity); Engine imports no Temporal | `<Name>(<args>) → <output>` |
-| Manager → ResourceAccess | Activity **defined and registered by the Manager**, wrapping the plain RA method; RA imports no Temporal | `Activity: <ActivityName>` |
-| Manager → Manager (queued, cross-Manager) | Signal an external Workflow | `SignalExternalWorkflow(<targetWorkflowId>, <SignalName>, <payload>)` — routed through `workflowExecutionAccess`; the static architecture has no sideways Manager → Manager edge |
-| Manager → self (sleep) | Durable Timer | `Timer(<duration>)` |
-| Manager → self (await human / external event) | Await Signal | `Await Signal(<SignalName>) — workflow suspends` |
-| Manager → child workflow | ExecuteChildWorkflow | `ExecuteChildWorkflow(<ChildWorkflowType>, <input>)` |
-| Manager → reset history at a checkpoint | Continue-As-New | `ContinueAsNew(<input>)` |
-| ResourceAccess → Resource | The plain RA method's actual I/O (running inside the Manager's Activity wrapper, but itself Temporal-free) | `<atomic verb>` plus idempotency key derivation (the Manager passes the key in, e.g. `${workflowId}:${activityId}`, since the RA method cannot read Temporal context) |
+| Client → Manager (start a use case) | Start a Workflow | `Client → Manager` sync — `<managerMethodName>(<args>) → <result>` |
+| Client → Manager (deliver a decision to a running workflow) | Signal a Workflow | same edge — the manager method that receives the decision |
+| Client → Manager (read state without mutation) | Query a Workflow | same edge — the manager read method |
+| Client → Manager (synchronous tracked write) | Update a Workflow | same edge — the manager write method |
+| SchedulerClient → Manager (recurring) | Temporal Schedule, registered via `messageBus.registerSchedule` | `SchedulerClient → Manager` sync — the manager method the schedule drives. This edge is what a `timeEvent` entry roots on |
+| Manager → Engine | Deterministic in-workflow call (NOT an Activity); Engine imports no Temporal | `Manager → Engine` sync — `<EngineMethodName>(<args>) → <output>` |
+| Manager → ResourceAccess | Activity **defined and registered by the Manager**, wrapping the plain RA method; RA imports no Temporal | `Manager → ResourceAccess` sync — the **atomic business verb**, never `Activity: …` |
+| Manager → Manager (queued, cross-Manager) | Signal an external Workflow, delivered via `messageBus.deliverSignal` | **A declared queued `Manager → Manager` edge** — `delivers <SignalName> (queued)`. It is a real static relationship (see below) and is what an `acceptEvent` entry roots on |
+| Manager → MessageBus | The two cross-component substrate verbs | `Manager → MessageBus` sync — `deliverSignal(<SignalName>)` / `registerSchedule(<name>)`. Managers only (restricted clientele) |
+| Manager → self (sleep / await / child workflow / continue-as-new) | Durable Timer, Await Signal, ExecuteChildWorkflow, Continue-As-New | **No edge at all** — execution substrate, not architecture. A suspension is conveyed by where the resuming fragment sits |
+| ResourceAccess → Resource | The plain RA method's actual I/O (running inside the Manager's Activity wrapper, but itself Temporal-free) | `ResourceAccess → Resource` sync — `<atomic verb>` plus idempotency-key derivation (the Manager passes the key in, e.g. `${workflowId}:${activityId}`, since the RA method cannot read Temporal context) |
 
-**Why "queued M↔M" maps to `SignalExternalWorkflow`, not to a static Manager → Manager edge.** The book's queued sideways edge is satisfied operationally by Temporal: the source Manager's workflow calls `workflowExecutionAccess.SignalExternalWorkflow(target, ...)`, which is routed by the Temporal cluster to a workflow on the target Manager's task queue. From a layering perspective the call goes downward through ResourceAccess (`workflowExecutionAccess`) and the cluster, then up into a different Manager — there is no static sideways edge. The cardinality limit on queued Manager↔Manager edges (Don't 6b: do not queue to more than one Manager per use case) still applies and counts `SignalExternalWorkflow` calls.
+**Queued M→M IS a static edge (corrected 2026-08-01).** The book's queued sideways carve-out is modelled as what it is: a **declared queued `Manager → Manager` relationship**, named for the business signal it carries. Temporal's `SignalExternalWorkflow` is how that edge is *delivered*, and the delivery rides the `MessageBus` utility's `deliverSignal` verb — the bus is the medium of the edge, not a party to it. So the realization draws the **queued M→M call and never additionally a bus call** for the same delivery; the substrate never appears as a ResourceAccess in the model. (Earlier doctrine routed this through a `workflowExecutionAccess` ResourceAccess and denied the static edge — that is retired: it hid a real architectural relationship behind infrastructure, and left message-triggered use cases with no edge for their chain to root on.) The cardinality limit still applies: Don't 6b — a Manager does not queue to more than one Manager in the same use case.
 
 ## Layering style — prefer closed
 

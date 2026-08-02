@@ -18,15 +18,15 @@ Because archistrator IS the platform, archistrator's own project references this
 
 ### 1. Communication topology
 
-**How systems built here run:** requests come in through one gateway and are handled by exactly one service per request; there is no hidden internal message bus.
+**How systems built here run:** requests come in through one gateway and are handled by exactly one service per request; services never chatter behind your back — the one channel between them is a narrow, named message surface, not a free-for-all bus.
 
-**Engineer detail:** External callers reach in-process Clients through Envoy Gateway; Clients call exactly one Manager per request via the durable-execution runtime (`durableExecutionAccess.startOrSignalWorkflow`). No internal message bus; no synchronous HTTP between Managers. A durable-execution runtime is mandatory for every Manager without exception.
+**Engineer detail:** External callers reach in-process Clients through Envoy Gateway; Clients call exactly one Manager per request, started or resumed on the durable-execution runtime. **No synchronous HTTP between Managers**, and no broker-style publish/subscribe fan-out. The ONLY inter-Manager channel is the `MessageBus` **utility** — a restricted-clientele utility (ch. 5) exposing exactly two verbs, `deliverSignal` (deliver a queued Manager→Manager message) and `registerSchedule` (register the recurring timers that fire through the SchedulerClient channel). **Only Managers may call it**, enforced by an arch-test import rule; Engines are pure computation, ResourceAccess fronts one resource each, and Clients enter at Managers. It encapsulates the workflow-execution-substrate volatility (Temporal today, another durable executor later) so no Manager binds to a runtime API. A durable-execution runtime is mandatory for every Manager without exception.
 
 ### 2. Layering style
 
 **How systems built here run:** the architecture is strictly layered — calls only ever go downward, never up or sideways.
 
-**Engineer detail:** Closed layering per App C §3.4. No Client-to-Engine, Client-to-ResourceAccess, or skip-layer edges. One permitted exception: the queued BillingManager→OperationsManager `applyDelinquencyPolicy` Signal (queued M→M per §3.4c.ii).
+**Engineer detail:** Closed layering per App C §3.4. No Client-to-Engine, Client-to-ResourceAccess, or skip-layer edges. The single permitted sideways call is the **queued Manager→Manager** edge (App C §3.4c.ii) — the book's carve-out for one use case triggering a latent, much-deferred execution of another. Every such edge is declared in the static model, named for the business signal it carries, and realized as that queued call (entry 8): the messaging utility underneath it is never drawn as a second edge for the same delivery.
 
 ### 3. Artifact presentation is a client concern
 
@@ -60,7 +60,9 @@ Because archistrator IS the platform, archistrator's own project references this
 
 **How systems built here run:** the workflow engine is how a service runs, not a component in the design — so the architecture stays clean.
 
-**Engineer detail:** A Manager's workflow-internal durable primitives (`startTimer`, `awaitSignal`, `executeChild`) and each Manager's own `client.Client` are EXECUTION SUBSTRATE, not architecture edges — they are how a Manager's own workflow runs on the durable runtime, not a call from one component to another. The systemDesign durable-execution-access edges therefore depict CLIENT-SIDE verb use only (`deliverSignal` / `registerSchedule` against another Manager's workflow), never a Manager's own timers/awaits/child-workflows over its own encapsulated workflow.
+**Engineer detail:** A Manager's workflow-internal durable primitives (`startTimer`, `awaitSignal`, `executeChild`) and each Manager's own `client.Client` are EXECUTION SUBSTRATE, not architecture edges — they are how a Manager's own workflow runs on the durable runtime, not a call from one component to another. The substrate's execution role is therefore **invisible in the architecture**: there is no ResourceAccess and no Resource component standing for the workflow engine, only the `MessageBus` utility (entry 1) carrying the two cross-component verbs. The systemDesign `Manager → MessageBus` edges depict CLIENT-SIDE verb use only (`deliverSignal` / `registerSchedule` against another Manager's workflow), never a Manager's own timers/awaits/child-workflows over its own encapsulated workflow.
+
+**How this shows up in a realization — verb calls draw; deliveries don't.** A queued Manager→Manager relationship is the architectural representation of a delivery, and the bus is the medium of that edge, not a party to it: realize the delivery as the **queued `Manager → Manager` call and never additionally as a `deliverSignal` bus call** — drawing both double-counts one act and re-materializes the substrate this entry makes invisible. A bus call IS drawn where the verb is the activity node's own business work (registering a per-customer recurring schedule on an onboarding chain). Boot-time schedule registration, which no use-case flow performs, is drawn nowhere.
 
 ### 9. Resource-access facets — one volatility, one substrate, many contracts
 

@@ -202,27 +202,26 @@ Invoke [[the-method-architecture]] via `system-architect`. This single skill cov
 >   - Every component is a `Component` (`Name`, `Kind`, `Encapsulates`, `AtomicBusinessVerbs`; `Layer` derived from `Kind` server-side)
 >   - Renders to one `softwareSystem` with all components as layer-tagged containers
 >   - The `static-architecture` view (layered pyramid) is derived render-on-read — you do not author it
->   - One `DynamicView` per core use case (call chain — see below)
+>   - One `DynamicView` per use case — core AND every nonCore variation (founder extension) — each REALIZED step by step (call chain — see below)
 >
 > The Structurizr DSL (`architecture.dsl` / `workspace.dsl`) is a
 > render-on-read of `.systemDesign` produced by the server — never a
 > hand-authored or copied file.
 >
-> Then validate every core use case as a call chain (ch. 4 "Architecture Validation"):
->   1. Take the activity diagram from `.coreUseCases`. Add swim lanes for components/subsystems.
->   2. Trace through the static architecture: Client → exactly one Manager → Engines/ResourceAccess → Resources.
->   3. Encode as a `DynamicView` (ordered `Edges`, `Mode` = `CallSync` | `CallQueued`) in `.systemDesign`.
->   4. Where call order/duration/multiplicity matters, ALSO carry PlantUML sequence-diagram source on that dynamic view.
+> Then realize EVERY use case as a call chain (ch. 4 "Architecture Validation"):
+>   1. Take the activity diagram from `.coreUseCases`. Its lanes stay business roles — the component mapping lives in the realization, not in relabeled lanes.
+>   2. Trace through the static architecture: actor → Client → exactly one Manager → Engines/ResourceAccess → Resources.
+>   3. Encode as a `DynamicView` whose `Steps` carry ONE ordered, non-empty call fragment per `action`/`timeEvent`/`acceptEvent` node (`decision`/`switch` may carry one when the guard itself requires a call; no other kind may). Each call is `{from, to, mode, label, alt?}` where endpoints are components or this use case's actors; participants and sequence are DERIVED, never authored.
+>   4. Root each path per its entry kind: `actor → Client` from a `start`, the scheduling `Client → Manager` call from a `timeEvent`, the queued `Manager → Manager` call from an `acceptEvent`. Where a Manager operation rides both Client surfaces, draw both as step-local `alt` groups.
 >
-> **Definition of valid (ch. 4):** every core use case must trace cleanly through the existing decomposition. If it can't, the **decomposition is wrong**, not the use case. Iterate the decomposition.
->
-> Also produce 2–3 non-core call chains to demonstrate versatility (ch. 5).
+> **Definition of valid (ch. 4):** every use case must realize cleanly through the existing decomposition, and every fragment must be TRUE — real calls, honest labels, meaningful order. If it can't, the **decomposition is wrong**, not the use case. Iterate the decomposition — and if the honest fix is a new component or edge, STOP and escalate rather than reshaping the model, or demoting a node to a note, so the gate passes.
 
 Validation rules from `STRUCTURIZR-CONVENTIONS.md`:
 
 | Rule | Action if failed |
 |---|---|
-| Every core use case has a dynamic view | Iterate call-chain validation |
+| Every use case (core AND variation) has a realized dynamic view | Iterate call-chain validation |
+| Every `action`/`timeEvent`/`acceptEvent` node carries a call fragment | Realize it, or — only if the system genuinely does no work there — make the node a note |
 | Each dynamic view: Client → exactly one Manager | Decomposition wrong → iterate |
 | No calling up | Decomposition wrong → iterate |
 | No sideways except queued Manager↔Manager / Manager→Engine | Decomposition wrong → iterate |

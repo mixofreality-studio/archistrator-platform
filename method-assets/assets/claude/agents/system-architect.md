@@ -192,23 +192,22 @@ Per ch. 4.
 Per `the-method-architecture/STRUCTURIZR-CONVENTIONS.md` (the render conventions). Author the typed `System` (`Components` + `Relationships` + `DynamicViews`) committed to `.systemDesign`:
 - All components as `Component` entries (`Kind` drives the derived `Layer`)
 - The `static-architecture` view is derived render-on-read (you do not author it)
-- One `DynamicView` per core use case (Step 9)
+- One `DynamicView` per use case — core AND every nonCore variation (founder extension) — each REALIZED step by step (Step 9)
 
 The Structurizr DSL is a render-on-read of `.systemDesign` — you do not write `architecture.dsl`.
 
 ### 9. Call chain validation — own it
 
-Per ch. 4.
+Per ch. 4. For **every** use case (core and variation), the realization is keyed to that use case's activity diagram:
 
-For each core use case:
-1. Take the activity diagram. Add swim lanes matching components/subsystems (ch. 5 Figure 5-9).
-2. Trace through the static architecture: Client → exactly one Manager → Engines/ResourceAccess → Resources.
-3. Represent as a `DynamicView` (ordered `Edges`, `Mode` = `CallSync` | `CallQueued`) in `.systemDesign`.
-4. When order/duration/multiplicity matters, also carry PlantUML sequence-diagram source on that dynamic view (no Mermaid).
+1. Take the activity diagram from `.coreUseCases`. It stays in business-role lanes — you do not relabel lanes with component names.
+2. Trace through the static architecture: actor → Client → exactly one Manager → Engines/ResourceAccess → Resources.
+3. Record it as a `DynamicView` whose `Steps` carry **one ordered, non-empty call fragment per `action`/`timeEvent`/`acceptEvent` node** (`decision`/`switch` may carry one when the guard itself requires a call; nothing else may). Each call is `{from, to, mode, label, alt?}`; participants and sequence are derived, never authored.
+4. Root each path per its entry kind: `actor → Client` from a `start`, the scheduling `Client → Manager` call from a `timeEvent`, the queued `Manager → Manager` call from an `acceptEvent`. Draw both Client surfaces as step-local `alt` groups wherever the operation rides both.
 
-**Definition of valid:** every core use case must trace cleanly. If it can't, the decomposition is wrong, NOT the use case. Back to Step 6.
+**Definition of valid:** every use case must realize cleanly, and every fragment must be TRUE — real calls, honest labels, meaningful order. If a chain can't be drawn, the decomposition is wrong, NOT the use case — back to Step 6. If the honest fix is a new component or edge, **STOP and escalate**: never reshape the model, and never demote a node to a note, so the gate passes.
 
-Add 2–3 non-core call chains to demonstrate versatility (ch. 5).
+Then compare the realizations to each other (ch. 3 symmetry): same entry shapes, same Engine-consultation and RA fan-out patterns, same drawing granularity for the same work. Justify each asymmetry by name or fix it.
 
 ### 10. Operational concepts — own it
 

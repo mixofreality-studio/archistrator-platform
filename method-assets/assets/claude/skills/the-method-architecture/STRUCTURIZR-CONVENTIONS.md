@@ -182,7 +182,11 @@ workspace "<Product Name>" "Volatility-based decomposition per The Method." {
             autolayout tb
         }
 
-        // -------- One dynamic view per CORE USE CASE = a call chain --------
+        // -------- One dynamic view per USE CASE = a call chain --------
+        // NOTE: this flat edge list is the RENDER. You author the realization
+        // step-keyed (one ordered call fragment per activity node); the
+        // renderer linearizes the fragments in activity-graph order to emit
+        // the block below. Never author a linearization by hand.
         // dynamic system "<use-case-key>" "<Use Case Name>" {
         //     user -> system.webApp "<actor action>"
         //     system.webApp -> system.<manager> "<API call>"
@@ -236,7 +240,7 @@ Method's rules. Each rule below is an automated check.
 
 | Rule | Check |
 |---|---|
-| Every core use case has a dynamic view | Count of dynamic views == count of core use cases |
+| Every use case has a dynamic view, and every view is realized | One view per use case in the committed set — core AND every nonCore variation (founder extension) — each carrying a call fragment for every `action`/`timeEvent`/`acceptEvent` node of that use case's activity diagram |
 | Clients call exactly one Manager per use case | In each dynamic view, count of distinct Manager targets ≤ 1 |
 | No calling up | No relationship goes from a lower layer to a higher layer |
 | No calling sideways within a layer | Except queued Manager→Manager (model as `delivers <SignalName> (queued)`) |
@@ -245,7 +249,7 @@ Method's rules. Each rule below is an automated check.
 | Cardinality | ≤5 Managers (no subsystems); ≤3 per subsystem; more Engines than Managers |
 | Total component count | Order of magnitude 10 |
 | Edge-label vocabulary | Labels use the destination layer's vocabulary: Client→Manager = manager method name; Manager→Engine = engine method signature; Manager→ResourceAccess = atomic business verbs; ResourceAccess→Resource = resource-native I/O. No workflow-engine primitives in labels (no `Activity:`, no `StartWorkflow(`, etc.). See "Edge-label conventions" above. |
-| No dynamic-view edge targets the infrastructure ResourceAccess | Dynamic views show business call chains; the durable-execution infrastructure is an implementation detail. The static-architecture view retains all Manager → infrastructure-access edges. See "Infrastructure ResourceAccess is omitted from dynamic views" below. |
+| Execution substrate stays out of every view | A Manager's own durable primitives (timers, awaited signals, child executions) are how it RUNS, not calls between components — they are not edges anywhere. The only cross-component messaging verbs live on the `MessageBus` utility, and a delivery already carried by a queued Manager→Manager edge is drawn as that edge and never also as a bus call. See "Execution substrate, messaging utilities, and what a call chain draws" below. |
 
 ## Rendering
 
@@ -339,69 +343,74 @@ use case showing the chain through Client → Manager → Engine/ResourceAccess
 ordered list of relationships between containers, scoped to a single use
 case. The dynamic view IS the call chain.
 
-## Infrastructure ResourceAccess is omitted from dynamic views
+## Execution substrate, messaging utilities, and what a call chain draws
 
-A ResourceAccess that fronts a Manager-execution infrastructure — any
-durable-workflow engine, actor cluster, or scheduler runtime that the
-Manager's use-case methods execute *on* — exists in the **static**
-architecture and the **relationships** block. It is the encapsulation
-of WorkflowRuntime volatility and must be visible there.
+The execution substrate a Manager's use-case methods run *on* — a
+durable-workflow engine, actor cluster, or scheduler runtime — is **not a
+component in the architecture at all**. A Manager's own durable primitives
+(timers, awaited signals, child executions, continue-as-new) are how that
+Manager RUNS, not calls from one component to another, so they appear in no
+view, static or dynamic.
 
-It does NOT appear in **dynamic views (per-use-case call chains)**.
+**Why.** Löwy never draws the workflow engine inside a TradeMe call chain
+(ch. 5). Drawing it would repeat the same edges across every use case (every
+Manager has the same primitives), obscure the business flow with
+infrastructure vocabulary, and treat an implementation choice as if it were
+part of the use case's domain semantics — it isn't.
 
-**Why.** Löwy never draws the workflow engine inside every TradeMe call
-chain (ch. 5). The engine is the infrastructure the Manager runs *on*, not a
-participant in the business call chain. Showing it in every dynamic view:
+**What IS a component: the messaging utility.** Exactly two verbs cross a
+component boundary — delivering a queued message to another Manager, and
+registering a recurring schedule — and those live on a `MessageBus`
+**Utility** with a restricted clientele (Managers only, ch. 5:
+*"you should disallow Client-to-Client communication across the bus"* made
+executable). It encapsulates the substrate-choice volatility, so no Manager
+binds to a runtime API. It is a declared component with declared
+`Manager → MessageBus` relationships, like `Security` or `Logging`.
 
-- repeats the same edges across every use case (every Manager has the
-  same infrastructure primitives: timers, signals, child executions, schedule
-  registrations),
-- obscures the business flow with infrastructure primitives,
-- treats an implementation detail (which infrastructure was chosen) as if it
-  were part of the use case's domain semantics — it isn't.
+**Verb calls draw; deliveries don't.** In a realization:
 
-**Where the infrastructure behaviour goes instead.** Infrastructure primitives —
-durable timers, awaited signals, cross-workflow signals, child executions,
-continue-as-new, scheduled executions — belong in:
+- a bus call **is** drawn — a real, numbered, tintable edge — where the verb
+  IS that activity node's business work (registering a customer's recurring
+  billing schedule on the onboarding chain). The no-lines-to-the-utilities-bar
+  convention of the static diagram does not apply in a call chain, where the
+  call IS the content;
+- a **delivery** whose business meaning is already a declared queued
+  Manager→Manager relationship is realized as **that queued call and never
+  additionally as a `deliverSignal` bus call**. The bus is the medium of the
+  queued edge, not a party to it; drawing both double-counts one act;
+- boot-time wiring that no use-case flow performs (schedules registered at
+  startup) is drawn nowhere. Its relationship stays declared and is exempt
+  from relationship coverage as an ambient dependency — an exemption the
+  checker reports on an Info line rather than applying silently.
 
-- the **static-architecture** edges from Manager → infrastructure ResourceAccess
-  (so the encapsulation is documented once, with the full primitive list,
-  in business verbs over the infrastructure),
-- the committed operational-concepts artifact (the `.operationalConcepts` slot —
-  where, why, and with what retention/replay
-  semantics — including the infrastructure-specific names of those primitives,
-  e.g., Temporal `Activity` / `Signal` / `Schedule`, Akka actor messages,
-  etc.),
-- per-Manager sequence diagrams when timing or signal ordering is what
-  the diagram is for (sequence diagrams are the right place to show a
-  `suspend → external event → resume` rhythm).
+**Where the runtime detail goes instead.** Infrastructure-specific primitive
+names and their retention/replay semantics — Temporal `Activity` / `Signal` /
+`Schedule`, Akka actor messages — belong in the committed operational-concepts
+artifact (the `.operationalConcepts` slot), never in an architecture label.
 
-**What a dynamic view shows instead.** The business-logical edges only:
+**What a call chain draws.** The business-logical calls only:
 
-- `Client → Manager` — the use case starts/resumes; the edge label is the
+- `actor → Client` — the human's gesture (sync; actors touch Clients and
+  nothing else).
+- `Client → Manager` — the use case starts or resumes; the label is the
   manager method name.
 - `Manager → Engine` — the engine method signature.
-- `Manager → ResourceAccess` (other than the infrastructure access) — the
-  atomic business verb that does the I/O.
+- `Manager → ResourceAccess` — the atomic business verb that does the I/O.
 - `ResourceAccess → Resource` — the actual I/O.
+- `Manager → Manager` (queued) — a cross-Manager delivery, drawn directly per
+  the closed-layer queued-sideways carve-out (ch. 3). The label names the
+  business signal — e.g. `delivers applyDelinquencyPolicy (queued)`.
+- `Manager → Utility` — where the utility verb is the step's own business
+  work (see above).
 
-**Cross-Manager signals.** When a Manager delivers a signal to another
-Manager, the dynamic view shows a **queued Manager→Manager edge**
-directly (per the closed-layer queued-sideways rule, ch. 3). The label
-names the business signal — e.g., `delivers applyDelinquencyPolicy
-(queued)`. The infrastructure-level delivery mechanism stays in the static
-view and the committed operational-concepts artifact (the
-`.operationalConcepts` slot).
+**Suspend-points.** A `Phase A: workflow suspends → Phase B: client signals
+it` interaction is conveyed by fragment order alone: the resuming
+`actor → Client → Manager` fragment sits on the activity node that receives
+the human's action, after the Manager's last pre-suspend verb. No
+await-signal edge is drawn — the substrate has no edges.
 
-**Suspend-points.** A `Phase A: workflow suspends → Phase B: client
-signals it` interaction is conveyed by ordering alone in the dynamic
-view: the Client's resume-call edge follows the Manager's last pre-suspend
-verb (typically `appendEvent(<Something>AwaitingReview)`). The reader
-infers the suspension from the event name and the resume from the next
-client method. The infrastructure's await-signal edge is not drawn.
-
-**Validation impact.** The standard check verifies that no dynamic view
-contains an edge whose target is a infrastructure ResourceAccess (any
-component tagged `infrastructure-access`, or a ResourceAccess whose role is
-encapsulating WorkflowRuntime volatility). Static-architecture edges to
-the same component are required and unaffected.
+**Validation impact.** Every component→component call in a realization must
+match a declared relationship on `(from, to, mode)`, so a drawn bus verb
+requires its `Manager → MessageBus` relationship to exist; and a delivery
+drawn twice shows up as an unexplained extra edge in review, not as a rule
+failure — that one is the critique's job.

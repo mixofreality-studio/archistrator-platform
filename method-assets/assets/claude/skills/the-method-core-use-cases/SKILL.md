@@ -96,7 +96,7 @@ For each core use case, write (if nested conditions exist, add an activity diagr
 ## Core Use Case: <Name>
 
 **Actor:** Who triggers it
-**Trigger:** What starts the flow
+**Trigger:** What starts the flow — one of `clientAction` | `timer` | `busMessage`
 **Outcome:** What the system delivers
 **Success path:** One paragraph
 **Alternative / error paths:** Bulleted list
@@ -104,9 +104,19 @@ For each core use case, write (if nested conditions exist, add an activity diagr
 **Activity diagram:** (PlantUML new syntax, role-based swimlanes)
 ```
 
+**The trigger taxonomy is load-bearing, and it is machine-checked against the diagram** (`CC-TRIGGER-EVENT`, Error). Pick it honestly:
+
+| Trigger | Who starts it | The diagram's entry | Downstream consequence |
+|---|---|---|---|
+| `clientAction` | a declared actor, through a Client | a `start` node | the chain roots `actor → Client → Manager`, so the use case **must declare ≥1 actor** (`CUC-ACTOR-REQUIRED`, Error) |
+| `timer` | a schedule or timer — an external process in the client tier (ch. 5) | an **edge-less `timeEvent`** node (the UML hourglass) | the chain roots at the scheduling `Client → Manager` call |
+| `busMessage` | another use case's queued message | an **edge-less `acceptEvent`** node | the chain roots at the queued `Manager → Manager` call that delivers it |
+
+Classify by what the system actually does, not by what sounds richer: if the flow is dispatched by a scheduler, it is a `timer` even when the work it does is event-shaped. And a `busMessage` classification obliges the architecture to carry a real queued edge that delivers it — a trigger the model cannot produce is a claim the design does not keep.
+
 Per App C §3.1c: *"Document all use cases that contain nested conditions with activity diagrams."* Use **PlantUML activity diagrams (new syntax)** — the `start` / `:action;` / `if (cond?) then (yes) ... else (no) ... endif` / `repeat ... repeat while (cond?)` / `switch (val?) case (x) ... endswitch` / `fork ... fork again ... end fork` / `stop` vocabulary. Use `goto`/`label` for arbitrary loop-backs the structured constructs can't capture. **Do not use Mermaid `flowchart`** — PlantUML activity is more expressive (swimlanes, structured switch, fork, goto/label) and renders via the project's PlantUML hook. Wrap every diagram in `@startuml` / `@enduml` so the validator picks it up.
 
-**Swimlanes (Pass 1 — use-case modeling):** Löwy introduces swimlanes during use-case modeling (Ch. 5 §1.4 "Use Cases", "Simplifying the Use Cases"): *"It is useful to show the flow of control between roles, organizations, and other responsible entities, using 'swim lanes' in your activity diagrams"* — and notes that the technique will be used *"to both initiate and validate the design."* That means **two passes**: (1) here, labeling lanes by **area of interest / role / responsible entity** — NOT yet by subsystem; (2) later in [[the-method-architecture]] during call-chain validation, where lanes are remapped to specific subsystems (Pass 2). Add swimlanes to any use-case activity diagram that crosses more than one role or area of responsibility.
+**Swimlanes (Pass 1 — use-case modeling):** Löwy introduces swimlanes during use-case modeling (Ch. 5 §1.4 "Use Cases", "Simplifying the Use Cases"): *"It is useful to show the flow of control between roles, organizations, and other responsible entities, using 'swim lanes' in your activity diagrams"* — and notes that the technique will be used *"to both initiate and validate the design."* That means **two passes**: (1) here, labeling lanes by **area of interest / role / responsible entity** — NOT yet by subsystem; (2) later in [[the-method-architecture]] during call-chain validation (Pass 2), where each node is REALIZED by the call fragment naming the components that perform it. Note what Pass 2 is and is not on this platform: the lanes you draw here stay business roles forever — the component mapping lives in the realization, not in a relabeled lane. Add swimlanes to any use-case activity diagram that crosses more than one role or area of responsibility.
 
 **Granularity rule — aim for ~3 lanes that map to future subsystems.** If your initial pass draws more than ~3 lanes, collapse sub-areas into their parent business concern. Löwy demonstrates this exact refactor at Ch. 5 §1.5 Fig 5-21→5-22: Fig 5-21 has 5 lanes (Client / Market / Regulations / Search / Membership); Fig 5-22 collapses to 3 (Client / Market / Membership) because *"Regulations and Search are all elements of the market"* — caption: *"This enables easy mapping to your subsystems design."* Each remaining lane should correspond to a future subsystem or an external participant — that is what *"to both initiate and validate the design"* means: the lanes you draw here pre-shape the subsystem boundaries you will commit to in [[the-method-architecture]]. **DON'T:** lanes are NEVER one-per-Manager, one-per-Engine, or one-per-ResourceAccess. Layer-typed lanes pre-bake the decomposition and defeat both Pass 1 and Pass 2.
 
@@ -184,20 +194,29 @@ IDENTITY BY NAME: every use case and actor is identified by its human-readable N
 
 The CI draft job emits each use case's `activity` as a typed node/edge model (not PlantUML — the PlantUML guidance above is for human-readable rendering; the committed draft carries the typed graph the server validates). The rules below are what the machine validates and are copied verbatim from the draft doctrine.
 
-ACTIVITY DIAGRAM: EVERY use case — CORE and SUPPORTING (nonCore) alike — MUST carry a NON-EMPTY `activity`: a WELL-FORMED UML activity diagram, a graph of `nodes` (each `{ref, kind, label, roleName, linkedActor, linkedComp}`) and `edges` (each `{from, to, kind, guard}`). There is NO "purely linear, so leave it null" exemption — a use case with a null or empty `activity` (missing `nodes` or `edges`) is an INCOMPLETE DRAFT and will be rejected. At an ABSOLUTE MINIMUM the diagram has a start node, at least one action node, and an end node wired start -> action -> end; a use case that branches or runs steps concurrently adds decision/merge or fork/join per the rules below. Walk the use case's real flow — do not stub a placeholder one-action diagram to satisfy the rule when the use case genuinely has steps. NEVER emit a bare string for `activity` — it is always a non-empty object with `nodes` and `edges`.
+ACTIVITY DIAGRAM: EVERY use case — CORE and SUPPORTING (nonCore) alike — MUST carry a NON-EMPTY `activity`: a WELL-FORMED UML activity diagram, a graph of `nodes` (each `{ref, kind, label, roleName, linkedActor, decidedBy?}`) and `edges` (each `{from, to, kind, guard}`). There is NO "purely linear, so leave it null" exemption — a use case with a null or empty `activity` (missing `nodes` or `edges`) is an INCOMPLETE DRAFT and will be rejected. At an ABSOLUTE MINIMUM the diagram has an ENTRY (see below), at least one action node, and an end node wired entry -> action -> end; a use case that branches or runs steps concurrently adds decision/merge or fork/join per the rules below. Walk the use case's real flow — do not stub a placeholder one-action diagram to satisfy the rule when the use case genuinely has steps. NEVER emit a bare string for `activity` — it is always a non-empty object with `nodes` and `edges`.
 
-IDENTITY BY NAME (no ids): you NEVER emit any opaque id or uuid. Give each node a short `ref` slug of your own (e.g. `n1`, `n2`) UNIQUE within the diagram; edges reference nodes by that `ref` in `from`/`to`. `linkedActor` (optional) is an actor's ROLE name from this use case; `linkedComp` is the System component NAME that performs this step. The server resolves all of these by name.
+IDENTITY BY NAME (no ids): you NEVER emit any opaque id or uuid. Give each node a short `ref` slug of your own (e.g. `n1`, `n2`) UNIQUE within the diagram; edges reference nodes by that `ref` in `from`/`to`. `linkedActor` (optional) is an actor's ROLE name from this use case. The server resolves all of these by name.
 
-LINKEDCOMP HAND-OFF: at THIS step (core use cases, before architecture exists) there are no components yet, so `linkedComp` is legitimately empty on first draft. It is REQUIRED to be back-populated during [[the-method-architecture]] — when each use case's dynamic view maps its steps onto the component call chain, set every meaningful action node's `linkedComp` to the component that performs it, so the step↔component linkage is inspectable. An architecture that ships with every use-case node's `linkedComp` still empty has an un-inspectable step↔component gap (a known root-cause defect — the field the drafts never filled). See [[the-method-architecture]] Step 9.
+REALIZATION HAND-OFF: this diagram is what the architecture is validated against. In [[the-method-architecture]] Step 9 every `action`, `timeEvent`, and `acceptEvent` node you write here MUST be realized by a call fragment naming the components that perform it — the join is by node, and it is machine-checked at Error severity (`CC-COVERAGE`). Two consequences for you, now: write action labels that name real work (a node whose label is vague is a node nobody can realize honestly), and do NOT pad the diagram with steps the system does not perform. A node at which the system genuinely does no work — a precondition, an external system's convergence, an act the human performs outside every Client, the render of a result already returned — is a `note`, not an `action`; notes carry no realization obligation, and using one honestly here is far better than forcing a fabricated call later. `linkedActor` is likewise a claim the realization must keep: a node laned to an actor must have that actor as an endpoint of its fragment (`CC-ACTOR-LANE`), so lane ONLY Client-touching human actors — an external system that can never legally call a Client is a lane by `roleName` alone.
 
 Node kinds and their edge cardinality:
-- start: one per diagram; 0 incoming, exactly 1 outgoing.
+- start: 0 incoming, exactly 1 outgoing. The entry of a `clientAction` use case.
+- timeEvent: the UML accept-time-event (hourglass) — the entry of a `timer` use case. NO incoming edge; exactly 1 outgoing.
+- acceptEvent: the UML accept-event action — the entry of a `busMessage` use case. NO incoming edge; exactly 1 outgoing.
 - action: a step; 1 incoming, 1 outgoing.
 - decision: a CHOICE; 1 incoming, >=2 outgoing.
 - merge: rejoins a decision's alternative branches; >=2 incoming, 1 outgoing.
 - fork: splits into CONCURRENT paths; 1 incoming, >=2 outgoing.
 - join: synchronizes concurrent paths; >=2 incoming, 1 outgoing.
+- note: documentation, NOT flow work. Either in-flow (edges intact — an out-of-band or response-render step) or free-floating and edge-less (ambient context, an outside-the-boundary effect). Carries no realization.
 - end: a final node; >=1 incoming, 0 outgoing.
+
+ENTRY SEMANTICS: a diagram's entry is a `start` node OR an edge-less `timeEvent`/`acceptEvent` node — an event-triggered use case needs NO start node, and adding one is a defect, because a start-rooted path demands an `actor -> Client` first call that a machine-triggered flow cannot honestly make. (This SUPERSEDES the older "exactly one start node" rule.) A diagram MAY have more than one entry when the use case genuinely has independent entries — e.g. an operator-initiated path plus a scheduled sweep over the same subject; each entry is walked as its own path, and two disjoint entry subgraphs are legal. Do NOT fake concurrency with a fork to fuse independent entries into one token: a fork is CONCURRENCY within one flow, not a way to give a diagram two beginnings.
+
+TRIGGER ALIGNMENT (machine-checked, `CC-TRIGGER-EVENT`, Error): a `timer` use case MUST have >=1 edge-less `timeEvent` entry; a `busMessage` use case MUST have >=1 edge-less `acceptEvent` entry; a `clientAction` use case MUST have NO event-node entries. And a `clientAction` use case MUST declare >=1 actor (`CUC-ACTOR-REQUIRED`, Error) — with none, nothing can root its chain.
+
+DECIDEDBY (optional, `decision`/`switch` ONLY): names WHO makes the choice at a branch — a System component NAME or an actor ROLE of this use case. Set it when the honest decider is not the Manager running the flow: the verdict is an Engine's output (a policy engine returning Retry|Escalate), a human's act (approve, revoke, take over), or an external provider's answer (a gateway approving a charge). LEAVE IT ABSENT when the guard is the Manager's own state read — absence reads as the Manager, which is then the honest attribution, and a wrong explicit decider is worse than none. Placement rule: the decider must be a plausible endpoint of the eventual call chain — for a component, the chain can reach it; for an actor, the diagram has an actor->Client touchpoint. `decidedBy` on any other node kind, or a value resolving to neither a component nor one of THIS use case's actors, is `CC-DECIDED-BY` (Error). NOTE: `decidedBy` puts component names into the requirements artifact, so a later component RENAME must retarget this field in the SAME amendment as the model — renames are cross-slot events.
 
 Put every node in its business-role swim-lane via `roleName` (e.g. "Customer", "Trusted System") — a business role or area of interest, NOT a Method layer or subsystem name.
 
@@ -206,7 +225,7 @@ Edge kinds:
 - controlFlow: no guard (set `guard` to ""); EVERY other edge, including ALL fork outgoing edges.
 
 Composition rules you MUST follow (a violation is rejected and redrafted):
-0. EVERY use case has a non-empty `activity` with EXACTLY ONE start node (0 incoming, 1 outgoing), at least ONE action node, and at least ONE end node — a diagram-less or node-less use case is an incomplete draft. This is NON-NEGOTIABLE for core use cases and equally REQUIRED for supporting (nonCore) ones; never leave `activity` null.
+0. EVERY use case has a non-empty `activity` with at least ONE ENTRY — a `start` node (0 incoming, 1 outgoing) for a `clientAction` use case, or an edge-less `timeEvent`/`acceptEvent` node for a `timer`/`busMessage` one, aligned with the use case's trigger — plus at least ONE action node and at least ONE end node. A diagram-less or node-less use case is an incomplete draft. This is NON-NEGOTIABLE for core use cases and equally REQUIRED for supporting (nonCore) ones; never leave `activity` null.
 1. A decision is a CHOICE: it MUST have >=2 outgoing guardedFlow edges, each with a distinct, mutually-exclusive guard; give exactly ONE edge the guard `[else]` for the remaining case. Its branches MUST reconverge at a merge node before the flow continues — a branch must not run straight into the next step or dangle.
 2. A fork is CONCURRENCY (not a choice): >=2 outgoing controlFlow (UNguarded) edges, ALL of which run; the concurrent paths MUST reconverge at a join. Never put a guard on a fork edge.
 3. guardedFlow edges originate ONLY from decision nodes; every other node's outgoing edges are controlFlow.
@@ -228,6 +247,12 @@ fork/join — two concurrent paths synchronize:
 {"nodes":[{"ref":"n1","kind":"fork","label":"","roleName":"Marketplace"},{"ref":"n2","kind":"action","label":"Search the registry","roleName":"Marketplace"},{"ref":"n3","kind":"action","label":"Notify the tradesman","roleName":"Tradesman"},{"ref":"n4","kind":"join","label":"","roleName":"Marketplace"}],"edges":[{"from":"n1","to":"n2","kind":"controlFlow","guard":""},{"from":"n1","to":"n3","kind":"controlFlow","guard":""},{"from":"n2","to":"n4","kind":"controlFlow","guard":""},{"from":"n3","to":"n4","kind":"controlFlow","guard":""}]}
 ```
 
+event entry — a `timer` use case enters at an edge-less `timeEvent` (no `start` node anywhere in the diagram), and a `decision` names its decider:
+
+```json
+{"nodes":[{"ref":"n1","kind":"timeEvent","label":"Settlement cycle comes due","roleName":"Trusted System"},{"ref":"n2","kind":"action","label":"Read the cycle's recorded usage","roleName":"Trusted System"},{"ref":"n3","kind":"decision","label":"Charge succeeded?","roleName":"Trusted System","decidedBy":"MerchantGateway"}],"edges":[{"from":"n1","to":"n2","kind":"controlFlow","guard":""},{"from":"n2","to":"n3","kind":"controlFlow","guard":""}]}
+```
+
 while-loop — a decision back-edges to the loop-head merge:
 
 ```json
@@ -238,7 +263,8 @@ while-loop — a decision back-edges to the loop-head merge:
 
 `.aiarch/state/project.json` → `.coreUseCases` holds the typed `CoreUseCases` model with:
 - Raw list (complete)
-- 2–6 core use cases (each with actor, trigger, outcome, paths, optional activity diagram)
+- 2–6 core use cases (each with actor, trigger, outcome, paths, and a non-empty activity diagram — required on every use case, core and variation alike)
+- Every diagram's entry aligned with its trigger: `start` for `clientAction` (which also declares ≥1 actor), an edge-less `timeEvent` for `timer`, an edge-less `acceptEvent` for `busMessage`
 - An `essenceRationale` on every core decision — a real essence-of-the-business argument, not a feature restatement (machine backstop: `DH-UC-ESSENCE-MISSING`, Warning)
 - Rejection table for non-core
 - PM ratification noted
@@ -252,5 +278,11 @@ Move to `the-method-architecture`.
 - **CRUD as core** ("Create Order", "Update Order") — these are mechanics, never core.
 - **No activity diagram** for a use case that has alternative paths — App C requires it. Activity diagrams use PlantUML new syntax; Mermaid `flowchart` is no longer accepted.
 - **Rejections without reasons** — every non-core needs a one-line justification.
+- **A `start` node on a timer- or message-triggered use case** — retired doctrine; the entry is the edge-less `timeEvent`/`acceptEvent` node, and a stray `start` demands an actor→Client root the flow cannot honestly make (`CC-TRIGGER-EVENT`).
+- **A `clientAction` use case with no declared actor** — nothing can root its chain (`CUC-ACTOR-REQUIRED`, Error).
+- **A trigger the architecture cannot produce** — `busMessage` with no queued edge behind it anywhere in the model. Reclassify honestly or let the missing edge justify itself on its own merits.
+- **Padding the diagram with steps the system does not perform** — every `action` becomes a realization obligation in [[the-method-architecture]]; a node with no honest work is a `note`, and inventing a call to cover it later is the worse defect.
+- **`decidedBy` naming a component the chain can never reach** — over-attribution; leave it absent and let the entry Manager carry the branch.
+- **Laning a node to an external system as `linkedActor`** — only Client-touching human actors are `linkedActor`; everything else is a lane by `roleName` (`CC-ACTOR-LANE`).
 - **Core decisions without an essence argument** — every core needs an `essenceRationale` that argues essence (shared by all customers, nearly immutable, differentiating), not one that restates the feature. Machine backstop: `DH-UC-ESSENCE-MISSING` (Warning).
 - **Missing swimlanes on a multi-role use case** — any use case that crosses more than one role or area of interest must have swimlanes. Omitting them loses the clarity that Löwy shows as essential for *"transform, clarify, and consolidate the raw data"* (Ch. 5 §1.4, "Simplifying the Use Cases"). Note: lanes here are labeled by area of interest/role, not by subsystem (that remapping happens in Pass 2 during [[the-method-architecture]]).
