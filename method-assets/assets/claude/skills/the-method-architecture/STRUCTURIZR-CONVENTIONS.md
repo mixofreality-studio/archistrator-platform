@@ -246,7 +246,7 @@ Method's rules. Each rule below is an automated check.
 | No calling sideways within a layer | Except queued Manager→Manager (model as `delivers <SignalName> (queued)`) |
 | No skipping layers | Client doesn't call Engine/ResourceAccess/Resource directly |
 | Engines/ResourceAccess/Resources don't subscribe | No incoming queued edges |
-| Cardinality | ≤5 Managers (no subsystems); ≤3 per subsystem; more Engines than Managers |
+| Cardinality | ≤5 Managers (no subsystems); ≤3 per subsystem; golden Engines-to-Managers ratio — fewer Engines than Managers |
 | Total component count | Order of magnitude 10 |
 | Edge-label vocabulary | Labels use the destination layer's vocabulary: Client→Manager = manager method name; Manager→Engine = engine method signature; Manager→ResourceAccess = atomic business verbs; ResourceAccess→Resource = resource-native I/O. No workflow-engine primitives in labels (no `Activity:`, no `StartWorkflow(`, etc.). See "Edge-label conventions" above. |
 | Execution substrate stays out of every view | A Manager's own durable primitives (timers, awaited signals, child executions) are how it RUNS, not calls between components — they are not edges anywhere. The only cross-component messaging verbs live on the `MessageBus` utility, and a delivery already carried by a queued Manager→Manager edge is drawn as that edge and never also as a bus call. See "Execution substrate, messaging utilities, and what a call chain draws" below. |

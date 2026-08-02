@@ -42,7 +42,7 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleDVEdgeEnds, ruleDVEdgeInModel, ruleDVSingleMgr,
 		ruleDVMode, ruleDVKeyUnique,
 		ruleDVStaticCoverage, ruleDVRelCoverage,
-		ruleDVPlannedSkipped,
+		ruleDVPlannedSkipped, ruleDVRelUtilityExempt,
 
 		// ---- Call-chain correspondence (rules_callchain.go) ----
 		ruleCCViewUseCase,
