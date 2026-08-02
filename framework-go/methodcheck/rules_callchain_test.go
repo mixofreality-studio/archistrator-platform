@@ -545,20 +545,22 @@ func TestCC_TriggerEventBusMessageWithoutAcceptEventFires(t *testing.T) {
 	}
 }
 
-// ---- PoC severity ----
+// ---- Gate severity ----
 
-// TestCC_AllRulesAreWarningSeverityInPoC pins ccGateSeverity: the whole family is
-// ADVISORY for the PoC (the post-QA rollout flips it to SeverityError), so a firing
-// CC rule must never fail the verdict.
-func TestCC_AllRulesAreWarningSeverityInPoC(t *testing.T) {
+// TestCC_AllRulesAreErrorSeverity pins ccGateSeverity post-flip (Task 12,
+// 2026-08-01, "gates: call-chain correspondence flips to Error"): the whole family is
+// now the HARD GATE — a firing CC rule fails the verdict. Renamed honestly from
+// TestCC_AllRulesAreWarningSeverityInPoC, which pinned the PoC-advisory posture this
+// flip retires.
+func TestCC_AllRulesAreErrorSeverity(t *testing.T) {
 	s := sysWith(ccView(CallStep{ActivityNodeID: "ghost-node", Calls: []TraceCall{ccActorEntry()}}))
 	c := ucWith(triggerClientAction, ccLinearNodes(), ccLinearEdges(), ccUser())
 	sev, ok := findingSeverity(callChainRules(s, c), ruleCCStepNode)
 	if !ok {
 		t.Fatalf("expected a CC-STEP-NODE finding to assert its severity against")
 	}
-	if sev != ccGateSeverity || ccGateSeverity != SeverityWarning {
-		t.Fatalf("every CC-* rule must be advisory (SeverityWarning) in the PoC, got %v", sev)
+	if sev != ccGateSeverity || ccGateSeverity != SeverityError {
+		t.Fatalf("every CC-* rule must be the hard gate (SeverityError) post-flip, got %v", sev)
 	}
 }
 

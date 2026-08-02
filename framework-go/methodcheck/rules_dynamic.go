@@ -62,6 +62,10 @@ const (
 	// deliberately skipped — a planned component cannot yet appear in a call chain, so
 	// it is exempt, but the exemption is surfaced (not silent) so it stays visible.
 	ruleDVPlannedSkipped RuleID = "DV-PLANNED-SKIPPED"
+	// ruleDVRelUtilityExempt (Info) lists the utility-targeted static relationships
+	// DV-REL-COVERAGE deliberately skipped (Task 12 / 7b §E4 pre-flip companion) — see
+	// checkRelationshipCoverage's utility-target exemption.
+	ruleDVRelUtilityExempt RuleID = "DV-REL-UTILITY-EXEMPT"
 )
 
 type relPairKey struct {
@@ -182,33 +186,94 @@ func plannedSkippedInfo(id RuleID, what string, planned []string) []Finding {
 // Deliberately matched on (from,to) and NOT on mode, unlike DV-EDGE-IN-MODEL: the
 // question here is "is this declared call exercised AT ALL", and a mode mismatch on an
 // otherwise-exercised pair is already reported, precisely, by DV-EDGE-IN-MODEL.
+//
+// UTILITY-TARGET EXEMPTION (Task 12 / 7b §E4, the binding pre-flip companion, book-audit
+// R3-confirmed): a relationship whose TARGET resolves to a Utility component is exempt
+// from the every-relationship-exercised requirement. Utility calls (Logging, Diagnostics,
+// Security, the message-bus) are drawn in a realization only where the verb IS the
+// business work being narrated (the ratified §C doctrine — e.g. onboard's
+// registerSchedule); the ambient dependency itself is not. Some of these edges (every
+// Manager→Logging/Diagnostics edge, every Client→Security edge, and the two startup-only
+// message-bus verbs om/cm→message-bus) can NEVER be honestly exercised by a use-case flow
+// — mirrors DV-STATIC-COVERAGE's isCoreComponentKind exemption (the same reason Utilities
+// are exempt from PARTICIPATION coverage exempts them from RELATIONSHIP coverage here).
+// Exercising a utility edge stays fully legal (DV-EDGE-IN-MODEL still matches it); only
+// the coverage OBLIGATION lifts. Surfaced via DV-REL-UTILITY-EXEMPT (Info), not silent —
+// the no-silent-caps idiom shared with DV-PLANNED-SKIPPED.
 func checkRelationshipCoverage(s System, idx map[string]Component) []Finding {
 	if len(s.DynamicViews) == 0 {
 		return nil
 	}
+	dynEdges := allDynEdges(s)
+	var out []Finding
+	var utilityExempt []string
+	for i, rel := range s.Relationships {
+		if !isUncoveredCallRel(rel, dynEdges) {
+			continue
+		}
+		f, exemptSection := relCoverageOutcome(rel, i, idx)
+		if exemptSection != "" {
+			utilityExempt = append(utilityExempt, exemptSection)
+			continue
+		}
+		out = append(out, f)
+	}
+	out = append(out, utilityTargetExemptInfo(utilityExempt)...)
+	return out
+}
+
+// allDynEdges indexes every (from,to) pair exercised by ANY step of ANY dynamic view.
+func allDynEdges(s System) map[relPairKey]bool {
 	dynEdges := make(map[relPairKey]bool)
 	for _, dv := range s.DynamicViews {
 		for _, e := range stepCalls(dv) {
 			dynEdges[relPairKey{from: e.From, to: e.To}] = true
 		}
 	}
-	var out []Finding
-	for i, rel := range s.Relationships {
-		if rel.Mode != modeSync && rel.Mode != modeQueued {
-			continue
-		}
-		if dynEdges[relPairKey{from: rel.From, to: rel.To}] {
-			continue
-		}
-		section := relationshipSection(rel, idx)
-		out = append(out, Finding{
-			RuleID:   ruleDVRelCoverage,
-			Severity: ccGateSeverity,
-			Message:  fmt.Sprintf("%s: static %s relationship appears in no dynamic-view edge; a declared call the call chains never exercise (static/dynamic drift)", section, rel.Mode),
-			Location: loc(i+1, section),
-		})
+	return dynEdges
+}
+
+// isUncoveredCallRel reports whether rel is a call-mode (sync/queued) relationship
+// that no dynamic-view edge exercises — the candidate set DV-REL-COVERAGE reasons over.
+func isUncoveredCallRel(rel Relationship, dynEdges map[relPairKey]bool) bool {
+	if rel.Mode != modeSync && rel.Mode != modeQueued {
+		return false
 	}
-	return out
+	return !dynEdges[relPairKey{from: rel.From, to: rel.To}]
+}
+
+// relCoverageOutcome classifies one unexercised call-mode relationship: when its
+// target resolves to a Utility component, exemptSection names the section to list
+// under DV-REL-UTILITY-EXEMPT and f is the zero value; otherwise f is the
+// DV-REL-COVERAGE finding to report and exemptSection is empty.
+func relCoverageOutcome(rel Relationship, i int, idx map[string]Component) (f Finding, exemptSection string) {
+	section := relationshipSection(rel, idx)
+	if to, ok := idx[rel.To]; ok && to.Kind == kindUtility {
+		return Finding{}, section
+	}
+	return Finding{
+		RuleID:   ruleDVRelCoverage,
+		Severity: ccGateSeverity,
+		Message:  fmt.Sprintf("%s: static %s relationship appears in no dynamic-view edge; a declared call the call chains never exercise (static/dynamic drift)", section, rel.Mode),
+		Location: loc(i+1, section),
+	}, ""
+}
+
+// utilityTargetExemptInfo returns a single Info finding listing the static
+// relationships checkRelationshipCoverage exempted because their target is a Utility
+// component, or nil when none were exempted — the no-silent-caps visibility emitter
+// for the utility-target exemption, matching plannedSkippedInfo's idiom.
+func utilityTargetExemptInfo(exempted []string) []Finding {
+	if len(exempted) == 0 {
+		return nil
+	}
+	sort.Strings(exempted)
+	return []Finding{{
+		RuleID:   ruleDVRelUtilityExempt,
+		Severity: SeverityInfo,
+		Message:  fmt.Sprintf("relationship coverage exempted %d utility-targeted relationship(s) from the every-relationship-exercised requirement (ambient dependency, never exercised by design): %v", len(exempted), exempted),
+		Location: loc(0, "relationship coverage"),
+	}}
 }
 
 // relationshipSection renders a human-readable locus for a relationship, using

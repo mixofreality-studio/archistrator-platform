@@ -214,7 +214,11 @@ func TestDynamicViewConsistency_StaticCoverage_NoViewsIsNoOp(t *testing.T) {
 	}
 }
 
-func TestDynamicViewConsistency_RelCoverage_UncoveredSyncRelWarns(t *testing.T) {
+// TestDynamicViewConsistency_RelCoverage_ComponentTargetFires: an unexercised static
+// relationship whose TARGET is an ordinary (non-Utility) core component still fires
+// DV-REL-COVERAGE — the utility-target exemption below must not over-reach. Renamed
+// honestly from ...Warns (Task 12 severity flip: ccGateSeverity is now Error).
+func TestDynamicViewConsistency_RelCoverage_ComponentTargetFires(t *testing.T) {
 	s := dynamicBaseSystem(t)
 	// Add a static sync relationship (Manager→Manager queued would be legal; use a
 	// second RA reachable from the Manager) that appears in no view edge.
@@ -231,6 +235,34 @@ func TestDynamicViewConsistency_RelCoverage_UncoveredSyncRelWarns(t *testing.T) 
 	}
 	if sev != ccGateSeverity {
 		t.Fatalf("DV-REL-COVERAGE must carry ccGateSeverity, got %v", sev)
+	}
+}
+
+// TestDynamicViewConsistency_RelCoverage_UtilityTargetExempt is the Task 12 / 7b §E4
+// binding pre-flip companion: a static relationship whose TARGET is a Utility component
+// is exempt from DV-REL-COVERAGE even when no dynamic view ever exercises it — utility
+// calls are drawn only where the verb IS the business work, not as ambient-dependency
+// documentation. Neither DV-REL-COVERAGE nor DV-STATIC-COVERAGE (the Utility is not a
+// core component kind) may fire; the exemption is instead surfaced as an Info finding.
+func TestDynamicViewConsistency_RelCoverage_UtilityTargetExempt(t *testing.T) {
+	s := dynamicBaseSystem(t)
+	logging := comp(t, "Logging", kindUtility)
+	s.Components = append(s.Components, logging)
+	mgrID := s.Components[1].ID
+	s.Relationships = append(s.Relationships, Relationship{From: mgrID, To: logging.ID, Mode: modeSync})
+	out := dynamicViewConsistency(s, CoreUseCases{})
+	if hasRuleFindings(out, ruleDVRelCoverage) {
+		t.Fatalf("an unexercised relationship targeting a Utility must NOT fire DV-REL-COVERAGE, got %+v", out)
+	}
+	if hasRuleFindings(out, ruleDVStaticCoverage) {
+		t.Fatalf("a Utility target is exempt from DV-STATIC-COVERAGE too (isCoreComponentKind), got %+v", out)
+	}
+	sev, ok := findingSeverity(out, ruleDVRelUtilityExempt)
+	if !ok {
+		t.Fatalf("expected a DV-REL-UTILITY-EXEMPT Info finding surfacing the exemption, got %+v", out)
+	}
+	if sev != SeverityInfo {
+		t.Fatalf("DV-REL-UTILITY-EXEMPT must be Info (no-silent-caps, not a gate), got %v", sev)
 	}
 }
 

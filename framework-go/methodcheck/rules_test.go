@@ -486,11 +486,25 @@ func passingSystem(t *testing.T, ucID string) System {
 func TestValidateArchitecture_Pass(t *testing.T) {
 	ucID := nid()
 	s := passingSystem(t, ucID)
+	// "Second" carries a real activity diagram (coreUC → minimalActivity: start→act), so
+	// its dynamic view must REALIZE "act" with a legally-rooted call chain (Task 12
+	// severity flip: CC-COVERAGE/CC-PATH-CONNECTED are now the hard gate) — an actor
+	// entering the same Client the primary flow uses.
+	second := coreUC("Second")
+	second.UseCase.Actors = []Actor{{ID: "user", Role: "User"}}
 	c := CoreUseCases{Decisions: []UseCaseDecision{
 		{UseCase: UseCase{ID: ucID, Name: "Core flow", Classification: classCore}},
-		coreUC("Second"),
+		second,
 	}}
-	s.DynamicViews = append(s.DynamicViews, DynamicView{UseCaseID: c.Decisions[1].UseCase.ID, Key: "uc2"})
+	clientID, mgrID := s.Components[0].ID, s.Components[1].ID
+	s.DynamicViews = append(s.DynamicViews, DynamicView{
+		UseCaseID: c.Decisions[1].UseCase.ID,
+		Key:       "uc2",
+		Steps: []CallStep{{ActivityNodeID: "act", Calls: []TraceCall{
+			{From: "user", To: clientID, Mode: modeSync},
+			{From: clientID, To: mgrID, Mode: modeSync},
+		}}},
+	})
 	res, err := validateArchitecture(s, c)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)

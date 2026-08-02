@@ -52,9 +52,12 @@ const (
 	ruleCCDecidedBy     RuleID = "CC-DECIDED-BY"
 )
 
-// ccGateSeverity is the PoC-advisory severity for the correspondence family and
-// the two coverage retargets. The post-QA rollout flips it to SeverityError.
-const ccGateSeverity = SeverityWarning
+// ccGateSeverity is the correspondence family's gate severity. Advisory
+// (SeverityWarning) through the PoC and the realization rollout; the rollout's
+// Task 12 severity flip (2026-08-01) makes it SeverityError — the hard gate is
+// now live: any draft/commit with a CC-*, DV-STATIC-COVERAGE, DV-REL-COVERAGE, or
+// CUC-ACTOR-REQUIRED violation fails the verdict.
+const ccGateSeverity = SeverityError
 
 // ccMustHaveStep is the set of activity-node kinds that MUST carry a realizing step:
 // they are the nodes that DO something, so a call chain has to say what calls they make.

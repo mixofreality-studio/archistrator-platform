@@ -87,6 +87,7 @@
               "id": "decide",
               "name": "Decide",
               "classification": "core",
+              "actors": [{ "id": "user", "role": "User" }],
               "activity": {
                 "nodes": [
                   { "id": "start", "kind": "start", "label": "start" },
@@ -104,6 +105,7 @@
               "id": "other",
               "name": "Other",
               "classification": "core",
+              "actors": [{ "id": "user", "role": "User" }],
               "activity": {
                 "nodes": [
                   { "id": "start", "kind": "start", "label": "start" },
@@ -192,6 +194,12 @@
                 "activityNodeId": "act",
                 "calls": [
                   {
+                    "from": "user",
+                    "to": "appclient",
+                    "mode": "sync",
+                    "label": ""
+                  },
+                  {
                     "from": "appclient",
                     "to": "designmanager",
                     "mode": "sync",
@@ -223,7 +231,25 @@
             "useCaseId": "other",
             "key": "uc2",
             "title": "Other",
-            "steps": []
+            "steps": [
+              {
+                "activityNodeId": "act",
+                "calls": [
+                  {
+                    "from": "user",
+                    "to": "appclient",
+                    "mode": "sync",
+                    "label": ""
+                  },
+                  {
+                    "from": "appclient",
+                    "to": "designmanager",
+                    "mode": "sync",
+                    "label": ""
+                  }
+                ]
+              }
+            ]
           }
         ]
       }
