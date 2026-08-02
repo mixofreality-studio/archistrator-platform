@@ -115,10 +115,9 @@
             "useCaseId": "decide",
             "key": "uc1",
             "title": "Core",
-            "participants": [ "appclient", "designmanager" ],
-            "edges": [ { "from": "appclient", "to": "designmanager", "mode": "sync", "label": "" } ]
+            "steps": [ { "activityNodeId": "act", "calls": [ { "from": "appclient", "to": "designmanager", "mode": "sync", "label": "" } ] } ]
           },
-          { "useCaseId": "other", "key": "uc2", "title": "Other", "participants": null, "edges": null }
+          { "useCaseId": "other", "key": "uc2", "title": "Other", "steps": null }
         ]
       }
     },

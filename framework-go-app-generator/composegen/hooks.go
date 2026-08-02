@@ -55,8 +55,26 @@ func variantHookName(component, variant string) string {
 // variant listed in Config.VariantHookArgs: <Comp><Variant>Args(cfg *Config)
 // returns the ordered driver-supplied Go types the variant constructor consumes
 // verbatim. The emitter stays policy-free — it emits only the typed seam; the
-// hand hooks.go reads cfg and builds the composition-root ports/values.
+// hand hooks.go reads cfg and builds the composition-root ports/values (any
+// infra the arm ALSO consumes is threaded as an extra positional arg to the
+// SURROUNDING constructor call instead — see resolveArm's hookExtraCtorArgs —
+// so this hook's own signature never varies).
+//
+// Idempotent by name: a variant bound by MULTIPLE profiles (e.g. messageBus's
+// "Temporal" variant binds both local and cloud) calls this once per profile
+// arm, but must emit exactly ONE Hooks-interface method — a second call for
+// the same (component, variant) is a silent no-op, not a duplicate interface
+// method (which would fail to compile).
 func (r *resolved) addVariantHook(rb raBinding, variant string, specs []HookArgType) {
+	name := variantHookName(rb.key, variant)
+	if r.variantHookSeen == nil {
+		r.variantHookSeen = map[string]bool{}
+	}
+	if r.variantHookSeen[name] {
+		return
+	}
+	r.variantHookSeen[name] = true
+
 	types := make([]string, 0, len(specs))
 	for _, s := range specs {
 		types = append(types, s.GoType)
@@ -64,7 +82,6 @@ func (r *resolved) addVariantHook(rb raBinding, variant string, specs []HookArgT
 			r.variantHookImports = append(r.variantHookImports, s.GoImport)
 		}
 	}
-	name := variantHookName(rb.key, variant)
 	r.variantHooks = append(r.variantHooks, hookMethod{
 		doc: []string{
 			name + " supplies the " + rb.key + " " + variant + " variant's constructor",

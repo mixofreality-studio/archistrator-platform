@@ -81,6 +81,13 @@ func comp(t *testing.T, name, kind string) Component {
 	return Component{ID: Slug(name), Name: name, Kind: kind, Layer: layer, Encapsulates: name + " volatility"}
 }
 
+// traceOf projects a DECLARED static relationship onto the realized call a step
+// carries. The fixtures that realize a relationship they also declare build the
+// call from the same value, so the two sides cannot drift apart by a typo.
+func traceOf(r Relationship) TraceCall {
+	return TraceCall{From: r.From, To: r.To, Mode: r.Mode, Label: r.Label}
+}
+
 // ---- ValidateVolatilities ----
 
 func TestValidateVolatilities_Pass(t *testing.T) {
@@ -323,6 +330,38 @@ func TestValidateCoreUseCases_GuardedEdgeFromNonDecisionFails(t *testing.T) {
 	}
 }
 
+// TestUCActDiag_EventEntryWithoutIncomingEdgeIsLegal proves the UML-event-node
+// relaxation (2026-07-30 callchain-realization Task 3): a timeEvent/acceptEvent node
+// with NO incoming edge is a standard UML alternative diagram entry, not an orphan.
+// Reading ucActivityDiagram (rules.go) shows it has NO orphan/unreachable check at
+// all — it only inspects decision/fork/merge/join node cardinalities — so a
+// kindTimeEvent entry node was ALREADY well-formed against UC-ACTDIAG specifically
+// before this task; this test pins that (already-correct) behavior so it can't
+// silently regress once Task 5 adds real per-node validation. (A SEPARATE rule,
+// UC-ACT-PRESENT, still requires a literal "start" node and is unaffected here — see
+// the Task-3 report's Concerns section.)
+func TestUCActDiag_EventEntryWithoutIncomingEdgeIsLegal(t *testing.T) {
+	uc := UseCaseDecision{UseCase: UseCase{
+		ID: Slug("Sweep"), Name: "Sweep", Classification: classCore, Trigger: "timer",
+		Activity: &ActivityDiagram{
+			Nodes: []ActivityNode{
+				{ID: "tick", Kind: kindTimeEvent, Label: "period elapses"},
+				{ID: "act", Kind: "action", Label: "run sweep"},
+				{ID: "end", Kind: "end"},
+			},
+			Edges: []ActivityEdge{{From: "tick", To: "act"}, {From: "act", To: "end"}},
+		},
+	}}
+	c := CoreUseCases{Decisions: []UseCaseDecision{uc, coreUC("Other")}}
+	res, err := validateCoreUseCases(c)
+	if err != nil {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	if hasRule(res, ruleUcActDiagram) {
+		t.Fatalf("edge-less event entry must be well-formed against UC-ACTDIAG, got %+v", res.Findings)
+	}
+}
+
 func TestValidateCoreUseCases_DuplicateUseCaseNameFails(t *testing.T) {
 	c := CoreUseCases{Decisions: []UseCaseDecision{
 		coreUC("Co-author artifact"), coreUC("Co-author artifact"), coreUC("Render artifact"),
@@ -346,6 +385,47 @@ func TestValidateCoreUseCases_DuplicateActorRoleWithinUseCaseFails(t *testing.T)
 	res, _ := validateCoreUseCases(c)
 	if !hasRule(res, ruleCucActorUniq) {
 		t.Fatalf("expected CUC-ACTOR-UNIQUE, got %+v", res.Findings)
+	}
+}
+
+// ---- CUC-ACTOR-REQUIRED ----
+
+// TestCUCActorRequired_ClientActionWithoutActorFires pins founder ruling R-A
+// (rollout rulings 2026-07-31): a clientAction use case is, by definition, started
+// by SOMEBODY, so it must name that somebody. Without an actor the use case has no
+// legal call-chain root either (CC-PATH-CONNECTED's clientAction shape is
+// actor→Client), which is why the gap is worth its own rule rather than being left
+// to surface as a downstream connectivity finding.
+func TestCUCActorRequired_ClientActionWithoutActorFires(t *testing.T) {
+	uc := coreUC("Co-author artifact")
+	uc.UseCase.Trigger = triggerClientAction
+	uc.UseCase.Actors = nil
+	c := CoreUseCases{Decisions: []UseCaseDecision{uc, coreUC("Other")}}
+	res, _ := validateCoreUseCases(c)
+	if !hasRuleFindings(res.Findings, ruleCucActorReq) {
+		t.Fatalf("a clientAction use case with zero actors must fire CUC-ACTOR-REQUIRED, got %+v", res.Findings)
+	}
+	if sev, _ := findingSeverity(res.Findings, ruleCucActorReq); sev != ccGateSeverity {
+		t.Fatalf("CUC-ACTOR-REQUIRED must ride ccGateSeverity (%v), got %v", ccGateSeverity, sev)
+	}
+	for _, f := range res.Findings {
+		if f.RuleID == ruleCucActorReq && f.Location.Section != "useCase "+uc.UseCase.ID {
+			t.Fatalf("CUC-ACTOR-REQUIRED section must be the use-case grammar %q, got %q", "useCase "+uc.UseCase.ID, f.Location.Section)
+		}
+	}
+}
+
+// TestCUCActorRequired_TimerWithoutActorPasses is the rule's other half: a
+// SCHEDULED use case is started by the clock, not by a person, so zero actors is
+// the ordinary shape and must stay silent.
+func TestCUCActorRequired_TimerWithoutActorPasses(t *testing.T) {
+	uc := coreUC("Sweep balances")
+	uc.UseCase.Trigger = triggerTimer
+	uc.UseCase.Actors = nil
+	c := CoreUseCases{Decisions: []UseCaseDecision{uc, coreUC("Other")}}
+	res, _ := validateCoreUseCases(c)
+	if hasRuleFindings(res.Findings, ruleCucActorReq) {
+		t.Fatalf("a timer-triggered use case needs no actor; CUC-ACTOR-REQUIRED must stay silent, got %+v", res.Findings)
 	}
 }
 
@@ -390,16 +470,15 @@ func passingSystem(t *testing.T, ucID string) System {
 	// The primary view exercises the full chain so every core component participates
 	// (DV-STATIC-COVERAGE) and every sync relationship is covered (DV-REL-COVERAGE).
 	dvs := []DynamicView{{
-		UseCaseID:    ucID,
-		Key:          "uc1",
-		Title:        "Core flow",
-		Participants: []string{client.ID, mgr.ID, eng.ID, ra.ID, res.ID},
-		Edges: []Relationship{
+		UseCaseID: ucID,
+		Key:       "uc1",
+		Title:     "Core flow",
+		Steps: []CallStep{{Calls: []TraceCall{
 			{From: client.ID, To: mgr.ID, Mode: modeSync},
 			{From: mgr.ID, To: eng.ID, Mode: modeSync},
 			{From: mgr.ID, To: ra.ID, Mode: modeSync},
 			{From: ra.ID, To: res.ID, Mode: modeSync},
-		},
+		}}},
 	}}
 	return System{Components: []Component{client, mgr, eng, ra, res}, Relationships: rels, DynamicViews: dvs}
 }
@@ -407,11 +486,25 @@ func passingSystem(t *testing.T, ucID string) System {
 func TestValidateArchitecture_Pass(t *testing.T) {
 	ucID := nid()
 	s := passingSystem(t, ucID)
+	// "Second" carries a real activity diagram (coreUC → minimalActivity: start→act), so
+	// its dynamic view must REALIZE "act" with a legally-rooted call chain (Task 12
+	// severity flip: CC-COVERAGE/CC-PATH-CONNECTED are now the hard gate) — an actor
+	// entering the same Client the primary flow uses.
+	second := coreUC("Second")
+	second.UseCase.Actors = []Actor{{ID: "user", Role: "User"}}
 	c := CoreUseCases{Decisions: []UseCaseDecision{
 		{UseCase: UseCase{ID: ucID, Name: "Core flow", Classification: classCore}},
-		coreUC("Second"),
+		second,
 	}}
-	s.DynamicViews = append(s.DynamicViews, DynamicView{UseCaseID: c.Decisions[1].UseCase.ID, Key: "uc2"})
+	clientID, mgrID := s.Components[0].ID, s.Components[1].ID
+	s.DynamicViews = append(s.DynamicViews, DynamicView{
+		UseCaseID: c.Decisions[1].UseCase.ID,
+		Key:       "uc2",
+		Steps: []CallStep{{ActivityNodeID: "act", Calls: []TraceCall{
+			{From: "user", To: clientID, Mode: modeSync},
+			{From: clientID, To: mgrID, Mode: modeSync},
+		}}},
+	})
 	res, err := validateArchitecture(s, c)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -666,14 +759,13 @@ func TestValidateArchitecture_UseCaseDynamicMissing_AllCoveredPasses(t *testing.
 	ucID := nid()
 	s := passingSystem(t, ucID)
 	variationID := nid()
-	// Add a second view for the nonCore variation, reusing the same participants/edges.
+	// Add a second view for the nonCore variation, reusing the same steps/calls.
 	primary := s.DynamicViews[0]
 	s.DynamicViews = append(s.DynamicViews, DynamicView{
-		UseCaseID:    variationID,
-		Key:          "uc2",
-		Title:        "Variation flow",
-		Participants: primary.Participants,
-		Edges:        primary.Edges,
+		UseCaseID: variationID,
+		Key:       "uc2",
+		Title:     "Variation flow",
+		Steps:     primary.Steps,
 	})
 	variationOf := ucID
 	c := CoreUseCases{Decisions: []UseCaseDecision{

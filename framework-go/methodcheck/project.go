@@ -57,7 +57,8 @@ const (
 	edgeGuardedFlow = "guardedFlow"
 )
 
-// ActivityNodeKind wire names (only the ones the activity-diagram rules read).
+// ActivityNodeKind wire names (only the ones the activity-diagram rules —
+// including the path walker in activitypaths.go — read).
 const (
 	nodeStart    = "start"
 	nodeAction   = "action"
@@ -65,6 +66,29 @@ const (
 	nodeMerge    = "merge"
 	nodeFork     = "fork"
 	nodeJoin     = "join"
+	nodeEnd      = "end"
+	nodeSwitch   = "switch"
+)
+
+// UseCase trigger wire names (the `trigger` field of a use case). They are the CC-*
+// family's alignment key against the activity diagram's entry nodes: a timer-triggered
+// use case must enter on a timeEvent, a busMessage one on an acceptEvent, and a
+// clientAction one on neither (see ccTriggerEvent in rules_callchain.go).
+const (
+	triggerClientAction = "clientAction"
+	triggerTimer        = "timer"
+	triggerBusMessage   = "busMessage"
+)
+
+// UML event node kinds (standard UML alternative diagram entries alongside a plain
+// `start` node): a timeEvent fires on a schedule/timer, an acceptEvent fires on an
+// external signal. Both are legal ENTRY points for an activity diagram — a diagram
+// whose only ingress is one of these nodes is well-formed even though the node
+// itself carries no incoming edge (it is not an orphan; nothing "leads into" a
+// trigger). See ucActivityDiagram (rules.go) / ucActPresent (rules_statevalidation.go).
+const (
+	kindTimeEvent   = "timeEvent"
+	kindAcceptEvent = "acceptEvent"
 )
 
 // Classification wire names.
@@ -191,6 +215,22 @@ type ActivityNode struct {
 	ID    string `json:"id"`
 	Kind  string `json:"kind"`
 	Label string `json:"label"`
+
+	// RoleName + LinkedActorID are populated for a NodeSwimLane node: the lane's role
+	// name and an optional link to a use-case Actor. LinkedActorID mirrors the app
+	// side's nullable *string as a plain string ("" when absent) — methodcheck's
+	// structural mirrors decode nullable wire fields into their zero value rather than
+	// carrying a pointer (see BuildStatus/ContractKey elsewhere in this file).
+	RoleName      string `json:"roleName"`
+	LinkedActorID string `json:"linkedActorId"`
+
+	// DecidedBy names WHO resolves this node's branch (rollout rulings 2026-07-31).
+	// It is legal ONLY on a decision/switch kind, and it resolves exactly like a call
+	// endpoint: against the System's components UNION the owning use case's actors.
+	// Empty means absent (the shape every pre-rulings committed node has) — same
+	// zero-value mirroring as LinkedActorID above. CC-DECIDED-BY (rules_callchain.go)
+	// checks both halves; nothing here enforces them.
+	DecidedBy string `json:"decidedBy"`
 }
 
 // ActivityEdge is a directed edge in an activity diagram.
@@ -243,13 +283,63 @@ type Relationship struct {
 	Label string `json:"label"`
 }
 
-// DynamicView is one call chain per use case.
+// DynamicView is one call chain per use case, keyed by step. Each step realizes one
+// activity-diagram node (Grammar B ActivityNode.ID, via CallStep.ActivityNodeID) as
+// the ordered fragment of calls that node's action makes. This mirrors the app-side
+// step-keyed model exactly (same wire names) — framework-go keeps its OWN parallel
+// string-typed struct rather than importing the app's enum-typed one.
 type DynamicView struct {
-	UseCaseID    string         `json:"useCaseId"`
-	Key          string         `json:"key"`
-	Title        string         `json:"title"`
-	Participants []string       `json:"participants"`
-	Edges        []Relationship `json:"edges"`
+	UseCaseID string     `json:"useCaseId"`
+	Key       string     `json:"key"`
+	Title     string     `json:"title"`
+	Steps     []CallStep `json:"steps"`
+}
+
+// CallStep is one realized activity-diagram node's call fragment: the node it
+// realizes (ActivityNodeID) and the ordered calls that node's action makes.
+type CallStep struct {
+	ActivityNodeID string      `json:"activityNodeId"`
+	Calls          []TraceCall `json:"calls"`
+}
+
+// TraceCall is one call inside a realized step (rollout rulings 2026-07-31): the
+// same directed, moded edge a Relationship carries, PLUS an optional alternative-
+// group tag. Calls in ONE step sharing an Alt value are surface-ALTERNATIVES —
+// equivalent entries into the same chain (the two surfaces a use case can be
+// entered from, say), not a sequence.
+//
+// WHAT ALT DOES NOT CHANGE: any CC-* verdict, and any PER-EDGE legality rule. Every
+// alternative still seeds CC-PATH-CONNECTED's reached set, and each is checked as an
+// ordinary call — which is exactly why no rule branches on Alt.
+//
+// WHAT ALT STILL HAS TO OBEY: the PER-VIEW CARDINALITY rules, which read a view's
+// calls as concurrent and do not exempt a group of alternatives. DV-SINGLE-MGR,
+// APPC-INT-CLIENT-MULTI-MGR and APPC-INT-MGR-MULTI-QUEUE all see two alternatives
+// entering two different Managers as one Client driving two Managers, and fire at
+// Error. Alternatives must therefore target the SAME Manager: they are two doors
+// into one chain, not two chains. Pinned by
+// TestDynamicViewConsistency_AltGroupToDifferentManagersFires.
+//
+// Empty Alt means absent — methodcheck's structural mirror decodes the app's
+// nullable `alt` into its zero value rather than carrying a pointer (see
+// ActivityNode.LinkedActorID / Component.BuildStatus for the same convention).
+type TraceCall struct {
+	From  string `json:"from"`
+	To    string `json:"to"`
+	Mode  string `json:"mode"`
+	Label string `json:"label"`
+	Alt   string `json:"alt"`
+}
+
+// relationship projects a trace call onto the plain directed edge the WHOLE-VIEW
+// suites reason about (DV-*, App-C, STP-*). Those rules ask "which endpoints, which
+// mode" — per edge, and in aggregate per view — and neither question reads the
+// alternative-group tag: an alternative is checked exactly like any other call, which
+// is what makes an alt group subject to the per-view cardinality rules (see
+// TraceCall). The CC-* family, which is the one that cares about a call's position in
+// a step, consumes TraceCall directly.
+func (tc TraceCall) relationship() Relationship {
+	return Relationship{From: tc.From, To: tc.To, Mode: tc.Mode, Label: tc.Label}
 }
 
 // OperationalConcepts mirrors the OperationalConcepts slot model.

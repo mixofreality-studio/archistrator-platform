@@ -14,23 +14,49 @@ const (
 	fwRAPath      = "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 )
 
-// raDep is one ResourceAccess component dependency of the manager, resolved to
+// raDep is one ACTIVITY-BEARING component dependency of the manager, resolved to
 // everything the activities/invokers emitters need: the struct field /
-// method-name stem, the interface type, the RA package alias + import path,
+// method-name stem, the interface type, the dep package alias + import path,
 // and its ops sorted by name.
 type raDep struct {
 	field      string // PascalCase dep name: struct field + method-name prefix
-	iface      string // RA interface type name (e.g. "Access")
-	alias      string // RA package alias (goPackage's last segment)
-	importPath string // full RA package import path
+	iface      string // dep interface type name (e.g. "Access")
+	alias      string // dep package alias (goPackage's last segment)
+	importPath string // full dep package import path
 	component  string // dep.Component — the serviceContracts key, for ActivityName
 	depName    string // dep.Name — the CallerKeyedOps lookup key
 	ops        []projectmodel.Operation
 }
 
-// resolveRADeps resolves the manager's ResourceAccess component deps in
-// contract order. A dep is an RA component dep iff it names a component whose
-// contract layer is ResourceAccess; Engine deps and plain deps are skipped.
+// activityBearingLayers are the contract layers whose ops a workflow can reach
+// ONLY through a Temporal Activity, because they perform I/O outside the
+// deterministic replay context.
+//
+// ResourceAccess is the obvious member. UTILITY joins it because an I/O utility —
+// a message bus whose deliverSignal/registerSchedule are ordinary control-plane
+// RPC — is indistinguishable from an RA at this layer: same fwra call Context
+// (see modelgen's layerContext), same idempotency-key threading, same
+// must-not-run-inside-replay constraint. Engine deps are pure computation the
+// workflow calls in-process by value; plain deps are config.
+//
+// Layer membership alone is NOT sufficient — see the built-guard in resolveRADeps.
+var activityBearingLayers = map[string]bool{"ResourceAccess": true, "Utility": true}
+
+// resolveRADeps resolves the manager's activity-bearing component deps in
+// contract order. A dep qualifies only when it is BOTH in an activity-bearing
+// layer (see activityBearingLayers) AND BUILT — a non-empty goPackage, the same
+// "built" selection modelgen makes when deciding which contracts to emit. Engine
+// deps and plain deps are skipped.
+//
+// The built-guard is load-bearing, not defensive. A contract can sit in an
+// activity-bearing layer and have no Go package at all, and an EXTERNAL utility is
+// the standard case: a Security contract declaring resolvePrincipal / authorize /
+// verifyWebhookSignature is layer Utility with real operations, but the component
+// is a third-party service this codebase never compiles, so it carries goPackage
+// null. Without the guard, a manager declaring such a dep would emit one Activity
+// per op against path.Base("") == "." with an import path ending in a bare slash —
+// uncompilable generated code from a perfectly legal model. The layer says "this
+// would need an Activity if we built it"; goPackage says "we built it".
 func resolveRADeps(ec emitContext) []raDep {
 	var out []raDep
 	for _, dep := range ec.mgr.Deps {
@@ -38,7 +64,7 @@ func resolveRADeps(ec emitContext) []raDep {
 			continue
 		}
 		c, ok := ec.model.Contracts[dep.Component]
-		if !ok || c.Layer != "ResourceAccess" {
+		if !ok || !activityBearingLayers[c.Layer] || c.GoPackage == "" {
 			continue
 		}
 		ops := append([]projectmodel.Operation(nil), c.Doc.Interface.Operations...)

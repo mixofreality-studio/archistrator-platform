@@ -10,8 +10,9 @@ import (
 
 // activityStructDoc is the doc comment on the generated genActivities struct.
 const activityStructDoc = "// genActivities hosts one Temporal Activity per operation of each\n" +
-	"// ResourceAccess component dependency — the manager's architecture-approved\n" +
-	"// call surface. Fields are the contract interfaces, threaded by RegisterWorker.\n"
+	"// I/O component dependency (ResourceAccess, and any Utility carrying a service\n" +
+	"// contract) — the manager's architecture-approved call surface. Fields are the\n" +
+	"// contract interfaces, threaded by RegisterWorker.\n"
 
 // activityKeyHelper is the run-scoped idempotency-key deriver emitted verbatim.
 const activityKeyHelper = `// genActivityIdempotencyKey derives the run-scoped 3-part key
@@ -26,8 +27,8 @@ func genActivityIdempotencyKey(ctx context.Context) fwra.IdempotencyKey {
 `
 
 // emitActivities generates activities.gen.go: one Temporal Activity per
-// operation of each ResourceAccess component dependency of the manager, in
-// contract (dep) order, ops sorted by name.
+// operation of each activity-bearing component dependency of the manager (see
+// activityBearingLayers), in contract (dep) order, ops sorted by name.
 func emitActivities(ec emitContext) ([]byte, error) {
 	deps := resolveRADeps(ec)
 
@@ -51,7 +52,7 @@ func emitActivities(ec emitContext) ([]byte, error) {
 }
 
 // activityImports builds the grouped import block: stdlib, the Temporal SDK,
-// the framework packages, then the RA dep packages (+ any foundational
+// the framework packages, then the dep packages (+ any foundational
 // x-go-import types the ops reference). gofmt sorts within each group.
 func activityImports(deps []raDep) string {
 	stdlib := []string{importLine("context"), importLine("fmt")}

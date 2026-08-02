@@ -113,6 +113,98 @@ func TestGenerateArchistratorFidelity(t *testing.T) {
 	}
 }
 
+// busFixture declares a UTILITY-layer contract with a Temporal infra binding —
+// the shape a restricted messaging utility (Manager-only clientele) takes once a
+// durable-execution ResourceAccess folds into it. Before the utility layer was
+// mapped, this emitted context-less signatures and NO infra constructor (the
+// impl silently vanished); the tests below pin both halves.
+const busFixture = `{
+  "serviceContracts": {
+    "messageBus": {
+      "component": "messageBus",
+      "layer": "Utility",
+      "goPackage": "internal/utility/messagebus",
+      "title": "messagebus contract",
+      "infra": ["Temporal"],
+      "$defs": {
+        "ExecutionKind": { "type": "string", "enum": ["billing", "operations"] },
+        "ExecutionID": { "type": "string" },
+        "SignalName": { "type": "string" },
+        "ExecutionPayload": {
+          "type": "object",
+          "properties": { "Bytes": { "type": "string", "contentEncoding": "base64" } },
+          "required": ["Bytes"],
+          "additionalProperties": false
+        }
+      },
+      "interface": {
+        "name": "MessageBus",
+        "layer": "utility",
+        "operations": [
+          {
+            "name": "DeliverSignal",
+            "params": [
+              { "name": "targetExecutionID", "schema": { "$ref": "#/$defs/ExecutionID" } },
+              { "name": "signalName", "schema": { "$ref": "#/$defs/SignalName" } },
+              { "name": "payload", "schema": { "$ref": "#/$defs/ExecutionPayload" } }
+            ],
+            "error": true
+          }
+        ]
+      }
+    }
+  }
+}`
+
+// TestGenerateUtilityLayerContext asserts a Utility-layer contract emits the
+// ResourceAccess call Context on every op (layerContext's deliberate reuse: an
+// I/O utility's verbs are retried mutating calls needing Principal +
+// IdempotencyKey) together with the fwra import, and — because Utility now
+// shares the RA impl branch — the delegating infra constructor for its declared
+// infra. A regression here means an infra-backed utility's implementation
+// silently disappears from the generated surface.
+func TestGenerateUtilityLayerContext(t *testing.T) {
+	got, err := modelgen.Generate([]byte(busFixture), modelgen.Config{ModulePath: "example.com/bus"})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	src, ok := got["internal/utility/messagebus"]
+	if !ok {
+		t.Fatalf("Generate did not return the utility package (keys %v)", keysOf(got))
+	}
+	if _, err := parser.ParseFile(token.NewFileSet(), "messagebus", src, parser.AllErrors); err != nil {
+		t.Fatalf("emitted utility package does not parse: %v", err)
+	}
+
+	out := string(src)
+	if !contains(out, `fwra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"`) {
+		t.Error("utility contract should import the fwra call-context package")
+	}
+	if !contains(out, "DeliverSignal(rc fwra.Context,") {
+		t.Errorf("utility op should take the fwra call Context, got:\n%s", out)
+	}
+	if !contains(out, "func NewTemporalMessageBus(") {
+		t.Errorf("utility with infra should emit the delegating infra constructor, got:\n%s", out)
+	}
+}
+
+// TestGenerateFakesUtilityLayer asserts the utility layer reaches the fake
+// emitter too — a Fake<Iface> whose methods carry the same fwra.Context, so it
+// satisfies the real generated interface.
+func TestGenerateFakesUtilityLayer(t *testing.T) {
+	got, err := modelgen.GenerateFakes([]byte(busFixture), modelgen.Config{ModulePath: "example.com/bus"})
+	if err != nil {
+		t.Fatalf("GenerateFakes: %v", err)
+	}
+	src, ok := got["internal/utility/messagebus/fake"]
+	if !ok {
+		t.Fatalf("GenerateFakes did not return the utility fake package (keys %v)", keysOf(got))
+	}
+	if !contains(string(src), "rc fwra.Context") {
+		t.Errorf("utility fake should carry the fwra call Context, got:\n%s", src)
+	}
+}
+
 // TestGenerateErrorEmptyModulePath asserts Generate rejects an empty ModulePath
 // naming the field.
 func TestGenerateErrorEmptyModulePath(t *testing.T) {

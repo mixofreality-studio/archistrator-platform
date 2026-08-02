@@ -121,48 +121,13 @@ func TestRelDup_SingleEdgePasses(t *testing.T) {
 	}
 }
 
-// ---- DV-CHAIN-CONNECTED ----
-
-func TestDVChain_NoClientRootWarns(t *testing.T) {
-	mgr := comp(t, "M", kindManager)
-	eng := comp(t, "E", kindEngine)
-	s := System{
-		Components:   []Component{mgr, eng},
-		DynamicViews: []DynamicView{{Key: "uc1", Participants: []string{mgr.ID, eng.ID}, Edges: []Relationship{{From: mgr.ID, To: eng.ID, Mode: modeSync}}}},
-	}
-	sev, ok := findingSeverity(dvChainConnected(s), ruleDVChainConn)
-	if !ok || sev != SeverityWarning {
-		t.Fatalf("a chain with no Client root must warn DV-CHAIN-CONNECTED")
-	}
-}
-
-func TestDVChain_DisconnectedWarns(t *testing.T) {
-	client := comp(t, "C", kindClient)
-	mgr := comp(t, "M", kindManager)
-	eng := comp(t, "E", kindEngine)
-	s := System{
-		Components: []Component{client, mgr, eng},
-		DynamicViews: []DynamicView{{Key: "uc1",
-			Participants: []string{client.ID, mgr.ID, eng.ID},
-			Edges:        []Relationship{{From: client.ID, To: mgr.ID, Mode: modeSync}}, // eng unreachable
-		}},
-	}
-	if !hasRuleFindings(dvChainConnected(s), ruleDVChainConn) {
-		t.Fatalf("an unreachable participant must warn DV-CHAIN-CONNECTED")
-	}
-}
-
-func TestDVChain_ConnectedPasses(t *testing.T) {
-	client := comp(t, "C", kindClient)
-	mgr := comp(t, "M", kindManager)
-	s := System{
-		Components:   []Component{client, mgr},
-		DynamicViews: []DynamicView{{Key: "uc1", Participants: []string{client.ID, mgr.ID}, Edges: []Relationship{{From: client.ID, To: mgr.ID, Mode: modeSync}}}},
-	}
-	if out := dvChainConnected(s); len(out) != 0 {
-		t.Fatalf("a connected chain must not warn, got %+v", out)
-	}
-}
+// DV-CHAIN-CONNECTED and its tests were RETIRED by the 2026-07-30
+// callchain-realization work: CC-PATH-CONNECTED (rules_callchain.go) subsumes it and
+// strictly strengthens it — where DV-CHAIN-CONNECTED asked only that every participant
+// be reachable from SOME Client in the flattened union of a view's calls,
+// CC-PATH-CONNECTED walks each activity-diagram path in order and demands every call
+// fragment be rooted legally (actor→Client, or the entry-kind's root shape) or continue
+// from an already-reached component. See rules_callchain_test.go.
 
 // ---- UC-ACT-PRESENT ----
 
@@ -185,6 +150,48 @@ func TestUCActPresent_ValidPasses(t *testing.T) {
 	c := CoreUseCases{Decisions: []UseCaseDecision{coreUC("X")}} // coreUC carries a minimal activity
 	if out := ucActPresent(c); len(out) != 0 {
 		t.Fatalf("a start+action activity must pass, got %+v", out)
+	}
+}
+
+// TestUCActPresent_EventEntryOnlyDiagramPasses pins the 2026-07-30
+// callchain-realization relaxation: a diagram whose only ingress is a UML event node
+// (timeEvent/acceptEvent with no incoming edge) is a well-formed entry and needs no
+// literal "start" node. Without it every event-triggered use case failed the pipeline
+// at UC-ACT-PRESENT before the CC-* correspondence rules could ever see the diagram.
+func TestUCActPresent_EventEntryOnlyDiagramPasses(t *testing.T) {
+	c := CoreUseCases{Decisions: []UseCaseDecision{{UseCase: UseCase{
+		Name: "Sweep", Classification: classCore, Trigger: triggerTimer,
+		Activity: &ActivityDiagram{
+			Nodes: []ActivityNode{
+				{ID: "tick", Kind: kindTimeEvent, Label: "period elapses"},
+				{ID: "act", Kind: nodeAction, Label: "run sweep"},
+				{ID: "e", Kind: nodeEnd},
+			},
+			Edges: []ActivityEdge{{From: "tick", To: "act"}, {From: "act", To: "e"}},
+		},
+	}}}}
+	if out := ucActPresent(c); len(out) != 0 {
+		t.Fatalf("an event-entry-only diagram with an action must pass UC-ACT-PRESENT, got %+v", out)
+	}
+}
+
+// TestUCActPresent_EventNodeWithIncomingEdgeIsNotAnEntry is the negative half of the
+// relaxation: only an EDGE-LESS event node is an ingress. An event node reached by an
+// edge is a mid-flow wait/receive, not a trigger, so a diagram carrying only that (and
+// no start node) is still structurally entry-less and must still fire.
+func TestUCActPresent_EventNodeWithIncomingEdgeIsNotAnEntry(t *testing.T) {
+	c := CoreUseCases{Decisions: []UseCaseDecision{{UseCase: UseCase{
+		Name: "Await", Classification: classCore,
+		Activity: &ActivityDiagram{
+			Nodes: []ActivityNode{
+				{ID: "act", Kind: nodeAction, Label: "submit"},
+				{ID: "ev", Kind: kindAcceptEvent, Label: "await approval"},
+			},
+			Edges: []ActivityEdge{{From: "act", To: "ev"}},
+		},
+	}}}}
+	if !hasRuleFindings(ucActPresent(c), ruleUCActPresent) {
+		t.Fatalf("an event node WITH an incoming edge is mid-flow, not an entry; UC-ACT-PRESENT must still fire")
 	}
 }
 

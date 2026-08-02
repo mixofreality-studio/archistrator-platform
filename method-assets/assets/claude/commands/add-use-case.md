@@ -60,15 +60,21 @@ Dispatch `system-architect`:
 >   - one new Manager method (workflow change)
 >   - one new ResourceAccess verb if necessary
 >
-> Draft the call chain. Add it as a new `DynamicView` to the typed
-> `System` in `.aiarch/state/project.json` → `.systemDesign`.
+> The use case's activity diagram must land in `.coreUseCases` FIRST — the
+> realization is keyed to its nodes, so there is nothing to realize until the
+> diagram exists (this is not the optional "notable variation" bookkeeping the
+> old flow allowed; every use case carries a diagram AND a realization).
 >
-> Update `.coreUseCases` only if this is a notable new variation worth
-> tracking; otherwise leave alone.
+> Then draft the call chain and add it as a new `DynamicView` to the typed
+> `System` in `.aiarch/state/project.json` → `.systemDesign`: `Steps` carrying
+> one ordered, non-empty call fragment per `action`/`timeEvent`/`acceptEvent`
+> node, rooted per the diagram's entry kind, per [[the-method-architecture]]
+> Step 9.
 >
-> Then validate the new dynamic view against the convention rules (skill
-> file). If it can't be drawn cleanly using existing components, escalate
-> to Step 4.
+> Then validate: the whole `CC-*` correspondence family runs at Error severity
+> at `putDraftModel`. If the chain can't be drawn cleanly using existing
+> components, escalate to Step 4 — do NOT reshape a component, invent a call,
+> or demote a node to a note to make it draw.
 
 Estimate the implementation cost (probably small): one Manager method, one
 or two construction activities. Recommend appending these as activities to

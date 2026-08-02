@@ -42,6 +42,10 @@ type resolved struct {
 	// variantHookImports are the import paths the variant-arg hook return types
 	// reference (e.g. the projectstate package for the catalog/minter ports).
 	variantHookImports []string
+	// variantHookSeen dedupes addVariantHook by hook name: a variant bound by
+	// multiple profiles (messageBus's "Temporal" variant binds both local and
+	// cloud) must still emit exactly ONE Hooks-interface method.
+	variantHookSeen map[string]bool
 	// workerGateHooks are the conditional-worker-registration gates (G6b) —
 	// Register<Iface>Worker — collected during manager resolution, in manager
 	// order.
@@ -97,6 +101,11 @@ type raBinding struct {
 	arms       []variantArm
 	switched   bool
 	stub       bool
+	// layer is the contract's declared layer verbatim (e.g. "ResourceAccess",
+	// "Utility") — used ONLY to keep the required-binding boot-error message
+	// layer-accurate (fix round 1, Task 7c live-firing review, MINOR #8): a
+	// binding is not always a ResourceAccess (messageBus is a Utility).
+	layer string
 }
 
 // variantArm is one profile's variant construction for a binding.
@@ -134,6 +143,14 @@ type managerComp struct {
 	// Register<Iface>Worker(cfg) bool hook (G6b) — it has ≥1 optional-dormant
 	// component dep, so whether its Worker runs is composition-root policy.
 	gated bool
+	// registersSchedules marks a manager whose Deps include the driver-named
+	// Config.ScheduleRegistrarComponent (composegen: startup
+	// schedule-registration seam, Task 7c) — its package is expected to export
+	// RegisterSchedules(ctx context.Context, bus messagebus.MessageBus) error.
+	// The emitter calls it once, immediately after the manager's embedded
+	// Worker starts (inside the same Register<Iface>Worker(cfg) gate when
+	// gated), so a Schedule is never registered against a dormant Worker.
+	registersSchedules bool
 }
 
 // resolve builds the composition plan.
@@ -164,8 +181,38 @@ func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
 	if err := r.resolveManagers(m); err != nil {
 		return nil, err
 	}
+	if err := r.validateScheduleRegistrar(); err != nil {
+		return nil, err
+	}
 	r.hooks = deriveHooks(r)
 	return r, nil
+}
+
+// validateScheduleRegistrar fails Generate with a named, actionable error
+// (fix round 1, Task 7c live-firing review, FINDING 4) instead of silently
+// emitting RegisterSchedules(ctx, nil) — the driver-named
+// Config.ScheduleRegistrarComponent resolving to "nil" means the deployment
+// model declares NO real binding arm for it (an arm-less optional/dormant
+// component), so every manager depending on it would call RegisterSchedules
+// against a nil messagebus.MessageBus, panicking the moment that manager's
+// Worker starts. A silent nil here is strictly worse than a generate-time
+// failure: it would compile clean and only blow up at runtime, the exact
+// class of bug this task's own live-firing review exists to catch.
+func (r *resolved) validateScheduleRegistrar() error {
+	if r.cfg.ScheduleRegistrarComponent == "" {
+		return nil // feature off — no manager was marked registersSchedules either (see resolveManager)
+	}
+	if r.localVar[r.cfg.ScheduleRegistrarComponent] != "nil" {
+		return nil // resolved to a real constructed binding — nothing to guard
+	}
+	for _, mc := range r.managers {
+		if mc.registersSchedules {
+			return fmt.Errorf(
+				"composegen: manager %q depends on schedule-registrar component %q, but it resolved to nil (no deployment binding arm) — RegisterSchedules would be called with a nil bus",
+				mc.key, r.cfg.ScheduleRegistrarComponent)
+		}
+	}
+	return nil
 }
 
 // resolveAliases computes the import alias for every component package the walk
@@ -342,6 +389,7 @@ func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding,
 		alias:      r.aliasFor(c.GoPackage),
 		importPath: r.cfg.ModulePath + "/" + c.GoPackage,
 		presence:   b.Presence,
+		layer:      c.Layer,
 	}
 	for _, profile := range r.profiles {
 		pv, ok := b.PerProfile[profile]
@@ -354,26 +402,40 @@ func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding,
 }
 
 // resolveArm resolves one profile's variant to a New<Variant><Interface> call.
-// When the variant is registered in Config.VariantHookArgs (G3), the WHOLE arg
-// list is a single spread call hooks.<Comp><Variant>Args(cfg) — the model can't
-// supply those args (composition-root ports / typed values), so the emitter
-// delegates them to a typed hook and threads no infra/settings. Otherwise the
-// positional convention applies: infra values (per the substrate catalog) then
-// binding settings; a variant that consumes any infra returns (Interface,
-// error), an infra-free variant (memory/dry-run) returns the interface alone.
+// When the variant is registered in Config.VariantHookArgs (G3), the hook call
+// hooks.<Comp><Variant>Args(cfg) supplies the args the model can't express
+// (composition-root ports / typed values) — its OWN signature stays cfg-only:
+// "the hook reads its cfg" holds for every existing hook-args variant
+// (github-app, keycloak substrates). Bound infra resolving to an
+// already-CONSTRUCTED LOCAL the hook cannot reach that way (today: the
+// temporal substrate's dialed client `tc`) is instead threaded as an EXTRA
+// POSITIONAL ARG to the SURROUNDING constructor call, ahead of the hook call
+// (hookExtraCtorArgs) — e.g.
+// messagebus.NewTemporalMessageBus(tc, hooks.MessageBusTemporalArgs(cfg)). This
+// is a plain multi-arg Go call (not the f(g()) sole-arg spread), so it
+// composes cleanly with a hook that itself returns multiple values. A
+// hook-args variant is registered ONCE regardless of how many profiles bind it
+// (messageBus's "Temporal" variant binds BOTH local and cloud) —
+// addVariantHook dedupes by name. Otherwise (no hook) the positional
+// convention applies: infra values (per the substrate catalog) then binding
+// settings; a variant that consumes any infra returns (Interface, error)
+// UNLESS overridden by Config.VariantConstructorNoError
+// (messagebus.NewTemporalMessageBus is single-return despite consuming the
+// temporal infra) — an infra-free variant (memory/dry-run) returns the
+// interface alone.
 func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.BindingVariant, settings []projectmodel.Setting) variantArm {
 	ctor := rb.alias + ".New" + variantToken(pv.Variant) + rb.iface
+	returnsError := len(pv.Infra) > 0 && !r.cfg.VariantConstructorNoError[rb.key+"/"+pv.Variant]
 	if specs, ok := r.cfg.VariantHookArgs[rb.key+"/"+pv.Variant]; ok {
-		for _, ik := range pv.Infra {
-			r.consumedKeys[ik] = true // still a consumed substrate (the hook reads its cfg)
-		}
+		extraCtorArgs := r.hookExtraCtorArgs(pv.Infra)
 		r.addVariantHook(rb, pv.Variant, specs)
+		args := append(extraCtorArgs, "hooks."+variantHookName(rb.key, pv.Variant)+"(cfg)")
 		return variantArm{
 			profile:      profile,
 			variant:      pv.Variant,
 			ctor:         ctor,
-			args:         []string{"hooks." + variantHookName(rb.key, pv.Variant) + "(cfg)"},
-			returnsError: len(pv.Infra) > 0,
+			args:         args,
+			returnsError: returnsError,
 		}
 	}
 	var args []string
@@ -390,8 +452,28 @@ func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.Bind
 		variant:      pv.Variant,
 		ctor:         ctor,
 		args:         args,
-		returnsError: len(pv.Infra) > 0,
+		returnsError: returnsError,
 	}
+}
+
+// hookExtraCtorArgs computes, for a VariantHookArgs-configured arm's bound
+// infra, the EXTRA positional arg expressions the surrounding
+// New<Variant><Interface> call needs ahead of the hook call, for any infra key
+// whose substrate resolves to an already-constructed LOCAL (not a cfg field)
+// — today only "temporal" (the dialed `tc`). Every infra key is still marked
+// consumed (bookkeeping) regardless of whether it contributes an arg.
+// Postgres-substrate + hook-args is unimplemented (no bound variant needs it
+// today); extend the switch here (ctx, *pgxpool.Pool) if one ever does.
+func (r *resolved) hookExtraCtorArgs(infraKeys []string) []string {
+	var args []string
+	for _, ik := range infraKeys {
+		decl := r.infra[ik]
+		r.consumedKeys[ik] = true
+		if decl.Substrate == "temporal" {
+			args = append(args, "tc")
+		}
+	}
+	return args
 }
 
 // resolveEngines constructs every engine-layer contract via its pure
@@ -460,11 +542,7 @@ func (r *resolved) resolveManager(m *projectmodel.Model, key string, c *projectm
 			return managerComp{}, fmt.Errorf("composegen: manager %q: %w", key, err)
 		}
 		mc.ctorArgs = append(mc.ctorArgs, arg)
-		// G6b: a component dep bound to an optional-dormant RA makes this
-		// manager's Worker registration composition-root policy.
-		if dep.Component != "" && r.optDormant[dep.Component] {
-			mc.gated = true
-		}
+		r.applyDepFlags(&mc, dep)
 	}
 	if mc.gated {
 		r.workerGateHooks = append(r.workerGateHooks, workerGateHook(mc.iface))
@@ -475,6 +553,23 @@ func (r *resolved) resolveManager(m *projectmodel.Model, key string, c *projectm
 		mc.webImport = r.cfg.ModulePath + "/internal/client/web/" + webPkgBase(c.GoPackage)
 	}
 	return mc, nil
+}
+
+// applyDepFlags sets the two per-dep managerComp flags a component dep can
+// trigger (split out of resolveManager's loop body to keep its cognitive
+// complexity down): G6b's Worker-registration gate (a dep bound to an
+// optional-dormant RA), and Task 7c's schedule-registrar marker (a dep bound
+// to the driver-named Config.ScheduleRegistrarComponent).
+func (r *resolved) applyDepFlags(mc *managerComp, dep projectmodel.Dep) {
+	if dep.Component == "" {
+		return
+	}
+	if r.optDormant[dep.Component] {
+		mc.gated = true
+	}
+	if r.cfg.ScheduleRegistrarComponent != "" && dep.Component == r.cfg.ScheduleRegistrarComponent {
+		mc.registersSchedules = true
+	}
 }
 
 // managerIsWebExposed decides whether a manager is web-exposed (B1). When the
