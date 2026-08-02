@@ -28,15 +28,24 @@ package methodcheck
 // TWO BOUNDS, ONE FOR EACH FAILURE MODE:
 //
 //   - The OUTPUT cap (maxActivityPaths) truncates the returned set. It is applied
-//     EXACTLY ONCE, as a final truncation of whatever was enumerated, and nothing
-//     inside the walk is cap-aware. This is a deliberate fix (2026-07-30
-//     fix-round-1) for a defect in an earlier version that threaded a shared
-//     decrement-per-TERMINAL "budget" through the recursion: a fork branch
-//     containing internal decision/switch branching was RECOMPUTED once per
-//     already-accumulated sibling combination, over-charging relative to the number
-//     of final combinations produced, and — worse — silently dropping legitimate
+//     EXACTLY ONCE, as a final truncation of whatever was enumerated, and during
+//     ordinary IN-BUDGET exploration nothing inside the walk is cap-aware: spend
+//     and the in-budget half of carry (below) never look at maxActivityPaths, only
+//     at the work budget. This is a deliberate fix (2026-07-30 fix-round-1) for a
+//     defect in an earlier version that threaded a shared decrement-per-TERMINAL
+//     "budget" through the recursion: a fork branch containing internal
+//     decision/switch branching was RECOMPUTED once per already-accumulated
+//     sibling combination, over-charging relative to the number of final
+//     combinations produced, and — worse — silently dropping legitimate
 //     combinations mid-fork. Charging per terminal is what made that scheme
-//     asymmetric; capping the output once, at the end, cannot.
+//     asymmetric; capping the output once, at the end, cannot. (The one narrow
+//     EXCEPTION, added by the 2026-07-31 rollout rulings' work budget below:
+//     once that budget is actually exhausted, carry's post-exhaustion
+//     degradation half checks maxActivityPaths directly — see carry's own doc
+//     comment — so the escape hatch IS cap-aware. That confined exception is not
+//     a second life for the per-terminal decrement this fix retired: it only
+//     ever caps what carry does with walks already completed, never re-enters
+//     exploration.)
 //   - The WORK budget (maxWalkWork) bounds the RECURSION itself (rollout rulings
 //     2026-07-31). Truncating the output alone still requires materializing the
 //     complete result first, which is exponential in nested fork×decision depth —
