@@ -1,6 +1,9 @@
 package methodcheck
 
-import "testing"
+import (
+	"strings"
+	"testing"
+)
 
 // rules_dynamic_test.go PORTS predicates_dynamic_test.go to the structural structs.
 
@@ -187,9 +190,9 @@ func TestDynamicViewConsistency_StaticCoverage_UnparticipatingCoreComponentFails
 	if !ok {
 		t.Fatalf("expected DV-STATIC-COVERAGE for a core component in no dynamic view")
 	}
-	// Retargeted 2026-07-30 (callchain-realization Task 5): the two coverage rules now
-	// ride the CC gate's PoC-advisory severity — the post-QA rollout flips ccGateSeverity
-	// back to SeverityError for the whole family at once.
+	// Retargeted 2026-07-30 (callchain-realization Task 5): the two coverage rules ride
+	// the CC gate's shared severity — the rollout's Task 12 severity flip (2026-08-01)
+	// made ccGateSeverity SeverityError for the whole family at once.
 	if sev != ccGateSeverity {
 		t.Fatalf("DV-STATIC-COVERAGE must carry ccGateSeverity, got %v", sev)
 	}
@@ -263,6 +266,18 @@ func TestDynamicViewConsistency_RelCoverage_UtilityTargetExempt(t *testing.T) {
 	}
 	if sev != SeverityInfo {
 		t.Fatalf("DV-REL-UTILITY-EXEMPT must be Info (no-silent-caps, not a gate), got %v", sev)
+	}
+	// The Info line IS the no-silent-caps safety net (mirrors DV-PLANNED-SKIPPED) — it
+	// must actually NAME the exempted relationship, not just report a count, or the
+	// "not silent" claim is hollow.
+	var msg string
+	for _, f := range out {
+		if f.RuleID == ruleDVRelUtilityExempt {
+			msg = f.Message
+		}
+	}
+	if !strings.Contains(msg, "DesignManager→Logging") {
+		t.Fatalf("DV-REL-UTILITY-EXEMPT message must name the exempted relationship (DesignManager→Logging), got %q", msg)
 	}
 }
 

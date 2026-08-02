@@ -127,7 +127,8 @@ func dynamicViewConsistency(s System, c CoreUseCases) []Finding {
 // SEVERITY (2026-07-30 Task 5): this rule and DV-REL-COVERAGE are the two
 // static↔dynamic COVERAGE rules, so they ride ccGateSeverity with the CC-* family —
 // coverage becomes enforceable exactly when the correspondence family it depends on
-// does. The post-QA rollout flips ccGateSeverity to SeverityError for all of them.
+// does. The rollout's Task 12 severity flip (2026-08-01) made ccGateSeverity
+// SeverityError for all of them — this is the hard gate now.
 func checkStaticParticipationCoverage(s System) []Finding {
 	if len(s.DynamicViews) == 0 {
 		return nil

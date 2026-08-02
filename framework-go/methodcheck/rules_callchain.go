@@ -204,7 +204,8 @@ func (cc ccContext) ucLoc() *Location {
 	return loc(cc.ordinal, "useCase "+cc.uc.ID)
 }
 
-// ccFinding builds a finding at the family's shared PoC severity.
+// ccFinding builds a finding at the family's shared gate severity (Error since the
+// Task 12 severity flip, 2026-08-01).
 func ccFinding(id RuleID, l *Location, format string, args ...any) Finding {
 	return Finding{RuleID: id, Severity: ccGateSeverity, Message: fmt.Sprintf(format, args...), Location: l}
 }
