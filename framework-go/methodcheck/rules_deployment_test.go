@@ -9,26 +9,47 @@ import (
 // deployment model: System components are packaged into DeployContainers (by name),
 // and DeploymentNodes instance containers (by key) rather than components directly.
 
+// deploymentBaseSystem carries RELATIONSHIPS as well as components, because the
+// deployment edge family judges the DERIVED edge set: with no System
+// relationships to derive from, every element of an otherwise legal topology
+// would read as isolated. The chain below is the ordinary closed-layer one —
+// client into the Manager, Manager down to its Engine and its ResourceAccess,
+// ResourceAccess onto its Resource — which derives into a connected graph.
 func deploymentBaseSystem(t *testing.T) System {
 	t.Helper()
-	return System{Components: []Component{
-		comp(t, "AppClient", kindClient),
-		comp(t, "DesignManager", kindManager),
-		comp(t, "ValidatingEngine", kindEngine),
-		comp(t, "StateAccess", kindResourceAccess),
-		comp(t, "StateDB", kindResource),
-	}}
+	return System{
+		Components: []Component{
+			comp(t, "AppClient", kindClient),
+			comp(t, "DesignManager", kindManager),
+			comp(t, "ValidatingEngine", kindEngine),
+			comp(t, "StateAccess", kindResourceAccess),
+			comp(t, "StateDB", kindResource),
+		},
+		Relationships: []Relationship{
+			{From: Slug("AppClient"), To: Slug("DesignManager"), Mode: modeSync, Label: "submits to"},
+			{From: Slug("DesignManager"), To: Slug("ValidatingEngine"), Mode: modeSync, Label: "validates with"},
+			{From: Slug("DesignManager"), To: Slug("StateAccess"), Mode: modeSync, Label: "reads and writes via"},
+			{From: Slug("StateAccess"), To: Slug("StateDB"), Mode: modeSync, Label: "reads from and writes to"},
+		},
+	}
 }
 
 // deploymentBaseContainers packages each System component into its own container,
-// keyed by a slug of the component name.
+// keyed by a slug of the component name. The client's container declares the
+// `spa` surface so the base topology satisfies DEP-FRONTEND-PRESENT — a system
+// nobody can be seen to reach is precisely what that rule exists to catch.
 func deploymentBaseContainers(s System) []DeployContainer {
 	containers := make([]DeployContainer, 0, len(s.Components))
 	for _, c := range s.Components {
+		surface := surfaceService
+		if c.Kind == kindClient {
+			surface = surfaceSPA
+		}
 		containers = append(containers, DeployContainer{
 			Key:        containerKey(c.Name),
 			Name:       c.Name,
 			Components: []string{c.Name},
+			Surface:    surface,
 		})
 	}
 	return containers
@@ -45,20 +66,31 @@ func resourceInfraNodes(s System) []InfrastructureNode {
 	var infra []InfrastructureNode
 	for _, c := range s.Components {
 		if c.Kind == kindResource {
-			infra = append(infra, InfrastructureNode{Name: c.Name})
+			infra = append(infra, InfrastructureNode{Key: "infra-" + Slug(c.Name), Name: c.Name})
 		}
 	}
 	return infra
 }
 
+// envInstancingAll builds a one-node environment instancing every container.
+// Element keys are prefixed with the profile, so the same container instanced in
+// three environments still holds a key unique WITHIN each of them.
 func envInstancingAll(profile, title string, containers []DeployContainer, infra []InfrastructureNode) DeploymentEnvironment {
 	var instances []ContainerInstance
 	for _, c := range containers {
-		instances = append(instances, ContainerInstance{ContainerKey: c.Key})
+		instances = append(instances, ContainerInstance{Key: profile + "-" + c.Key, ContainerKey: c.Key})
+	}
+	scoped := make([]InfrastructureNode, 0, len(infra))
+	for _, in := range infra {
+		in.Key = profile + "-" + in.Key
+		scoped = append(scoped, in)
 	}
 	return DeploymentEnvironment{
 		Profile: profile, Title: title,
-		Nodes: []DeploymentNode{{Name: "cluster", Technology: "k8s", ContainerInstances: instances, InfrastructureNodes: infra}},
+		Nodes: []DeploymentNode{{
+			Key: profile + "-cluster", Name: "cluster", Technology: "k8s",
+			ContainerInstances: instances, InfrastructureNodes: scoped,
+		}},
 	}
 }
 
@@ -436,19 +468,25 @@ func TestDeploymentConsistency_FlattensNestedNodes(t *testing.T) {
 	nestedEnv := func(profile string) DeploymentEnvironment {
 		var parentInst, childInst []ContainerInstance
 		for i, c := range containers {
-			ci := ContainerInstance{ContainerKey: c.Key}
+			ci := ContainerInstance{Key: profile + "-" + c.Key, ContainerKey: c.Key}
 			if i < half {
 				parentInst = append(parentInst, ci)
 			} else {
 				childInst = append(childInst, ci)
 			}
 		}
+		infra := resourceInfraNodes(s)
+		for i := range infra {
+			infra[i].Key = profile + "-" + infra[i].Key
+		}
 		return DeploymentEnvironment{
 			Profile: profile,
 			Nodes: []DeploymentNode{{
-				Name: "cluster", ContainerInstances: parentInst,
-				InfrastructureNodes: resourceInfraNodes(s),
-				Children:            []DeploymentNode{{Name: "namespace", ContainerInstances: childInst}},
+				Key: profile + "-cluster", Name: "cluster", ContainerInstances: parentInst,
+				InfrastructureNodes: infra,
+				Children: []DeploymentNode{{
+					Key: profile + "-namespace", Name: "namespace", ContainerInstances: childInst,
+				}},
 			}},
 		}
 	}

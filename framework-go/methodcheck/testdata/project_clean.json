@@ -1,405 +1,536 @@
 {
-  "id": "demo",
-  "version": 9,
-  "phase": 0,
-  "owner": "owner@x",
-  "name": "Demo",
-  "slots": {
-    "0": {
-      "status": 2,
-      "kind": 0,
-      "model": {
-        "vision": "v",
-        "objectives": [
-          {
-            "number": 1,
-            "statement": "fast"
-          }
-        ],
-        "mission": "components"
-      }
-    },
-    "1": {
-      "status": 2,
-      "kind": 1,
-      "model": {
-        "items": [
-          {
-            "term": "Scheduler",
-            "definition": "d",
-            "category": "Who"
-          },
-          {
-            "term": "Scheduling",
-            "definition": "d",
-            "category": "What"
-          },
-          {
-            "term": "Pricing",
-            "definition": "p",
-            "category": "How"
-          },
-          {
-            "term": "Region",
-            "definition": "r",
-            "category": "Where"
-          }
-        ]
-      }
-    },
-    "2": {
-      "status": 2,
-      "kind": 2,
-      "model": {
-        "items": [
-          {
-            "id": "R1",
-            "statement": "scheduling pricing adapts across customers"
-          }
-        ]
-      }
-    },
-    "3": {
-      "status": 2,
-      "kind": 3,
-      "model": {
-        "items": [
-          {
-            "name": "Scheduling policy",
-            "rationale": "scheduling changes over time",
-            "axis": "sameCustomerOverTime"
-          },
-          {
-            "name": "Pricing model",
-            "rationale": "pricing differs across customers",
-            "axis": "allCustomersAtOneTime"
-          }
-        ]
-      }
-    },
-    "4": {
-      "status": 2,
-      "kind": 4,
-      "model": {
-        "decisions": [
-          {
-            "useCase": {
-              "id": "decide",
-              "name": "Decide",
-              "classification": "core",
-              "actors": [{ "id": "user", "role": "User" }],
-              "activity": {
-                "nodes": [
-                  { "id": "start", "kind": "start", "label": "start" },
-                  { "id": "act", "kind": "action", "label": "decide the thing" }
-                ],
-                "edges": [
-                  { "from": "start", "to": "act", "kind": "controlFlow" }
-                ]
-              }
-            },
-            "rejectionReason": ""
-          },
-          {
-            "useCase": {
-              "id": "other",
-              "name": "Other",
-              "classification": "core",
-              "actors": [{ "id": "user", "role": "User" }],
-              "activity": {
-                "nodes": [
-                  { "id": "start", "kind": "start", "label": "start" },
-                  { "id": "act", "kind": "action", "label": "do the other thing" }
-                ],
-                "edges": [
-                  { "from": "start", "to": "act", "kind": "controlFlow" }
-                ]
-              }
-            },
-            "rejectionReason": ""
-          }
-        ]
-      }
-    },
-    "5": {
-      "status": 2,
-      "kind": 5,
-      "model": {
-        "components": [
-          {
-            "id": "appclient",
-            "name": "AppClient",
-            "kind": "client",
-            "layer": "client",
-            "encapsulates": "the client transport surface"
-          },
-          {
-            "id": "designmanager",
-            "name": "DesignManager",
-            "kind": "manager",
-            "layer": "manager",
-            "encapsulates": "the design workflow"
-          },
-          {
-            "id": "validatingengine",
-            "name": "ValidatingEngine",
-            "kind": "engine",
-            "layer": "engine",
-            "encapsulates": "the validation rules"
-          },
-          {
-            "id": "stateaccess",
-            "name": "StateAccess",
-            "kind": "resourceAccess",
-            "layer": "resourceAccess",
-            "encapsulates": "the project-state store access"
-          },
-          {
-            "id": "statedb",
-            "name": "StateDB",
-            "kind": "resource",
-            "layer": "resource",
-            "encapsulates": "the project-state database"
-          }
-        ],
-        "relationships": [
-          {
-            "from": "appclient",
-            "to": "designmanager",
-            "mode": "sync"
-          },
-          {
-            "from": "designmanager",
-            "to": "validatingengine",
-            "mode": "sync"
-          },
-          {
-            "from": "designmanager",
-            "to": "stateaccess",
-            "mode": "sync"
-          },
-          {
-            "from": "stateaccess",
-            "to": "statedb",
-            "mode": "sync"
-          }
-        ],
-        "dynamicViews": [
-          {
-            "useCaseId": "decide",
-            "key": "uc1",
-            "title": "Core",
-            "steps": [
-              {
-                "activityNodeId": "act",
-                "calls": [
-                  {
-                    "from": "user",
-                    "to": "appclient",
-                    "mode": "sync",
-                    "label": ""
-                  },
-                  {
-                    "from": "appclient",
-                    "to": "designmanager",
-                    "mode": "sync",
-                    "label": ""
-                  },
-                  {
-                    "from": "designmanager",
-                    "to": "validatingengine",
-                    "mode": "sync",
-                    "label": ""
-                  },
-                  {
-                    "from": "designmanager",
-                    "to": "stateaccess",
-                    "mode": "sync",
-                    "label": ""
-                  },
-                  {
-                    "from": "stateaccess",
-                    "to": "statedb",
-                    "mode": "sync",
-                    "label": ""
-                  }
-                ]
-              }
-            ]
-          },
-          {
-            "useCaseId": "other",
-            "key": "uc2",
-            "title": "Other",
-            "steps": [
-              {
-                "activityNodeId": "act",
-                "calls": [
-                  {
-                    "from": "user",
-                    "to": "appclient",
-                    "mode": "sync",
-                    "label": ""
-                  },
-                  {
-                    "from": "appclient",
-                    "to": "designmanager",
-                    "mode": "sync",
-                    "label": ""
-                  }
-                ]
-              }
-            ]
-          }
-        ]
-      }
-    },
-    "6": {
-      "status": 2,
-      "kind": 6,
-      "model": {
-        "decisions": [
-          {
-            "topic": "sync vs queued",
-            "decision": "queued",
-            "justifyingObjective": 1
-          }
-        ],
-        "deployment": {
-          "deliveryStyle": "both",
-          "containers": [
-            {
-              "key": "appclient",
-              "name": "AppClient",
-              "components": [
-                "AppClient"
-              ]
-            },
-            {
-              "key": "designmanager",
-              "name": "DesignManager",
-              "components": [
-                "DesignManager"
-              ]
-            },
-            {
-              "key": "validatingengine",
-              "name": "ValidatingEngine",
-              "components": [
-                "ValidatingEngine"
-              ]
-            },
-            {
-              "key": "stateaccess",
-              "name": "StateAccess",
-              "components": [
-                "StateAccess"
-              ]
-            },
-            {
-              "key": "statedb",
-              "name": "StateDB",
-              "components": [
-                "StateDB"
-              ]
-            }
-          ],
-          "environments": [
-            {
-              "profile": "cloud",
-              "title": "Cloud",
-              "nodes": [
-                {
-                  "name": "cluster",
-                  "containerInstances": [
-                    {
-                      "containerKey": "appclient"
-                    },
-                    {
-                      "containerKey": "designmanager"
-                    },
-                    {
-                      "containerKey": "validatingengine"
-                    },
-                    {
-                      "containerKey": "stateaccess"
-                    },
-                    {
-                      "containerKey": "statedb"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "profile": "local",
-              "title": "Local",
-              "nodes": [
-                {
-                  "name": "cluster",
-                  "containerInstances": [
-                    {
-                      "containerKey": "appclient"
-                    },
-                    {
-                      "containerKey": "designmanager"
-                    },
-                    {
-                      "containerKey": "validatingengine"
-                    },
-                    {
-                      "containerKey": "stateaccess"
-                    },
-                    {
-                      "containerKey": "statedb"
-                    }
-                  ]
-                }
-              ]
-            },
-            {
-              "profile": "test",
-              "title": "Test",
-              "nodes": [
-                {
-                  "name": "cluster",
-                  "containerInstances": [
-                    {
-                      "containerKey": "appclient"
-                    },
-                    {
-                      "containerKey": "designmanager"
-                    },
-                    {
-                      "containerKey": "validatingengine"
-                    },
-                    {
-                      "containerKey": "stateaccess"
-                    },
-                    {
-                      "containerKey": "statedb"
-                    }
-                  ]
-                }
-              ]
-            }
-          ]
+ "id": "demo",
+ "version": 9,
+ "phase": 0,
+ "owner": "owner@x",
+ "name": "Demo",
+ "slots": {
+  "0": {
+   "status": 2,
+   "kind": 0,
+   "model": {
+    "vision": "v",
+    "objectives": [
+     {
+      "number": 1,
+      "statement": "fast"
+     }
+    ],
+    "mission": "components"
+   }
+  },
+  "1": {
+   "status": 2,
+   "kind": 1,
+   "model": {
+    "items": [
+     {
+      "term": "Scheduler",
+      "definition": "d",
+      "category": "Who"
+     },
+     {
+      "term": "Scheduling",
+      "definition": "d",
+      "category": "What"
+     },
+     {
+      "term": "Pricing",
+      "definition": "p",
+      "category": "How"
+     },
+     {
+      "term": "Region",
+      "definition": "r",
+      "category": "Where"
+     }
+    ]
+   }
+  },
+  "2": {
+   "status": 2,
+   "kind": 2,
+   "model": {
+    "items": [
+     {
+      "id": "R1",
+      "statement": "scheduling pricing adapts across customers"
+     }
+    ]
+   }
+  },
+  "3": {
+   "status": 2,
+   "kind": 3,
+   "model": {
+    "items": [
+     {
+      "name": "Scheduling policy",
+      "rationale": "scheduling changes over time",
+      "axis": "sameCustomerOverTime"
+     },
+     {
+      "name": "Pricing model",
+      "rationale": "pricing differs across customers",
+      "axis": "allCustomersAtOneTime"
+     }
+    ]
+   }
+  },
+  "4": {
+   "status": 2,
+   "kind": 4,
+   "model": {
+    "decisions": [
+     {
+      "useCase": {
+       "id": "decide",
+       "name": "Decide",
+       "classification": "core",
+       "actors": [
+        {
+         "id": "user",
+         "role": "User"
         }
-      }
-    },
-    "7": {
-      "status": 2,
-      "kind": 7,
-      "model": {
-        "items": [
-          {
-            "section": "\u00a73.1",
-            "guideline": "g",
-            "status": "pass",
-            "justification": ""
-          }
+       ],
+       "activity": {
+        "nodes": [
+         {
+          "id": "start",
+          "kind": "start",
+          "label": "start"
+         },
+         {
+          "id": "act",
+          "kind": "action",
+          "label": "decide the thing"
+         }
+        ],
+        "edges": [
+         {
+          "from": "start",
+          "to": "act",
+          "kind": "controlFlow"
+         }
         ]
+       }
+      },
+      "rejectionReason": ""
+     },
+     {
+      "useCase": {
+       "id": "other",
+       "name": "Other",
+       "classification": "core",
+       "actors": [
+        {
+         "id": "user",
+         "role": "User"
+        }
+       ],
+       "activity": {
+        "nodes": [
+         {
+          "id": "start",
+          "kind": "start",
+          "label": "start"
+         },
+         {
+          "id": "act",
+          "kind": "action",
+          "label": "do the other thing"
+         }
+        ],
+        "edges": [
+         {
+          "from": "start",
+          "to": "act",
+          "kind": "controlFlow"
+         }
+        ]
+       }
+      },
+      "rejectionReason": ""
+     }
+    ]
+   }
+  },
+  "5": {
+   "status": 2,
+   "kind": 5,
+   "model": {
+    "components": [
+     {
+      "id": "appclient",
+      "name": "AppClient",
+      "kind": "client",
+      "layer": "client",
+      "encapsulates": "the client transport surface"
+     },
+     {
+      "id": "designmanager",
+      "name": "DesignManager",
+      "kind": "manager",
+      "layer": "manager",
+      "encapsulates": "the design workflow"
+     },
+     {
+      "id": "validatingengine",
+      "name": "ValidatingEngine",
+      "kind": "engine",
+      "layer": "engine",
+      "encapsulates": "the validation rules"
+     },
+     {
+      "id": "stateaccess",
+      "name": "StateAccess",
+      "kind": "resourceAccess",
+      "layer": "resourceAccess",
+      "encapsulates": "the project-state store access"
+     },
+     {
+      "id": "statedb",
+      "name": "StateDB",
+      "kind": "resource",
+      "layer": "resource",
+      "encapsulates": "the project-state database"
+     }
+    ],
+    "relationships": [
+     {
+      "from": "appclient",
+      "to": "designmanager",
+      "mode": "sync"
+     },
+     {
+      "from": "designmanager",
+      "to": "validatingengine",
+      "mode": "sync"
+     },
+     {
+      "from": "designmanager",
+      "to": "stateaccess",
+      "mode": "sync"
+     },
+     {
+      "from": "stateaccess",
+      "to": "statedb",
+      "mode": "sync"
+     }
+    ],
+    "dynamicViews": [
+     {
+      "useCaseId": "decide",
+      "key": "uc1",
+      "title": "Core",
+      "steps": [
+       {
+        "activityNodeId": "act",
+        "calls": [
+         {
+          "from": "user",
+          "to": "appclient",
+          "mode": "sync",
+          "label": ""
+         },
+         {
+          "from": "appclient",
+          "to": "designmanager",
+          "mode": "sync",
+          "label": ""
+         },
+         {
+          "from": "designmanager",
+          "to": "validatingengine",
+          "mode": "sync",
+          "label": ""
+         },
+         {
+          "from": "designmanager",
+          "to": "stateaccess",
+          "mode": "sync",
+          "label": ""
+         },
+         {
+          "from": "stateaccess",
+          "to": "statedb",
+          "mode": "sync",
+          "label": ""
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "other",
+      "key": "uc2",
+      "title": "Other",
+      "steps": [
+       {
+        "activityNodeId": "act",
+        "calls": [
+         {
+          "from": "user",
+          "to": "appclient",
+          "mode": "sync",
+          "label": ""
+         },
+         {
+          "from": "appclient",
+          "to": "designmanager",
+          "mode": "sync",
+          "label": ""
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   }
+  },
+  "6": {
+   "status": 2,
+   "kind": 6,
+   "model": {
+    "decisions": [
+     {
+      "topic": "sync vs queued",
+      "decision": "queued",
+      "justifyingObjective": 1
+     }
+    ],
+    "deployment": {
+     "deliveryStyle": "both",
+     "containers": [
+      {
+       "key": "appclient",
+       "name": "AppClient",
+       "components": [
+        "AppClient"
+       ],
+       "surface": "spa"
+      },
+      {
+       "key": "designmanager",
+       "name": "DesignManager",
+       "components": [
+        "DesignManager"
+       ],
+       "surface": "service"
+      },
+      {
+       "key": "validatingengine",
+       "name": "ValidatingEngine",
+       "components": [
+        "ValidatingEngine"
+       ],
+       "surface": "service"
+      },
+      {
+       "key": "stateaccess",
+       "name": "StateAccess",
+       "components": [
+        "StateAccess"
+       ],
+       "surface": "service"
+      },
+      {
+       "key": "statedb",
+       "name": "StateDB",
+       "components": [
+        "StateDB"
+       ],
+       "surface": "service"
       }
+     ],
+     "environments": [
+      {
+       "profile": "cloud",
+       "title": "Cloud",
+       "nodes": [
+        {
+         "name": "cluster",
+         "containerInstances": [
+          {
+           "containerKey": "appclient",
+           "key": "cloud-ci-appclient"
+          },
+          {
+           "containerKey": "designmanager",
+           "key": "cloud-ci-designmanager"
+          },
+          {
+           "containerKey": "validatingengine",
+           "key": "cloud-ci-validatingengine"
+          },
+          {
+           "containerKey": "stateaccess",
+           "key": "cloud-ci-stateaccess"
+          },
+          {
+           "containerKey": "statedb",
+           "key": "cloud-ci-statedb"
+          }
+         ],
+         "key": "cloud-node-cluster",
+         "infrastructureNodes": [
+          {
+           "key": "cloud-infra-gateway",
+           "name": "Edge gateway",
+           "technology": "Envoy Gateway",
+           "role": "gateway",
+           "description": "TLS termination and OIDC authentication at the edge."
+          },
+          {
+           "key": "cloud-infra-idp",
+           "name": "Identity provider",
+           "technology": "Keycloak",
+           "role": "identityProvider",
+           "description": "Issues and validates the tokens the gateway checks."
+          }
+         ]
+        },
+        {
+         "key": "cloud-node-device",
+         "name": "User's computer",
+         "technology": "Windows / macOS",
+         "instances": 1,
+         "children": [
+          {
+           "key": "cloud-node-browser",
+           "name": "Web browser",
+           "technology": "Chrome, Firefox, Safari or Edge",
+           "instances": 1,
+           "containerInstances": [
+            {
+             "key": "cloud-ci-appclient-browser",
+             "containerKey": "appclient",
+             "note": "the single-page application, executing in the user's browser"
+            }
+           ]
+          }
+         ]
+        }
+       ],
+       "persons": [
+        {
+         "key": "cloud-person-user",
+         "name": "User",
+         "description": "Uses the system through its web surface."
+        }
+       ],
+       "relationships": [
+        {
+         "from": "cloud-person-user",
+         "to": "cloud-ci-appclient-browser",
+         "label": "Uses",
+         "technology": "",
+         "mode": "sync"
+        },
+        {
+         "from": "cloud-ci-appclient-browser",
+         "to": "cloud-infra-gateway",
+         "label": "Makes API calls to",
+         "technology": "JSON/HTTPS",
+         "mode": "sync"
+        },
+        {
+         "from": "cloud-infra-gateway",
+         "to": "cloud-infra-idp",
+         "label": "Authenticates the request against",
+         "technology": "OIDC",
+         "mode": "sync"
+        },
+        {
+         "from": "cloud-infra-gateway",
+         "to": "cloud-ci-designmanager",
+         "label": "Forwards the authenticated request to",
+         "technology": "HTTP",
+         "mode": "sync"
+        }
+       ]
+      },
+      {
+       "profile": "local",
+       "title": "Local",
+       "nodes": [
+        {
+         "name": "cluster",
+         "containerInstances": [
+          {
+           "containerKey": "appclient",
+           "key": "local-ci-appclient"
+          },
+          {
+           "containerKey": "designmanager",
+           "key": "local-ci-designmanager"
+          },
+          {
+           "containerKey": "validatingengine",
+           "key": "local-ci-validatingengine"
+          },
+          {
+           "containerKey": "stateaccess",
+           "key": "local-ci-stateaccess"
+          },
+          {
+           "containerKey": "statedb",
+           "key": "local-ci-statedb"
+          }
+         ],
+         "key": "local-node-cluster"
+        }
+       ]
+      },
+      {
+       "profile": "test",
+       "title": "Test",
+       "nodes": [
+        {
+         "name": "cluster",
+         "containerInstances": [
+          {
+           "containerKey": "appclient",
+           "key": "test-ci-appclient"
+          },
+          {
+           "containerKey": "designmanager",
+           "key": "test-ci-designmanager"
+          },
+          {
+           "containerKey": "validatingengine",
+           "key": "test-ci-validatingengine"
+          },
+          {
+           "containerKey": "stateaccess",
+           "key": "test-ci-stateaccess"
+          },
+          {
+           "containerKey": "statedb",
+           "key": "test-ci-statedb"
+          }
+         ],
+         "key": "test-node-cluster"
+        }
+       ]
+      }
+     ]
     }
+   }
+  },
+  "7": {
+   "status": 2,
+   "kind": 7,
+   "model": {
+    "items": [
+     {
+      "section": "\u00a73.1",
+      "guideline": "g",
+      "status": "pass",
+      "justification": ""
+     }
+    ]
+   }
   }
+ }
 }

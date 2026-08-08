@@ -23,6 +23,17 @@ const (
 	// a planned component cannot yet be packaged into a container, so it is exempt from
 	// the per-profile coverage requirement, but the exemption is surfaced (not silent).
 	ruleDepPlannedSkipped RuleID = "DEP-PLANNED-SKIPPED"
+
+	// The EDGE family. A deployment view whose elements carry no relationships is
+	// a set of boxes: it says what exists but not how anything reaches anything,
+	// which is the one question a deployment view is asked. These five rules make
+	// the edges, the frontend surfaces, and the platform's standard front door
+	// structural requirements rather than drafting conventions.
+	ruleDepKeyUnique       RuleID = "DEP-KEY-UNIQUE"
+	ruleDepEdgeRef         RuleID = "DEP-EDGE-REF"
+	ruleDepEdgeIsolated    RuleID = "DEP-EDGE-ISOLATED"
+	ruleDepFrontendPresent RuleID = "DEP-FRONTEND-PRESENT"
+	ruleDepEdgeGateway     RuleID = "DEP-EDGE-GATEWAY"
 )
 
 type envSet struct {
@@ -139,6 +150,7 @@ func deploymentConsistency(op OperationalConcepts, s System) []Finding {
 	out = append(out, checkContainersUsed(topo.Containers, instancedKeys)...)
 	out = append(out, checkProfileSets(presentProfiles, expected)...)
 	out = append(out, checkCrossProfileCoverage(byProfile, internalComponentNames(s))...)
+	out = append(out, checkDeploymentEdges(topo, s, expected)...)
 	out = append(out, plannedSkippedInfo(ruleDepPlannedSkipped, "deployment container coverage", plannedContainerComponents(s))...)
 	out = append(out, checkResourcesPresent(topo, s)...)
 	return out

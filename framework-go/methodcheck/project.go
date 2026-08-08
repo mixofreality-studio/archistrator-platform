@@ -121,6 +121,31 @@ const (
 	profileTest  = "test"
 )
 
+// ContainerSurface wire names — how a container is CONSUMED. The three
+// human-facing surfaces (spa/mobile/cli) plus agentHarness are the "frontend"
+// set DEP-FRONTEND-PRESENT requires; `service` is the default and is the
+// back-end case, so every pre-existing document (which carries no surface at
+// all) parses as a service and is unaffected.
+const (
+	surfaceSPA          = "spa"
+	surfaceMobile       = "mobile"
+	surfaceAgentHarness = "agentHarness"
+	surfaceCLI          = "cli"
+	surfaceService      = "service"
+)
+
+// ElementRole wire names — what an infrastructure node or external software
+// system DOES. Typed so the deployment rules can find the edge gateway and the
+// identity provider structurally, rather than by string-matching "Envoy" or
+// "Keycloak" against a name the drafting agent chose freely. `other` is the
+// default, so pre-existing documents parse unchanged.
+const (
+	roleGateway          = "gateway"
+	roleIdentityProvider = "identityProvider"
+	roleAgentHarness     = "agentHarness"
+	roleOther            = "other"
+)
+
 // ReviewCommitted is the slot status ordinal that marks an architect-approved slot
 // (projectstate.ReviewCommitted == iota: None=0, AwaitingReview=1, Committed=2).
 // The committed JSON encodes status as the integer ordinal.
@@ -369,17 +394,54 @@ type DeployContainer struct {
 	Technology  string   `json:"technology"`
 	Description string   `json:"description"`
 	Components  []string `json:"components"` // System component NAMES
+	// Surface is how this container is consumed — one of the ContainerSurface
+	// wire names. Empty means `service` (the back-end default), which is what
+	// every document authored before the field existed decodes to.
+	Surface string `json:"surface"`
 }
 
 // DeploymentEnvironment is the set of nodes for one profile.
+//
+// Relationships and Persons are AUTHORED per environment rather than globally
+// because the profiles genuinely differ: an operated cloud profile fronts the
+// app with an edge gateway performing OIDC, while a local dev-boot profile
+// binds a loopback port with neither. One global edge list could not describe
+// both truthfully.
 type DeploymentEnvironment struct {
-	Profile string           `json:"profile"`
-	Title   string           `json:"title"`
-	Nodes   []DeploymentNode `json:"nodes"`
+	Profile       string                   `json:"profile"`
+	Title         string                   `json:"title"`
+	Nodes         []DeploymentNode         `json:"nodes"`
+	Persons       []DeploymentPerson       `json:"persons"`
+	Relationships []DeploymentRelationship `json:"relationships"`
+}
+
+// DeploymentPerson is a human actor placed in a deployment environment — the
+// person the frontend surfaces serve. Deliberately minimal: a person is a label
+// and an edge endpoint, not a modelling subsystem.
+type DeploymentPerson struct {
+	Key         string `json:"key"`
+	Name        string `json:"name"`
+	Description string `json:"description"`
+}
+
+// DeploymentRelationship is one edge between two elements of the SAME
+// deployment environment, addressed by their element Keys.
+//
+// The application edges (SPA→server, server→Postgres, …) are DERIVED from the
+// committed System relationships and are not authored here; what is authored is
+// only what derivation cannot know, because its endpoints are not System
+// components at all — the browser, the edge gateway, and the identity provider.
+type DeploymentRelationship struct {
+	From       string `json:"from"`
+	To         string `json:"to"`
+	Label      string `json:"label"`
+	Technology string `json:"technology"`
+	Mode       string `json:"mode"`
 }
 
 // DeploymentNode is a nestable C4 deployment node.
 type DeploymentNode struct {
+	Key                     string                   `json:"key"`
 	Name                    string                   `json:"name"`
 	Technology              string                   `json:"technology"`
 	Description             string                   `json:"description"`
@@ -392,7 +454,14 @@ type DeploymentNode struct {
 }
 
 // ContainerInstance instances a declared DeployContainer inside a node.
+//
+// Key is the INSTANCE's identity and is distinct from ContainerKey, which says
+// which container is instanced. The two differ because one container may
+// legitimately be instanced in more than one node — a single-page application
+// is both delivered by the web server and executed in the browser — and those
+// two instances are distinct edge endpoints.
 type ContainerInstance struct {
+	Key          string   `json:"key"`
 	ContainerKey string   `json:"containerKey"`
 	Note         string   `json:"note"`
 	Tags         []string `json:"tags"`
@@ -400,17 +469,21 @@ type ContainerInstance struct {
 
 // InfrastructureNode is non-deployable infra (gateway, DB engine, broker).
 type InfrastructureNode struct {
+	Key         string   `json:"key"`
 	Name        string   `json:"name"`
 	Technology  string   `json:"technology"`
 	Description string   `json:"description"`
+	Role        string   `json:"role"`
 	Tags        []string `json:"tags"`
 }
 
 // SoftwareSystemInstance is an external software system (GitHub, Anthropic, Keycloak).
 type SoftwareSystemInstance struct {
+	Key         string   `json:"key"`
 	Name        string   `json:"name"`
 	Technology  string   `json:"technology"`
 	Description string   `json:"description"`
+	Role        string   `json:"role"`
 	Tags        []string `json:"tags"`
 }
 
