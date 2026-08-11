@@ -166,3 +166,59 @@ func TestGitStore_CommitCarriesRealTimestamp(t *testing.T) {
 		t.Fatalf("second commit time %v precedes first %v — recency ordering broken", snap2.CommitTime, snap.CommitTime)
 	}
 }
+
+// TestGitStore_MissingBranchFallsBackToDefaultHead — a store targeting a branch
+// that does not exist yet (the design-session-branch open flow) reads the remote's
+// DEFAULT-branch tip instead: the session starts from main's content, and the
+// snapshot's Base is main's tip so the first session write forks from it. This
+// characterizes the remoteTip HEAD-fallback semantics, which the bounded-clone
+// rework must preserve.
+func TestGitStore_MissingBranchFallsBackToDefaultHead(t *testing.T) {
+	repo := gh.StartLocalGitRepo(t, "main")
+	mainStore, err := fwgithub.NewGitStore(repo.URL, "main")
+	if err != nil {
+		t.Fatalf("NewGitStore(main): %v", err)
+	}
+	auth, ctx := fwgithub.GitAuth{Local: true}, context.Background()
+
+	// Seed main with state.
+	mainBase := mustReadBase(t, mainStore, auth, ctx)
+	seeded, err := mainStore.CommitSubtree(ctx, statePrefix,
+		map[string][]byte{"project.json": []byte(`{"from":"main"}`)}, mainBase, "aiarch: seed", auth)
+	if err != nil {
+		t.Fatalf("seed main: %v", err)
+	}
+
+	// A store on a branch that does not exist reads main's tip.
+	sessionStore, err := fwgithub.NewGitStore(repo.URL, "session-x")
+	if err != nil {
+		t.Fatalf("NewGitStore(session-x): %v", err)
+	}
+	snap, err := sessionStore.ReadSubtree(ctx, statePrefix, auth)
+	if err != nil {
+		t.Fatalf("ReadSubtree (missing branch): %v", err)
+	}
+	if !snap.Exists {
+		t.Fatal("missing-branch read: Exists = false, want HEAD fallback (true)")
+	}
+	if snap.Base != seeded.Base {
+		t.Fatalf("missing-branch base %q, want main tip %q", snap.Base, seeded.Base)
+	}
+	if string(snap.Files["project.json"]) != `{"from":"main"}` {
+		t.Fatalf("missing-branch read %q, want main's content", snap.Files["project.json"])
+	}
+
+	// Writing from that base creates the session branch forked off main's tip.
+	res, err := sessionStore.CommitSubtree(ctx, statePrefix,
+		map[string][]byte{"project.json": []byte(`{"from":"session"}`)}, snap.Base, "aiarch: fork", auth)
+	if err != nil {
+		t.Fatalf("CommitSubtree (fork session): %v", err)
+	}
+	got, err := sessionStore.ReadSubtree(ctx, statePrefix, auth)
+	if err != nil {
+		t.Fatalf("ReadSubtree (session after fork): %v", err)
+	}
+	if got.Base != res.Base || string(got.Files["project.json"]) != `{"from":"session"}` {
+		t.Fatalf("session read (base %q, %q), want (base %q, session content)", got.Base, got.Files["project.json"], res.Base)
+	}
+}

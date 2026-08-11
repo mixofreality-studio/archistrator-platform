@@ -270,18 +270,41 @@ func handleSubtreePushError(err error) error {
 	return ClassifyGitError(err, "github.CommitSubtree: push")
 }
 
-// clone fetches the full repo into in-memory storage (no on-disk worktree). A
-// full clone lets the caller see the target branch tip and read the subtree in
-// one round-trip.
+// clone fetches ONLY the target branch's tip commit into in-memory storage (no
+// on-disk worktree): depth 1, single branch, no tags. Bounded fetch is a MEMORY
+// invariant, not an optimization — the CAS path never needs history (reads walk
+// the tip tree; a CAS write's parent IS the observed tip), and a full clone's
+// in-memory unpack grows with the repo's whole history, which for a state repo
+// whose ~1MB project.json is rewritten on every mutation ran the production
+// server past its container memory limit (OOM crash-loop, 2026-08-11).
+//
+// A remote whose target branch does not exist yet falls back to a depth-1 clone
+// of the remote's default HEAD, preserving remoteTip's HEAD-fallback semantics
+// (the design-session-branch open flow reads main's tip; the first session write
+// forks from it).
 func (s *GitStore) clone(ctx context.Context, auth GitAuth) (*gogit.Repository, error) {
-	repo, err := gogit.CloneContext(ctx, memory.NewStorage(), memfs.New(), &gogit.CloneOptions{
-		URL:  s.repoURL,
-		Auth: auth.authMethod(),
-	})
+	repo, err := s.shallowClone(ctx, auth, plumbing.NewBranchReferenceName(s.branch))
+	if errors.Is(err, gogit.NoMatchingRefSpecError{}) {
+		repo, err = s.shallowClone(ctx, auth, "")
+	}
 	if err != nil {
 		return nil, ClassifyGitError(err, "github.GitStore.clone")
 	}
 	return repo, nil
+}
+
+// shallowClone performs the bounded (depth-1, single-branch, no-tags) in-memory
+// clone of `ref` (the remote's default HEAD when empty). The raw go-git error is
+// returned unclassified so clone can distinguish branch-absent from real faults.
+func (s *GitStore) shallowClone(ctx context.Context, auth GitAuth, ref plumbing.ReferenceName) (*gogit.Repository, error) {
+	return gogit.CloneContext(ctx, memory.NewStorage(), memfs.New(), &gogit.CloneOptions{
+		URL:           s.repoURL,
+		Auth:          auth.authMethod(),
+		Depth:         1,
+		SingleBranch:  true,
+		ReferenceName: ref,
+		Tags:          gogit.NoTags,
+	})
 }
 
 // remoteTip resolves the target branch tip via its remote-tracking ref
