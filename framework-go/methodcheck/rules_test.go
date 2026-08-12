@@ -894,3 +894,53 @@ func TestFindingsOrderedByOrdinalThenRuleID(t *testing.T) {
 		}
 	}
 }
+
+// ---- CUC-ACTOR-ID ----
+
+// TestCUCActorID_EmptyIDFires pins the gap the todomvc bench exposed
+// (run-20260812T012915Z): an actor committed as {id: "", role: ...} passes the
+// role-slug and presence rules yet leaves the System realization with nothing to
+// root an actor→Client chain on — every downstream architecture draft dead-ends.
+// The id must be rejected HERE, at the slot that authored it.
+func TestCUCActorID_EmptyIDFires(t *testing.T) {
+	uc := coreUC("Work the list")
+	uc.UseCase.Trigger = triggerClientAction
+	uc.UseCase.Actors = []Actor{{ID: "", Role: "Team member"}}
+	c := CoreUseCases{Decisions: []UseCaseDecision{uc, coreUC("Other")}}
+	res, _ := validateCoreUseCases(c)
+	if !hasRuleFindings(res.Findings, ruleCucActorID) {
+		t.Fatalf("an empty actor id must fire CUC-ACTOR-ID, got %+v", res.Findings)
+	}
+	if sev, _ := findingSeverity(res.Findings, ruleCucActorID); sev != ccGateSeverity {
+		t.Fatalf("CUC-ACTOR-ID must ride ccGateSeverity (%v), got %v", ccGateSeverity, sev)
+	}
+}
+
+// TestCUCActorID_DuplicateIDWithinUseCaseFires: two actors sharing one id are
+// indistinguishable as chain roots.
+func TestCUCActorID_DuplicateIDWithinUseCaseFires(t *testing.T) {
+	uc := coreUC("Work the list")
+	uc.UseCase.Actors = []Actor{
+		{ID: "team-member", Role: "Team member"},
+		{ID: "team-member", Role: "Automated tooling"},
+	}
+	c := CoreUseCases{Decisions: []UseCaseDecision{uc, coreUC("Other")}}
+	res, _ := validateCoreUseCases(c)
+	if !hasRuleFindings(res.Findings, ruleCucActorID) {
+		t.Fatalf("a duplicated actor id must fire CUC-ACTOR-ID, got %+v", res.Findings)
+	}
+}
+
+// TestCUCActorID_ProperIDsPass: distinct non-empty ids are the ordinary shape.
+func TestCUCActorID_ProperIDsPass(t *testing.T) {
+	uc := coreUC("Work the list")
+	uc.UseCase.Actors = []Actor{
+		{ID: "team-member", Role: "Team member"},
+		{ID: "automated-tooling", Role: "Automated tooling"},
+	}
+	c := CoreUseCases{Decisions: []UseCaseDecision{uc, coreUC("Other")}}
+	res, _ := validateCoreUseCases(c)
+	if hasRuleFindings(res.Findings, ruleCucActorID) {
+		t.Fatalf("distinct non-empty actor ids must stay silent, got %+v", res.Findings)
+	}
+}

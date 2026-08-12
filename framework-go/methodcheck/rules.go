@@ -27,6 +27,7 @@ const (
 	ruleCucNameUniq  RuleID = "CUC-NAME-UNIQUE"
 	ruleCucActorUniq RuleID = "CUC-ACTOR-UNIQUE"
 	ruleCucActorReq  RuleID = "CUC-ACTOR-REQUIRED"
+	ruleCucActorID   RuleID = "CUC-ACTOR-ID"
 	ruleUcNodeIDUniq RuleID = "UC-NODE-UNIQUE"
 
 	ruleOpcObjRef RuleID = "OPC-OBJREF"
@@ -76,6 +77,7 @@ func validateCoreUseCases(c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, useCaseNameUnique(c)...)
 	findings = append(findings, actorNamesUnique(c)...)
 	findings = append(findings, actorRequired(c)...)
+	findings = append(findings, actorIDsResolvable(c)...)
 	findings = append(findings, activityNodeIDsUnique(c)...)
 	findings = append(findings, ucActivityDiagram(c)...)
 	findings = append(findings, ucActPresent(c)...)
@@ -373,6 +375,45 @@ func actorNamesUnique(c CoreUseCases) []Finding {
 // This is the CoreUseCases-attributed member of the rollout's two new rules (its
 // sibling CC-DECIDED-BY needs the System roster and so lives in the CC family), but
 // it rides the same ccGateSeverity so both flip to Error together.
+// actorIDsResolvable — CUC-ACTOR-ID. Every declared actor must carry a non-empty
+// id, unique within its use case. The System realization resolves a clientAction
+// chain root (actor → Client) strictly against the owning use case's Actor.ID, so
+// an actor committed as {id: "", role: ...} makes every downstream System model
+// unvalidatable — the whole architecture step dead-ends against this slot (observed:
+// todomvc bench run-20260812T012915Z, where all 13 use cases committed empty actor
+// ids and the architect could only STOP). CUC-ACTOR-UNIQUE guards the ROLE slug;
+// this rule guards the id the realization actually keys on. Rides ccGateSeverity
+// with its siblings: it exists to protect the same actor→Client rooting.
+func actorIDsResolvable(c CoreUseCases) []Finding {
+	var out []Finding
+	for i, d := range c.Decisions {
+		uc := d.UseCase
+		seen := make(map[string]bool, len(uc.Actors))
+		for j, a := range uc.Actors {
+			section := fmt.Sprintf("use case %d (%s) actor %d", i+1, uc.Name, j+1)
+			if a.ID == "" {
+				out = append(out, Finding{
+					RuleID:   ruleCucActorID,
+					Severity: ccGateSeverity,
+					Message:  fmt.Sprintf("%s (role %q): actor id is empty; the System realization roots actor→Client chains on Actor.ID, so an id-less actor can never anchor a call chain", section, a.Role),
+					Location: loc(i+1, section),
+				})
+				continue
+			}
+			if seen[a.ID] {
+				out = append(out, Finding{
+					RuleID:   ruleCucActorID,
+					Severity: ccGateSeverity,
+					Message:  fmt.Sprintf("%s: actor id %q is duplicated within the use case", section, a.ID),
+					Location: loc(i+1, section),
+				})
+			}
+			seen[a.ID] = true
+		}
+	}
+	return out
+}
+
 func actorRequired(c CoreUseCases) []Finding {
 	var out []Finding
 	for i, d := range c.Decisions {
