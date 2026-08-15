@@ -32,8 +32,34 @@ State is git-as-DB: all of this lives in `.aiarch/state/project.json` (a typed J
 
 What the agent authors into `.activityList` is the typed `ActivityListDeltas` model — the entire human-review surface, and nothing else:
 - `overrides` — an `ActivityOverride` per derived activity whose computed `effortDays` or `riskBucket` is wrong for this project, each carrying a written `justification`.
-- `additive` — an `AdditiveActivity` for work that maps to no single component (environment setup, security review, documentation, training, deployment, …), each with its own incident edges and a written `justification`. Additive activities are **genuinely componentless** — one that names a `componentId` is rejected, because a component-bound additive is a covert exclusion/replacement channel for a derivation the architecture should instead fix.
-- `additiveMilestones` — additional milestones that depend on additive activities (e.g. a "v1 Production Live" milestone cannot derive, since it depends entirely on additive noncoding work).
+- `additive` — an `AdditiveActivity` for work that maps to no single component (environment setup, security review, documentation, training, deployment, …), each with its own incident edges and a written `justification`. Additive activities are **genuinely componentless** — one that names a `componentId` is rejected, because a component-bound additive is a covert exclusion/replacement channel for a derivation the architecture should instead fix. May also carry a `gates` selector (below) declaring which derived activities it precedes.
+- `additiveMilestones` — additional milestones that depend on additive activities (e.g. a "v1 Production Live" milestone cannot derive, since it depends entirely on additive noncoding work). May also carry a `gatedBy` selector (below) declaring which derived activities must finish before it.
+
+### The `gates` / `gatedBy` predicate — attaching by rule, not by name
+
+Some additive work genuinely precedes (or follows) a whole *class* of derived activities, not one named activity: `N-CI` (build/CI infrastructure) must precede every coding activity — you cannot build a component before CI exists to build it in. `N-SCHEMA` (database/schema design) must precede every store-backed ResourceAccess. Naming these edges by enumerating activity ids is exactly the hand-maintenance this whole delta-document design exists to remove, and it goes stale silently the moment a component is added or renamed.
+
+So `AdditiveActivity` and `AdditiveMilestone` each carry an optional **closed predicate selector**, `ActivitySelector`:
+
+```jsonc
+{ "coding": true }                                          // every coding activity
+{ "prefix": "U-SPA-" }                                      // every SPA construction activity
+{ "componentKind": "resourceAccess" }                        // every activity whose component is a ResourceAccess
+{ "componentKind": "resource", "provisioning": "owned" }      // store-backed Resources only
+```
+
+Semantics: after the baseline derives and additives are appended, each selector expands to edges **additive → each matching derived activity** — the expansion runs before the drift gate hashes the result, so a selector that goes stale (matches a different set after an architecture change) is caught by `make derived-plan-check` on the next re-derivation, exactly like every other part of the baseline.
+
+**The two fields are named differently on purpose — this is a deliberate asymmetry, not an inconsistency to "fix."**
+- `AdditiveActivity.gates` makes the additive a **predecessor**: the additive must finish before each matching activity starts.
+- `AdditiveMilestone.gatedBy` makes the milestone a **successor**: each matching activity must finish before the milestone can be reached.
+
+Don't assume the direction by analogy from one field to the other — an activity *gates* what it precedes; a milestone *is gated by* what precedes it. Reusing one name for both (e.g. calling both `gates`) would silently invert the edge direction for whichever one got the "wrong" reading, which is exactly why the fields carry different names.
+
+**Constraints, both load-bearing:**
+- The language is **closed** — `coding`, `prefix`, `componentKind`, `provisioning` are the whole vocabulary; there is no arbitrary expression form.
+- **A selector matching zero activities is an error, not a no-op.** A predicate that quietly matches nothing is a vacuity defect — the attachment silently does nothing while looking authored and reviewed. Reject it at validation time, the same posture as every other authored claim in this document (see "Ground a justification in a property," below) — a claim that turns out false is worse than an honest absence.
+- A selector may only ever **add** `additive → derived` edges. It can never remove or redirect a derived edge — that would reopen exactly the "no exclusions, no derived-edge overrides" hole this document's vocabulary is closed against.
 
 Two usage patterns produce this slot:
 
@@ -240,7 +266,7 @@ This is the normative task the CI draft job (and a local `/project-design` run) 
 
 1. **Read the derived baseline.** It is a render-on-read of the committed System — `estimationEngine.DerivePlan` computes it deterministically; you do not construct it by hand and you do not need `putDraftModel` to produce it.
 2. **For each derived activity whose band-midpoint default is wrong for this project, author an `ActivityOverride`** — `effortDays` and/or `riskBucket` only — with a written `justification` (see "Ground a justification in a property" below).
-3. **Walk the ch. 13 noncoding checklist** (Procedure Step 3 above) and author an `AdditiveActivity` for each item that applies and isn't already in the always-emit inventory — environment setup, security review, documentation, training, deployment, and the like — each with its own incident edges (`dependsOn`) and a written `justification`.
+3. **Walk the ch. 13 noncoding checklist** (Procedure Step 3 above) and author an `AdditiveActivity` for each item that applies and isn't already in the always-emit inventory — environment setup, security review, documentation, training, deployment, and the like — each with its own incident edges (`dependsOn`) and a written `justification`. Where the item genuinely precedes (or, for a milestone, follows) a whole class of derived activities rather than one named one, attach a `gates`/`gatedBy` selector (see "The `gates`/`gatedBy` predicate" above) instead of enumerating.
 4. **Do NOT author** `C-*`, `R-*`, `U-SPA-<manager>`, `G-SPA`, `I-*`, or the always-emit `N-*` inventory (`N-STP`/`N-STH`/`N-RTH`/`N-SMOKE`/`N-QA`/`N-PERF`/`N-IT`) — they derive. Typing one of these into the delta document is an anti-pattern (see "Anti-patterns to reject" below), not a completeness measure.
 
 **The vocabulary is closed: no exclusions, no derived-edge overrides.** There is no way to say "this component needs no work" and no way to rewrite a derived dependency edge. If a component genuinely needs no work, it should not be a component — remove it from the System. If a derived edge is wrong, the *relationship* is wrong — amend the System's relationships, not the plan. Both routes go through system design, not through the activity-list delta; a silent exclusion or edge override is exactly how the zombies below survived undetected.
@@ -284,8 +310,8 @@ WORKER CLASSES ARE A FIXED ROSTER, not open vocabulary: every worker class MUST 
 
 `.aiarch/state/project.json` → `.activityList` holds a committed typed `ActivityListDeltas` document with:
 - `overrides`: zero or more `ActivityOverride`s, each naming an activity that actually exists in the derived baseline, each carrying a written `justification` (grounded per "Ground a justification in a property," not a superlative), each respecting the 5-day quantum / ≤35-day cap / Fibonacci risk bucket.
-- `additive`: an `AdditiveActivity` for every ch. 13 noncoding checklist item that applies and is not already in the always-emit inventory, each genuinely componentless (no `componentId`), each with its own incident edges and a written `justification`, each `workerClass` from the fixed roster with a PlanningAssumptions `rateCard` entry.
-- `additiveMilestones`, if any milestone depends entirely on additive work and therefore cannot derive.
+- `additive`: an `AdditiveActivity` for every ch. 13 noncoding checklist item that applies and is not already in the always-emit inventory, each genuinely componentless (no `componentId`), each with its own incident edges and a written `justification`, each `workerClass` from the fixed roster with a PlanningAssumptions `rateCard` entry. A `gates` selector, if present, must match at least one derived activity.
+- `additiveMilestones`, if any milestone depends entirely on additive work and therefore cannot derive. A `gatedBy` selector, if present, must match at least one derived activity.
 - **No exclusions and no derived-edge overrides** — the vocabulary above is the whole document; there is no field for either.
 - **No `C-*`, `R-*`, `U-SPA-*`, `G-SPA`, `I-*`, or `N-*` entries authored by hand** — `make derived-plan-check` re-derives the baseline from the committed System and fails the build on any difference; that drift gate, not this document, is what proves baseline correctness.
 
@@ -299,5 +325,8 @@ Move to `the-method-network-draft`.
 - **A `D###` + `C###` pair per component in the base list** — this is the "clock." Detailed design is a *phase* of the one per-component activity, dispatched to the senior via the per-phase hand-off ([[the-method-handoff]]), not a separate activity. Separate design-first activities belong ONLY in the compressed solution ([[the-method-compressed-solution]]), applied selectively.
 - **No additive activities for applicable checklist items** — projects don't ship without UX, infra, deployment, training. Walk the ch. 13 checklist; force the additive inventory for what the derivation cannot see.
 - **A superlative justification** — "tied for the most," "the smallest X in the system." One counterexample falsifies it; ground the claim in a property instead (correction c, above).
+- **A `gates`/`gatedBy` selector matching zero activities** — a vacuity defect, not a no-op; reject it rather than let a silently-inert attachment look authored and reviewed.
+- **Using `gates` on a milestone or `gatedBy` on an activity** — the two fields are named differently on purpose because they run in opposite directions (`gates` = additive precedes; `gatedBy` = additive follows); do not assume the direction by analogy from one to the other.
+- **A selector that redirects or removes a derived edge** — the predicate language may only ever add `additive → derived` edges; that is the same closed-vocabulary boundary as "no exclusions, no derived-edge overrides."
 - **Durations like 7, 11, 22 days** — break the quantum rule. Round to 5/10/15/20/25/30/35.
 - **A single role for everything** — flatten the team's skill diversity; misses the senior-hand-off opportunity.
