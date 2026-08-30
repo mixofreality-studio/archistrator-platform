@@ -36,7 +36,16 @@ func Materialize(destRepo string) error {
 	if err != nil {
 		return err
 	}
+	return materialize(destRepo, files)
+}
 
+// materialize is the shared write-prune-manifest rail behind both Materialize
+// (the full .claude tree) and MaterializeStep (one step's scoped subset). The
+// prune pass is what makes scoped seating NARROWING rather than additive: any
+// file a previous seat owned that `files` no longer claims is removed, so a
+// worktree re-seated for a different step carries that step's surface and
+// nothing else.
+func materialize(destRepo string, files map[string][]byte) error {
 	manifestFile := filepath.Join(destRepo, manifestPath)
 	prev, err := loadPrevManifest(manifestFile)
 	if err != nil {
@@ -58,6 +67,13 @@ func Materialize(destRepo string) error {
 	for _, p := range retained {
 		owned[p] = true
 	}
+
+	// Pruning a skill removes its files but would leave the skill's directory
+	// behind. An empty .claude/skills/<name>/ still reads as a skill to some
+	// tooling and is pure noise in a scoped seat, so drop directories the
+	// prune emptied. Best-effort: a directory that will not remove is left in
+	// place rather than failing the seat.
+	pruneEmptyDirs(filepath.Join(destRepo, ".claude"))
 
 	// buildManifest only reads keys, so a retained path with no known content
 	// (files[p] is nil for it) still round-trips into the manifest correctly.
@@ -136,6 +152,34 @@ func pruneOrphans(destRepo string, prev manifest, owned map[string]bool) (retain
 		}
 	}
 	return retained, errs
+}
+
+// pruneEmptyDirs removes directories under root that a prune pass emptied,
+// deepest-first so a directory whose only content was empty directories is
+// itself removed. root itself is never removed. Best-effort by design: a
+// removal that fails (non-empty, or a permission problem) is skipped, since a
+// leftover empty directory is cosmetic and must not fail an otherwise good
+// seat.
+func pruneEmptyDirs(root string) {
+	var dirs []string
+	_ = filepath.WalkDir(root, func(p string, d os.DirEntry, err error) error {
+		if err != nil {
+			return nil //nolint:nilerr // a walk error just means nothing to prune here
+		}
+		if d.IsDir() && p != root {
+			dirs = append(dirs, p)
+		}
+		return nil
+	})
+	// Deepest paths are longest, so descending length is a valid child-first order.
+	sort.Slice(dirs, func(i, j int) bool { return len(dirs[i]) > len(dirs[j]) })
+	for _, d := range dirs {
+		entries, rerr := os.ReadDir(d)
+		if rerr != nil || len(entries) > 0 {
+			continue
+		}
+		_ = os.Remove(d)
+	}
 }
 
 // isSafeManifestPath reports whether p is safe to treat as a materializer-

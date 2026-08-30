@@ -17,6 +17,8 @@ tools:
   - mcp__aiarch-state__listResearchSources
   - mcp__aiarch-state__getResearchSource
   - mcp__aiarch-state__projectStateReadProject
+  - mcp__aiarch-state__projectStateListProjects
+  - mcp__aiarch-state__designSessionReadProjectOnBranch
   - mcp__aiarch-state__putDraftModel
   - mcp__aiarch-state__setCritiqueVerdict
   - mcp__aiarch-state__recordServiceContract
@@ -25,6 +27,7 @@ tools:
   - mcp__aiarch-state__respondToReviewComment
   - mcp__aiarch-state__estimationComputeNetwork
   - mcp__aiarch-state__estimationEstimateForOption
+  - mcp__aiarch-state__estimationDerivePlan
   - mcp__aiarch-state__reviewProposeReviews
 ---
 

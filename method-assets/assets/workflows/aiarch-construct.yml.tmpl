@@ -134,7 +134,7 @@ jobs:
       # Working-tree only: no git state is touched and nothing here is committed.
       - name: Materialize the .claude prompt surface (runtime-rendered, not repo-committed)
         run: |
-          "${{ steps.statemcp.outputs.bin }}" seat-assets --dest .
+          "${{ steps.statemcp.outputs.bin }}" seat-assets --dest . --command "${{ inputs.command }}"
 
       # The MCP config claude-code-action passes to the Claude CLI (--mcp-config). The
       # ambient CONSTRUCTION context (project id, job mode, component id, activity id,
@@ -155,12 +155,26 @@ jobs:
                   "AIARCH_COMPONENT_ID": "${{ inputs.component_id }}",
                   "AIARCH_ACTIVITY_ID": "${{ inputs.activity_id }}",
                   "AIARCH_TARGET_BRANCH": "activity/${{ inputs.activity_id }}",
-                  "AIARCH_STATE_ROOT": "${{ github.workspace }}"
+                  "AIARCH_STATE_ROOT": "${{ github.workspace }}",
+                  "AIARCH_COMMAND": "${{ inputs.command }}"
                 }
               }
             }
           }
           EOF
+
+
+      # Resolve this step's built-in tool deny list from the SAME method-assets
+      # step manifest the local executor uses, so the two dispatch rails scope
+      # identically. Restating the list in YAML here is exactly the duplication
+      # that would drift. An unknown step prints an empty line, which degrades to
+      # the unscoped surface rather than failing the job.
+      - name: Resolve the step's built-in tool scope
+        id: steptools
+        env:
+          MCP_BIN: ${{ steps.statemcp.outputs.bin }}
+        run: |
+          echo "disallowed=$("${MCP_BIN}" step-tools --command "${{ inputs.command }}" --disallowed)" >> "$GITHUB_OUTPUT"
 
       - name: Run construction step (claude-code-action)
         uses: anthropics/claude-code-action@v1
@@ -181,7 +195,7 @@ jobs:
           # --mcp-config wires the local aiarch-state MCP server (built above) into the
           # Claude CLI; --dangerously-skip-permissions auto-allows tool calls (incl. the
           # MCP tools) in the unattended runner.
-          claude_args: "--dangerously-skip-permissions --mcp-config ${{ runner.temp }}/aiarch-mcp.json"
+          claude_args: "--dangerously-skip-permissions --mcp-config ${{ runner.temp }}/aiarch-mcp.json --strict-mcp-config --setting-sources project --exclude-dynamic-system-prompt-sections --disallowedTools ${{ steps.steptools.outputs.disallowed }}"
           # Thin prompt: NO construction logic here. The intent lives entirely in the
           # per-(type,variant,phase) command under .claude/commands/, which pulls its
           # role agent + Method skill + the-method-project-state. The Manager computed
