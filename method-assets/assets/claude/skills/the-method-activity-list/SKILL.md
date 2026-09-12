@@ -1,6 +1,6 @@
 ---
 name: the-method-activity-list
-description: Project Design — produce the activity list (coding + noncoding) with 5-day quantum estimates. ONE coding activity per component (detailed-design and construction are internal lifecycle phases, not separate activities), plus integration and noncoding. Reads the committed systemDesign and planningAssumptions artifacts in project.json. Produces the typed ActivityList committed to project.json → .activityList. Invoke after [[the-method-planning-assumptions]], before [[the-method-network-draft]].
+description: Project Design — produce the activity list (coding + noncoding) with 5-day quantum estimates. Löwy's Table 11-1 applied to the architecture — ONE coding activity per hand-built component (detailed-design and construction are internal lifecycle phases, not separate activities), one frontend activity per hand-built client, plus the noncoding test plan (N-STP) and system testing (N-IT). Reads the committed systemDesign and planningAssumptions artifacts in project.json. Produces the typed ActivityList committed to project.json → .activityList. Invoke after [[the-method-planning-assumptions]], before [[the-method-network-draft]].
 ---
 
 # Activity List
@@ -23,12 +23,12 @@ The architecture defines what to build. The activity list says how the work deco
 
 State is git-as-DB: all of this lives in `.aiarch/state/project.json` (a typed JSON aggregate), NOT in `designs/<product>/*.md` files. Markdown/DSL is a render-on-read of the typed state, never the source of truth.
 
-- The committed **systemDesign** artifact in `project.json` → `.systemDesign` — the architecture decomposition: each component → coding activities; relationships → integration activities. (When rendered as Structurizr DSL, each component is a `container`.)
+- The committed **systemDesign** artifact in `project.json` → `.systemDesign` — the architecture decomposition: each hand-built component → one coding activity; call chains → dependency edges (there are no integration activities — see Step 2). (When rendered as Structurizr DSL, each component is a `container`.)
 - The committed **planningAssumptions** artifact in `project.json` → `.planningAssumptions`
 
 ## Output
 
-**`.activityList` holds a delta document, not a materialized list.** The baseline activity set — every `C-*` coding activity, `R-*` resource provisioning, `U-SPA-<manager>` and `U-SPA-S` SPA construction, `G-SPA` UI-design concept, and the always-emit `N-*` testing/QA inventory — is **derived mechanically** by `estimationEngine.DerivePlan` from the committed `systemDesign` artifact, plus the dependency network and milestones that follow from the System's relationships. It is a **render-on-read**: re-running `DerivePlan` against the same committed System reproduces it exactly, and `make derived-plan-check` fails the build if it doesn't.
+**`.activityList` holds a delta document, not a materialized list.** The baseline activity set — Löwy's Table 11-1 applied to the architecture: every `C-*` coding activity, `R-*` resource provisioning, one `U-SPA-<clientId>` frontend activity per client the team builds by hand, and the two always-emit noncoding activities `N-STP` (test plan) and `N-IT` (system testing) — is **derived mechanically** by `estimationEngine.DerivePlan` from the committed `systemDesign` artifact, plus the dependency network and milestones that follow from the System's relationships. It is a **render-on-read**: re-running `DerivePlan` against the same committed System reproduces it exactly, and `make derived-plan-check` fails the build if it doesn't.
 
 What the agent authors into `.activityList` is the typed `ActivityListDeltas` model — the entire human-review surface, and nothing else:
 - `overrides` — an `ActivityOverride` per derived activity whose computed `effortDays` or `riskBucket` is wrong for this project, each carrying a written `justification`.
@@ -37,13 +37,13 @@ What the agent authors into `.activityList` is the typed `ActivityListDeltas` mo
 
 ### The `gates` / `gatedBy` predicate — attaching by rule, not by name
 
-Some additive work genuinely precedes (or follows) a whole *class* of derived activities, not one named activity: `N-CI` (build/CI infrastructure) must precede every coding activity — you cannot build a component before CI exists to build it in. `N-SCHEMA` (database/schema design) must precede every store-backed ResourceAccess. Naming these edges by enumerating activity ids is exactly the hand-maintenance this whole delta-document design exists to remove, and it goes stale silently the moment a component is added or renamed.
+Some additive work genuinely precedes (or follows) a whole *class* of derived activities, not one named activity: `N-SCHEMA` (database/schema design) must precede every store-backed ResourceAccess — you cannot build the access code before the schema it serves exists. (Build/CI is not such an additive: build automation is platform infrastructure.) Naming these edges by enumerating activity ids is exactly the hand-maintenance this whole delta-document design exists to remove, and it goes stale silently the moment a component is added or renamed.
 
 So `AdditiveActivity` and `AdditiveMilestone` each carry an optional **closed predicate selector**, `ActivitySelector`:
 
 ```jsonc
 { "coding": true }                                          // every coding activity
-{ "prefix": "U-SPA-" }                                      // every SPA construction activity
+{ "prefix": "U-SPA-" }                                      // every frontend (client) activity
 { "componentKind": "resourceAccess" }                        // every activity whose component is a ResourceAccess
 { "componentKind": "resource", "provisioning": "owned" }      // store-backed Resources only
 ```
@@ -68,7 +68,7 @@ Two usage patterns produce this slot:
 
 ## Worker classes and the activity inventory — canonical doctrine
 
-Two normative rules govern this activity list: every activity's `workerClass` is drawn from the fixed Method team roster (and must have a `rateCard` entry in the committed PlanningAssumptions), and each activity is named with its short network id under the fixed prefix conventions — with a component whose work is not yours to plan (generated transport, or a platform/third-party-provided component) getting NO coding activity, and the standard UI/testing inventory ALWAYS derived. The canonical statements of both rules live under **Draft-job doctrine → Worker classes are a fixed roster** and **→ What derives (the closed baseline)** below; they apply identically here. Where the book says UX-designer or DevOps, use `ui-designer` and `senior-developer`.
+Two normative rules govern this activity list: every activity's `workerClass` is drawn from the fixed Method team roster (and must have a `rateCard` entry in the committed PlanningAssumptions), and each activity is named with its short network id under the fixed prefix conventions — with a component whose work is not yours to plan (generated transport, or a platform/third-party-provided component) getting NO coding activity, and the two noncoding testing activities (`N-STP`, `N-IT`) ALWAYS derived. The canonical statements of both rules live under **Draft-job doctrine → Worker classes are a fixed roster** and **→ What derives (the closed baseline)** below; they apply identically here. Where the book says UX-designer or DevOps, use `ui-designer` and `senior-developer`.
 
 ## Procedure
 
@@ -78,7 +78,7 @@ Two normative rules govern this activity list: every activity's `workerClass` is
 
 > This is the deliberate correction of the "clock": do NOT emit a `D###` design activity *and* a `C###` construction activity per component. The base activity list is one activity per component; the per-phase role hand-off lives inside the lifecycle. Pulling contract design out into a *separate* activity is a **compression technique** — see [[the-method-compressed-solution]] — applied selectively (to components others build against, to break dependencies and parallelize), never universally in the base list.
 
-> ID-prefix convention (load-bearing, not just recommended): `C-<abbrev>` the single per-component coding activity, `R-*` resource provisioning, `U-SPA*` SPA/webApp construction (the ONLY prefix classified as frontend downstream), `G-*` UI-design concepts, `I-*` integration, `N-*` noncoding (testing variants key on `N-STP`/`N-STH`/`N-PERF`/`N-IT`/`N-QA`). (`D###` design-first activities appear ONLY in the compressed solution, never the base.) In the typed model the activity `name` IS this short network id; the human-readable label goes in `title`. Downstream classifiers (DeriveType / DeriveVariant / ClassifyType) key on these prefixes — a prose name like `webapp-client-coding` classifies as a generic service.
+> ID-prefix convention (load-bearing, not just recommended): `C-<abbrev>` the single per-component coding activity, `R-*` resource provisioning, `U-SPA-<clientId>` the single frontend activity for a hand-built client (the ONLY prefix classified as frontend downstream), `I-*` integration, `N-*` noncoding (testing variants key on `N-STP`/`N-IT`). (`D###` design-first activities, and a separate client-design activity, appear ONLY as compression moves in the compressed solution, never the base.) In the typed model the activity `name` IS this short network id; the human-readable label goes in `title`. Downstream classifiers (DeriveType / DeriveVariant / ClassifyType) key on these prefixes — a prose name like `webapp-client-coding` classifies as a generic service.
 
 Format each entry:
 
@@ -109,60 +109,60 @@ The single duration covers the whole lifecycle (design + build + test-plan + int
 
 What App C's *"avoid integration at the end of the project"* buys you is already structural: because integration is a phase inside each activity, and each activity's dependencies are on other activities' frozen contracts (Step 1 above), integration happens incrementally as the network unfolds — never as a big-bang activity at the end.
 
-The one activity that plays System Testing's Table 11-1 role is the terminal `N-IT` gate (Step 2b below): it depends on the top-of-stack construction activities (`U-SPA-*` for a product with a UI surface, or the top-layer `C-*`/`R-*` activities otherwise) exactly as activity 21 depends on 5/19/20 — never on a per-relationship or per-use-case `I-*`.
+The one activity that plays System Testing's Table 11-1 role is the terminal `N-IT` gate (Step 2b below): it depends on every activity that has no other successor — in practice the top of the stack (the `U-SPA-<clientId>` activities where the team builds a client, and anything else nothing downstream depends on, such as `N-STP`) — never on a per-relationship or per-use-case `I-*`.
 
 > **Suppressing a component's coding activity also suppresses every architecture edge through it — re-wire what replaced it.** This is the failure this rule can cause, and it is silent.
 >
-> Architecture relationships become network edges by way of the *activities* at each end. When a component's coding activity is suppressed (`constructionProfile: generated` or `provided`, Step 1), every relationship touching it has no activity to attach to and is dropped. For a client that is exactly the wrong outcome: the client→manager edges vanish, and the `U-SPA-<manager>` activities standing in for the client's real work inherit nothing.
+> Architecture relationships become network edges by way of the *activities* at each end. When a component's coding activity is suppressed (`constructionProfile: generated` or `provided`, Step 1), every relationship touching it has no activity to attach to and is dropped. That is only safe when nothing else stands in for the suppressed component's work.
 >
-> Observed live: the SPA activities and the terminal `N-IT` gate floated to the front of the schedule with 50 days of float, so the committed plan had **the whole system tested 50 days before the managers it tests existed**, and understated project duration by 43% (115 days against a true 165). Every gate was green — the network was internally consistent, just incoherent as a schedule.
+> Observed live, under the retired per-manager SPA inventory: `U-SPA-<manager>` activities stood in for a suppressed client's real work, inherited none of its client→manager edges, and — together with the terminal `N-IT` gate — floated to the front of the schedule with 50 days of float, so the committed plan had **the whole system tested 50 days before the managers it tests existed**, and understated project duration by 43% (115 days against a true 165). Every gate was green — the network was internally consistent, just incoherent as a schedule.
 >
-> So whenever suppression removes a component that other work stands in for, wire the stand-in explicitly: emit `U-SPA-<m> → C-<m>` for every manager with a coding activity. Löwy has both edges — activity 19 (Client App1) depends on the managers, and activity 21 depends on the client activities.
+> That is why the frontend activity is keyed on the client itself: one `U-SPA-<clientId>` per client with `uiSurface: true`, taking its predecessors straight from that client's call chains — exactly as Löwy's activity 19 (Client App1) depends on the managers it calls, and activity 21 depends on the client activities. There is no stand-in left to wire. A client whose transport the platform generates gets no activity; its edges drop, and any manager left with no other successor is picked up by `N-IT` under the terminal-gate rule.
 >
 > The general lesson is worth more than the specific edge: **a derived network can satisfy every consistency check and still describe an impossible schedule.** Solve it and assert an ordering invariant — the terminal gate must finish after everything it gates — because no amount of derive-and-compare will catch this.
 
-### Step 2b — Standard UI-Design and Test-Plan activities
+### Step 2b — The two noncoding activities: Test Plan and System Testing
 
-Two activities are **always emitted** (not left ad-hoc), because every plan needs them and their reviewers are fixed by role. Both are part of the derived baseline — `DerivePlan` emits them mechanically, the draft agent does not author them — but the *design intent* below is still the authoritative statement of what they are and why, since the derivation is only a mechanical enforcement of it.
+Exactly two noncoding activities are **always emitted** (not left ad-hoc), because every plan needs them and their reviewers are fixed by role. Both are part of the derived baseline — `DerivePlan` emits them mechanically, the draft agent does not author them — but the *design intent* below is still the authoritative statement of what they are and why, since the derivation is only a mechanical enforcement of it.
 
-**UI-Design activity (only for products with a UI surface — a Client + SPA/app container).** One UI-design activity derives, prefix `G-SPA`, role `ui-designer`, sequenced *before* the UI construction activities (the UI construction depends on it). The designer produces UI concepts; review is computed at construction time by `[[the-method-review-routing]]` (founder/architect-user + ux-reviewer + product-manager + architect) — do **not** stamp reviewers here.
+Per Löwy's testing doctrine ([[the-method-testing]]) — unit testing alone is "borderline useless"; the load-bearing verification is full regression of the integrated system — emit, **not** BDD/Gherkin specs:
 
-| G001 | UI design concepts for the SPA | ui-design | reactSPA | ui-designer | 15 | (manager detailed-designs) |
-
-**Testing activities (always).** Per Löwy's testing doctrine ([[the-method-testing]]) — unit testing alone is "borderline useless"; the load-bearing verification is full regression of the integrated system — emit, **not** BDD/Gherkin specs:
-
-- a **System Test Plan** (`N-STP`, role `test-engineer`) — the ways to prove the integrated system fails, traced to the core use cases; early and high-float;
-- a **System Test Harness** (`N-STH`, role `test-engineer`) — code that drives the system to break it (best-fit tech: Playwright for UI/SPA E2E, Go for API/integration; no Gherkin layer);
-- a **Regression Test Harness** (`N-RTH`, role **`senior-developer`** — Löwy: regression harness is *developer-owned*, distinct from the test-engineer's system harness);
-- **daily build + smoke** (`N-SMOKE`, role `senior-developer` — the roster has no devops class);
-- a process **QA** activity (`N-QA`, role `qa-engineer`) — *"what will it take to assure quality?"*, distinct from test execution;
-- a terminal **System Testing** gate (end-of-project, role **`software-tester`** — Löwy: testers run system testing; aim for a 1:1–2:1 tester:developer ratio).
+- a **System Test Plan** (`N-STP`, role `test-engineer`) — Table 11-1 #4: the ways to prove the integrated system fails, traced to the core use cases; early and high-float;
+- a terminal **System Testing** gate (`N-IT`, role **`software-tester`**) — Table 11-1 #21: testers run system testing; aim for a 1:1–2:1 tester:developer ratio.
 
 Per-service test plans (STP) are written *before* each component's construction and live inside the construction activity — do not emit one activity per STP. Their review (`system-architect` + `product-manager` + `qa-engineer`) is computed at construction time by `[[the-method-review-routing]]` (`artifactKind: test-plan`).
 
-| N-STP | System Test Plan (all core UCs) | noncoding | test-engineer | 15 | — |
-| N-STH | System Test Harness (Playwright + Go) | noncoding | test-engineer | 20 | N-STP |
-| N-RTH | Regression Test Harness | noncoding | senior-developer | 15 | N-STP |
+| N-STP | System Test Plan (all core UCs) | noncoding | test-engineer | 15 | M0 |
+| N-IT | System Testing | noncoding | software-tester | (estimated per project) | every activity with no other successor |
+
+**No UI-design activity.** A frontend activity's own lifecycle already carries its UX-requirements and design phases (dispatched to `ui-designer`; review computed at construction time by `[[the-method-review-routing]]`), so the base plan has no separate UI-design or scaffold activity and no per-manager SPA activities. Pulling client design out into an activity of its own is only ever a **compression move** ([[the-method-compressed-solution]]), never part of the base plan.
+
+**Not in the inventory — neither derived nor added back as additives:**
+- **Test harness** (Table 11-1 #5) — the platform generates the system and regression test harness;
+- **Logging / Security / Pub-Sub** (#6–8) — utilities are platform-provided (correction (a) below);
+- **Daily build and smoke** — build automation is platform infrastructure;
+- **QA** — QA is a *role*, not an activity: the `qa-engineer` spans the project and, like every phase-spanning role, is booked as indirect cost;
+- **Performance testing** — not in Table 11-1's noncoding list. A project that genuinely needs it adds it as a justified additive (Step 3).
 
 Routing note: reviewer sets are **never** columns in this table — they are dynamic (see `[[the-method-review-routing]]`). This step only guarantees the *work* exists; who reviews it is computed when it is performed.
 
 ### Step 3 — Noncoding activities
 
-Per ch. 13 (TradeMe second example), noncoding activities cluster at the beginning and end of the project. Walk through this checklist and add what applies.
+Per ch. 13 (TradeMe second example), noncoding activities cluster at the beginning and end of the project. Walk through this checklist and add what applies — as additives, since only `N-STP` and `N-IT` derive.
+
+**Already covered — never add these as additives:**
+- Requirements, architecture (and its review with management), project planning (Table 11-1 #1–3) — these are the design phases (Phase 1 and 2), represented by the M0 milestone; they are not construction activities
+- System test plan (`N-STP`) and system testing (`N-IT`) — derived
+- System and regression test harness — generated by the platform
+- Build / CI infrastructure, daily build & smoke — platform infrastructure
+- Quality-assurance process + gates — the `qa-engineer` role, booked as indirect cost, not an activity
+- UX design — the UX-requirements and design phases of each frontend activity
 
 **Beginning of project:**
-- Requirements analysis (formal pass beyond `/system-design`)
-- Architecture review with management
-- Project planning (this very phase + downstream phases)
-- System test plan + system test harness (test-engineer; early, high-float)
-- Regression test harness (developer-owned)
-- Quality-assurance process + gates (qa-engineer)
 - Development environment setup
-- Build / CI infrastructure + daily build & smoke
 - Source control setup
 - Database/schema design (the model, not RA code)
 - Security review
-- UX design (often a phase-long activity per ch. 11)
 
 **Middle of project:**
 - Code review activities (folded into construction in some teams; explicit otherwise)
@@ -170,8 +170,7 @@ Per ch. 13 (TradeMe second example), noncoding activities cluster at the beginni
 - Architecture refinement / ADRs
 
 **End of project:**
-- System testing (terminal gate; run by software-tester)
-- Performance testing
+- Performance testing — only when the project genuinely needs it, with a justification (it is not in Table 11-1's noncoding list)
 - Hardening / bug fix
 - User acceptance testing
 - Production deployment
@@ -186,14 +185,10 @@ Format:
 
 | ID | Name | Type | Role | Duration (days) | Depends on |
 |---|---|---|---|---|---|
-| N001 | Requirements analysis | noncoding | product-manager | 10 | — |
-| N002 | UX design | noncoding | ui-designer | 25 (spans entire UI phase) | N001 |
-| N003 | Build/CI setup | noncoding | senior-developer | 10 | — |
-| N004 | Production environment provisioning | noncoding | senior-developer | 15 | N003 |
-| N005 | Integration testing | quality | test-engineer | 15 | (all construction done) |
-| N006 | Hardening | quality | senior-developer + junior-developer | 10 | N005 |
-| N007 | Deployment | noncoding | senior-developer | 5 | N006 |
-| N008 | Training | noncoding | product-manager | 5 | N007 |
+| N001 | Production environment provisioning | noncoding | senior-developer | 15 | M0 |
+| N002 | Hardening | quality | senior-developer + junior-developer | 10 | N-IT |
+| N003 | Deployment | noncoding | senior-developer | 5 | N001, N002 |
+| N004 | Training | noncoding | product-manager | 5 | N003 |
 ```
 
 ### Step 4 — Apply estimation rules (App C §4.4)
@@ -243,16 +238,18 @@ Per ch. 11 Table 11-2 / ch. 13 Table 13-4, build the roles-and-phases mapping:
 | Architect | X | X | X | X | X |
 | Project Manager | X | X | X | X | X |
 | Product Manager | X | X | X | X | X |
-| Senior dev | X | X (incl. regression harness) | X | X | |
+| Senior dev | X | X | X | X | |
 | Junior dev | | X (unit + STP tests) | X | X | |
-| Test engineer | X (test plan + harness) | X (harness build) | X | X (perf) | X |
+| Test engineer | X (system test plan) | X | X | X | X |
 | Software tester | | | X (system test) | X (system testing) | |
 | QA engineer | X (gates) | X (process audit) | X | X | X |
 | UX designer | X | X | | | |
 | DevOps | X | X | X | X | X |
 ```
 
-Per Löwy ch. 9: the **test engineer** (builds harnesses, writes code to break the system), the **software tester** (runs system testing; 1:1–2:1 tester:developer ratio), and the **QA engineer** (senior, process — "what will it take to assure quality?") are three *distinct* roles. Do not collapse them.
+Per Löwy ch. 9: the **test engineer** (writes the system test plan and the code to break the system), the **software tester** (runs system testing; 1:1–2:1 tester:developer ratio), and the **QA engineer** (senior, process — "what will it take to assure quality?") are three *distinct* roles. Do not collapse them.
+
+This table is staffing, not activities. The QA engineer spans the phases and, like every phase-spanning role, is booked as indirect cost — there is no QA activity.
 
 The table keeps the book's row names; in the typed model the "UX designer" row is `ui-designer` and the "DevOps" row is `senior-developer` (the fixed roster has no devops class).
 
@@ -267,7 +264,7 @@ This is the normative task the CI draft job (and a local `/project-design` run) 
 1. **Read the derived baseline.** It is a render-on-read of the committed System — `estimationEngine.DerivePlan` computes it deterministically; you do not construct it by hand and you do not need `putDraftModel` to produce it.
 2. **For each derived activity whose band-midpoint default is wrong for this project, author an `ActivityOverride`** — `effortDays` and/or `riskBucket` only — with a written `justification` (see "Ground a justification in a property" below).
 3. **Walk the ch. 13 noncoding checklist** (Procedure Step 3 above) and author an `AdditiveActivity` for each item that applies and isn't already in the always-emit inventory — environment setup, security review, documentation, training, deployment, and the like — each with its own incident edges (`dependsOn`) and a written `justification`. Where the item genuinely precedes (or, for a milestone, follows) a whole class of derived activities rather than one named one, attach a `gates`/`gatedBy` selector (see "The `gates`/`gatedBy` predicate" above) instead of enumerating.
-4. **Do NOT author** `C-*`, `R-*`, `U-SPA-<manager>`, `G-SPA`, `I-*`, or the always-emit `N-*` inventory (`N-STP`/`N-STH`/`N-RTH`/`N-SMOKE`/`N-QA`/`N-PERF`/`N-IT`) — they derive. Typing one of these into the delta document is an anti-pattern (see "Anti-patterns to reject" below), not a completeness measure.
+4. **Do NOT author** `C-*`, `R-*`, `U-SPA-<clientId>`, `I-*`, or the always-emit `N-STP`/`N-IT` — they derive. Typing one of these into the delta document is an anti-pattern (see "Anti-patterns to reject" below), not a completeness measure. Nor add the retired inventory back as additives: no test-harness, daily-build/smoke, QA, or UI-design activity (Step 2b).
 
 **The vocabulary is closed: no exclusions, no derived-edge overrides.** There is no way to say "this component needs no work" and no way to rewrite a derived dependency edge. If a component genuinely needs no work, it should not be a component — remove it from the System. If a derived edge is wrong, the *relationship* is wrong — amend the System's relationships, not the plan. Both routes go through system design, not through the activity-list delta; a silent exclusion or edge override is exactly how the zombies below survived undetected.
 
@@ -277,10 +274,12 @@ Every activity in the baseline is named with its short network id under the fixe
 
 - **`C-<id>`** — one per code-layer component whose `constructionProfile` is `"handwritten"` (the conservative default when unauthored — see "Components you do not build" below).
 - **`R-<id>`** — one per Resource with `provisioning == "vendor"`.
-- **`U-SPA-<manager>`** and **`U-SPA-S`** — one per Manager plus the SPA scaffold, when any component declares a UI surface.
-- **`G-SPA`** — the UI-design concept, when any component declares a UI surface, sequenced before the `U-SPA-*` construction activities.
-- **`N-*`** — the always-emit testing/QA inventory: `N-STP` system test plan, `N-STH` system test harness, `N-RTH` regression test harness, `N-SMOKE` daily build and smoke, `N-QA` process QA, `N-PERF` performance testing, and the terminal `N-IT` system-testing gate.
+- **`U-SPA-<clientId>`** — one per client the team builds by hand (`uiSurface: true`); a client with `constructionProfile: generated` gets none. There are no per-manager SPA activities and no separate UI-design or scaffold activity — the frontend activity's own lifecycle carries its UX-requirements and design phases.
+- **`N-*`** — exactly two noncoding activities: `N-STP`, the system test plan (Table 11-1 #4), and the terminal `N-IT` system-testing gate (#21). No test-harness, daily-build/smoke, performance, or QA activity — see Step 2b.
 - **No `I-*`.** There is no integration activity, per relationship or per use case — see Procedure Step 2 above.
+- **Not construction activities at all:** Table 11-1 #1–3 (requirements, architecture, project design) are the design phases, represented by the M0 milestone; #5 (test harness) is platform-generated; #6–8 (logging, security, pub-sub) are platform-provided utilities.
+
+**Dependencies** follow Table 11-1's method: they come from the architecture's call chains, each counted once, with transitive edges collapsed; every activity with no other predecessor depends on M0; `N-IT` depends on every activity with no other successor.
 
 Generated client transport (an api/mcp/agent client whose substance is the platform-generated REST handlers, typed clients, MCP tool surfaces, and OpenAPI document) and platform/third-party-provided components both get no coding activity — see "Components you do not build" below.
 
@@ -304,7 +303,7 @@ A false checkable claim is **worse** than honest provenance — it invites a rev
 
 ### Worker classes are a fixed roster
 
-WORKER CLASSES ARE A FIXED ROSTER, not open vocabulary: every worker class MUST be spelled exactly as one of system-architect, product-manager, project-manager, senior-developer, junior-developer, ui-designer, ux-reviewer, qa-engineer, test-engineer, software-tester — the Method team the platform actually dispatches. NEVER invent a domain-, component-, or platform-flavored class (no Capture-Engineer, no Platform-DevOps-Engineer): an unknown class silently rides default token rates in the cost engines and misclassifies in every downstream view. This applies to `AdditiveActivity.workerClass` exactly as it applied to the old fully-authored list. Typical assignment: junior-developer builds components and the SPA; senior-developer integrates and owns regression/CI/smoke/provisioning; system-architect owns schema and ADR work; ui-designer the UI-design concepts; test-engineer the system test plan, harness, and perf rig; qa-engineer the QA process; software-tester the terminal system-testing gate.
+WORKER CLASSES ARE A FIXED ROSTER, not open vocabulary: every worker class MUST be spelled exactly as one of system-architect, product-manager, project-manager, senior-developer, junior-developer, ui-designer, ux-reviewer, qa-engineer, test-engineer, software-tester — the Method team the platform actually dispatches. NEVER invent a domain-, component-, or platform-flavored class (no Capture-Engineer, no Platform-DevOps-Engineer): an unknown class silently rides default token rates in the cost engines and misclassifies in every downstream view. This applies to `AdditiveActivity.workerClass` exactly as it applied to the old fully-authored list. Typical assignment: junior-developer builds components and the hand-built clients; senior-developer integrates and owns provisioning; system-architect owns schema and ADR work; ui-designer the UX-requirements and design phases of each frontend activity; test-engineer the system test plan (and a perf rig, when a justified additive calls for one); software-tester the terminal system-testing gate; qa-engineer the quality process, as a phase-spanning role booked as indirect cost, not an activity.
 
 ## Exit criteria (for router)
 
@@ -313,17 +312,20 @@ WORKER CLASSES ARE A FIXED ROSTER, not open vocabulary: every worker class MUST 
 - `additive`: an `AdditiveActivity` for every ch. 13 noncoding checklist item that applies and is not already in the always-emit inventory, each genuinely componentless (no `componentId`), each with its own incident edges and a written `justification`, each `workerClass` from the fixed roster with a PlanningAssumptions `rateCard` entry. A `gates` selector, if present, must match at least one derived activity.
 - `additiveMilestones`, if any milestone depends entirely on additive work and therefore cannot derive. A `gatedBy` selector, if present, must match at least one derived activity.
 - **No exclusions and no derived-edge overrides** — the vocabulary above is the whole document; there is no field for either.
-- **No `C-*`, `R-*`, `U-SPA-*`, `G-SPA`, `I-*`, or `N-*` entries authored by hand** — `make derived-plan-check` re-derives the baseline from the committed System and fails the build on any difference; that drift gate, not this document, is what proves baseline correctness.
+- **No `C-*`, `R-*`, `U-SPA-*`, `I-*`, `N-STP`, or `N-IT` entries authored by hand** — `make derived-plan-check` re-derives the baseline from the committed System and fails the build on any difference; that drift gate, not this document, is what proves baseline correctness.
+- **No additive re-creating the retired inventory** — no test-harness, daily-build/smoke, QA, or separate UI-design activity; a performance-testing additive only with a justification that the project genuinely needs it.
 
 Move to `the-method-network-draft`.
 
 ## Anti-patterns to reject
 
-- **Authoring a derived activity by hand.** A `C-*`, `R-*`, `U-SPA-*`, `G-SPA`, `I-*`, or `N-*` entry typed into the delta document is either a duplicate of the one `DerivePlan` already emits, or a **zombie** — an activity naming a component that no longer exists in the System. This is exactly how `C-HE`, `C-WIA`, and `R-WIT` survived in the committed plan, marked Done+Integrated, against components that had already been removed from the architecture. The drift gate (correction d, above) is what makes this impossible now; authoring one by hand routes straight around it.
+- **Authoring a derived activity by hand.** A `C-*`, `R-*`, `U-SPA-*`, `I-*`, `N-STP`, or `N-IT` entry typed into the delta document is either a duplicate of the one `DerivePlan` already emits, or a **zombie** — an activity naming a component that no longer exists in the System. This is exactly how `C-HE`, `C-WIA`, and `R-WIT` survived in the committed plan, marked Done+Integrated, against components that had already been removed from the architecture. The drift gate (correction d, above) is what makes this impossible now; authoring one by hand routes straight around it.
 - **An exclusion, or a derived-edge override, in any form.** The vocabulary is closed on purpose (see "no exclusions, no derived-edge overrides" above). Wanting either one is a signal to go fix the System, not the activity list.
 - **Single "implement everything" activity** — god activity; split per component (enforced by derivation, not by hand).
 - **A `D###` + `C###` pair per component in the base list** — this is the "clock." Detailed design is a *phase* of the one per-component activity, dispatched to the senior via the per-phase hand-off ([[the-method-handoff]]), not a separate activity. Separate design-first activities belong ONLY in the compressed solution ([[the-method-compressed-solution]]), applied selectively.
-- **No additive activities for applicable checklist items** — projects don't ship without UX, infra, deployment, training. Walk the ch. 13 checklist; force the additive inventory for what the derivation cannot see.
+- **A separate UI-design, scaffold, or per-manager SPA activity in the base list** — the one `U-SPA-<clientId>` activity per hand-built client carries its own UX-requirements and design phases; a separate client-design activity is a compression move only.
+- **Re-adding the retired inventory as additives** — a test-harness, daily-build/smoke, or QA activity. The harness and build automation are platform-generated; QA is a role booked as indirect cost, not an activity. Performance testing enters only as a justified additive when the project genuinely needs it.
+- **No additive activities for applicable checklist items** — projects don't ship without provisioning, deployment, training. Walk the ch. 13 checklist; force the additive inventory for what the derivation cannot see.
 - **A superlative justification** — "tied for the most," "the smallest X in the system." One counterexample falsifies it; ground the claim in a property instead (correction c, above).
 - **A `gates`/`gatedBy` selector matching zero activities** — a vacuity defect, not a no-op; reject it rather than let a silently-inert attachment look authored and reviewed.
 - **Using `gates` on a milestone or `gatedBy` on an activity** — the two fields are named differently on purpose because they run in opposite directions (`gates` = additive precedes; `gatedBy` = additive follows); do not assume the direction by analogy from one to the other.
