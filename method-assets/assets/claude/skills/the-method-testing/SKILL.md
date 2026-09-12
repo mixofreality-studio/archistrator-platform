@@ -174,12 +174,17 @@ applies to archistrator itself and to **every system archistrator builds**.
   **transport-agnostic step layer** drives each core use case through *both* and
   asserts identical committed state. This is what keeps "mirrors method-for-
   method" honest as both surfaces evolve.
-- **R5 — Author separation is binding.** The agent that authors the load-bearing
-  harness (`test-engineer`) is **blind to the implementation** — it sees only the
-  core use cases + the Client contracts (generated OpenAPI/MCP specs), never the
-  component source. Implementing developer agents do **not** write the
-  load-bearing tests; `software-tester` runs them. **This separation IS the
-  anti-cheat guarantee** — black-box surface alone is not enough without it.
+- **R5 — Author separation is binding.** The harness has no human (or agent)
+  author: it is **generated** from the System Test Plan (`.testingState.systemTestPlan`)
+  by the platform's `gen-systemtests` generator. What *is* authored is that
+  plan — its scenarios, cases, and expected results — written by `test-engineer`
+  in `N-STP`, and that authoring is **blind to the implementation**: it sees only
+  the core use cases + the Client contracts (generated OpenAPI/MCP specs), never
+  the component source. Implementing developer agents do **not** write the
+  System Test Plan; `software-tester` runs the generated harness against the
+  integrated system. **This separation IS the anti-cheat guarantee** — one agent
+  must never author both a component and the plan that judges it; black-box
+  surface alone is not enough without it.
 - **R6 — Enforcement is mechanical.** The arch checker / CI asserts: (a) no
   harness module path under the server tree; (b) the harness depguard allowlist
   holds; (c) `…/internal/…` is never imported cross-tree (compiler-true, asserted
@@ -202,7 +207,8 @@ applies to archistrator itself and to **every system archistrator builds**.
   "accelerates the schedule like nothing else."
 - **White-box / in-package internals-reaching tests** (§7 R1) — not Löwy (App A
   is black-box-against-the-test-plan), and the primary agent cheating surface.
-- **One agent authoring a component *and* its load-bearing tests** (§7 R5) — the
-  harness author must be blind to the implementation.
+- **One agent authoring a component *and* the System Test Plan that judges it**
+  (§7 R5) — the plan's author must be blind to the implementation; the harness
+  itself has no author at all, since it is generated from that plan.
 - **Harness module inside the server tree** (§7 R3) — breaks Go's `internal/`
   seal and re-legalizes importing internals.

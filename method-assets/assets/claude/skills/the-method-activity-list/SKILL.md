@@ -240,7 +240,7 @@ Per ch. 11 Table 11-2 / ch. 13 Table 13-4, build the roles-and-phases mapping:
 | Product Manager | X | X | X | X | X |
 | Senior dev | X | X | X | X | |
 | Junior dev | | X (unit + STP tests) | X | X | |
-| Test engineer | X (system test plan) | X | X | X | X |
+| Test engineer | X (system test plan) | X (per-component test planning) | X (per-component test planning) | X (perf additive only) | X |
 | Software tester | | | X (system test) | X (system testing) | |
 | QA engineer | X (gates) | X (process audit) | X | X | X |
 | UX designer | X | X | | | |

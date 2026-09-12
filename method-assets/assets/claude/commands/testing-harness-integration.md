@@ -2,6 +2,8 @@
 
 > The Harness Review step of a testing-harness activity: audit the just-built System Test Harness as a process artifact — does its structural boundary hold, and does its coverage match the plan — without touching its code.
 
+> **Transitional note.** This testing-harness activity is retained only for projects that committed it before method-assets v0.7.0; current doctrine does not derive a testing-harness activity for new activity lists — the platform generates the system and regression test harness.
+
 **Arguments** — `$ARGUMENTS` is `<component_id> <activity_id>` (two space-separated tokens; `component_id` is typically empty — the System Test Harness is a system-level activity, not a per-component one). Parse once; do not swap them. Work lands on the shared activity branch `activity/<activity_id>` and its single PR — you are contributing commits to a PR that already exists (or open it if this is the first phase). Do NOT open a second PR.
 
 **Agent + skills.** Work to the standard of the **`qa-engineer`** agent (`.claude/agents/qa-engineer.md`). Follow **[[the-method-testing]]** and **[[the-method-project-state]]** for all reading/updating of `.aiarch/state/project.json`.

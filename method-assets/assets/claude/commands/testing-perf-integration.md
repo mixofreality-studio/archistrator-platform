@@ -2,6 +2,8 @@
 
 > The Rig Review step of a testing-perf activity: audit the just-built performance test rig as a process artifact — does its structural boundary hold, and does its scenario coverage match the design — without touching its code.
 
+> **Transitional note.** Performance testing is not a base-plan activity in current doctrine; it is used only when a project adds it as a justified additive — this step remains fully legitimate wherever a project has done so.
+
 **Arguments** — `$ARGUMENTS` is `<component_id> <activity_id>` (two space-separated tokens; `component_id` is typically empty — the performance test rig is a system-level activity, not a per-component one). Parse once; do not swap them. Work lands on the shared activity branch `activity/<activity_id>` and its single PR — you are contributing commits to a PR that already exists (or open it if this is the first phase). Do NOT open a second PR.
 
 **Agent + skills.** Work to the standard of the **`qa-engineer`** agent (`.claude/agents/qa-engineer.md`). Follow **[[the-method-testing]]** and **[[the-method-project-state]]** for all reading/updating of `.aiarch/state/project.json`.

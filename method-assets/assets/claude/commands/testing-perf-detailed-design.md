@@ -2,6 +2,8 @@
 
 > The Perf Scenario Design step of a testing-perf activity: freeze the performance test rig's target scenarios, load profiles, and pass/fail thresholds before any rig code is written.
 
+> **Transitional note.** Performance testing is not a base-plan activity in current doctrine; it is used only when a project adds it as a justified additive — this step remains fully legitimate wherever a project has done so.
+
 **Arguments** — `$ARGUMENTS` is `<component_id> <activity_id>` (two space-separated tokens; `component_id` is typically empty — the performance test rig is a system-level activity, not a per-component one). Parse once; do not swap them. Work lands on the shared activity branch `activity/<activity_id>` and its single PR — you are contributing commits to a PR that already exists (or open it if this is the first phase). Do NOT open a second PR.
 
 **Agent + skills.** Work to the standard of the **`test-engineer`** agent (`.claude/agents/test-engineer.md`). Follow **[[the-method-testing]]** and **[[the-method-project-state]]** for all reading/updating of `.aiarch/state/project.json`.

@@ -2,6 +2,8 @@
 
 > The Process Audit step of a testing-qa activity: audit whether the development process — including the gates defined in Gate Definition — is actually being followed, and tune the process where it is not.
 
+> **Transitional note.** This testing-qa activity is retained only for projects that committed it before method-assets v0.7.0; current doctrine does not derive a testing-qa activity for new activity lists — QA is the qa-engineer's phase-spanning role, not an activity.
+
 **Arguments** — `$ARGUMENTS` is `<component_id> <activity_id>` (two space-separated tokens; `component_id` is typically empty — this is a project-level activity, not a per-component one). Parse once; do not swap them. Work lands on the shared activity branch `activity/<activity_id>` and its single PR — you are contributing commits to a PR that already exists (or open it if this is the first phase). Do NOT open a second PR.
 
 **Agent + skills.** Work to the standard of the **`qa-engineer`** agent (`.claude/agents/qa-engineer.md`). Follow **[[the-method-testing]]** and **[[the-method-project-state]]** for all reading/updating of `.aiarch/state/project.json`.
