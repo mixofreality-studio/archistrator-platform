@@ -9,7 +9,9 @@
  *     never reads or writes the page URL, instead of browser history;
  *   - the network and navigation: framework-web's preview guards (the FIRST
  *     import below) make every other request throw and refuse any second tab or
- *     window (a nested preview), and PreviewAlarm shows every miss and refusal.
+ *     window (a nested preview), and PreviewAlarm shows every miss and refusal;
+ *   - the session: a 401 on the app's session probe cannot sign in here, so
+ *     PreviewSessionGate shows the preview error page instead of reloading.
  *
  * `?screen=<id>&state=<id>` picks the fixture; an unknown or missing pair renders
  * an honest error page, never a guess. The QueryClient never retries, so an
@@ -27,6 +29,7 @@ import { createMemoryHistory } from '@tanstack/react-router';
 import {
   PreviewAlarm,
   PreviewErrorPage,
+  PreviewSessionGate,
   raisePreviewIncident,
   resolvePreviewState,
   statesFromModules,
@@ -75,11 +78,13 @@ if (resolution.kind !== 'ok') {
 
   root.render(
     <StrictMode>
-      <QueryClientProvider client={queryClient}>
-        <OpsClientProvider value={{ ops, transport: 'fixture' }}>
-          <App router={router} />
-        </OpsClientProvider>
-      </QueryClientProvider>
+      <PreviewSessionGate>
+        <QueryClientProvider client={queryClient}>
+          <OpsClientProvider value={{ ops, transport: 'fixture' }}>
+            <App router={router} />
+          </OpsClientProvider>
+        </QueryClientProvider>
+      </PreviewSessionGate>
       <PreviewAlarm />
     </StrictMode>
   );

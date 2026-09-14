@@ -1,3 +1,21 @@
 @@ -7,1 +7,1 @@
 -      PREVIEW MODE (design-renderer-data.md §2′.1, §2′.5). This page boots the SAME
 +      PREVIEW MODE (scaffolded by framework-go-app-generator/webgen). This page boots the SAME
+@@ -9,3 +9,11 @@
+-      Its own CSP makes the document network-dead and frame-dead whatever server
+-      hosts it: connect-src 'none' backs the in-page network guard, and
+-      frame-src 'none' turns any nested preview off inside a preview.
++      Its own CSP is the preview's full response CSP less frame-ancestors (which a
++      <meta> cannot carry), so the page fetches nothing from another origin whatever
++      server hosts it: no request, image, script, style, font, prefetch, worker or
++      frame. framework-web's previewFixtures build plugin fails a build whose CSP
++      differs from PREVIEW_META_CSP.
++      A CSP does not govern navigation. A same-tab link, location.href or a meta
++      refresh to another origin is refused and reported by framework-web's
++      navigation guard where the browser has the Navigation API (Chromium today),
++      and only reported, or not caught at all, elsewhere. The preview origin holds
++      no cookies and no secrets, so what such a navigation can carry out is the
++      fixture data; that residual is accepted.
+@@ -16,1 +24,1 @@
+-      content="connect-src 'none'; frame-src 'none'; worker-src 'none'; object-src 'none'; form-action 'none'; base-uri 'none'"
++      content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'none'; form-action 'none'; base-uri 'none'; object-src 'none'; frame-src 'none'; worker-src 'none'"

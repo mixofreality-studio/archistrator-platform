@@ -1,26 +1,28 @@
 @@ -2,1 +2,1 @@
 - * PREVIEW shell entry (design-renderer-data.md §2′.1, §2′.5): the SAME <App/> the
 + * PREVIEW shell entry (design-renderer-data.md §2′.1): the SAME <App/> the
-@@ -10,3 +10,3 @@
+@@ -10,3 +10,5 @@
 - *   - the network and navigation: installPreviewGuards (the FIRST import below)
 - *     makes every other request throw and refuses any second tab or window (a
 - *     nested preview), and PreviewAlarm shows every miss and refusal.
 + *   - the network and navigation: framework-web's preview guards (the FIRST
 + *     import below) make every other request throw and refuse any second tab or
-+ *     window (a nested preview), and PreviewAlarm shows every miss and refusal.
-@@ -14,3 +14,3 @@
++ *     window (a nested preview), and PreviewAlarm shows every miss and refusal;
++ *   - the session: a 401 on the app's session probe cannot sign in here, so
++ *     PreviewSessionGate shows the preview error page instead of reloading.
+@@ -14,3 +16,3 @@
 - * `?screen=<id>&state=<id>` picks the fixture (fixtureRegistry.ts); an unknown or
 - * missing pair renders an honest error page, never a guess. The QueryClient keeps
 - * the SPA's staleTime but never retries, so an error state shows at once.
 + * `?screen=<id>&state=<id>` picks the fixture; an unknown or missing pair renders
 + * an honest error page, never a guess. The QueryClient never retries, so an
 + * error state shows at once.
-@@ -19,0 +19,1 @@
+@@ -19,0 +21,1 @@
 + * Scaffolded by framework-go-app-generator/webgen; the app's own code from here on.
-@@ -21,1 +22,1 @@
+@@ -21,1 +24,1 @@
 -import './installPreviewGuards';
 +import '@mixofreality-studio/archistrator-platform-framework-web/preview/install';
-@@ -26,16 +27,7 @@
+@@ -26,16 +29,8 @@
 -import '@fontsource/space-grotesk/400.css';
 -import '@fontsource/space-grotesk/500.css';
 -import '@fontsource/space-grotesk/600.css';
@@ -40,29 +42,43 @@
 +import {
 +  PreviewAlarm,
 +  PreviewErrorPage,
++  PreviewSessionGate,
 +  raisePreviewIncident,
 +  resolvePreviewState,
 +  statesFromModules,
 +} from '@mixofreality-studio/archistrator-platform-framework-web/preview';
-@@ -44,1 +36,1 @@
+@@ -44,1 +39,1 @@
 -import { fixtureOpsClient } from '../api/fixtureOps';
 +import { fixtureOpsClient, type FixtureFile } from '../api/fixtureOps';
-@@ -46,1 +38,0 @@
+@@ -46,1 +41,0 @@
 -import { fetchCapabilities } from '../hooks/useCapabilities';
-@@ -48,4 +39,0 @@
+@@ -48,4 +42,0 @@
 -import { PreviewAlarm } from './PreviewAlarm';
 -import { PreviewErrorPage } from './PreviewErrorPage';
 -import { resolvePreviewState, statesFromModules } from './fixtureRegistry';
 -import { raisePreviewIncident } from './previewIncidents';
-@@ -53,1 +40,1 @@
+@@ -53,1 +43,1 @@
 -const modules: Record<string, unknown> = import.meta.glob('@preview-fixtures/web-client/*/*.json', {
 +const modules = import.meta.glob<unknown>('@preview-fixtures/web-client/*/*.json', {
-@@ -57,1 +44,4 @@
+@@ -57,1 +47,4 @@
 -const resolution = resolvePreviewState(window.location.search, statesFromModules(modules));
 +const resolution = resolvePreviewState(
 +  window.location.search,
 +  statesFromModules<FixtureFile>(modules)
 +);
-@@ -78,1 +68,1 @@
+@@ -78,1 +71,1 @@
 -    fetchCapabilities: () => fetchCapabilities(ops),
 +    ops,
+@@ -88,5 +81,7 @@
+-      <QueryClientProvider client={queryClient}>
+-        <OpsClientProvider value={{ ops, transport: 'fixture' }}>
+-          <App router={router} />
+-        </OpsClientProvider>
+-      </QueryClientProvider>
++      <PreviewSessionGate>
++        <QueryClientProvider client={queryClient}>
++          <OpsClientProvider value={{ ops, transport: 'fixture' }}>
++            <App router={router} />
++          </OpsClientProvider>
++        </QueryClientProvider>
++      </PreviewSessionGate>

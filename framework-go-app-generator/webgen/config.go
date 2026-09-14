@@ -29,6 +29,11 @@ type Config struct {
 	FixturesEnv string
 	// Composition are the hand-declared composition routes, in config order.
 	Composition []CompositionRoute
+	// RestOnly names every op the server registers no MCP tool for, so it binds
+	// `tool: null`: the composition routes, and any OAS op that is REST-only on
+	// purpose. An op with no tool that is not named here fails generation, and
+	// so does a name here that is not such an op (see CheckRestOnly).
+	RestOnly []string
 }
 
 // The name limits keep every templated TypeScript line within the app's
@@ -76,7 +81,33 @@ func ParseConfig(src []byte) (Config, error) {
 		return Config{}, err
 	}
 	c.Composition = routes
+	restOnly, err := strList(root, "restOnly")
+	if err != nil {
+		return Config{}, err
+	}
+	c.RestOnly = restOnly
 	return c, c.Validate()
+}
+
+// strList reads an optional array of strings.
+func strList(o *Object, key string) ([]string, error) {
+	v, ok := o.Get(key)
+	if !ok {
+		return nil, nil
+	}
+	items, ok := v.([]Value)
+	if !ok {
+		return nil, fmt.Errorf("webgen: config: %s must be an array of strings", key)
+	}
+	out := make([]string, 0, len(items))
+	for _, item := range items {
+		s, ok := item.(string)
+		if !ok || s == "" {
+			return nil, fmt.Errorf("webgen: config: %s must be an array of non-empty strings", key)
+		}
+		out = append(out, s)
+	}
+	return out, nil
 }
 
 // Validate checks the fields every generator relies on.
@@ -148,11 +179,16 @@ func LoadInputs(dir string, c Config) (Inputs, error) {
 }
 
 // Bindings is every binding the OpsClient carries: the OAS ops and the
-// composition routes, in OpId order.
+// composition routes, in OpId order. An op left without a tool must be declared
+// REST-only (CheckRestOnly).
 func (in Inputs) Bindings() ([]Binding, error) {
 	derived, err := DeriveBindings(in.OAS, in.Tools)
 	if err != nil {
 		return nil, err
 	}
-	return WithComposition(derived, in.Config.Composition)
+	all, err := WithComposition(derived, in.Config.Composition)
+	if err != nil {
+		return nil, err
+	}
+	return all, CheckRestOnly(all, in.Config.RestOnly)
 }

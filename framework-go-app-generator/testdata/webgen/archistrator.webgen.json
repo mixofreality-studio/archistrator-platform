@@ -4,6 +4,7 @@
   "oas": "../server/api/openapi.yaml",
   "mcpTools": "../server/internal/client/mcp",
   "fixturesEnv": "ARCHISTRATOR_PREVIEW_FIXTURES",
+  "restOnly": ["compositionGetCapabilities", "compositionGetOperatedAppId", "compositionGetUserinfo"],
   "composition": {
     "compositionGetCapabilities": {
       "method": "GET",

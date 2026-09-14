@@ -117,6 +117,45 @@ func WithComposition(bindings []Binding, routes []CompositionRoute) ([]Binding, 
 	return sortBindings(out)
 }
 
+// CheckRestOnly fails when an op has no MCP tool and webgen.json does not
+// declare it REST-only, or when a REST-only declaration names no such op. A
+// tool-less binding is `tool: null`, which switches the MCP transport off for
+// the op; that must be a decision in the config, never the side effect of a
+// tool table webgen could not read, or of an op the server forgot to register.
+func CheckRestOnly(bindings []Binding, restOnly []string) error {
+	declared, err := restOnlySet(restOnly)
+	if err != nil {
+		return err
+	}
+	toolless := map[string]bool{}
+	for _, b := range bindings {
+		if b.Tool != "" {
+			continue
+		}
+		toolless[b.OpID] = true
+		if !declared[b.OpID] {
+			return fmt.Errorf("webgen: %s (%s %s) matches no registered MCP tool; register the tool, or declare the op REST-only in webgen.json \"restOnly\"", b.OpID, b.Method, b.Path)
+		}
+	}
+	for _, id := range restOnly {
+		if !toolless[id] {
+			return fmt.Errorf("webgen: config: restOnly names %q, which is not an op without an MCP tool", id)
+		}
+	}
+	return nil
+}
+
+func restOnlySet(restOnly []string) (map[string]bool, error) {
+	declared := map[string]bool{}
+	for _, id := range restOnly {
+		if declared[id] {
+			return nil, fmt.Errorf("webgen: config: restOnly names %q twice", id)
+		}
+		declared[id] = true
+	}
+	return declared, nil
+}
+
 // sortBindings orders by OpId the way the reference generator's
 // String.prototype.localeCompare does. For [A-Za-z0-9] that is the ICU root
 // collation: case-insensitive first, then lower case before upper case at the
