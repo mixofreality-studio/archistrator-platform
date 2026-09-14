@@ -220,20 +220,7 @@ func ClaudeFilesFor(command string) (map[string][]byte, error) {
 
 	out := map[string][]byte{}
 	for p, body := range all {
-		switch {
-		case strings.HasPrefix(p, ".claude/commands/"):
-			if p == ".claude/commands/"+m.Command+".md" {
-				out[p] = body
-			}
-		case strings.HasPrefix(p, ".claude/agents/"):
-			if m.Agent != "" && p == ".claude/agents/"+m.Agent+".md" {
-				out[p] = body
-			}
-		case strings.HasPrefix(p, ".claude/skills/"):
-			if keepSkill[skillNameOf(p)] {
-				out[p] = body
-			}
-		default:
+		if inStepScope(p, m, keepSkill) {
 			out[p] = body
 		}
 	}
@@ -241,6 +228,23 @@ func ClaudeFilesFor(command string) (map[string][]byte, error) {
 		return nil, fmt.Errorf("method-assets: step %q resolved to an empty asset set", command)
 	}
 	return out, nil
+}
+
+// inStepScope reports whether the asset at p belongs to step m's scoped set:
+// its own command file, its own charter (a step with no agent has none), a
+// skill in its closure, or any shared file outside commands/, agents/ and
+// skills/.
+func inStepScope(p string, m StepManifest, keepSkill map[string]bool) bool {
+	switch {
+	case strings.HasPrefix(p, ".claude/commands/"):
+		return p == ".claude/commands/"+m.Command+".md"
+	case strings.HasPrefix(p, ".claude/agents/"):
+		return m.Agent != "" && p == ".claude/agents/"+m.Agent+".md"
+	case strings.HasPrefix(p, ".claude/skills/"):
+		return keepSkill[skillNameOf(p)]
+	default:
+		return true
+	}
 }
 
 // skillNameOf extracts the skill directory name from a seated skill path

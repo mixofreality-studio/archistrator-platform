@@ -237,47 +237,67 @@ func agentSkillsLine(body string) string {
 func allowedTools(charter []string, mode string, isProjectDesign bool) []string {
 	out := []string{}
 	for _, t := range charter {
-		verb, isMCP := strings.CutPrefix(t, "mcp__aiarch-state__")
-		if !isMCP {
+		if toolAllowed(t, mode, isProjectDesign) {
 			out = append(out, t)
-			continue
 		}
-		if modes, composed := composedVerbModes[verb]; composed {
-			if contains(modes, mode) {
-				out = append(out, t)
-			}
-			continue
-		}
-		if projectDesignVerbs[verb] && !isProjectDesign {
-			continue
-		}
-		out = append(out, t)
 	}
 	sort.Strings(out)
 	return out
 }
 
+// toolAllowed decides one charter tool against the step: a built-in always
+// passes, a composed verb passes only in the modes its registry serves, a
+// project-design verb passes only on a project-design step, and every other
+// raw read passes.
+func toolAllowed(tool, mode string, isProjectDesign bool) bool {
+	verb, isMCP := strings.CutPrefix(tool, "mcp__aiarch-state__")
+	if !isMCP {
+		return true
+	}
+	if modes, composed := composedVerbModes[verb]; composed {
+		return contains(modes, mode)
+	}
+	return isProjectDesign || !projectDesignVerbs[verb]
+}
+
 // parseSkillGraph maps each skill name to the skill names its body links to.
 func parseSkillGraph(files map[string][]byte) map[string][]string {
-	known := map[string]bool{}
-	for p := range files {
-		if n, ok := skillName(p); ok {
-			known[n] = true
-		}
-	}
+	known := knownSkills(files)
 	graph := map[string][]string{}
 	for p, body := range files {
 		n, ok := skillName(p)
 		if !ok {
 			continue
 		}
-		for _, m := range wikilinkRe.FindAllStringSubmatch(string(body), -1) {
-			if target := m[1]; known[target] && target != n {
-				graph[n] = append(graph[n], target)
-			}
+		if links := skillLinks(n, body, known); len(links) > 0 {
+			graph[n] = append(graph[n], links...)
 		}
 	}
 	return graph
+}
+
+// knownSkills is the set of skill names seated anywhere in the asset tree.
+func knownSkills(files map[string][]byte) map[string]bool {
+	known := map[string]bool{}
+	for p := range files {
+		if n, ok := skillName(p); ok {
+			known[n] = true
+		}
+	}
+	return known
+}
+
+// skillLinks returns, in body order, the seated skills one file of skill `name`
+// links to. A self-link, or a link to a name no skill is seated under, is not
+// an edge.
+func skillLinks(name string, body []byte, known map[string]bool) []string {
+	var out []string
+	for _, m := range wikilinkRe.FindAllStringSubmatch(string(body), -1) {
+		if target := m[1]; known[target] && target != name {
+			out = append(out, target)
+		}
+	}
+	return out
 }
 
 func skillName(p string) (string, bool) {
