@@ -1,6 +1,6 @@
 {
   "name": "@mixofreality-studio/archistrator-platform-eslint-config-web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Reusable strict ESLint flat config + layered import-boundary gate for archistrator TS web apps.",
   "type": "module",
   "main": "index.js",

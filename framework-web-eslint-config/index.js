@@ -19,8 +19,11 @@ import boundaries from 'eslint-plugin-boundaries';
 import tseslint from 'typescript-eslint';
 import eslintConfigPrettier from 'eslint-config-prettier';
 
-// The six element types and the folders that carry them. mode:'folder' matches a
+// The seven element types and the folders that carry them. mode:'folder' matches a
 // file by an ancestor folder path; App.tsx is the app shell, classified as routes.
+// previewShell is the preview-mode entry (webgen's scaffold): it boots the SAME
+// App over the fixture transport, so it may reach routes and the api layer, and
+// nothing may import it (design-renderer-data.md §2′.5).
 export const ELEMENTS = [
   { type: 'routes', mode: 'folder', pattern: 'src/routes' },
   { type: 'routes', mode: 'full', pattern: 'src/App.tsx' },
@@ -29,6 +32,7 @@ export const ELEMENTS = [
   { type: 'api', mode: 'folder', pattern: 'src/api' },
   { type: 'contracts', mode: 'folder', pattern: 'src/contracts' },
   { type: 'utilities', mode: 'folder', pattern: 'src/utilities' },
+  { type: 'previewShell', mode: 'folder', pattern: 'src/previewShell' },
 ];
 
 // The downward-only import DAG (eslint-plugin-boundaries v6 object selectors).
@@ -41,6 +45,7 @@ export const BOUNDARY_RULES = [
   { from: { type: 'api' }, allow: { to: { type: ['api', 'contracts', 'utilities'] } } },
   { from: { type: 'utilities' }, allow: { to: { type: ['utilities', 'contracts'] } } },
   { from: { type: 'contracts' }, allow: { to: { type: ['contracts'] } } },
+  { from: { type: 'previewShell' }, allow: { to: { type: ['previewShell', 'routes', 'components', 'hooks', 'api', 'contracts', 'utilities'] } } },
 ];
 
 // The strict code-quality baseline every archistrator TS app shares, ported verbatim
