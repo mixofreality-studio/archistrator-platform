@@ -8,9 +8,13 @@
 //	webgen scaffold                                 write the scaffold files that are absent
 //	webgen skeleton -route /x <opId>...             print a minimal fixture for a screen state
 //
-// The webApp's package.json then carries the preview script contract:
+// Run it from a Go module that requires framework-go-app-generator (the app's
+// server module, whose appgen already does): `go run <pkg>@<version>` is refused
+// for this module, because its go.mod carries replace directives for its
+// sibling platform modules. The webApp's package.json then carries the preview
+// script contract:
 //
-//	"gen:ops":           "go run <this module>/cmd/webgen@<version> generate",
+//	"gen:ops":           "cd ../server && go run github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/cmd/webgen generate -C ../webApp",
 //	"build:preview":     "vite build -c vite.preview.config.ts && archistrator-preview-check-bundle dist-preview --preview",
 //	"check:prod-bundle": "archistrator-preview-check-bundle dist"
 //
