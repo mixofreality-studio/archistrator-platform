@@ -10,7 +10,7 @@
 
 ## Steps
 
-> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, the System Test Harness, and the full test-run and defect history recorded so far in this activity (from the Smoke Pass and Use-Case Execution phases).
 2. **Produce** the phase artifact: execute the developer-owned Regression Test Harness against the integrated system and record via `recordTestingState` the run into the testing-state's test-run history, filing any newly observed regression as a defect; then write the regression-and-sign-off note — either affirming the system is clean, or naming the still-open critical/high defects blocking sign-off — into the phase-artifacts store via `recordPhaseArtifact` per [[the-method-project-state]]. Commit onto branch `activity/<activity_id>`.

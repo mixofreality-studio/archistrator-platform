@@ -10,7 +10,7 @@
 
 ## Steps
 
-> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, the component's frozen contract, and the core use cases / dynamic views the component participates in from the committed system design.
 2. **Produce** the phase artifact: the component's Service Test Plan slice — the enumerated ways to demonstrate the component does not work, traced to its contract operations and call chains — recorded into the phase-artifacts store via `recordPhaseArtifact` per [[the-method-project-state]] and committed onto branch `activity/<activity_id>`.

@@ -10,7 +10,7 @@
 
 ## Steps
 
-> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, the committed core use cases, and the components/relationships/dynamic views in the committed system design that realize each core use case.
 2. **Produce** the phase artifact: the use-case trace — every core use case in scope mapped to the call chains and components it exercises, establishing the coverage the forthcoming System Test Plan must include — recorded into the phase-artifacts store via `recordPhaseArtifact` per [[the-method-project-state]] and committed onto branch `activity/<activity_id>`.

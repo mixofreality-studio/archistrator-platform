@@ -12,7 +12,7 @@
 
 ## Steps
 
-> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, the harness module produced in the Harness Construction phase, and the System Test Plan scenarios it targets.
 2. **Produce** the phase artifact: the harness-review note — confirming the harness's structural boundary holds and its use-case coverage matches the System Test Plan with no gaps, or naming the specific process gaps back to the test-engineer — recorded into the phase-artifacts store via `recordPhaseArtifact` per [[the-method-project-state]] and committed onto branch `activity/<activity_id>`.

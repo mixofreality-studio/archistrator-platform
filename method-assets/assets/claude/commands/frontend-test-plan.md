@@ -10,7 +10,7 @@
 
 ## Steps
 
-> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, this surface's approved UI design concept, the core use cases and persona journeys it serves, and the frozen contracts of the Manager/Engine components its flows call.
 2. **Produce** the phase artifact: this surface's flows test-plan slice — the enumerated ways each flow could fail to satisfy the approved UI design or the contracts it depends on, traced to specific flows and contract operations — recorded into the phase-artifacts store via `recordPhaseArtifact` per [[the-method-project-state]] and committed onto branch `activity/<activity_id>`.

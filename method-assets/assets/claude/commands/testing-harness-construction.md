@@ -12,7 +12,7 @@
 
 ## Steps
 
-> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
 > **State changes go through the `aiarch-state` MCP tools, not hand-edits.** Where a step below says to record a service contract, phase artifact, or testing artifact and "commit onto branch", do it with the matching tool — `recordServiceContract` / `recordPhaseArtifact` / `recordTestingState` — and finish with `publishDraft`. Do **not** hand-edit `.aiarch/state/project.json` or run `git` for state; only source/doc **files** (code, docs) are git-committed by you. See [[the-method-project-state]].
 

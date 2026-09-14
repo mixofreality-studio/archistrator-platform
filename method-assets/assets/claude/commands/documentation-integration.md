@@ -10,7 +10,7 @@
 
 ## Steps
 
-> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: this activity's documentation outline, the authored document files in the repository, and the committed system design entries and dynamic views those documents describe.
 2. **Produce** the phase artifact: a doc review note — which documents were checked, whether every nested-condition use case they cover has its required activity diagram, and whether every name/component/relationship they contain matches the committed system design — recorded to `.aiarch/state/project.json`'s phase-artifacts store via `recordPhaseArtifact` per [[the-method-project-state]], then committed onto branch `activity/<activity_id>`.

@@ -10,7 +10,7 @@
 
 ## Steps
 
-> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, the frozen provisioning spec for this deployment, and the committed system design's relationships to identify which components actually depend on this infrastructure.
 2. **Produce** the phase artifact: verify the dependent components run against the real provisioned infrastructure (not a stub), and record a convergence/integration note into `.aiarch/state/project.json`'s phase-artifacts store via `recordPhaseArtifact` per [[the-method-project-state]], committed onto branch `activity/<activity_id>`.
