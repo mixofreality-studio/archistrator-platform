@@ -3,9 +3,9 @@
  * REAL `vite build`: an invalid fixture fails the build, and so does a
  * preview.html whose CSP is not the preview CSP, or a build without one.
  */
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import assert from 'node:assert/strict';
-import { mkdirSync, mkdtempSync, readdirSync, realpathSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readdirSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { build } from 'vite';
@@ -32,6 +32,11 @@ const page = (csp: string): string =>
   `<meta http-equiv="Content-Security-Policy" content="${csp}" />` +
   '<title>t</title></head><body><script type="module" src="./entry.js"></script></body></html>';
 
+const made: string[] = [];
+after(() => {
+  for (const dir of made) rmSync(dir, { recursive: true, force: true });
+});
+
 interface Project {
   readonly root: string;
   readonly outDir: string;
@@ -41,6 +46,7 @@ interface Project {
 function project(fixture: unknown, html = page(PREVIEW_META_CSP), entryName = 'preview.html'): Project {
   // realpath: macOS's tmpdir is a symlink, and Vite wants the input under its root.
   const root = realpathSync(mkdtempSync(join(tmpdir(), 'preview-plugin-')));
+  made.push(root);
   writeFileSync(join(root, entryName), html);
   writeFileSync(join(root, 'entry.js'), 'document.title = "built";\n');
   writeFileSync(join(root, 'fixtures.schema.json'), JSON.stringify(schema));
