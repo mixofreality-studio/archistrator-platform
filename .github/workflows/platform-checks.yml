@@ -55,7 +55,7 @@ jobs:
           mkdir -p "${render_dir}"
           ( cd method-assets && METHODASSETS_RENDER_DIR="${render_dir}" GOWORK=off go test -count=1 -run '^TestDumpRenderedWorkflowsForLint$' . )
           cd "${render_dir}"
-          GOWORK=off go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/aiarch-construct.yml
+          GOWORK=off go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
   web:
     runs-on: ubuntu-latest
     permissions:

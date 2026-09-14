@@ -43,14 +43,10 @@ func TestWorkflowTemplatesScopeThePromptSurface(t *testing.T) {
 		s := string(body)
 
 		// The seat step must scope to this step, not render all 59 commands, and the
-		// MCP server must know the step, or it registers the full tool catalog. The
-		// construct workflow carries free operator text, so it maps every value
-		// through env: (construct_injection_test.go); the design workflow still
-		// expands the command inline.
-		seat, stamp := `seat-assets --dest . --command "${{ inputs.command }}"`, `"AIARCH_COMMAND": "${{ inputs.command }}"`
-		if name == "aiarch-construct.yml.tmpl" {
-			seat, stamp = `seat-assets --dest . --command "${AIARCH_COMMAND}"`, `AIARCH_COMMAND: $command`
-		}
+		// MCP server must know the step, or it registers the full tool catalog. Both
+		// workflows map every value through env: and build the config with jq
+		// (construct_injection_test.go, workflow_injection_test.go).
+		seat, stamp := `seat-assets --dest . --command "${AIARCH_COMMAND}"`, `AIARCH_COMMAND: $command`
 		if !strings.Contains(s, seat) {
 			t.Errorf("%s: seat step must scope the surface with --command", name)
 		}
