@@ -10,6 +10,8 @@
 
 ## Steps
 
+> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, this surface's approved UI design concept, its Client/SPA entry (relationships in/out) in the committed system design, and the frozen contracts of the specific Manager/Engine neighbors its flows cross.
 2. **Produce** the phase artifact: the wiring between this surface and its integration-scope neighbors, verified against the relevant flows/dynamic view(s), plus an integration note recorded into `.phaseArtifacts.integrationNote` via `recordPhaseArtifact` per [[the-method-project-state]] and committed onto branch `activity/<activity_id>`.
 3. **Verify** (only your own output; fast checks, working directory `webApp`): `npm run typecheck`; `npm run lint` scoped to the files you touched for this surface and, only if the wiring directly touched them, the specific neighbor client code — not `npm run build`, not `npm run check`, and not the `uitests` end-to-end suite.

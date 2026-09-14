@@ -10,6 +10,8 @@
 
 ## Steps
 
+> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, the approved System Test Plan (its use-case index and scenario list), and the approved System Test Harness. Confirm both carry an approved status before proceeding — a smoke pass against an unapproved plan or harness is premature.
 2. **Produce** the phase artifact: a smoke-pass test run — one quick pass invoking the harness against each core Client-layer surface named in the plan's use-case index to confirm the integrated system responds, recorded via `recordTestingState` as an entry in the testing-state's test-run history per [[the-method-project-state]] and committed onto branch `activity/<activity_id>`. If the harness fails to connect or a surface is unreachable, file that as a defect in the testing-state's defect list rather than leaving it unrecorded.
 3. **Verify** (only your own output; fast checks): the run references the actual approved plan and harness (not an invented one); the pass covers connectivity/liveness only, not every scenario in the plan; any hard failure was filed as a defect.

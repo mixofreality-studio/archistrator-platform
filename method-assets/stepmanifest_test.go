@@ -43,6 +43,50 @@ func TestStepManifestRegenerationIsNoOp(t *testing.T) {
 	}
 }
 
+// TestEveryConstructStepHoldsOperatorNotes pins the prompt half of operator-note
+// delivery (archistrator B1, amendment §C.1 item 3): every construct step is granted
+// get_operator_notes, no other mode is, and every construct command tells the agent to
+// call it first. A construct step without the grant would have the tool filtered out of
+// its MCP surface while its command tells it to call the tool.
+func TestEveryConstructStepHoldsOperatorNotes(t *testing.T) {
+	const tool = "mcp__aiarch-state__get_operator_notes"
+	const preamble = "First call `get_operator_notes`; if it returns notes, act on them before anything else."
+	files, err := ClaudeFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	construct := 0
+	for slug, m := range Manifests() {
+		has := false
+		for _, name := range m.Tools {
+			if name == tool {
+				has = true
+			}
+		}
+		body := string(files[".claude/commands/"+slug+".md"])
+		switch m.Mode {
+		case "construct":
+			construct++
+			if !has {
+				t.Errorf("%s: a construct step must be granted get_operator_notes", slug)
+			}
+			if !strings.Contains(body, preamble) {
+				t.Errorf("%s: a construct command must tell the agent to call get_operator_notes first", slug)
+			}
+		default:
+			if has {
+				t.Errorf("%s (mode %s): only construct steps are granted get_operator_notes", slug, m.Mode)
+			}
+			if strings.Contains(body, "get_operator_notes") {
+				t.Errorf("%s (mode %s): only construct commands name get_operator_notes", slug, m.Mode)
+			}
+		}
+	}
+	if construct < 20 {
+		t.Fatalf("found %d construct steps; the manifest lost the construction commands", construct)
+	}
+}
+
 // TestEveryDispatchableCommandHasAManifest asserts the manifest covers exactly
 // the dispatchable command set: every command file either has an entry or is a
 // known non-dispatchable orchestration command, and no entry names a command

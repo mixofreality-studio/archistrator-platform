@@ -10,6 +10,8 @@
 
 ## Steps
 
+> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, the System Test Plan produced in the Plan Authoring phase, and the use-case trace it was scoped against.
 2. **Produce** the phase artifact: the plan-review note — confirming the plan's exit criteria are binary and its coverage matches the traced use cases and call chains with no gaps, or naming the specific process gaps back to the test-engineer — recorded into the phase-artifacts store via `recordPhaseArtifact` per [[the-method-project-state]] and committed onto branch `activity/<activity_id>`.
 3. **Verify** (only your own output; fast checks): the note addresses process quality (coverage completeness against the trace, binary exit criteria, readiness for the harness to build against) and does not restate or alter the plan's line items; it contains no test or harness code and does not attempt to substitute for the `test-plan` review-routing gate.

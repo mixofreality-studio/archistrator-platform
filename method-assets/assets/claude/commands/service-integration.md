@@ -10,6 +10,8 @@
 
 ## Steps
 
+> **Operator notes first.** First call `get_operator_notes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
+
 1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, the component's frozen contract, its inbound/outbound relationships in the committed system design, and the frozen contracts of the specific neighbor components its call chains cross.
 2. **Produce** the phase artifact: the wiring between this component and its integration-scope neighbors, verified against the relevant dynamic view(s), plus an integration note recorded into the phase-artifacts store via `recordPhaseArtifact` per [[the-method-project-state]] and committed onto branch `activity/<activity_id>`.
 3. **Verify** (only your own output; fast checks, from the Go module directory containing the target package — the repo root in a generated app; `GOWORK=off`): `gofmt -w .`; `GOWORK=off go build ./...`; `GOWORK=off go vet ./...`; `GOWORK=off go test ./<goPackage>/...` (the component's `goPackage`) for this component and, only if the wiring directly touched them, the specific neighbor packages — not `make test-short`.

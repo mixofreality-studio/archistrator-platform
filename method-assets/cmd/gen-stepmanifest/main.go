@@ -95,6 +95,30 @@ var composedVerbModes = map[string][]string{
 	"recordServiceContract":  {modeConstruct},
 	"recordPhaseArtifact":    {modeConstruct},
 	"recordTestingState":     {modeConstruct},
+	// the construct-mode read of the operator's steer for this attempt
+	"get_operator_notes": {modeConstruct},
+}
+
+// modeImplicitVerbs are the composed verbs EVERY step of a mode is granted,
+// whatever its charter lists. get_operator_notes is the operator's steer for
+// the attempt (a send-back, retry or re-queue note): every construct command
+// tells the agent to call it first, so every construct step must hold it —
+// a step whose charter predates the tool would otherwise have it filtered out
+// of its surface (archistrator B1, amendment §C.1 finding H9).
+var modeImplicitVerbs = map[string][]string{
+	modeConstruct: {"get_operator_notes"},
+}
+
+// withModeImplicit adds the mode-implicit verbs to an already-narrowed tool
+// list, sorted and without duplicates.
+func withModeImplicit(tools []string, mode string) []string {
+	for _, v := range modeImplicitVerbs[mode] {
+		if name := "mcp__aiarch-state__" + v; !contains(tools, name) {
+			tools = append(tools, name)
+		}
+	}
+	sort.Strings(tools)
+	return tools
 }
 
 // projectDesignVerbs are the raw generated tools that serve Phase 2 (project
@@ -209,7 +233,7 @@ func manifestFor(slug, body string, skillLinks map[string][]string, charters map
 	}
 
 	mode := modeFor(slug)
-	tools := allowedTools(charter, mode, projectDesignCommands[slug])
+	tools := withModeImplicit(allowedTools(charter, mode, projectDesignCommands[slug]), mode)
 
 	return methodassets.StepManifest{
 		Command: slug,
