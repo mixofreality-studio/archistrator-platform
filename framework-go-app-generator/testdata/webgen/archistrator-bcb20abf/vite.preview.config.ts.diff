@@ -1,0 +1,113 @@
+@@ -3,1 +3,1 @@
+-import { defineConfig, type Plugin } from 'vite';
++import { defineConfig } from 'vite';
+@@ -6,5 +6,3 @@
+-  SURFACE,
+-  buildFixtureSchema,
+-  loadOas,
+-  validateFixtureTree,
+-} from './scripts/fixture-schema.mjs';
++  PREVIEW_RESPONSE_HEADERS,
++  previewFixtures,
++} from '@mixofreality-studio/archistrator-platform-framework-web/preview/node';
+@@ -14,1 +12,1 @@
+-// ?screen=<id>&state=<id> choosing the fixture. A sibling of vite.mcp.config.ts.
++// ?screen=<id>&state=<id> choosing the fixture. A sibling of the production config.
+@@ -17,3 +15,3 @@
+-//   - outDir `dist-preview/`, NEVER `dist/`: the nginx image and the Go localdist
+-//     embed ship dist/ only, and `npm run build` asserts dist/ carries no preview
+-//     code (scripts/check-prod-bundle.mjs).
++//   - outDir `dist-preview/`, NEVER `dist/`: production ships dist/ only, and the
++//     production build asserts dist/ carries no preview code
++//     (archistrator-preview-check-bundle dist).
+@@ -22,7 +20,5 @@
+-//     ARCHISTRATOR_PREVIEW_FIXTURES (relative to webApp/), defaulting to
+-//     preview/fixtures, where the U-SPA-web-client Design phase will record the
+-//     designed fixtures (§2′.5 item 4). The uitests build it over their own
+-//     test-local fixtures: ARCHISTRATOR_PREVIEW_FIXTURES=../uitests/preview-fixtures.
+-//   - Every fixture is validated against the OAS-generated schema when the build
+-//     starts; one invalid fixture fails the build. The schema ships beside the
+-//     bundle as fixtures.schema.json.
++//     ARCHISTRATOR_PREVIEW_FIXTURES (relative to the webApp), defaulting to preview/fixtures,
++//     where the frontend activity's Design phase records the designed fixtures.
++//   - Every fixture is validated against preview/fixtures.schema.json (generated
++//     from the server OAS by webgen) when the build starts; one invalid fixture
++//     fails the build. The schema ships beside the bundle.
+@@ -33,0 +29,2 @@
++//
++// Scaffolded by framework-go-app-generator/webgen; the app's own code from here on.
+@@ -35,52 +33,2 @@
+-const fixturesRoot = resolve(
+-  here,
+-  process.env['ARCHISTRATOR_PREVIEW_FIXTURES'] ?? 'preview/fixtures'
+-);
+-
+-// The response headers the future Go preview listener sets (§2′.3), for `vite
+-// preview`. frame-ancestors is 'none' here; the listener will name archistrator's
+-// public origin instead.
+-const PREVIEW_CSP = [
+-  "default-src 'self'",
+-  "script-src 'self'",
+-  "style-src 'self' 'unsafe-inline'",
+-  "img-src 'self' data: blob:",
+-  "font-src 'self' data:",
+-  "connect-src 'none'",
+-  "form-action 'none'",
+-  "base-uri 'none'",
+-  "object-src 'none'",
+-  "frame-src 'none'",
+-  "worker-src 'none'",
+-  "frame-ancestors 'none'",
+-].join('; ');
+-
+-function previewFixtures(): Plugin {
+-  return {
+-    name: 'archistrator-preview-fixtures',
+-    apply: 'build',
+-    // After Vite's own HTML plugin, which emits preview.html in its generateBundle;
+-    // a normal-order plugin runs first and would find nothing to rename.
+-    enforce: 'post',
+-    buildStart() {
+-      const { files, errors } = validateFixtureTree(fixturesRoot);
+-      if (errors.length > 0) {
+-        this.error(`preview fixtures fail the OAS-generated schema:\n  ${errors.join('\n  ')}`);
+-      }
+-      this.info(`${String(files.length)} fixture state(s) from ${fixturesRoot}/${SURFACE}`);
+-    },
+-    generateBundle(_options, bundle) {
+-      // The entry is preview.html at the source root; the bundle serves it as index.html.
+-      const html = bundle['preview.html'];
+-      if (html?.type === 'asset') {
+-        delete bundle['preview.html'];
+-        this.emitFile({ type: 'asset', fileName: 'index.html', source: html.source });
+-      }
+-      this.emitFile({
+-        type: 'asset',
+-        fileName: 'fixtures.schema.json',
+-        source: `${JSON.stringify(buildFixtureSchema(loadOas()), null, 2)}\n`,
+-      });
+-    },
+-  };
+-}
++const fixturesEnv = process.env['ARCHISTRATOR_PREVIEW_FIXTURES'];
++const fixturesRoot = resolve(here, fixturesEnv ?? 'preview/fixtures');
+@@ -90,1 +38,8 @@
+-  plugins: [react(), previewFixtures()],
++  plugins: [
++    react(),
++    previewFixtures({
++      fixturesRoot,
++      surface: 'web-client',
++      schemaPath: resolve(here, 'preview/fixtures.schema.json'),
++    }),
++  ],
+@@ -97,8 +52,1 @@
+-  preview: {
+-    headers: {
+-      'Content-Security-Policy': PREVIEW_CSP,
+-      'Referrer-Policy': 'no-referrer',
+-      'X-Content-Type-Options': 'nosniff',
+-      'Cross-Origin-Resource-Policy': 'same-origin',
+-    },
+-  },
++  preview: { headers: PREVIEW_RESPONSE_HEADERS },

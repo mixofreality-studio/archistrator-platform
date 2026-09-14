@@ -1,0 +1,140 @@
+@@ -5,2 +5,2 @@
+- * build (src/previewShell/) uses it; `npm run build` asserts the production
+- * bundle never contains it (scripts/check-prod-bundle.mjs).
++ * build (src/previewShell/) uses it; the production build's bundle check
++ * (archistrator-preview-check-bundle dist) asserts dist/ never contains it.
+@@ -8,2 +8,4 @@
+- * Design: .superpowers/sdd/2026-09-12-deterministic-activity-derivation/
+- * design-renderer-data.md §2′.1. Each op's fixture is exactly one of:
++ * The runtime is framework-web's (`createFixtureTransport`); this module binds
++ * it to this app's op table and its ApiError, so a fixture error or a miss is
++ * the app's own ApiError and renders through its ordinary error handling. Each
++ * op's fixture is exactly one of:
+@@ -11,3 +13,2 @@
+- *   - `{ result }`       the call resolves with a fresh deep copy of `result`;
+- *   - `{ error }`        the call rejects with the real ApiError, so the app
+- *                        shows its ordinary error handling;
++ *   - `{ result }`        the call resolves with a fresh deep copy of `result`;
++ *   - `{ error }`         the call rejects with the real ApiError;
+@@ -16,7 +17,3 @@
+- * A mutation answers the same way and changes no state: the fixture map is
+- * never written, and every result is a copy. An Approve click in a preview runs
+- * the real handler and the real toast, and changes nothing anywhere.
+- *
+- * A call with NO fixture is LOUD: it rejects with FixtureMissError (an ApiError
+- * with status 500, never 404, because several hooks read a 404 as "nothing
+- * here" and would hide the miss) and reports the op to `onMiss`.
++ * A mutation answers the same way and changes no state. A call with NO fixture
++ * is LOUD: it rejects with FixtureMissError (an ApiError with status 500, never
++ * 404, because a 404 reads as "nothing here") and reports the op to `onMiss`.
+@@ -24,2 +21,1 @@
+- * EARMARK (design §2′.1, P2): this runtime moves into framework-web, and its
+- * fixture types into app-generator's webgen output.
++ * Scaffolded by framework-go-app-generator/webgen; the app's own code from here on.
+@@ -27,0 +23,6 @@
++import {
++  createFixtureTransport,
++  type FixtureFile as PreviewFixtureFile,
++  type FixtureOps as PreviewFixtureOps,
++  type FixtureOpsOptions as PreviewFixtureOpsOptions,
++} from '@mixofreality-studio/archistrator-platform-framework-web/preview';
+@@ -28,8 +30,1 @@
+-import { OP_BINDINGS, type OpId, type OpParams, type OpsClient } from './ops.gen.ts';
+-
+-/** The wire error a fixture injects. `status` decides, as it does on the wire. */
+-export interface FixtureError {
+-  readonly status: number;
+-  readonly code?: string;
+-  readonly message?: string;
+-}
++import { OP_BINDINGS, type OpId } from './ops.gen.ts';
+@@ -37,5 +32,5 @@
+-/** One op's canned answer. */
+-export type FixtureOp =
+-  | { readonly result: unknown }
+-  | { readonly error: FixtureError }
+-  | { readonly pending: true };
++export {
++  FIXTURE_MISS_CODE,
++  type FixtureError,
++  type FixtureOp,
++} from '@mixofreality-studio/archistrator-platform-framework-web/preview';
+@@ -44,17 +39,1 @@
+-export type FixtureOps = Readonly<Partial<Record<OpId, FixtureOp>>>;
+-
+-/** One screen state's fixture file (uitests/preview-fixtures/<surface>/<screen>/<state>.json). */
+-export interface FixtureFile {
+-  /** The concrete route the state opens at, e.g. "/project/archistrator/construction". */
+-  readonly route: string;
+-  readonly title?: string;
+-  readonly note?: string;
+-  readonly ops: FixtureOps;
+-}
+-
+-/** The code a miss carries; scripts/check-prod-bundle.mjs greps for the class name. */
+-export const FIXTURE_MISS_CODE = 'fixture_miss';
+-
+-/** A call whose op has no fixture. Rejects loudly; never reads as "not found". */
+-export class FixtureMissError extends ApiError {
+-  readonly opId: OpId;
++export type FixtureOps = PreviewFixtureOps<OpId>;
+@@ -62,11 +41,2 @@
+-  constructor(opId: OpId) {
+-    const binding = OP_BINDINGS[opId];
+-    super(
+-      500,
+-      FIXTURE_MISS_CODE,
+-      `FixtureMissError: no fixture answers ${opId} (${binding.method} ${binding.path})`
+-    );
+-    this.name = 'FixtureMissError';
+-    this.opId = opId;
+-  }
+-}
++/** One screen state's fixture file (<fixtures root>/<surface>/<screen>/<state>.json). */
++export type FixtureFile = PreviewFixtureFile<OpId>;
+@@ -74,4 +44,1 @@
+-export interface FixtureOpsOptions {
+-  /** Told about every miss, before the call rejects. The preview shell raises its alarm. */
+-  readonly onMiss?: (opId: OpId, params: OpParams) => void;
+-}
++export type FixtureOpsOptions = PreviewFixtureOpsOptions<OpId>;
+@@ -79,3 +46,4 @@
+-function fixtureFor(fixtures: FixtureOps, op: OpId): FixtureOp | undefined {
+-  return Object.prototype.hasOwnProperty.call(fixtures, op) ? fixtures[op] : undefined;
+-}
++export const { fixtureOpsClient, FixtureMissError } = createFixtureTransport({
++  ApiError,
++  bindings: OP_BINDINGS,
++});
+@@ -83,29 +51,2 @@
+-export function fixtureOpsClient(fixtures: FixtureOps, options: FixtureOpsOptions = {}): OpsClient {
+-  const call = <R = unknown>(op: OpId, params: OpParams = {}): Promise<R> => {
+-    const fixture = fixtureFor(fixtures, op);
+-    if (fixture === undefined) {
+-      options.onMiss?.(op, params);
+-      return Promise.reject(new FixtureMissError(op));
+-    }
+-    if ('pending' in fixture) {
+-      return new Promise<R>(() => {
+-        // Never settles: the state under preview IS the loading state.
+-      });
+-    }
+-    if ('error' in fixture) {
+-      const { status, code, message } = fixture.error;
+-      return Promise.reject(
+-        new ApiError(
+-          status,
+-          code ?? 'internal',
+-          message ?? `request failed with status ${String(status)}`
+-        )
+-      );
+-    }
+-    return Promise.resolve(structuredClone(fixture.result) as R);
+-  };
+-  // A fixture's `result` is JSON, so it always carries a body: `callForBody`
+-  // answers exactly as `call` does (the REST transport's empty-2xx refusal has
+-  // no fixture equivalent).
+-  return { call, callForBody: call };
+-}
++/** A call whose op has no fixture. */
++export type FixtureMissError = InstanceType<typeof FixtureMissError>;

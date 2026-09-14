@@ -33,5 +33,8 @@
     "allowUnreachableCode": false,
     "allowUnusedLabels": false
   },
-  "include": ["src"]
+  "include": ["src"],
+  // Tests (node --test over the sources) are typechecked by tsconfig.test.json
+  // and never emitted into the published dist/.
+  "exclude": ["src/**/*.test.ts"]
 }

@@ -66,6 +66,7 @@ expect(has('hooks/useThing.ts', 'boundaries/dependencies'), 'hooks -> components
 expect(has('components/Card.ts', 'boundaries/dependencies'), 'components -> api should be flagged');
 expect(has('routes/Home.ts', 'boundaries/dependencies'), 'routes -> api should be flagged');
 expect(has('misc/orphan.ts', 'boundaries/no-unknown-files'), 'unclassified file should be flagged');
+expect(has('hooks/usePreview.ts', 'boundaries/dependencies'), 'hooks -> previewShell (nothing imports the preview entry) should be flagged');
 
 if (failures.length > 0) {
   console.error('FAIL:\n' + failures.map((f) => '  - ' + f).join('\n'));
