@@ -212,52 +212,11 @@ func checkFrontendPresent(elements []DeploymentElement, section string, ordinal 
 // is required — a gateway that forwards without authenticating, or that nothing
 // reaches, is not the platform's front door.
 func checkGatewayChain(edges []DeploymentRelationship, elements []DeploymentElement, section string, ordinal int) []Finding {
-	byKey := make(map[string]DeploymentElement, len(elements))
-	gateways := make(map[string]bool)
-	idps := make(map[string]bool)
-	frontends := make(map[string]bool)
-	appContainers := make(map[string]bool)
-	for _, e := range elements {
-		byKey[e.Key] = e
-		switch {
-		case e.Role == roleGateway:
-			gateways[e.Key] = true
-		case e.Role == roleIdentityProvider:
-			idps[e.Key] = true
-		}
-		if e.IsFrontend() {
-			frontends[e.Key] = true
-		}
-		if e.Kind == ElementContainer && e.Surface == surfaceService {
-			appContainers[e.Key] = true
-		}
-	}
-	if len(gateways) == 0 {
+	members := classifyFrontDoor(elements)
+	if len(members[frontDoorGateway]) == 0 {
 		return nil // no edge gateway in this environment — nothing to require
 	}
-
-	var reachesGateway, reachesIdP, reachesApp bool
-	for _, edge := range edges {
-		switch {
-		case frontends[edge.From] && gateways[edge.To]:
-			reachesGateway = true
-		case gateways[edge.From] && idps[edge.To]:
-			reachesIdP = true
-		case gateways[edge.From] && appContainers[edge.To]:
-			reachesApp = true
-		}
-	}
-
-	var missing []string
-	if !reachesGateway {
-		missing = append(missing, "frontend surface → gateway")
-	}
-	if !reachesIdP {
-		missing = append(missing, "gateway → identity provider")
-	}
-	if !reachesApp {
-		missing = append(missing, "gateway → application container")
-	}
+	missing := missingFrontDoorLinks(edges, members)
 	if len(missing) == 0 {
 		return nil
 	}
@@ -268,4 +227,93 @@ func checkGatewayChain(edges []DeploymentRelationship, elements []DeploymentElem
 			section, missing),
 		Location: loc(ordinal, section),
 	}}
+}
+
+// The front door's positions: what an element can BE in the chain. Each is also
+// the wording a DEP-EDGE-GATEWAY finding uses for it.
+const (
+	frontDoorFrontend = "frontend surface"
+	frontDoorGateway  = "gateway"
+	frontDoorIdP      = "identity provider"
+	frontDoorApp      = "application container"
+)
+
+// frontDoorLink is one hop of the front door, from one position to another.
+type frontDoorLink struct{ from, to string }
+
+func (l frontDoorLink) String() string { return l.from + " → " + l.to }
+
+// frontDoorChain is the standard front door, in the order a finding names its
+// missing hops: a frontend surface reaches the gateway, the gateway
+// authenticates against the identity provider, and the gateway forwards to the
+// application container.
+var frontDoorChain = []frontDoorLink{
+	{from: frontDoorFrontend, to: frontDoorGateway},
+	{from: frontDoorGateway, to: frontDoorIdP},
+	{from: frontDoorGateway, to: frontDoorApp},
+}
+
+// frontDoorPositions lists the chain positions an element occupies. Role and
+// surface are independent facts, so the checks are independent too.
+func frontDoorPositions(e DeploymentElement) []string {
+	var ps []string
+	switch e.Role {
+	case roleGateway:
+		ps = append(ps, frontDoorGateway)
+	case roleIdentityProvider:
+		ps = append(ps, frontDoorIdP)
+	}
+	if e.IsFrontend() {
+		ps = append(ps, frontDoorFrontend)
+	}
+	if e.Kind == ElementContainer && e.Surface == surfaceService {
+		ps = append(ps, frontDoorApp)
+	}
+	return ps
+}
+
+// frontDoorMembers indexes element keys by the chain position they occupy.
+type frontDoorMembers map[string]map[string]bool
+
+func classifyFrontDoor(elements []DeploymentElement) frontDoorMembers {
+	m := frontDoorMembers{}
+	for _, e := range elements {
+		for _, p := range frontDoorPositions(e) {
+			if m[p] == nil {
+				m[p] = map[string]bool{}
+			}
+			m[p][e.Key] = true
+		}
+	}
+	return m
+}
+
+// linkOf returns the index of the FIRST chain hop an edge realizes. An edge
+// credits at most one hop. That only matters when one key names elements in two
+// positions, a document DEP-KEY-UNIQUE has already failed; the chain then judges
+// it by the earlier hop.
+func (m frontDoorMembers) linkOf(edge DeploymentRelationship) (int, bool) {
+	for i, l := range frontDoorChain {
+		if m[l.from][edge.From] && m[l.to][edge.To] {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// missingFrontDoorLinks names, in chain order, the hops no edge realizes.
+func missingFrontDoorLinks(edges []DeploymentRelationship, m frontDoorMembers) []string {
+	realized := make([]bool, len(frontDoorChain))
+	for _, edge := range edges {
+		if i, ok := m.linkOf(edge); ok {
+			realized[i] = true
+		}
+	}
+	var missing []string
+	for i, l := range frontDoorChain {
+		if !realized[i] {
+			missing = append(missing, l.String())
+		}
+	}
+	return missing
 }
