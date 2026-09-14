@@ -28,7 +28,12 @@ export {
   PreviewNetworkBlockedError,
   installNetworkGuard,
 } from './networkGuard.ts';
-export { installNavigationGuard, opensNewContext, type LinkActivation } from './navigationGuard.ts';
+export {
+  installNavigationGuard,
+  leavesOrigin,
+  opensNewContext,
+  type LinkActivation,
+} from './navigationGuard.ts';
 export {
   previewIncidents,
   raisePreviewIncident,
@@ -46,4 +51,11 @@ export {
   type UnresolvedPreview,
 } from './fixtureRegistry.ts';
 export { PreviewAlarm, type PreviewAlarmProps } from './PreviewAlarm.tsx';
-export { PreviewErrorPage, type PreviewErrorPageProps } from './PreviewErrorPage.tsx';
+export {
+  PreviewErrorPage,
+  type PreviewErrorPageProps,
+  type PreviewFailure,
+  type UnauthenticatedPreview,
+} from './PreviewErrorPage.tsx';
+export { PreviewSessionGate, type PreviewSessionGateProps } from './PreviewSessionGate.tsx';
+export { installFrameGuard, type GuardChild } from './frameGuard.ts';

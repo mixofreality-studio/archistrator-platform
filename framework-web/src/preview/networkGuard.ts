@@ -5,9 +5,12 @@
  * attempt so the preview's alarm can show it. It catches any bypass of the
  * OpsClient seam.
  *
- * It is defence in depth. The preview document's own CSP (preview.html) also sets
- * `connect-src 'none'`, and the preview listener's response CSP does too (§2′.3).
- * The guard is the layer that fails LOUDLY and names the caller's URL.
+ * It is defence in depth. The preview document's own CSP (preview.html, the full
+ * PREVIEW_META_CSP) refuses every request to another origin, and the preview
+ * listener's response CSP does too (§2′.3); the CSP is what keeps the network
+ * closed. The guard is the layer that fails LOUDLY and names the caller's URL.
+ * A blank frame's own copies of these channels are guarded by frameGuard.ts;
+ * installPreviewGuards reports whatever the CSP refuses beyond them.
  *
  * installPreviewGuards (the preview entry's FIRST import, `…/preview/install`)
  * runs it before any other module evaluates (openapi-fetch, for one, captures
@@ -74,13 +77,20 @@ export function installNetworkGuard(
       value: refuseConstructor(channel),
     });
   }
-  Object.defineProperty(target.navigator, 'sendBeacon', {
+  // sendBeacon lives on Navigator.prototype: patching only the instance would
+  // leave `Navigator.prototype.sendBeacon.call(navigator, url)` open.
+  const beacon = {
     configurable: true,
     writable: true,
     value: (url: string | URL): never => {
       throw block('sendBeacon', describe(url));
     },
-  });
+  };
+  const navigatorProto: unknown = Object.getPrototypeOf(target.navigator);
+  if (typeof navigatorProto === 'object' && navigatorProto !== null) {
+    Object.defineProperty(navigatorProto, 'sendBeacon', beacon);
+  }
+  Object.defineProperty(target.navigator, 'sendBeacon', beacon);
   // A second browsing context is a nested preview (or an exit from the fixture
   // world); navigationGuard.ts refuses the link form, this the scripted form.
   Object.defineProperty(target, 'open', {

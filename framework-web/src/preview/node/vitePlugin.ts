@@ -4,12 +4,15 @@
  *   - when the build starts, every fixture under <fixturesRoot>/<surface> is
  *     validated against the OAS-generated schema; one invalid fixture fails the
  *     build;
- *   - the entry, preview.html at the source root, is served as index.html;
+ *   - the entry, preview.html at the source root, is served as index.html; a
+ *     build with no preview.html, or whose preview.html does not carry exactly
+ *     the preview CSP (PREVIEW_META_CSP) ahead of every load, fails;
  *   - the schema ships beside the bundle as fixtures.schema.json.
  */
 import { readFileSync } from 'node:fs';
 import type { Plugin } from 'vite';
 import { compileFixtureValidator, validateFixtureTree } from './fixtureTree.ts';
+import { previewPageCspProblem } from './headers.ts';
 
 export interface PreviewFixturesOptions {
   /** The fixture root; fixtures are <fixturesRoot>/<surface>/<screen>/<state>.json. */
@@ -43,10 +46,15 @@ export function previewFixtures(options: PreviewFixturesOptions): Plugin {
     },
     generateBundle(_options, bundle) {
       const html = bundle['preview.html'];
-      if (html?.type === 'asset') {
-        delete bundle['preview.html'];
-        this.emitFile({ type: 'asset', fileName: 'index.html', source: html.source });
+      if (html?.type !== 'asset') {
+        this.error('the preview build emitted no preview.html; its entry must be preview.html');
       }
+      const page =
+        typeof html.source === 'string' ? html.source : new TextDecoder().decode(html.source);
+      const problem = previewPageCspProblem(page);
+      if (problem !== undefined) this.error(`preview.html ${problem}`);
+      delete bundle['preview.html'];
+      this.emitFile({ type: 'asset', fileName: 'index.html', source: html.source });
       this.emitFile({ type: 'asset', fileName: 'fixtures.schema.json', source: schemaText() });
     },
   };

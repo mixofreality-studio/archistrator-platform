@@ -8,20 +8,23 @@
  * webgen OpsClient's composition route compositionGetUserinfo), so the probe
  * rides that seam and a preview's fixture transport can answer it
  * (design-renderer-data.md §2′.0 P2). Either way, a rejection whose `status` is
- * 401 reloads the page so the edge issues the OIDC redirect.
+ * 401 is announced (announceUnauthenticated) and then reloads the page so the
+ * edge issues the OIDC redirect, unless a listener claimed it: a preview does,
+ * because it cannot sign in and a reload would loop over the same fixture.
  */
 
 import { useState, useEffect, type ReactNode } from 'react';
 import { Box, CircularProgress, Alert, Button, Typography } from '@mui/material';
 import type { UserInfo } from '../types/UserInfo.js';
 import { UserContext } from './UserContextDefinition.js';
+import { announceUnauthenticated } from './sessionEvents.js';
 
 interface UserProviderProps {
   children: ReactNode;
   /**
    * The session probe: resolves the user, or rejects. A rejection with a numeric
-   * `status` of 401 (an ApiError, say) reloads the page. Defaults to
-   * GET /api/userinfo.
+   * `status` of 401 (an ApiError, say) reloads the page, unless the announced
+   * 401 was claimed (see sessionEvents.ts). Defaults to GET /api/userinfo.
    */
   fetchUser?: () => Promise<UserInfo>;
 }
@@ -68,8 +71,13 @@ export function UserProvider({ children, fetchUser }: UserProviderProps): ReactN
       setUser(await probe());
     } catch (err) {
       if (statusOf(err) === 401) {
-        // Session expired or not authenticated — reload to trigger Envoy OIDC redirect
-        window.location.reload();
+        // Session expired or not authenticated: reload to trigger the Envoy OIDC
+        // redirect, unless a listener (a preview) claimed the 401.
+        if (announceUnauthenticated()) {
+          window.location.reload();
+          return;
+        }
+        setError('Not signed in (401), and this page cannot sign in.');
         return;
       }
       const errorMessage = err instanceof Error ? err.message : 'Unknown error occurred';

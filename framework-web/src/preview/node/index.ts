@@ -13,4 +13,10 @@ export {
   type FixtureValidator,
 } from './fixtureTree.ts';
 export { previewFixtures, type PreviewFixturesOptions } from './vitePlugin.ts';
-export { PREVIEW_CSP, PREVIEW_RESPONSE_HEADERS } from './headers.ts';
+export {
+  PREVIEW_CSP,
+  PREVIEW_META_CSP,
+  PREVIEW_PERMISSIONS_POLICY,
+  PREVIEW_RESPONSE_HEADERS,
+  previewPageCspProblem,
+} from './headers.ts';

@@ -4,7 +4,7 @@
  */
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { opensNewContext, type LinkActivation } from './navigationGuard.ts';
+import { leavesOrigin, opensNewContext, type LinkActivation } from './navigationGuard.ts';
 
 const plain: LinkActivation = {
   target: '',
@@ -32,4 +32,18 @@ void test('a click the browser would turn into a new tab is refused', () => {
   assert.equal(opensNewContext({ ...plain, ctrlKey: true }), true);
   assert.equal(opensNewContext({ ...plain, metaKey: true }), true);
   assert.equal(opensNewContext({ ...plain, shiftKey: true }), true, 'shift opens a window');
+});
+
+void test('a same-tab link leaves only for another origin', () => {
+  const base = 'http://abc.preview.localhost:8890/_/p/addr/index.html?screen=a&state=b';
+  assert.equal(leavesOrigin('?screen=c&state=d', base), false);
+  assert.equal(leavesOrigin('/project/x', base), false);
+  assert.equal(leavesOrigin('#section', base), false);
+  assert.equal(leavesOrigin('http://abc.preview.localhost:8890/other', base), false);
+  assert.equal(leavesOrigin('https://evil.test/q?secret=1', base), true);
+  assert.equal(leavesOrigin('http://abc.preview.localhost:8891/', base), true);
+  assert.equal(leavesOrigin('//evil.test/x', base), true);
+  assert.equal(leavesOrigin('javascript:alert(1)', base), true);
+  assert.equal(leavesOrigin('data:text/html,x', base), true);
+  assert.equal(leavesOrigin('http://[bad', base), true);
 });
