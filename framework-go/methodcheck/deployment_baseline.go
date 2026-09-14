@@ -51,75 +51,94 @@ func WebAppBaseline() DeploymentEnvironment {
 			Name:        "User",
 			Description: "Uses the system through its web or agent surface.",
 		}},
-		Nodes: []DeploymentNode{
+		Nodes:         []DeploymentNode{baselineClientDeviceNode(), baselineAppClusterNode()},
+		Relationships: baselineFrontDoorRelationships(),
+	}
+}
+
+// baselineClientDeviceNode is the user's side of the prototype: a device whose
+// browser executes the single-page application, plus the agent harness as the
+// second supported frontend surface.
+func baselineClientDeviceNode() DeploymentNode {
+	return DeploymentNode{
+		Key:        BaselineKeyDevice,
+		Name:       "User's computer",
+		Technology: "Windows / macOS / Linux",
+		Instances:  1,
+		Children: []DeploymentNode{{
+			Key:        BaselineKeyBrowser,
+			Name:       "Web browser",
+			Technology: "Chrome, Firefox, Safari or Edge",
+			Instances:  1,
+			ContainerInstances: []ContainerInstance{{
+				Key:          BaselineKeySPAInstance,
+				ContainerKey: BaselineContainerSPAKey,
+				Note:         "the single-page application, executing in the user's browser",
+			}},
+		}},
+		SoftwareSystemInstances: []SoftwareSystemInstance{{
+			Key:         BaselineKeyHarness,
+			Name:        "Agent harness",
+			Technology:  "MCP client",
+			Description: "Reaches the same API through the system's generated tool surface.",
+			Role:        roleAgentHarness,
+		}},
+	}
+}
+
+// baselineAppClusterNode is the platform's side of the prototype: the edge
+// gateway and identity provider that form the front door, and the application
+// container behind them.
+func baselineAppClusterNode() DeploymentNode {
+	return DeploymentNode{
+		Key:        BaselineKeyAppNode,
+		Name:       "Application cluster",
+		Technology: "Kubernetes",
+		InfrastructureNodes: []InfrastructureNode{
 			{
-				Key:        BaselineKeyDevice,
-				Name:       "User's computer",
-				Technology: "Windows / macOS / Linux",
-				Instances:  1,
-				Children: []DeploymentNode{{
-					Key:        BaselineKeyBrowser,
-					Name:       "Web browser",
-					Technology: "Chrome, Firefox, Safari or Edge",
-					Instances:  1,
-					ContainerInstances: []ContainerInstance{{
-						Key:          BaselineKeySPAInstance,
-						ContainerKey: BaselineContainerSPAKey,
-						Note:         "the single-page application, executing in the user's browser",
-					}},
-				}},
-				SoftwareSystemInstances: []SoftwareSystemInstance{{
-					Key:         BaselineKeyHarness,
-					Name:        "Agent harness",
-					Technology:  "MCP client",
-					Description: "Reaches the same API through the system's generated tool surface.",
-					Role:        roleAgentHarness,
-				}},
+				Key:         BaselineKeyGateway,
+				Name:        "Edge gateway",
+				Technology:  "Envoy Gateway / Gateway API",
+				Description: "TLS termination and OIDC authentication at the edge.",
+				Role:        roleGateway,
 			},
 			{
-				Key:        BaselineKeyAppNode,
-				Name:       "Application cluster",
-				Technology: "Kubernetes",
-				InfrastructureNodes: []InfrastructureNode{
-					{
-						Key:         BaselineKeyGateway,
-						Name:        "Edge gateway",
-						Technology:  "Envoy Gateway / Gateway API",
-						Description: "TLS termination and OIDC authentication at the edge.",
-						Role:        roleGateway,
-					},
-					{
-						Key:         BaselineKeyIdP,
-						Name:        "Identity provider",
-						Technology:  "Keycloak",
-						Description: "Issues and validates the tokens the gateway checks.",
-						Role:        roleIdentityProvider,
-					},
-				},
-				ContainerInstances: []ContainerInstance{{
-					Key:          BaselineKeyAppInstance,
-					ContainerKey: BaselineContainerAppKey,
-					Note:         "the application server",
-				}},
+				Key:         BaselineKeyIdP,
+				Name:        "Identity provider",
+				Technology:  "Keycloak",
+				Description: "Issues and validates the tokens the gateway checks.",
+				Role:        roleIdentityProvider,
 			},
 		},
-		Relationships: []DeploymentRelationship{
-			{
-				From: BaselineKeySPAInstance, To: BaselineKeyGateway,
-				Label: "Makes API calls to", Technology: "JSON/HTTPS", Mode: modeSync,
-			},
-			{
-				From: BaselineKeyHarness, To: BaselineKeyGateway,
-				Label: "Makes tool calls to", Technology: "MCP/HTTPS", Mode: modeSync,
-			},
-			{
-				From: BaselineKeyGateway, To: BaselineKeyIdP,
-				Label: "Authenticates the request against", Technology: "OIDC", Mode: modeSync,
-			},
-			{
-				From: BaselineKeyGateway, To: BaselineKeyAppInstance,
-				Label: "Forwards the authenticated request to", Technology: "HTTP", Mode: modeSync,
-			},
+		ContainerInstances: []ContainerInstance{{
+			Key:          BaselineKeyAppInstance,
+			ContainerKey: BaselineContainerAppKey,
+			Note:         "the application server",
+		}},
+	}
+}
+
+// baselineFrontDoorRelationships are the authored edges of the front door: both
+// frontend surfaces reach the gateway, which authenticates against the identity
+// provider and forwards to the application. These are the edges whose endpoints
+// are not System components, so derivation cannot produce them.
+func baselineFrontDoorRelationships() []DeploymentRelationship {
+	return []DeploymentRelationship{
+		{
+			From: BaselineKeySPAInstance, To: BaselineKeyGateway,
+			Label: "Makes API calls to", Technology: "JSON/HTTPS", Mode: modeSync,
+		},
+		{
+			From: BaselineKeyHarness, To: BaselineKeyGateway,
+			Label: "Makes tool calls to", Technology: "MCP/HTTPS", Mode: modeSync,
+		},
+		{
+			From: BaselineKeyGateway, To: BaselineKeyIdP,
+			Label: "Authenticates the request against", Technology: "OIDC", Mode: modeSync,
+		},
+		{
+			From: BaselineKeyGateway, To: BaselineKeyAppInstance,
+			Label: "Forwards the authenticated request to", Technology: "HTTP", Mode: modeSync,
 		},
 	}
 }
