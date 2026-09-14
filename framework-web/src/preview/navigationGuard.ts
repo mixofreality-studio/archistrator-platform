@@ -49,8 +49,9 @@ export function opensNewContext(a: LinkActivation): boolean {
 
 /**
  * True when `href`, resolved against `base`, is on another origin than `base`.
- * A URL that does not parse, or an opaque one (`javascript:`, `data:`), counts
- * as leaving: the guard refuses what it cannot place.
+ * A URL that does not parse counts as leaving, and so does an opaque one
+ * (`javascript:`, `data:`), whose origin is "null": the guard refuses what it
+ * cannot place.
  */
 export function leavesOrigin(href: string, base: string): boolean {
   let url: URL;
@@ -59,7 +60,7 @@ export function leavesOrigin(href: string, base: string): boolean {
   } catch {
     return true;
   }
-  return url.origin === 'null' || url.origin !== new URL(base).origin;
+  return url.origin !== new URL(base).origin;
 }
 
 /** The part of the Navigation API the guard uses. */

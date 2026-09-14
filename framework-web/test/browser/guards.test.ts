@@ -151,6 +151,23 @@ void test('a same-tab exit to another origin is refused and reported, however it
   }
 });
 
+// Chromium's Navigation API would also cancel it; an engine without that API
+// has only the click guard, so the click itself must be refused.
+void test('a same-tab link to another origin is refused at the click itself', async () => {
+  const o = await open();
+  const refused = await o.page.evaluate((target) => {
+    const a = document.createElement('a');
+    a.href = `${target}/click`;
+    document.body.append(a);
+    const click = new MouseEvent('click', { bubbles: true, cancelable: true, button: 0 });
+    return !a.dispatchEvent(click);
+  }, logger.origin);
+  assert.equal(refused, true, 'the click went through to the browser');
+  const got = await incidents(o.page);
+  assert.deepEqual(got, [{ kind: 'navigation-blocked', detail: `${logger.origin}/click` }]);
+  await settle(o);
+});
+
 void test('a scripted reload is refused and reported; a same-origin state link is allowed', async () => {
   const o = await open();
   const loads = app.hits.filter((h) => h.startsWith('/?')).length;
