@@ -1,16 +1,38 @@
 {
   "name": "@mixofreality-studio/archistrator-platform-framework-web",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./preview": {
+      "types": "./dist/preview/index.d.ts",
+      "default": "./dist/preview/index.js"
+    },
+    "./preview/install": {
+      "types": "./dist/preview/install.d.ts",
+      "default": "./dist/preview/install.js"
+    },
+    "./preview/node": {
+      "types": "./dist/preview/node/index.d.ts",
+      "default": "./dist/preview/node/index.js"
+    }
+  },
+  "bin": {
+    "archistrator-preview-check-bundle": "dist/preview/node/checkBundleCli.js"
+  },
   "files": [
     "dist"
   ],
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.test.json",
+    "test": "node --test 'src/**/*.test.ts'"
   },
   "repository": {
     "type": "git",
@@ -26,7 +48,13 @@
     "@emotion/react": ">=11.0.0",
     "@emotion/styled": ">=11.0.0",
     "react": ">=19.0.0",
-    "react-dom": ">=19.0.0"
+    "react-dom": ">=19.0.0",
+    "vite": ">=7.0.0"
+  },
+  "peerDependenciesMeta": {
+    "vite": {
+      "optional": true
+    }
   },
   "dependencies": {
     "@opentelemetry/exporter-logs-otlp-http": "^0.212.0",
@@ -37,10 +65,12 @@
     "@opentelemetry/resources": "^2.5.1",
     "@opentelemetry/sdk-logs": "^0.212.0",
     "@opentelemetry/sdk-trace-web": "^2.5.1",
-    "@opentelemetry/semantic-conventions": "^1.39.0"
+    "@opentelemetry/semantic-conventions": "^1.39.0",
+    "ajv": "^6.15.0"
   },
   "devDependencies": {
     "typescript": "~5.9.3",
+    "@types/node": "^25.0.3",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
     "@mui/material": "^7.3.6",
@@ -48,6 +78,7 @@
     "@emotion/react": "^11.14.0",
     "@emotion/styled": "^11.14.1",
     "react": "^19.2.0",
-    "react-dom": "^19.2.0"
+    "react-dom": "^19.2.0",
+    "vite": "^7.3.0"
   }
 }
