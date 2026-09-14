@@ -44,6 +44,16 @@ jobs:
             echo "== $m =="
             ( cd "$m" && GOWORK=off go test ./... )
           done
+      # The seated workflows are templates, so lint what the scaffold actually
+      # RENDERS: dump them (an env-gated method-assets test) and run actionlint,
+      # which runs shellcheck (preinstalled on ubuntu-latest) over every run: body.
+      - name: Lint the rendered method-assets workflows (actionlint + shellcheck)
+        run: |
+          render_dir="${RUNNER_TEMP}/method-assets-render"
+          mkdir -p "${render_dir}"
+          ( cd method-assets && METHODASSETS_RENDER_DIR="${render_dir}" GOWORK=off go test -count=1 -run '^TestDumpRenderedWorkflowsForLint$' . )
+          cd "${render_dir}"
+          GOWORK=off go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/aiarch-construct.yml
   web:
     runs-on: ubuntu-latest
     permissions:
