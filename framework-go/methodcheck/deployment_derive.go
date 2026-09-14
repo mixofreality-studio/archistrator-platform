@@ -1,7 +1,9 @@
 package methodcheck
 
 import (
-	"sort"
+	"cmp"
+	"slices"
+	"strings"
 )
 
 // deployment_derive.go owns the deployment view's ELEMENT INDEX and its DERIVED
@@ -100,33 +102,43 @@ func EnvironmentElements(env DeploymentEnvironment, containersByKey map[string]D
 	for _, p := range env.Persons {
 		out = append(out, DeploymentElement{Key: p.Key, Kind: ElementPerson, Name: p.Name})
 	}
-	var walk func(nodes []DeploymentNode)
-	walk = func(nodes []DeploymentNode) {
-		for _, n := range nodes {
-			out = append(out, DeploymentElement{Key: n.Key, Kind: ElementNode, Name: n.Name})
-			for _, ci := range n.ContainerInstances {
-				out = append(out, DeploymentElement{
-					Key:          ci.Key,
-					Kind:         ElementContainer,
-					Name:         containerDisplayName(containersByKey, ci.ContainerKey),
-					ContainerKey: ci.ContainerKey,
-					Surface:      containerSurface(containersByKey, ci.ContainerKey),
-				})
-			}
-			for _, in := range n.InfrastructureNodes {
-				out = append(out, DeploymentElement{
-					Key: in.Key, Kind: ElementInfra, Name: in.Name, Role: elementRole(in.Role),
-				})
-			}
-			for _, ss := range n.SoftwareSystemInstances {
-				out = append(out, DeploymentElement{
-					Key: ss.Key, Kind: ElementExternal, Name: ss.Name, Role: elementRole(ss.Role),
-				})
-			}
-			walk(n.Children)
-		}
+	return appendNodeTree(out, env.Nodes, containersByKey)
+}
+
+// appendNodeTree appends a node forest depth-first: each node's own elements,
+// then its children's.
+func appendNodeTree(out []DeploymentElement, nodes []DeploymentNode, containersByKey map[string]DeployContainer) []DeploymentElement {
+	for _, n := range nodes {
+		out = append(out, nodeElements(n, containersByKey)...)
+		out = appendNodeTree(out, n.Children, containersByKey)
 	}
-	walk(env.Nodes)
+	return out
+}
+
+// nodeElements is one node and what it directly hosts, in order: the node, its
+// container instances, its infrastructure, its external systems. Children are
+// the caller's to walk.
+func nodeElements(n DeploymentNode, containersByKey map[string]DeployContainer) []DeploymentElement {
+	out := []DeploymentElement{{Key: n.Key, Kind: ElementNode, Name: n.Name}}
+	for _, ci := range n.ContainerInstances {
+		out = append(out, DeploymentElement{
+			Key:          ci.Key,
+			Kind:         ElementContainer,
+			Name:         containerDisplayName(containersByKey, ci.ContainerKey),
+			ContainerKey: ci.ContainerKey,
+			Surface:      containerSurface(containersByKey, ci.ContainerKey),
+		})
+	}
+	for _, in := range n.InfrastructureNodes {
+		out = append(out, DeploymentElement{
+			Key: in.Key, Kind: ElementInfra, Name: in.Name, Role: elementRole(in.Role),
+		})
+	}
+	for _, ss := range n.SoftwareSystemInstances {
+		out = append(out, DeploymentElement{
+			Key: ss.Key, Kind: ElementExternal, Name: ss.Name, Role: elementRole(ss.Role),
+		})
+	}
 	return out
 }
 
@@ -171,80 +183,119 @@ func containersByKeyIndex(containers []DeployContainer) map[string]DeployContain
 // of them, and what survives is exactly the picture a deployment view is for:
 // what crosses a process or machine boundary.
 func DeriveDeploymentRelationships(env DeploymentEnvironment, containers []DeployContainer, s System) []DeploymentRelationship {
-	containersByKey := containersByKeyIndex(containers)
-	elements := EnvironmentElements(env, containersByKey)
+	elements := EnvironmentElements(env, containersByKeyIndex(containers))
+	r := newEndpointResolver(elements, containers, s.Components)
+	out := crossBoundaryEdges(s.Relationships, r.resolve)
+	sortDeploymentRelationships(out)
+	return out
+}
 
-	componentByID := make(map[string]Component, len(s.Components))
-	for _, c := range s.Components {
-		componentByID[c.ID] = c
+// endpointResolver maps a System component onto the deployment elements of ONE
+// environment that host it. It holds the joins that mapping needs, built once.
+type endpointResolver struct {
+	componentByID map[string]Component
+	// component NAME → the container key packaging it. A component two
+	// containers both claim resolves to the later one.
+	containerByComponent map[string]string
+	// container key → its instance element keys in this environment.
+	instancesByContainer map[string][]string
+	// resource name slug → the infra / external element keys naming it.
+	elementsByResourceSlug map[string][]string
+}
+
+func newEndpointResolver(elements []DeploymentElement, containers []DeployContainer, components []Component) endpointResolver {
+	r := endpointResolver{
+		componentByID:          make(map[string]Component, len(components)),
+		containerByComponent:   make(map[string]string),
+		instancesByContainer:   make(map[string][]string),
+		elementsByResourceSlug: make(map[string][]string),
 	}
-
-	// component NAME → the container key packaging it.
-	containerByComponent := make(map[string]string)
+	for _, c := range components {
+		r.componentByID[c.ID] = c
+	}
 	for _, c := range containers {
 		for _, member := range c.Components {
-			containerByComponent[member] = c.Key
+			r.containerByComponent[member] = c.Key
 		}
 	}
-
-	// container key → its instance element keys in this environment.
-	instancesByContainer := make(map[string][]string)
-	// resource name slug → the infra / external element keys naming it.
-	elementsByResourceSlug := make(map[string][]string)
 	for _, e := range elements {
 		switch e.Kind {
 		case ElementContainer:
-			instancesByContainer[e.ContainerKey] = append(instancesByContainer[e.ContainerKey], e.Key)
+			r.instancesByContainer[e.ContainerKey] = append(r.instancesByContainer[e.ContainerKey], e.Key)
 		case ElementInfra, ElementExternal:
 			slug := Slug(e.Name)
-			elementsByResourceSlug[slug] = append(elementsByResourceSlug[slug], e.Key)
+			r.elementsByResourceSlug[slug] = append(r.elementsByResourceSlug[slug], e.Key)
 		}
 	}
+	return r
+}
 
-	resolve := func(componentID string) []string {
-		c, ok := componentByID[componentID]
-		if !ok || c.Kind == kindUtility {
-			return nil
-		}
-		var keys []string
-		if containerKey, packaged := containerByComponent[c.Name]; packaged {
-			keys = append(keys, instancesByContainer[containerKey]...)
-		}
-		return append(keys, elementsByResourceSlug[Slug(c.Name)]...)
+// resolve returns the keys of the elements hosting a component: every instance
+// of the container packaging it, then every infra / external element whose name
+// slugs to its name. Both apply when both hold (see DeriveDeploymentRelationships).
+// A Utility, or an id the System does not declare, resolves to nothing.
+func (r endpointResolver) resolve(componentID string) []string {
+	c, ok := r.componentByID[componentID]
+	if !ok || c.Kind == kindUtility {
+		return nil
 	}
+	var keys []string
+	if containerKey, packaged := r.containerByComponent[c.Name]; packaged {
+		keys = append(keys, r.instancesByContainer[containerKey]...)
+	}
+	return append(keys, r.elementsByResourceSlug[Slug(c.Name)]...)
+}
 
-	type edgeKey struct{ from, to, label string }
-	seen := make(map[edgeKey]bool)
+// derivedEdgeKey is the identity of a derived edge. Mode is deliberately not
+// part of it: two System relationships that land on the same element pair with
+// the same label draw one line, carrying the first relationship's mode.
+type derivedEdgeKey struct{ from, to, label string }
+
+// crossBoundaryEdges maps each System relationship through resolve and keeps
+// the edges that cross an element boundary, each identity once, in first-seen
+// order.
+func crossBoundaryEdges(rels []Relationship, resolve func(componentID string) []string) []DeploymentRelationship {
+	seen := make(map[derivedEdgeKey]bool)
 	var out []DeploymentRelationship
-	for _, rel := range s.Relationships {
-		fromKeys := resolve(rel.From)
-		toKeys := resolve(rel.To)
-		for _, from := range fromKeys {
-			for _, to := range toKeys {
-				if from == to {
-					continue // same element — not a deployment-visible edge
-				}
-				k := edgeKey{from, to, rel.Label}
-				if seen[k] {
-					continue
-				}
-				seen[k] = true
-				out = append(out, DeploymentRelationship{
-					From: from, To: to, Label: rel.Label, Mode: rel.Mode,
-				})
+	for _, rel := range rels {
+		for _, e := range fanOut(rel, resolve(rel.From), resolve(rel.To)) {
+			k := derivedEdgeKey{e.From, e.To, e.Label}
+			if seen[k] {
+				continue
 			}
+			seen[k] = true
+			out = append(out, e)
 		}
 	}
-	sort.SliceStable(out, func(i, j int) bool {
-		if out[i].From != out[j].From {
-			return out[i].From < out[j].From
-		}
-		if out[i].To != out[j].To {
-			return out[i].To < out[j].To
-		}
-		return out[i].Label < out[j].Label
-	})
 	return out
+}
+
+// fanOut is one relationship drawn between every hosting element of its source
+// and every hosting element of its target, minus the pairs that are the SAME
+// element. An edge inside one element is not deployment-visible.
+func fanOut(rel Relationship, fromKeys, toKeys []string) []DeploymentRelationship {
+	var out []DeploymentRelationship
+	for _, from := range fromKeys {
+		for _, to := range toKeys {
+			if from == to {
+				continue
+			}
+			out = append(out, DeploymentRelationship{From: from, To: to, Label: rel.Label, Mode: rel.Mode})
+		}
+	}
+	return out
+}
+
+// sortDeploymentRelationships orders edges by From, then To, then Label, so a
+// derived set renders and diffs deterministically.
+func sortDeploymentRelationships(edges []DeploymentRelationship) {
+	slices.SortStableFunc(edges, func(a, b DeploymentRelationship) int {
+		return cmp.Or(
+			strings.Compare(a.From, b.From),
+			strings.Compare(a.To, b.To),
+			strings.Compare(a.Label, b.Label),
+		)
+	})
 }
 
 // AllRelationships is the full edge set of an environment as a view must render

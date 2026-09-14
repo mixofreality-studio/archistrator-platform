@@ -40,7 +40,17 @@ func RenderWebAppPrototypeAsset() ([]byte, error) {
 	}
 
 	var b bytes.Buffer
-	b.WriteString(`---
+	b.WriteString(prototypeAssetProse)
+	b.WriteString("```json\n")
+	b.Write(fragment)
+	b.WriteString("\n```\n")
+	return b.Bytes(), nil
+}
+
+// prototypeAssetProse is the asset's frontmatter and prose, everything above
+// the JSON fence. It says what must survive the agent's adaptation; the rules it
+// names are the ones that judge the result.
+const prototypeAssetProse = `---
 name: webapp-deployment-prototype
 kind: doctrine-asset
 description: The deployment topology every web application built here starts from — a person on their device, the frontend surface they use, and the platform's standard authenticated front door in front of the application. READ-ONLY and GENERATED from methodcheck.WebAppBaseline(); referenced (not re-derived) by [[the-method-operational-concepts]] and enforced by DEP-EDGE-GATEWAY.
@@ -98,9 +108,4 @@ pretend otherwise — model the real local story instead.
 
 ## The fragment
 
-`)
-	b.WriteString("```json\n")
-	b.Write(fragment)
-	b.WriteString("\n```\n")
-	return b.Bytes(), nil
-}
+`

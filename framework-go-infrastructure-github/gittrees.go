@@ -189,14 +189,9 @@ func (c *AppClient) CreateTree(ctx context.Context, fullName, baseTree string, e
 	if len(entries) == 0 {
 		return "", fwra.New(fwra.ContractMisuse, "CreateTree: empty entry set")
 	}
-	wire := make([]map[string]string, 0, len(entries))
-	for _, e := range entries {
-		if strings.TrimSpace(e.Path) == "" || strings.TrimSpace(e.SHA) == "" {
-			return "", fwra.New(fwra.ContractMisuse, "CreateTree: entry with empty path/sha")
-		}
-		wire = append(wire, map[string]string{
-			"path": e.Path, "mode": "100644", "type": "blob", "sha": e.SHA,
-		})
+	wire, err := treeWireEntries(entries)
+	if err != nil {
+		return "", err
 	}
 	payload := map[string]any{"tree": wire}
 	if baseTree != "" {
@@ -219,6 +214,21 @@ func (c *AppClient) CreateTree(ctx context.Context, fullName, baseTree string, e
 		return "", fwra.Wrap(fwra.Infrastructure, uerr, "CreateTree: decode")
 	}
 	return dto.SHA, nil
+}
+
+// treeWireEntries renders entries as the trees API's regular-file blob items,
+// rejecting an entry with an empty path or sha before any wire call is made.
+func treeWireEntries(entries []TreeWriteEntry) ([]map[string]string, error) {
+	wire := make([]map[string]string, 0, len(entries))
+	for _, e := range entries {
+		if strings.TrimSpace(e.Path) == "" || strings.TrimSpace(e.SHA) == "" {
+			return nil, fwra.New(fwra.ContractMisuse, "CreateTree: entry with empty path/sha")
+		}
+		wire = append(wire, map[string]string{
+			"path": e.Path, "mode": "100644", "type": "blob", "sha": e.SHA,
+		})
+	}
+	return wire, nil
 }
 
 // CreateCommit creates a commit object in `fullName` via POST .../git/commits
@@ -353,25 +363,35 @@ func (c *AppClient) CommitFilesAtomic(ctx context.Context, fullName, branch, mes
 		return "", err
 	}
 
-	var parents []string
-	if exists {
-		parents = []string{headSHA}
-	}
-	commitSHA, err := c.CreateCommit(ctx, fullName, message, treeSHA, parents, committer, instToken)
+	commitSHA, err := c.CreateCommit(ctx, fullName, message, treeSHA, headParents(headSHA, exists), committer, instToken)
 	if err != nil {
 		return "", err
 	}
 
-	if exists {
-		if err := c.UpdateRef(ctx, fullName, branch, commitSHA, instToken); err != nil {
-			return "", err
-		}
-		return commitSHA, nil
-	}
-	if err := c.createBranchRef(ctx, fullName, branch, commitSHA, instToken); err != nil {
+	if err := c.advanceBranch(ctx, fullName, branch, commitSHA, exists, instToken); err != nil {
 		return "", err
 	}
 	return commitSHA, nil
+}
+
+// headParents is the new commit's parent list: the branch head when the branch
+// exists, none for the root commit of an unborn branch.
+func headParents(headSHA string, exists bool) []string {
+	if !exists {
+		return nil
+	}
+	return []string{headSHA}
+}
+
+// advanceBranch points `branch` at commitSHA, the final and only visible step
+// of the atomic chain. An existing branch takes an unforced fast-forward PATCH
+// (the compare-and-swap); an unborn one has its ref CREATED. Either kind of CAS
+// loss surfaces as fwra.Conflict.
+func (c *AppClient) advanceBranch(ctx context.Context, fullName, branch, commitSHA string, exists bool, instToken string) error {
+	if exists {
+		return c.UpdateRef(ctx, fullName, branch, commitSHA, instToken)
+	}
+	return c.createBranchRef(ctx, fullName, branch, commitSHA, instToken)
 }
 
 // branchHeadAndTree resolves the branch head commit and its tree id. An absent
