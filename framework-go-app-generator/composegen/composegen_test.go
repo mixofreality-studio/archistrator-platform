@@ -303,7 +303,7 @@ func TestPostgresPoolGatedByProfile(t *testing.T) {
 	guardIdx := strings.Index(s, `if profile == "cloud" {`)
 	dialIdx := strings.Index(s, "pool, err = postgresinfra.NewPool(ctx, cfg.PostgresURL)")
 	closeIdx := strings.Index(s, "defer pool.Close()")
-	if guardIdx < 0 || dialIdx < 0 || closeIdx < 0 || !(guardIdx < dialIdx && dialIdx < closeIdx) {
+	if guardIdx < 0 || dialIdx < 0 || closeIdx < 0 || guardIdx >= dialIdx || dialIdx >= closeIdx {
 		t.Errorf("pool dial + defer Close are not nested inside the profile guard (guard=%d dial=%d close=%d)", guardIdx, dialIdx, closeIdx)
 	}
 }
