@@ -420,6 +420,10 @@ func TestConstructWorkflow_ValidationRejectsHostileIds(t *testing.T) {
 	hostile := []string{
 		"", "C-1; touch PWNED_SEMI", "$(touch PWNED_ID)", "`touch PWNED_TICK`", "a b",
 		"-rf", "C-1\ntouch PWNED_NL", "${{ secrets.X }}", `C"1`, strings.Repeat("a", 129),
+		// `..` anywhere (M1): a path-traversal id must never reach a branch name,
+		// a prompt or an output.
+		"a..b", "C-PE/../../etc", "x/..", "x/../y", "C..", "..",
+		"C-PE.", ".hidden",
 	}
 	for _, h := range hostile {
 		for _, which := range []string{"activity", "component", "command"} {
