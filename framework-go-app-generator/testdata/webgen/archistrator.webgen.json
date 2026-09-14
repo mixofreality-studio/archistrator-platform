@@ -1,0 +1,51 @@
+{
+  "app": "archistrator",
+  "surface": "web-client",
+  "oas": "../server/api/openapi.yaml",
+  "mcpTools": "../server/internal/client/mcp",
+  "fixturesEnv": "ARCHISTRATOR_PREVIEW_FIXTURES",
+  "composition": {
+    "compositionGetCapabilities": {
+      "method": "GET",
+      "path": "/api/v1/capabilities",
+      "result": {
+        "type": "object",
+        "required": ["operations"],
+        "properties": { "operations": { "type": "boolean" } }
+      }
+    },
+    "compositionGetOperatedAppId": {
+      "method": "GET",
+      "path": "/api/v1/projects/{projectID}/operated-app-id",
+      "result": {
+        "type": "object",
+        "required": ["operatedAppId"],
+        "properties": { "operatedAppId": { "type": "string" } }
+      }
+    },
+    "compositionGetUserinfo": {
+      "method": "GET",
+      "path": "/api/userinfo",
+      "result": {
+        "type": "object",
+        "required": ["kind", "sub"],
+        "properties": {
+          "kind": { "type": "string" },
+          "sub": { "type": "string" },
+          "preferred_username": { "type": "string" },
+          "email": { "type": "string" },
+          "name": { "type": "string" },
+          "roles": { "type": "array", "items": { "type": "string" } },
+          "organizations": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["id", "name"],
+              "properties": { "id": { "type": "string" }, "name": { "type": "string" } }
+            }
+          }
+        }
+      }
+    }
+  }
+}

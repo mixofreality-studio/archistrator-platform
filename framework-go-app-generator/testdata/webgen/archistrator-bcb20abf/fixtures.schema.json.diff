@@ -1,0 +1,3 @@
+@@ -4,1 +4,1 @@
+-  "description": "Generated from server/api/openapi.yaml by webApp/scripts/fixture-schema.mjs. Each ops key is an OpsClient OpId; each answer is a result, an error, or pending.",
++  "description": "Generated from ../server/api/openapi.yaml by framework-go-app-generator/webgen. Each ops key is an OpsClient OpId; each answer is a result, an error, or pending.",
