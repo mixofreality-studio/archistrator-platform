@@ -424,6 +424,10 @@ func TestConstructWorkflow_ValidationRejectsHostileIds(t *testing.T) {
 		// a prompt or an output.
 		"a..b", "C-PE/../../etc", "x/..", "x/../y", "C..", "..",
 		"C-PE.", ".hidden",
+		// A dot may only come BETWEEN two id characters, so no SEGMENT may start or
+		// end with one either (the B1 re-review's Minor on `a./b`): a `/./` no-op
+		// element and a segment-trailing dot are refused like `..` is.
+		"a./b", "a/./b", "a/.b", "a/.", "./a", "a.", ".", "a/b.", "a/b/.c",
 	}
 	for _, h := range hostile {
 		for _, which := range []string{"activity", "component", "command"} {

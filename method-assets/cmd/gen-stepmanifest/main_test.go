@@ -3,7 +3,10 @@ package main
 import (
 	"reflect"
 	"sort"
+	"strings"
 	"testing"
+
+	methodassets "github.com/mixofreality-studio/archistrator-platform/method-assets"
 )
 
 // main_test.go pins the generator's two filters: which charter tools a step
@@ -84,4 +87,87 @@ func TestParseSkillGraph(t *testing.T) {
 	if !reflect.DeepEqual(got, want) {
 		t.Fatalf("parseSkillGraph = %v, want %v (a skill with no links must have no entry)", got, want)
 	}
+}
+
+// ---------------------------------------------------------------------------
+// the generator's own tables, read against each other
+// ---------------------------------------------------------------------------
+//
+// The drift gate (stepmanifest_test.go, TestStepManifestRegenerationIsNoOp)
+// compares the committed stepmanifest.gen.go against this generator's output, so
+// it catches every generator change that MOVES the output. It cannot catch a
+// generator change that moves nothing — a verb-name typo in a table no charter
+// reaches is invisible to it (archistrator B1 re-review, the one surviving
+// mutant: renaming composedVerbModes' "getOperatorNotes" key back to the old
+// snake_case name changed no byte of the manifest, because modeImplicitVerbs
+// re-adds the verb to every construct step anyway). These two read the tables
+// against each other and against the charters, so a name that exists in neither
+// is a dead entry and a failure.
+
+// TestModeImplicitVerbsAreComposedVerbsServingThatMode pins the two tables to each
+// other. A mode-implicit verb is granted to EVERY step of its mode, so it must be a
+// composed verb the registry serves in that mode — otherwise the generator grants a
+// verb its own narrowing table says does not exist there, and the two halves of a
+// rename have silently come apart.
+func TestModeImplicitVerbsAreComposedVerbsServingThatMode(t *testing.T) {
+	if len(modeImplicitVerbs) == 0 {
+		t.Fatal("modeImplicitVerbs is empty — this gate would pass vacuously")
+	}
+	for mode, verbs := range modeImplicitVerbs {
+		for _, v := range verbs {
+			modes, ok := composedVerbModes[v]
+			if !ok {
+				t.Errorf("modeImplicitVerbs[%q] grants %q, which composedVerbModes does not name — "+
+					"one of the two spellings is stale (known names: %s)", mode, v, strings.Join(composedVerbNames(), ", "))
+				continue
+			}
+			if !contains(modes, mode) {
+				t.Errorf("modeImplicitVerbs[%q] grants %q to every %[1]s step, but composedVerbModes serves it only in %v",
+					mode, v, modes)
+			}
+		}
+	}
+}
+
+// TestEveryComposedVerbIsReachable fails on a DEAD entry in composedVerbModes: a verb
+// no agent charter declares and no mode implies is narrowing nothing, which is exactly
+// what a renamed key looks like.
+func TestEveryComposedVerbIsReachable(t *testing.T) {
+	files, err := methodassets.ClaudeFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	declared := map[string]bool{}
+	for _, tools := range parseCharters(files) {
+		for _, tool := range tools {
+			if verb, isMCP := strings.CutPrefix(tool, mcp); isMCP {
+				declared[verb] = true
+			}
+		}
+	}
+	if len(declared) == 0 {
+		t.Fatal("no charter declares an aiarch-state verb — this gate would pass vacuously")
+	}
+	implicit := map[string]bool{}
+	for _, verbs := range modeImplicitVerbs {
+		for _, v := range verbs {
+			implicit[v] = true
+		}
+	}
+	for _, verb := range composedVerbNames() {
+		if !declared[verb] && !implicit[verb] {
+			t.Errorf("composedVerbModes names %q, but no agent charter declares %s%[1]s and no mode "+
+				"implies it — the entry narrows nothing (a stale spelling, or a verb that left the charters)", verb, mcp)
+		}
+	}
+}
+
+// composedVerbNames returns composedVerbModes' keys, sorted.
+func composedVerbNames() []string {
+	names := make([]string, 0, len(composedVerbModes))
+	for v := range composedVerbModes {
+		names = append(names, v)
+	}
+	sort.Strings(names)
+	return names
 }

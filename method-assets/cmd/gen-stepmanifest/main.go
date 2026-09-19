@@ -16,11 +16,17 @@
 //
 //	go run ./cmd/gen-stepmanifest
 //
+// -o writes the generated source somewhere else instead. That is how the drift
+// gate (stepmanifest_test.go's TestStepManifestRegenerationIsNoOp) regenerates
+// and diffs WITHOUT rewriting the committed file: a check must not mutate the
+// tree it is checking.
+//
 // stepmanifest_test.go fails if the committed file differs from this output.
 package main
 
 import (
 	"bytes"
+	"flag"
 	"fmt"
 	"go/format"
 	"os"
@@ -31,7 +37,8 @@ import (
 	methodassets "github.com/mixofreality-studio/archistrator-platform/method-assets"
 )
 
-const outPath = "stepmanifest.gen.go"
+// defaultOutPath is the committed manifest, relative to the module root.
+const defaultOutPath = "stepmanifest.gen.go"
 
 // ---------------------------------------------------------------------------
 // job modes
@@ -160,13 +167,15 @@ var (
 )
 
 func main() {
-	if err := run(); err != nil {
+	out := flag.String("o", defaultOutPath, "write the generated manifest to this path instead of the committed one")
+	flag.Parse()
+	if err := run(*out); err != nil {
 		fmt.Fprintln(os.Stderr, "gen-stepmanifest:", err)
 		os.Exit(1)
 	}
 }
 
-func run() error {
+func run(outPath string) error {
 	files, err := methodassets.ClaudeFiles()
 	if err != nil {
 		return err

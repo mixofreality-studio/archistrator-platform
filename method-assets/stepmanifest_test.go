@@ -17,28 +17,29 @@ var wikilinkPattern = regexp.MustCompile(`\[\[([a-z0-9-]+)\]\]`)
 // TestStepManifestRegenerationIsNoOp is the drift gate: the committed
 // stepmanifest.gen.go must be exactly what cmd/gen-stepmanifest emits from the
 // current assets. Edit a command's "Agent + skills" line, a skill's links, or a
-// charter's tools, and this fails until the manifest is regenerated.
+// charter's tools, and this fails until the manifest is regenerated. It runs in
+// CI as part of platform-checks.yml's "Test all platform Go modules" step.
+//
+// The regeneration goes to a TEMP file via the generator's -o flag: a drift gate
+// must not rewrite the very file it is checking (the earlier in-place form left a
+// stale tree silently repaired on disk whenever it failed).
 func TestStepManifestRegenerationIsNoOp(t *testing.T) {
-	before, err := os.ReadFile("stepmanifest.gen.go")
+	committed, err := os.ReadFile("stepmanifest.gen.go")
 	if err != nil {
 		t.Fatalf("read committed manifest: %v", err)
 	}
-	dir := t.TempDir()
-	tmp := filepath.Join(dir, "stepmanifest.gen.go")
-	if cerr := os.WriteFile(tmp, before, 0o600); cerr != nil {
-		t.Fatalf("stage: %v", cerr)
-	}
+	out := filepath.Join(t.TempDir(), "stepmanifest.gen.go")
 
-	cmd := exec.Command("go", "run", "./cmd/gen-stepmanifest")
+	cmd := exec.Command("go", "run", "./cmd/gen-stepmanifest", "-o", out)
 	cmd.Dir = "."
-	if out, rerr := cmd.CombinedOutput(); rerr != nil {
-		t.Fatalf("go run ./cmd/gen-stepmanifest: %v\n%s", rerr, out)
+	if msg, rerr := cmd.CombinedOutput(); rerr != nil {
+		t.Fatalf("go run ./cmd/gen-stepmanifest -o %s: %v\n%s", out, rerr, msg)
 	}
-	after, err := os.ReadFile("stepmanifest.gen.go")
+	regenerated, err := os.ReadFile(out)
 	if err != nil {
 		t.Fatalf("read regenerated manifest: %v", err)
 	}
-	if string(before) != string(after) {
+	if string(committed) != string(regenerated) {
 		t.Errorf("stepmanifest.gen.go is stale — run: go run ./cmd/gen-stepmanifest")
 	}
 }
