@@ -8,5 +8,6 @@ use (
 	./framework-go-infrastructure-otel
 	./framework-go-infrastructure-postgres
 	./framework-go-infrastructure-temporal
+	./framework-go-scenariohost
 	./method-assets
 )

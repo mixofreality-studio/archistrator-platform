@@ -1,0 +1,5 @@
+# Written by this module's own tests: the Temporal dev server's persistent DB
+# and the results.json index Main flushes for the probe component.
+.temporal/
+test-results/
+test-artifacts/
