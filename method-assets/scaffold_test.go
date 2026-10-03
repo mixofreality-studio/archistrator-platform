@@ -66,32 +66,77 @@ func TestScaffoldFiles(t *testing.T) {
 	}
 }
 
+// testgenModuleRootArgs is the testgen invocation every scaffolded caller
+// must use on the module-root layout. The pinned CLI defaults -uitests to
+// ../uitests/generated RELATIVE TO -root (the server/ layout), so a caller that
+// passes only `-root .` writes the Playwright specs, config and hooks.ts
+// OUTSIDE the checkout and its -check is permanently red for any project with
+// a UI client; -uitests must be spelled explicitly.
+const testgenModuleRootArgs = "-project .aiarch/state/project.json -root . -uitests uitests/generated"
+
 // TestConstructTemplateHasScenarioSteps pins the venue half of deterministic
 // component testing (spec §6.2): on the integration phase the construct
-// workflow runs the scenario tests, uploads test-results/** as a GitHub
+// workflow runs the scenario tests, uploads ONE results tree as a GitHub
 // artifact and records the run through the aiarch-state MCP binary; go-checks
-// runs the testgen drift check on every PR (spec §5.3).
+// runs the testgen drift check on every PR (spec §5.3). Both testgen
+// invocations spell the module-root -uitests dir.
+//
+// Artifact layout (pinned here because two consumers were written against it):
+// actions/upload-artifact@v4 roots the zip at the least common ancestor of its
+// SEARCH PATHS, so the single `test-results/**` yields entries `go-test.jsonl`
+// and `<component>/results.json` — the layout the local venue (spec §6.3,
+// .aiarch/test-results/<run>/<component>/results.json) and Plan 2's cloud
+// TestRun reader (`OpenTestRunFile(ctx, ref, "<component>/results.json")`,
+// TestRunPanel `fileUrl('go-test.jsonl')`) expect. The generated Playwright
+// config writes to uitests/test-results/<component> (emit_playwright.go,
+// componentDirDepth=2), so the scenario step MIRRORS that directory into
+// test-results/<component>/ after the run: a second upload path would re-root
+// the zip at the checkout (test-results/go-test.jsonl, uitests/test-results/…)
+// for Go-only components too, and `record-test-run --results test-results`
+// would find no results.json for a UI client. videoRef/traceRef inside
+// results.json are relative to the component dir, so the copy keeps them valid.
 func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 	out, err := ScaffoldFiles(testData)
 	if err != nil {
 		t.Fatal(err)
 	}
+	testgen := AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion
 	y := string(out[".github/workflows/aiarch-construct.yml"])
 	for _, s := range []string{
 		"name: Run scenario tests", "name: Upload test results", "actions/upload-artifact@v4",
 		"name: Record test run", "record-test-run",
-		AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion,
+		testgen + " " + testgenModuleRootArgs + " -check",
 	} {
 		if !strings.Contains(y, s) {
 			t.Errorf("aiarch-construct.yml missing %q", s)
 		}
 	}
-	g := string(out[".github/workflows/go-checks.yml"])
-	if !strings.Contains(g, "testgen@") || !strings.Contains(g, "-check") {
-		t.Error("go-checks must run the testgen drift check")
+	scenarios := y[strings.Index(y, "name: Run scenario tests"):]
+	scenarios = scenarios[:strings.Index(scenarios, "name: Upload test results")]
+	// The Playwright run is followed by the mirror into the Go tree, so the
+	// artifact and the run record see test-results/<component>/results.json.
+	pw := strings.Index(scenarios, "npx playwright test")
+	mirror := strings.Index(scenarios, `cp -R "uitests/test-results/${AIARCH_COMPONENT_ID}" test-results/`)
+	if pw < 0 || mirror < 0 || mirror < pw {
+		t.Errorf("Run scenario tests must mirror uitests/test-results/<component> into test-results/ after the Playwright run:\n%s", scenarios)
 	}
-	if !strings.Contains(g, AppGeneratorModulePath+"/cmd/testgen@"+AppGeneratorVersion) {
-		t.Error("go-checks must pin testgen to the scaffold's app-generator version")
+	// The runner's default shell is `bash -e`: a red Go scenario or a red
+	// Playwright run must be captured, not abort the script, or the mirror never
+	// happens and the record step finds no results.json for a UI client.
+	if got := strings.Count(scenarios, "|| status=$?"); got != 2 || !strings.Contains(scenarios, `exit "${status}"`) {
+		t.Errorf("Run scenario tests must capture the go test and playwright statuses and exit with them (got %d captures):\n%s", got, scenarios)
+	}
+	upload := y[strings.Index(y, "name: Upload test results"):]
+	upload = upload[:strings.Index(upload, "name: Record test run")]
+	if !strings.Contains(upload, "path: test-results/**") {
+		t.Errorf("Upload test results must upload the single test-results/** tree:\n%s", upload)
+	}
+	if strings.Contains(upload, "uitests/test-results") {
+		t.Errorf("Upload test results must not add a second search path (it re-roots the zip at the checkout):\n%s", upload)
+	}
+	g := string(out[".github/workflows/go-checks.yml"])
+	if !strings.Contains(g, testgen+" "+testgenModuleRootArgs+" -check") {
+		t.Errorf("go-checks must run the pinned testgen drift check with module-root paths:\n%s", g)
 	}
 }
 
@@ -109,15 +154,21 @@ func TestScaffoldMakefileScenariosInclude(t *testing.T) {
 		t.Fatal("missing Makefile.scenarios.mk")
 	}
 	m := string(mk)
+	testgen := AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion
 	for _, s := range []string{
 		"gen-tests:", "gen-tests-check:", "test-scenarios:",
-		AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion,
-		"-project .aiarch/state/project.json", "-root .",
+		testgen + " " + testgenModuleRootArgs + "\n",
+		testgen + " " + testgenModuleRootArgs + " -check\n",
 		"-run 'TestScenario_'", "test-results/go-test.jsonl",
 	} {
 		if !strings.Contains(m, s) {
 			t.Errorf("Makefile.scenarios.mk missing %q", s)
 		}
+	}
+	// Every testgen call (write and check) spells -uitests: a bare -root . would
+	// default it to ../uitests/generated and write outside the checkout.
+	if got := strings.Count(m, "cmd/testgen@"); got != strings.Count(m, "-uitests uitests/generated") {
+		t.Errorf("every testgen invocation must pass -uitests uitests/generated (%d invocations):\n%s", got, m)
 	}
 	if strings.Contains(m, "../") || strings.Contains(m, "server/") {
 		t.Errorf("Makefile.scenarios.mk must be module-root-relative:\n%s", m)
