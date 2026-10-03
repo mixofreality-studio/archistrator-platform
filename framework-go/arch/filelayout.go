@@ -2,6 +2,8 @@ package arch
 
 import (
 	"go/ast"
+	"go/parser"
+	"go/token"
 	"os"
 	"path"
 	"path/filepath"
@@ -17,10 +19,25 @@ import (
 // <leaf><stereotype>.go, carrying all contract methods and shared/non-workflow
 // code; (2) on the Manager layer only, one per-workflow file per workflow
 // ENTRY func, named after the func (minus the "Workflow" suffix, lowercased);
-// (3) the single test file <stereotype>_test.go. Anywhere in scope, a hand
-// call to RegisterActivity/RegisterActivityWithOptions is forbidden
-// (registration is reserved for the generated worker), and a workflow.Context
-// func outside the Manager layer is forbidden regardless of its file.
+// (3) the scenario-test pair, and ONLY that pair (rule scenario-tests-only):
+// the generated scenarios file <stereotype>_scenarios.gen_test.go and the
+// agent-owned hooks file <stereotype>_hooks_test.go. Both must be black-box —
+// declare package <leaf>_test (rule test-package-not-external) — and the hooks
+// file may import only the component's own package, the standard library, a
+// platform test double package (…/testinfra), the scenario host
+// (…scenariohost) and the consuming module's Spec.HooksImportAllowlist
+// prefixes (rule hooks-import-not-allowed). Any other _test.go file in a
+// component package — a hand-written unit test, a white-box test, the old
+// <stereotype>_test.go — is a scenario-tests-only violation: the component's
+// tests are DERIVED from its use cases and test plan, never hand-authored.
+// The generated file is named *.gen_test.go, not *_test.gen.go: the Go tool
+// compiles ONLY files ending in _test.go as tests, so a "_test.gen.go" file
+// declaring package <leaf>_test is a second package in the directory and
+// breaks the build — the ".gen" marker therefore sits before the mandatory
+// "_test.go" suffix. Anywhere in scope, a hand call to RegisterActivity/
+// RegisterActivityWithOptions is forbidden (registration is reserved for the
+// generated worker), and a workflow.Context func outside the Manager layer is
+// forbidden regardless of its file.
 //
 // A workflow ENTRY func is a func whose name ends in "Workflow" AND takes a
 // workflow.Context param (both conditions required — a func merely named
@@ -42,13 +59,15 @@ import (
 // deliberately, since the check must work for consumers without pulling the
 // real Temporal SDK into this framework module or its testdata fixtures.
 //
-// Test-file-name checking is done via os.ReadDir on the package directory
-// rather than by loading with packages.Load(Tests:true): Tests:true would
-// double the load (a separate test-variant package per production package)
-// just to observe file NAMES, when the rule only needs to know what _test.go
-// files exist on disk — never their parsed contents. os.ReadDir is simpler,
-// avoids the double-load, and picks up an external (foo_test package) test
-// file for free since it lists names, not import graphs.
+// Scenario-test checking is done via os.ReadDir on the package directory plus
+// an ImportsOnly parse of each allowed test file, rather than by loading with
+// packages.Load(Tests:true): Tests:true would double the load (a separate
+// test-variant package per production package) and, worse, FAIL the load when
+// a hooks file imports a package the module does not yet depend on — when the
+// rule only needs file names, the package clause and the import list.
+// os.ReadDir + parser.ImportsOnly is simpler, avoids the double-load, needs no
+// type information, and sees an external (foo_test package) test file for
+// free since it lists names, not import graphs.
 //
 // fileLayoutViolations is the pure core: it takes an already-loaded package
 // set (Tests:false, syntax-level load — no type info needed) and returns every
@@ -108,10 +127,12 @@ func packageFileLayoutViolations(p *packages.Package, spec Spec, layer Layer) []
 	}
 	leaf := path.Base(p.PkgPath)
 	implFile := leaf + layer.FileStereotype + ".go"
-	testFile := layer.FileStereotype + "_test.go"
+	scenariosFile := layer.FileStereotype + "_scenarios.gen_test.go"
+	hooksFile := layer.FileStereotype + "_hooks_test.go"
+	testFiles := scenariosFile + " and " + hooksFile
 
 	var out []fileLayoutViolation
-	out = append(out, testFileNameViolations(p, testFile)...)
+	out = append(out, scenarioTestViolations(p, spec, scenariosFile, hooksFile)...)
 
 	for i, fpath := range p.CompiledGoFiles {
 		base := filepath.Base(fpath)
@@ -122,7 +143,7 @@ func packageFileLayoutViolations(p *packages.Package, spec Spec, layer Layer) []
 		for _, call := range registerActivityCalls(f) {
 			out = append(out, fileLayoutViolation{p.PkgPath, base, "hand-activity-registration", call})
 		}
-		out = append(out, fileHandwrittenViolations(p.PkgPath, base, implFile, testFile, layer, spec, workflowFuncs(f), workflowEntryFuncs(f))...)
+		out = append(out, fileHandwrittenViolations(p.PkgPath, base, implFile, testFiles, layer, spec, workflowFuncs(f), workflowEntryFuncs(f))...)
 	}
 	return out
 }
@@ -138,7 +159,7 @@ func packageFileLayoutViolations(p *packages.Package, spec Spec, layer Layer) []
 // the rule-2 classification key: a file is a "workflow file" iff it has
 // exactly one entry func, and the required filename and the
 // multiple-funcs check are both derived from entryFuncs, not wfFuncs.
-func fileHandwrittenViolations(pkgPath, base, implFile, testFile string, layer Layer, spec Spec, wfFuncs, entryFuncs []string) []fileLayoutViolation {
+func fileHandwrittenViolations(pkgPath, base, implFile, testFiles string, layer Layer, spec Spec, wfFuncs, entryFuncs []string) []fileLayoutViolation {
 	var out []fileLayoutViolation
 	switch {
 	case base == implFile:
@@ -147,10 +168,10 @@ func fileHandwrittenViolations(pkgPath, base, implFile, testFile string, layer L
 				"workflow func " + wfFuncs[0] + " must live in its own per-workflow file, not " + implFile})
 		}
 	case len(wfFuncs) > 0:
-		out = append(out, workflowFileViolations(pkgPath, base, implFile, testFile, layer, spec, wfFuncs, entryFuncs)...)
+		out = append(out, workflowFileViolations(pkgPath, base, implFile, testFiles, layer, spec, wfFuncs, entryFuncs)...)
 	default:
 		out = append(out, fileLayoutViolation{pkgPath, base, "file-not-allowed",
-			"handwritten files are limited to " + implFile + ", per-workflow files, " + testFile})
+			"handwritten files are limited to " + implFile + ", per-workflow files, " + testFiles})
 	}
 	return out
 }
@@ -161,7 +182,7 @@ func fileHandwrittenViolations(pkgPath, base, implFile, testFile string, layer L
 // file-not-allowed (helpers-only file, no entry func), workflow-file-multiple-funcs,
 // and workflow-file-name checks, in that order, matching the classification
 // described in the fileHandwrittenViolations doc comment.
-func workflowFileViolations(pkgPath, base, implFile, testFile string, layer Layer, spec Spec, wfFuncs, entryFuncs []string) []fileLayoutViolation {
+func workflowFileViolations(pkgPath, base, implFile, testFiles string, layer Layer, spec Spec, wfFuncs, entryFuncs []string) []fileLayoutViolation {
 	var out []fileLayoutViolation
 	if layer.Name != spec.TemporalLayer {
 		out = append(out, fileLayoutViolation{pkgPath, base, "workflow-func-outside-manager",
@@ -173,7 +194,7 @@ func workflowFileViolations(pkgPath, base, implFile, testFile string, layer Laye
 		// func — this is not a workflow file (e.g. a helpers-only file),
 		// so it falls into the closed set's default: file-not-allowed.
 		out = append(out, fileLayoutViolation{pkgPath, base, "file-not-allowed",
-			"handwritten files are limited to " + implFile + ", per-workflow files, " + testFile})
+			"handwritten files are limited to " + implFile + ", per-workflow files, " + testFiles})
 		return out
 	}
 	if len(entryFuncs) > 1 {
@@ -186,10 +207,14 @@ func workflowFileViolations(pkgPath, base, implFile, testFile string, layer Laye
 	return out
 }
 
-// testFileNameViolations flags every _test.go file in p's package directory
-// whose name is not testFile. See the file header for why this is a directory
-// listing rather than a Tests:true load.
-func testFileNameViolations(p *packages.Package, testFile string) []fileLayoutViolation {
+// scenarioTestViolations enforces spec T2 on p's package directory: the only
+// _test.go files in a component package are the generated scenarios file and
+// its hooks file (scenario-tests-only), both declare the external
+// <pkg>_test package (test-package-not-external), and the hooks file's
+// imports stay inside hooksImportAllowed (hooks-import-not-allowed). See the
+// file header for why this is a directory listing + ImportsOnly parse rather
+// than a Tests:true load.
+func scenarioTestViolations(p *packages.Package, spec Spec, scenariosFile, hooksFile string) []fileLayoutViolation {
 	dir := filepath.Dir(p.CompiledGoFiles[0])
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -201,11 +226,66 @@ func testFileNameViolations(p *packages.Package, testFile string) []fileLayoutVi
 		if e.IsDir() || !strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		if name != testFile {
-			out = append(out, fileLayoutViolation{p.PkgPath, name, "test-file-name", "want " + testFile})
+		if name != scenariosFile && name != hooksFile {
+			out = append(out, fileLayoutViolation{p.PkgPath, name, "scenario-tests-only", "want only " + scenariosFile + " and " + hooksFile})
+			continue
+		}
+		out = append(out, allowedTestFileViolations(p, spec, filepath.Join(dir, name), name == hooksFile)...)
+	}
+	return out
+}
+
+// allowedTestFileViolations checks one of the two allowed test files: it must
+// parse, must declare package <pkg>_test, and — when it is the hooks file —
+// may import only what hooksImportAllowed permits. Only the package clause
+// and the import list are needed, so the parse is ImportsOnly.
+func allowedTestFileViolations(p *packages.Package, spec Spec, fpath string, isHooks bool) []fileLayoutViolation {
+	name := filepath.Base(fpath)
+	f, err := parser.ParseFile(token.NewFileSet(), fpath, nil, parser.ImportsOnly)
+	if err != nil {
+		return []fileLayoutViolation{{p.PkgPath, name, "scenario-tests-only", "unparseable: " + err.Error()}}
+	}
+	var out []fileLayoutViolation
+	if f.Name.Name != p.Name+"_test" {
+		out = append(out, fileLayoutViolation{p.PkgPath, name, "test-package-not-external", "want package " + p.Name + "_test"})
+	}
+	if !isHooks {
+		return out
+	}
+	for _, imp := range f.Imports {
+		ipath := strings.Trim(imp.Path.Value, `"`)
+		if !hooksImportAllowed(ipath, p.PkgPath, spec) {
+			out = append(out, fileLayoutViolation{p.PkgPath, name, "hooks-import-not-allowed", ipath})
 		}
 	}
 	return out
+}
+
+// hooksImportAllowed reports whether a hooks test file in package own may
+// import importPath: the component's own package and the standard library
+// always; a platform test double package (path ending in "/testinfra") and
+// the scenario host (any path SEGMENT ending in "scenariohost" — the module
+// is framework-go-scenariohost, so a "/scenariohost" substring would never
+// match its real import path) always; and any Spec.HooksImportAllowlist
+// prefix — the consuming module's generated contract packages, typically.
+func hooksImportAllowed(importPath, own string, spec Spec) bool {
+	if importPath == own || isStdlibImport(importPath) {
+		return true
+	}
+	if strings.HasSuffix(importPath, "/testinfra") {
+		return true
+	}
+	for seg := range strings.SplitSeq(importPath, "/") {
+		if strings.HasSuffix(seg, "scenariohost") {
+			return true
+		}
+	}
+	for _, pre := range spec.HooksImportAllowlist {
+		if strings.HasPrefix(importPath, pre) {
+			return true
+		}
+	}
+	return false
 }
 
 // workflowFuncs returns the name of every top-level func in f whose parameter
