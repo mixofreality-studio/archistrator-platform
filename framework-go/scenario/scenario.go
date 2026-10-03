@@ -28,14 +28,17 @@ type Stimulus struct {
 	Outcome
 }
 
-// InputEv is the input event of a stimulus.
+// InputEv is the input event of a stimulus. Every dynamic-view call into a
+// component on a path node is a stimulus of that component (Amendment A1): its
+// callers are its actors, whether they are actors or other components.
 type InputEv struct {
-	Kind  string `json:"kind"`            // action | acceptEvent | timeEvent | decision
-	From  string `json:"from"`            // actor id, or "" for timeEvent
-	To    string `json:"to"`              // component id (normalized)
-	Op    string `json:"op"`              // resolved contract op name, or "" when unresolved
-	Call  string `json:"call"`            // "<useCase>/<nodeId>/<callIndex>" provenance, "" when none
-	Guard string `json:"guard,omitempty"` // decision inputs only
+	Kind  string   `json:"kind"`            // "call" when From is a component; otherwise the node kind (action | acceptEvent | timeEvent | decision | switch | …)
+	From  string   `json:"from"`            // the caller as written (actor or component id); "" for an un-called timeEvent
+	To    string   `json:"to"`              // component id (normalized)
+	Op    string   `json:"op"`              // resolved contract op name, or "" when unresolved
+	Call  string   `json:"call"`            // "<useCase>/<nodeId>/<callIndex>" provenance ("…/<callIndex>.<k>" when one label names several ops), "" when none
+	Guard string   `json:"guard,omitempty"` // the guard taken at a decision/switch node, on every stimulus of that node
+	Via   []string `json:"via,omitempty"`   // the alternative callers when an alt group's calls into To collapse to this one stimulus (A4)
 }
 
 // Outcome is what is observed after a stimulus (or, for Preconditions,
@@ -59,4 +62,20 @@ type State struct {
 	Node    string `json:"node"`
 	Object  string `json:"object"`
 	InState string `json:"inState"`
+}
+
+// Report is a derivation together with what the derivation decided about the
+// design while producing it.
+type Report struct {
+	Scenarios []Scenario
+	// StartRedundant names, per use case and sorted by use case id, the start
+	// families dropped because the diagram also has event entries and those
+	// paths carry no stimulus of their own (Amendment A3, UC-START-REDUNDANT).
+	StartRedundant []StartRedundancy
+}
+
+// StartRedundancy is one use case whose start-family paths were dropped.
+type StartRedundancy struct {
+	UseCase string
+	Dropped int // number of start-family paths dropped
 }

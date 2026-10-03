@@ -4,23 +4,6 @@
     "useCase": "x",
     "title": "Two entries",
     "path": [
-      "start",
-      "a",
-      "end"
-    ],
-    "guards": [],
-    "preconditions": {
-      "expectedOutputs": [],
-      "expectedStates": [],
-      "hints": []
-    },
-    "stimuli": []
-  },
-  {
-    "id": "x-P2",
-    "useCase": "x",
-    "title": "Two entries",
-    "path": [
       "tick",
       "b",
       "end"
@@ -49,7 +32,7 @@
     ]
   },
   {
-    "id": "x-P3",
+    "id": "x-P2",
     "useCase": "x",
     "title": "Two entries",
     "path": [
