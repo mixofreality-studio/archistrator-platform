@@ -41,6 +41,7 @@ package methodassets
 
 import (
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 )
@@ -187,9 +188,7 @@ func ManifestFor(command string) (StepManifest, bool) {
 // rebuilt per call; callers may mutate it.
 func Manifests() map[string]StepManifest {
 	out := make(map[string]StepManifest, len(stepManifests))
-	for k, v := range stepManifests {
-		out[k] = v
-	}
+	maps.Copy(out, stepManifests)
 	return out
 }
 
@@ -251,8 +250,8 @@ func inStepScope(p string, m StepManifest, keepSkill map[string]bool) bool {
 // (".claude/skills/<name>/SKILL.md" and any sibling reference file).
 func skillNameOf(p string) string {
 	rest := strings.TrimPrefix(p, ".claude/skills/")
-	if i := strings.IndexByte(rest, '/'); i >= 0 {
-		return rest[:i]
+	if before, _, ok := strings.Cut(rest, "/"); ok {
+		return before
 	}
 	return rest
 }

@@ -13,6 +13,7 @@ package methodassets
 import (
 	"encoding/json"
 	"io/fs"
+	"maps"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -30,7 +31,7 @@ var runKeyLine = regexp.MustCompile(`^(\s*)(- )?run:(.*)$`)
 func runBodies(doc string) []string {
 	lines := strings.Split(doc, "\n")
 	var bodies []string
-	for i := 0; i < len(lines); i++ {
+	for i := range lines {
 		m := runKeyLine.FindStringSubmatch(lines[i])
 		if m == nil {
 			continue
@@ -308,9 +309,7 @@ func TestDesignWorkflow_ValidationRejectsHostileInputs(t *testing.T) {
 	}
 	with := func(in, v string) map[string]string {
 		vals := map[string]string{}
-		for k, g := range good {
-			vals[k] = g
-		}
+		maps.Copy(vals, good)
 		vals[in] = v
 		return vals
 	}

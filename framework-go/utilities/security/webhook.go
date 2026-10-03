@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"maps"
 )
 
 // WebhookChannel is a logical channel id (e.g. "merchant-gateway") that selects
@@ -22,9 +23,7 @@ type SignatureMaterial struct {
 // headers (copied so the caller cannot mutate it afterward).
 func NewSignatureMaterial(values map[string]string) SignatureMaterial {
 	cp := make(map[string]string, len(values))
-	for k, v := range values {
-		cp[k] = v
-	}
+	maps.Copy(cp, values)
 	return SignatureMaterial{values: cp}
 }
 

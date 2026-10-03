@@ -24,6 +24,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -592,9 +593,9 @@ func (f *FakeGitHub) serveCatalogActionsPublicKey(path string) (Response, bool) 
 // PUT /repos/{owner}/{name}/actions/secrets/{secretName}.
 func (f *FakeGitHub) serveCatalogWriteSecret(path, body string) (Response, bool) {
 	rest := strings.TrimPrefix(path, "/repos/")
-	idx := strings.Index(rest, "/actions/secrets/")
-	full := rest[:idx]
-	secretName := rest[idx+len("/actions/secrets/"):]
+	before, after, _ := strings.Cut(rest, "/actions/secrets/")
+	full := before
+	secretName := after
 	repo, exists := f.catalog[full]
 	if !exists {
 		return Response{Status: 404, Body: `{"message":"not found"}`}, true
@@ -618,22 +619,22 @@ func (f *FakeGitHub) serveCatalogWriteSecret(path, body string) (Response, bool)
 // serveCatalogGitData handles /repos/{owner}/{name}/git/... (any method) by
 // resolving the owning repo and delegating to serveGitData.
 func (f *FakeGitHub) serveCatalogGitData(method, path, body string) (Response, bool) {
-	idx := strings.Index(path, "/git/")
-	full := strings.TrimPrefix(path[:idx], "/repos/")
+	before, after, _ := strings.Cut(path, "/git/")
+	full := strings.TrimPrefix(before, "/repos/")
 	repo, exists := f.catalog[full]
 	if !exists {
 		return Response{Status: 404, Body: `{"message":"not found"}`}, true
 	}
 	repo.initGitState()
-	return f.serveGitData(repo, method, path[idx+len("/git/"):], body)
+	return f.serveGitData(repo, method, after, body)
 }
 
 // serveCatalogCommitTip handles GET /repos/{owner}/{name}/commits/{ref} (the
 // default-branch tip commit).
 func (f *FakeGitHub) serveCatalogCommitTip(path string) (Response, bool) {
 	rest := strings.TrimPrefix(path, "/repos/")
-	idx := strings.Index(rest, "/commits/")
-	full := rest[:idx]
+	before, _, _ := strings.Cut(rest, "/commits/")
+	full := before
 	if _, exists := f.catalog[full]; !exists {
 		return Response{Status: 404, Body: `{"message":"not found"}`}, true
 	}
@@ -644,9 +645,9 @@ func (f *FakeGitHub) serveCatalogCommitTip(path string) (Response, bool) {
 // GET|PUT /repos/{owner}/{name}/contents/{path...}.
 func (f *FakeGitHub) serveCatalogContents(method, path, body string) (Response, bool) {
 	rest := strings.TrimPrefix(path, "/repos/")
-	idx := strings.Index(rest, "/contents/")
-	full := rest[:idx]
-	filePath := rest[idx+len("/contents/"):]
+	before, after, _ := strings.Cut(rest, "/contents/")
+	full := before
+	filePath := after
 	repo, exists := f.catalog[full]
 	if !exists {
 		return Response{Status: 404, Body: `{"message":"not found"}`}, true
@@ -813,8 +814,8 @@ func (f *FakeGitHub) serveGitCommitPost(repo *fakeRepo, body string) (Response, 
 // ref.
 func (f *FakeGitHub) serveGitDataPatch(repo *fakeRepo, sub, body string) (Response, bool) {
 	// Fast-forward a ref: PATCH git/refs/heads/{branch}
-	if strings.HasPrefix(sub, "refs/heads/") {
-		return f.serveGitRefPatch(repo, strings.TrimPrefix(sub, "refs/heads/"), body)
+	if after, ok := strings.CutPrefix(sub, "refs/heads/"); ok {
+		return f.serveGitRefPatch(repo, after, body)
 	}
 	return Response{}, false
 }
@@ -933,10 +934,8 @@ func (f *FakeGitHub) serveGitRefPost(repo *fakeRepo, body string) (Response, boo
 	}
 	_ = json.Unmarshal([]byte(body), &in)
 	branch := strings.TrimPrefix(in.Ref, "refs/heads/")
-	for _, b := range repo.branches {
-		if b == branch {
-			return Response{Status: 422, Body: `{"message":"Reference already exists"}`}, true
-		}
+	if slices.Contains(repo.branches, branch) {
+		return Response{Status: 422, Body: `{"message":"Reference already exists"}`}, true
 	}
 	if commit, ok := repo.gitCommits[in.SHA]; ok && repo.head == "" {
 		snap, ok2 := repo.resolveTreeSnapshot(commit.TreeSHA)

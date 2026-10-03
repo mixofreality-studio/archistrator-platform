@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime/debug"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -197,12 +198,7 @@ func isSafeManifestPath(p string) bool {
 	if !strings.HasPrefix(p, ".claude/") {
 		return false
 	}
-	for _, seg := range strings.Split(p, "/") {
-		if seg == ".." {
-			return false
-		}
-	}
-	return true
+	return !slices.Contains(strings.Split(p, "/"), "..")
 }
 
 // buildManifest builds the manifest for a file set: the module version plus

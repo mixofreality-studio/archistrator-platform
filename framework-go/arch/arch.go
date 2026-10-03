@@ -353,8 +353,7 @@ func checkPackageInterfaces(t *testing.T, pkg *packages.Package, layer Layer) {
 
 func checkInterfaceMethodReturns(t *testing.T, pkg *packages.Package, name string, iface *types.Interface) {
 	t.Helper()
-	for i := 0; i < iface.NumMethods(); i++ {
-		m := iface.Method(i)
+	for m := range iface.Methods() {
 		sig := m.Type().(*types.Signature)
 		res := sig.Results()
 		if res.Len() == 0 || res.At(res.Len()-1).Type().String() != "error" {
@@ -425,8 +424,8 @@ func temporalExempt(pkgPath string, exempt []string) bool {
 // "github.com" or "go.temporal.io".
 func isStdlibImport(importPath string) bool {
 	first := importPath
-	if i := strings.IndexByte(importPath, '/'); i >= 0 {
-		first = importPath[:i]
+	if before, _, ok := strings.Cut(importPath, "/"); ok {
+		first = before
 	}
 	return !strings.Contains(first, ".")
 }

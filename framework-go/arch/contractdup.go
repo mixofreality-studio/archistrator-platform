@@ -268,11 +268,10 @@ func ifaceMethodSetEqual(a, b *types.Interface) bool {
 		return false
 	}
 	bMethods := make(map[string]*types.Func, b.NumMethods())
-	for i := 0; i < b.NumMethods(); i++ {
-		bMethods[b.Method(i).Name()] = b.Method(i)
+	for method := range b.Methods() {
+		bMethods[method.Name()] = method
 	}
-	for i := 0; i < a.NumMethods(); i++ {
-		am := a.Method(i)
+	for am := range a.Methods() {
 		bm, ok := bMethods[am.Name()]
 		if !ok {
 			return false // name-set mismatch

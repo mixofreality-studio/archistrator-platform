@@ -467,11 +467,11 @@ func importsFrameworkUtility(pkgs []classifiedPackage, key string, normalize fun
 // frameworkUtilityImportMatches reports whether import path ip is a
 // framework-go/utilities/<name> whose <name> segment normalizes to key.
 func frameworkUtilityImportMatches(ip, key string, normalize func(string) string) bool {
-	idx := strings.Index(ip, frameworkUtilitiesMarker)
-	if idx < 0 {
+	_, after, ok := strings.Cut(ip, frameworkUtilitiesMarker)
+	if !ok {
 		return false
 	}
-	seg := ip[idx+len(frameworkUtilitiesMarker):]
+	seg := after
 	if j := strings.IndexByte(seg, '/'); j >= 0 {
 		seg = seg[:j]
 	}

@@ -370,24 +370,24 @@ func namedChildren(x *types.Named, p *packages.Package, out map[string]bool) []t
 		out[obj.Name()] = true
 	}
 	children := []types.Type{x.Underlying()}
-	for i := 0; i < x.NumMethods(); i++ {
-		children = append(children, x.Method(i).Type())
+	for method := range x.Methods() {
+		children = append(children, method.Type())
 	}
 	return children
 }
 
 func structFieldTypes(x *types.Struct) []types.Type {
 	out := make([]types.Type, 0, x.NumFields())
-	for i := 0; i < x.NumFields(); i++ {
-		out = append(out, x.Field(i).Type())
+	for field := range x.Fields() {
+		out = append(out, field.Type())
 	}
 	return out
 }
 
 func interfaceMethodTypes(x *types.Interface) []types.Type {
 	out := make([]types.Type, 0, x.NumMethods())
-	for i := 0; i < x.NumMethods(); i++ {
-		out = append(out, x.Method(i).Type())
+	for method := range x.Methods() {
+		out = append(out, method.Type())
 	}
 	return out
 }
@@ -397,8 +397,8 @@ func tupleTypes(tup *types.Tuple) []types.Type {
 		return nil
 	}
 	out := make([]types.Type, 0, tup.Len())
-	for i := 0; i < tup.Len(); i++ {
-		out = append(out, tup.At(i).Type())
+	for v := range tup.Variables() {
+		out = append(out, v.Type())
 	}
 	return out
 }

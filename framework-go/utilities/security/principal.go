@@ -1,5 +1,7 @@
 package security
 
+import "slices"
+
 // Principal is the platform's own typed identity, validated from the
 // bearer access token a request carried. It is NOT a token and NOT an IdP user
 // object — it is an aiarch value type the caller reads from the request context
@@ -46,12 +48,7 @@ type Organization struct {
 
 // HasRole reports whether the principal carries the given coarse role label.
 func (p Principal) HasRole(role string) bool {
-	for _, r := range p.Roles {
-		if r == role {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(p.Roles, role)
 }
 
 // IsMemberOf reports whether the principal belongs to an organization matching

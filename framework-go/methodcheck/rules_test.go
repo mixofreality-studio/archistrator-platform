@@ -231,7 +231,7 @@ func TestValidateCoreUseCases_Pass(t *testing.T) {
 
 func TestValidateCoreUseCases_SevenCoreTripsCardinality(t *testing.T) {
 	var ds []UseCaseDecision
-	for i := 0; i < 7; i++ {
+	for i := range 7 {
 		ds = append(ds, coreUC(fmt.Sprintf("uc%d", i)))
 	}
 	res, _ := validateCoreUseCases(CoreUseCases{Decisions: ds})
@@ -596,7 +596,7 @@ func TestValidateArchitecture_ClientSkipFails(t *testing.T) {
 
 func TestValidateArchitecture_TooManyManagersFails(t *testing.T) {
 	var comps []Component
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		comps = append(comps, comp(t, fmt.Sprintf("Mgr%d", i), kindManager))
 	}
 	out, _ := validateArchitecture(System{Components: comps}, CoreUseCases{})
@@ -644,12 +644,12 @@ func TestValidateArchitecture_TotalComponentCountIsWarning(t *testing.T) {
 	var comps []Component
 	var rels []Relationship
 	comps = append(comps, comp(t, "OnlyManager", kindManager))
-	for i := 0; i < 4; i++ {
+	for i := range 4 {
 		comps = append(comps, comp(t, fmt.Sprintf("Engine%d", i), kindEngine))
 	}
 	// Each ResourceAccess reaches its own Resource so none is a SYS-RA-ORPHAN; the
 	// SYS-CARD-TOTAL Warning is the only rule under test.
-	for i := 0; i < 8; i++ {
+	for i := range 8 {
 		ra := comp(t, fmt.Sprintf("StateAccess%d", i), kindResourceAccess)
 		db := comp(t, fmt.Sprintf("StateDB%d", i), kindResource)
 		comps = append(comps, ra, db)

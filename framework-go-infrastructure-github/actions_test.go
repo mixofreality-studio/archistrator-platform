@@ -62,7 +62,7 @@ func TestDispatchIsNotDeduped(t *testing.T) {
 	c := actionsClient(t, fake.BaseURL())
 	ctx := context.Background()
 	inputs := map[string]string{fwgithub.DispatchInputKeyIdempotency: "dup"}
-	for i := 0; i < 2; i++ {
+	for i := range 2 {
 		if err := c.DispatchWorkflow(ctx, "acme", "proj", "construct.yml", "main", inputs, "t"); err != nil {
 			t.Fatalf("dispatch %d: %v", i, err)
 		}
@@ -156,12 +156,10 @@ func TestDispatchRace(t *testing.T) {
 	inputs := map[string]string{fwgithub.DispatchInputKeyIdempotency: "race"}
 
 	var wg sync.WaitGroup
-	for i := 0; i < 5; i++ {
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+	for range 5 {
+		wg.Go(func() {
 			_ = c.DispatchWorkflow(ctx, "acme", "proj", "construct.yml", "main", inputs, "t")
-		}()
+		})
 	}
 	wg.Wait()
 	runs, _ := c.ListRunsByName(ctx, "acme", "proj", "construct.yml", fwgithub.RunNamePrefix+"race", "t")

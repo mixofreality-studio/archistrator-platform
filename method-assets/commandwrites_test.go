@@ -43,7 +43,7 @@ func knownAgentSet(files map[string][]byte) map[string]bool {
 // the file has no agent line (orchestrator commands that only dispatch).
 func agentsForCommand(body string, known map[string]bool) []string {
 	var line string
-	for _, l := range strings.Split(body, "\n") {
+	for l := range strings.SplitSeq(body, "\n") {
 		if strings.Contains(l, "Agent + skills") {
 			line = l
 			break
@@ -70,7 +70,7 @@ func agentsForCommand(body string, known map[string]bool) []string {
 // negated clause (e.g. "the PM never calls `putDraftModel`").
 func instructedWrites(body string) map[string]bool {
 	out := map[string]bool{}
-	for _, line := range strings.Split(body, "\n") {
+	for line := range strings.SplitSeq(body, "\n") {
 		if !numberedStep.MatchString(line) {
 			continue
 		}
@@ -78,10 +78,7 @@ func instructedWrites(body string) map[string]bool {
 			for _, form := range []string{"`" + verb + "`", "mcp__aiarch-state__" + verb} {
 				idx := strings.Index(line, form)
 				for idx >= 0 {
-					start := idx - 24
-					if start < 0 {
-						start = 0
-					}
+					start := max(idx-24, 0)
 					if !negationCue.MatchString(line[start:idx]) {
 						out[verb] = true
 					}

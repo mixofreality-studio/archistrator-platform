@@ -172,8 +172,8 @@ func (c *AppClient) OpenPullRequest(ctx context.Context, fullName, head, base, t
 func (c *AppClient) findOpenPR(ctx context.Context, fullName, head, base, instToken string) (number int, found bool, err error) {
 	// GitHub's head filter is "owner:branch"; the owner is the first segment of fullName.
 	owner := fullName
-	if i := strings.Index(fullName, "/"); i >= 0 {
-		owner = fullName[:i]
+	if before, _, ok := strings.Cut(fullName, "/"); ok {
+		owner = before
 	}
 	url := fmt.Sprintf("%s/repos/%s/pulls?state=open&head=%s:%s&base=%s", c.baseURL, fullName, owner, head, base)
 	status, body, dErr := c.do(ctx, http.MethodGet, url, nil, "", instToken)

@@ -69,7 +69,7 @@ func TestAgentToolScoping(t *testing.T) {
 	fm := string(files[".claude/agents/ux-reviewer.md"])
 	fm = fm[:strings.Index(fm, "\n---")]
 	for _, banned := range []string{"Edit", "Write"} {
-		for _, line := range strings.Split(fm, "\n") {
+		for line := range strings.SplitSeq(fm, "\n") {
 			l := strings.TrimSpace(strings.TrimPrefix(line, "-"))
 			if l == banned {
 				t.Errorf("ux-reviewer: banned built-in %s", banned)

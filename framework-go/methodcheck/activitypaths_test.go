@@ -220,7 +220,7 @@ func TestPaths_CapBoundaryTruncatesDeterministically(t *testing.T) {
 	n := maxActivityPaths + 8
 	nodes := []ActivityNode{{ID: "s", Kind: nodeStart}}
 	edges := make([]ActivityEdge, 0, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		id := fmt.Sprintf("e%d", i)
 		nodes = append(nodes, ActivityNode{ID: id, Kind: nodeEnd})
 		edges = append(edges, ActivityEdge{From: "s", To: id})
@@ -313,11 +313,11 @@ func TestPaths_BudgetBoundsNestedForkDecision(t *testing.T) {
 		{ID: "tick", Kind: kindTimeEvent}, {ID: "f", Kind: nodeFork},
 	}
 	edges := []ActivityEdge{{From: "s", To: "sa"}, {From: "sa", To: "se"}, {From: "tick", To: "f"}}
-	for b := 0; b < 8; b++ {
+	for b := range 8 {
 		d := fmt.Sprintf("d%d", b)
 		nodes = append(nodes, ActivityNode{ID: d, Kind: nodeDecision, Label: "branch?"})
 		edges = append(edges, ActivityEdge{From: "f", To: d})
-		for i := 0; i < 5; i++ {
+		for i := range 5 {
 			leaf := fmt.Sprintf("a%d-%d", b, i)
 			nodes = append(nodes, ActivityNode{ID: leaf, Kind: nodeAction, Label: leaf})
 			edges = append(edges, ActivityEdge{From: d, To: leaf, Kind: edgeGuardedFlow, Guard: "[g]"})
@@ -345,7 +345,7 @@ func decisionChainDiagram(stages int) ActivityDiagram {
 	nodes := []ActivityNode{{ID: "s", Kind: nodeStart}}
 	var edges []ActivityEdge
 	prev := "s"
-	for i := 0; i < stages; i++ {
+	for i := range stages {
 		d, a, b, m := fmt.Sprintf("d%d", i), fmt.Sprintf("a%d", i), fmt.Sprintf("b%d", i), fmt.Sprintf("m%d", i)
 		nodes = append(nodes,
 			ActivityNode{ID: d, Kind: nodeDecision, Label: "branch?"},
@@ -451,11 +451,11 @@ func TestPaths_BudgetTruncationMatchesTheCapPrefix(t *testing.T) {
 func TestPaths_BudgetDoesNotBindOnOrdinaryDiagram(t *testing.T) {
 	nodes := []ActivityNode{{ID: "s", Kind: nodeStart}, {ID: "f", Kind: nodeFork}}
 	edges := []ActivityEdge{{From: "s", To: "f"}}
-	for b := 0; b < 3; b++ {
+	for b := range 3 {
 		d := fmt.Sprintf("d%d", b)
 		nodes = append(nodes, ActivityNode{ID: d, Kind: nodeDecision, Label: "branch?"})
 		edges = append(edges, ActivityEdge{From: "f", To: d})
-		for i := 0; i < 3; i++ {
+		for i := range 3 {
 			leaf := fmt.Sprintf("a%d-%d", b, i)
 			nodes = append(nodes, ActivityNode{ID: leaf, Kind: nodeAction, Label: leaf})
 			edges = append(edges, ActivityEdge{From: d, To: leaf, Kind: edgeGuardedFlow, Guard: "[g]"})
