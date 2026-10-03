@@ -76,12 +76,25 @@ const testgenModuleRootArgs = "-project .aiarch/state/project.json -root . -uite
 
 // TestConstructTemplateHasScenarioSteps pins the venue half of deterministic
 // component testing (spec §6.2): on the integration phase the construct
-// workflow runs the scenario tests, uploads the Go results tree AND the
-// Playwright results tree (the generated config writes to
-// uitests/test-results/<component>, emit_playwright.go componentDirDepth=2) as
-// a GitHub artifact and records the run through the aiarch-state MCP binary;
-// go-checks runs the testgen drift check on every PR (spec §5.3). Both testgen
+// workflow runs the scenario tests, uploads ONE results tree as a GitHub
+// artifact and records the run through the aiarch-state MCP binary; go-checks
+// runs the testgen drift check on every PR (spec §5.3). Both testgen
 // invocations spell the module-root -uitests dir.
+//
+// Artifact layout (pinned here because two consumers were written against it):
+// actions/upload-artifact@v4 roots the zip at the least common ancestor of its
+// SEARCH PATHS, so the single `test-results/**` yields entries `go-test.jsonl`
+// and `<component>/results.json` — the layout the local venue (spec §6.3,
+// .aiarch/test-results/<run>/<component>/results.json) and Plan 2's cloud
+// TestRun reader (`OpenTestRunFile(ctx, ref, "<component>/results.json")`,
+// TestRunPanel `fileUrl('go-test.jsonl')`) expect. The generated Playwright
+// config writes to uitests/test-results/<component> (emit_playwright.go,
+// componentDirDepth=2), so the scenario step MIRRORS that directory into
+// test-results/<component>/ after the run: a second upload path would re-root
+// the zip at the checkout (test-results/go-test.jsonl, uitests/test-results/…)
+// for Go-only components too, and `record-test-run --results test-results`
+// would find no results.json for a UI client. videoRef/traceRef inside
+// results.json are relative to the component dir, so the copy keeps them valid.
 func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 	out, err := ScaffoldFiles(testData)
 	if err != nil {
@@ -98,12 +111,28 @@ func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 			t.Errorf("aiarch-construct.yml missing %q", s)
 		}
 	}
+	scenarios := y[strings.Index(y, "name: Run scenario tests"):]
+	scenarios = scenarios[:strings.Index(scenarios, "name: Upload test results")]
+	// The Playwright run is followed by the mirror into the Go tree, so the
+	// artifact and the run record see test-results/<component>/results.json.
+	pw := strings.Index(scenarios, "npx playwright test")
+	mirror := strings.Index(scenarios, `cp -R "uitests/test-results/${AIARCH_COMPONENT_ID}" test-results/`)
+	if pw < 0 || mirror < 0 || mirror < pw {
+		t.Errorf("Run scenario tests must mirror uitests/test-results/<component> into test-results/ after the Playwright run:\n%s", scenarios)
+	}
+	// The runner's default shell is `bash -e`: a red Go scenario or a red
+	// Playwright run must be captured, not abort the script, or the mirror never
+	// happens and the record step finds no results.json for a UI client.
+	if got := strings.Count(scenarios, "|| status=$?"); got != 2 || !strings.Contains(scenarios, `exit "${status}"`) {
+		t.Errorf("Run scenario tests must capture the go test and playwright statuses and exit with them (got %d captures):\n%s", got, scenarios)
+	}
 	upload := y[strings.Index(y, "name: Upload test results"):]
 	upload = upload[:strings.Index(upload, "name: Record test run")]
-	for _, p := range []string{"test-results/**", "uitests/test-results/**"} {
-		if !strings.Contains(upload, p) {
-			t.Errorf("Upload test results must include %q in its path:\n%s", p, upload)
-		}
+	if !strings.Contains(upload, "path: test-results/**") {
+		t.Errorf("Upload test results must upload the single test-results/** tree:\n%s", upload)
+	}
+	if strings.Contains(upload, "uitests/test-results") {
+		t.Errorf("Upload test results must not add a second search path (it re-roots the zip at the checkout):\n%s", upload)
 	}
 	g := string(out[".github/workflows/go-checks.yml"])
 	if !strings.Contains(g, testgen+" "+testgenModuleRootArgs+" -check") {
