@@ -28,7 +28,7 @@ The on-disk JSON is produced by the Go codec (`EncodeProjectJSON`/`DecodeProject
 | `.serviceContracts["<component-id>"]` | `map[string]projectstate.ServiceContract` (`servicecontract.go`) | READ + WRITE (detailed-design writes here) | component, layer, goPackage, infra, deps, stub, title, `$defs`, `interface` (ops) |
 | `.activityConstruction["<activity-id>"]` | `map[string]projectstate.ActivityConstructionStatus` (`activityconstructionstatus.go`) | READ-ONLY — Manager-owned | activityID, phase, buildStatus, `produced[]`, failure info |
 | `.constructionProgress` | `*projectstate.ConstructionProgress` (`constructionprogress.go`) | READ-ONLY — Manager-owned | Week, TotalWeeks, HandOffModel, SupervisionCap (earned-value rollup) |
-| `.testingState` | `*projectstate.TestingState` (`phaseartifacts.go`) | READ + WRITE (testing phases) | `systemTestPlan`, `harnessModule`, `perfHarness`, `qualityGates[]`, `qualityAuditReport`, `testRuns[]`, `defects[]` |
+| `.testingState` | `*projectstate.TestingState` (`phaseartifacts.go`) | READ + WRITE (testing phases) | `harnessModule`, `perfHarness`, `qualityGates[]`, `qualityAuditReport`, `testRuns[]` (written by the venue), `defects[]` |
 | `.phaseArtifacts` | `*projectstate.PhaseArtifacts` (`phaseartifacts.go`) | WRITE (non-contract phase artifacts) | maps of `srs`/`testPlan`/`integrationNote`/`uxRequirements`/`uiDesign`/`provisioningSpec`/`deployNote`/`docOutline`/`docNote` records, keyed by component/surface/resource/doc. `omitempty`/nil until the first artifact is produced — it may be **absent** in a fresh file. The write verb is `RecordPhaseArtifactProduced`. |
 | `.reviewPolicy` | `projectstate.ReviewPolicy` (`reviewpolicy.go`) | READ-ONLY — Manager-owned via `UpdateReviewPolicy` | `gatedPhasesByType`: activity-type wire name → phases requiring human approval |
 | `.research` | raw research corpus (`research.go`) | READ-ONLY | source material feeding Phase-1 |
@@ -77,8 +77,8 @@ When your phase produces an artifact that lives in state, record it through the 
 | artifact | tool | target |
 |---|---|---|
 | service contract (detailed-design) | `recordServiceContract` | `.serviceContracts["<ambient component>"]` |
-| UI-design concept / SRS / integration note / provisioning spec / deploy note / doc outline·note | `recordPhaseArtifact` (set exactly one payload field, pass the `mapKey`) | `.phaseArtifacts.<field>["<mapKey>"]` |
-| testing plan / results (system test plan, harness, quality gate, test run, defect, audit report) | `recordTestingState` (set exactly one payload field) | `.testingState.<field>` |
+| UI-design concept / SRS / component test plan / integration note / provisioning spec / deploy note / doc outline·note | `recordPhaseArtifact` (set exactly one payload field, pass the `mapKey`) | `.phaseArtifacts.<field>["<mapKey>"]` |
+| testing results (harness, quality gate, test run, defect, audit report — a component's test plan is a phase artifact, above) | `recordTestingState` (set exactly one payload field) | `.testingState.<field>` |
 | code | *(files, not state)* | files in the package the contract's `goPackage` names |
 
 The tool payload is the typed Go struct for that target (field names + shapes exactly — read the backing struct in `projectstate/` if unsure); the tool rejects invented/malformed fields before writing. `recordServiceContract` uses your ambient component; `recordPhaseArtifact`/`recordTestingState` use your ambient activity. A rejected write tells you exactly what to fix — correct it and call the tool again. When every artifact is recorded, call `publishDraft`.

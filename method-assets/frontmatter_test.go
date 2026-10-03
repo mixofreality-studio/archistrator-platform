@@ -15,7 +15,6 @@ var wantWrites = map[string][]string{
 	"ui-designer":      {"recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
 	"ux-reviewer":      {"respondToReviewComment"},
 	"test-engineer":    {"recordTestingState", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
-	"software-tester":  {"recordTestingState", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
 	"qa-engineer":      {"recordTestingState", "recordPhaseArtifact", "publishDraft", "respondToReviewComment"},
 }
 

@@ -12,7 +12,7 @@ import (
 var wantLifecycleTypes = []string{
 	"requirements", "architecture", "projectDesign",
 	"service", "frontend",
-	"testing:plan", "testing:harness", "testing:perf", "testing:systemTest", "testing:qaProcess",
+	"testing:harness", "testing:perf", "testing:qaProcess",
 	"deployment", "documentation", "uiDesign", "integration",
 }
 
@@ -88,17 +88,20 @@ func TestLifecycles_Acyclic(t *testing.T) {
 	}
 }
 
-func TestLifecycles_ServiceAndFrontendForkPerFigureA1(t *testing.T) {
+// Figure A-1's Test Plan branch is now serial: the scenario bindings need the
+// frozen contract (after designReview), and construction fills the hooks of the
+// tests generated from those bindings (after stpReview).
+func TestLifecycles_ServiceAndFrontendFollowFigureA1(t *testing.T) {
 	want := map[string][]string{
 		"srs":            {},
 		"srsReview":      {"srs"},
 		"detailedDesign": {"srsReview"},
 		"designReview":   {"detailedDesign"},
-		"construction":   {"designReview"},
+		"stp":            {"designReview"},
+		"stpReview":      {"stp"},
+		"construction":   {"stpReview"},
 		"codeReview":     {"construction"},
 		"integration":    {"codeReview"},
-		"stp":            {"srsReview"},
-		"stpReview":      {"stp"},
 		"testing":        {"integration", "stpReview"},
 	}
 	for _, key := range []string{"service", "frontend"} {
@@ -116,9 +119,40 @@ func TestLifecycles_ServiceAndFrontendForkPerFigureA1(t *testing.T) {
 				t.Errorf("%s: %s dependsOn = %v, want %v", key, task.ID, task.DependsOn, deps)
 			}
 		}
-		// The trunk is authored first: the layout keeps the first-authored chain on lane 0.
-		if l.Tasks[2].ID != "detailedDesign" || l.Tasks[7].ID != "stp" {
-			t.Errorf("%s: the Detailed Design branch must be authored before the STP branch", key)
+		// Authored in lifecycle order: a task may only depend on an earlier one,
+		// so the test plan must be written down before the construction it gates.
+		if l.Tasks[4].ID != "stp" || l.Tasks[5].ID != "stpReview" || l.Tasks[6].ID != "construction" {
+			t.Errorf("%s: the Test Plan tasks must be authored between Design Review and Construction", key)
+		}
+	}
+}
+
+// Bindings need the frozen contract's types, so the test plan follows the
+// design review; construction then fills the hooks of tests that already exist.
+func TestServiceAndFrontendTestPlanDependsOnDesignReview(t *testing.T) {
+	for _, typ := range []string{"service", "frontend"} {
+		lc, ok := LifecycleFor(typ)
+		if !ok {
+			t.Fatal(typ)
+		}
+		var stp LifecycleTask
+		for _, tk := range lc.Tasks {
+			if tk.ID == "stp" {
+				stp = tk
+			}
+		}
+		if len(stp.DependsOn) != 1 || stp.DependsOn[0] != "designReview" {
+			t.Fatalf("%s stp dependsOn %v", typ, stp.DependsOn)
+		}
+	}
+}
+
+// There is no system test plan and no system testing activity: each component
+// carries its own scenario plan, so the two lifecycles that staffed them are gone.
+func TestRetiredTestingLifecyclesAreGone(t *testing.T) {
+	for _, typ := range []string{"testing:plan", "testing:systemTest"} {
+		if _, ok := LifecycleFor(typ); ok {
+			t.Fatalf("%s must be removed", typ)
 		}
 	}
 }

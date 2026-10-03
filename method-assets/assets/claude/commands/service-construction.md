@@ -16,5 +16,6 @@
 
 1. **Read the contract** from `.aiarch/state/project.json` → `.serviceContracts["<component_id>"]` per [[the-method-project-state]]. It carries `Layer`, `Ops`, `Inbound`/`Outbound`, `DataContracts`, `ErrorModel`, `Idempotency`. Implement exactly it. If it has a gap, do NOT widen it (see `junior-developer`).
 2. **Implement** in the package the contract names — the `goPackage` in `.serviceContracts["<component_id>"]` (its `Layer` fixes the layer). Match existing code in that layer. Stay inside the component. Do NOT edit `*/generated/`. Commit onto `activity/<activity_id>`.
-3. **Verify YOUR code** (from the Go module directory containing the target package — the repo root in a generated app; `GOWORK=off`): `gofmt -w .`; `GOWORK=off go build ./...`; `GOWORK=off go vet ./...`; `GOWORK=off go test ./<goPackage>/...`. Only your package — not `make test-short`.
-4. **Stop.** Do not mark phase status (the Manager owns it) and do not merge. Leave the PR for the gate.
+3. **Verify YOUR code** (from the Go module directory containing the target package — the repo root in a generated app; `GOWORK=off`): `gofmt -w .`; `GOWORK=off go build ./...`; `GOWORK=off go vet ./...`. Only your package — not `make test-short`.
+4. **Scenario tests.** Run `make gen-tests`. Fill every `FILL` in `<stereotype>_hooks_test.go`. Delete any other `_test.go` in the package — the arch gate rejects it. `make test-scenarios` must be green before `publishDraft`.
+5. **Stop.** Do not mark phase status (the Manager owns it) and do not merge. Leave the PR for the gate.

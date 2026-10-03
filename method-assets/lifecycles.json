@@ -43,20 +43,20 @@
       "phases": [
         {"id": "requirements", "label": "Requirements", "weight": 15, "gate": "srsReview", "exitCriterion": "The SRS is written and passes SRS review"},
         {"id": "detailed_design", "label": "Detailed Design", "weight": 20, "gate": "designReview", "exitCriterion": "The service contract is designed and passes design review"},
-        {"id": "test_plan", "label": "Test Plan", "weight": 10, "gate": "stpReview", "exitCriterion": "This component's test plan is written and passes STP review"},
+        {"id": "test_plan", "label": "Test Plan", "weight": 10, "gate": "stpReview", "exitCriterion": "Every projected scenario is bound and the TP-* rules pass"},
         {"id": "construction", "label": "Construction", "weight": 40, "gate": "codeReview", "exitCriterion": "The code is written and passes code review, not merely checked in"},
-        {"id": "integration", "label": "Integration", "weight": 15, "gate": "testing", "exitCriterion": "The component is integrated and its tests pass"}
+        {"id": "integration", "label": "Integration", "weight": 15, "gate": "testing", "exitCriterion": "A test run at the current revision covers every scenario, all pass, and the results render"}
       ],
       "tasks": [
         {"id": "srs", "kind": "dispatch", "title": "SRS", "phase": "requirements", "dependsOn": [], "command": "service-requirements", "workerClass": "senior-developer", "artifactKind": "SRS"},
         {"id": "srsReview", "kind": "review", "title": "SRS Review", "phase": "requirements", "dependsOn": ["srs"], "reviews": "srs"},
         {"id": "detailedDesign", "kind": "dispatch", "title": "Detailed Design", "phase": "detailed_design", "dependsOn": ["srsReview"], "command": "service-detailed-design", "workerClass": "senior-developer", "artifactKind": "DetailedDesign"},
         {"id": "designReview", "kind": "review", "title": "Design Review", "phase": "detailed_design", "dependsOn": ["detailedDesign"], "reviews": "detailedDesign"},
-        {"id": "construction", "kind": "dispatch", "title": "Construction", "phase": "construction", "dependsOn": ["designReview"], "command": "service-construction", "workerClass": "junior-developer", "artifactKind": "Construction"},
+        {"id": "stp", "kind": "dispatch", "title": "Test Plan", "phase": "test_plan", "dependsOn": ["designReview"], "command": "service-test-plan", "workerClass": "test-engineer", "artifactKind": "STP"},
+        {"id": "stpReview", "kind": "review", "title": "Test Plan Review", "phase": "test_plan", "dependsOn": ["stp"], "reviews": "stp"},
+        {"id": "construction", "kind": "dispatch", "title": "Construction", "phase": "construction", "dependsOn": ["stpReview"], "command": "service-construction", "workerClass": "junior-developer", "artifactKind": "Construction"},
         {"id": "codeReview", "kind": "review", "title": "Code Review", "phase": "construction", "dependsOn": ["construction"], "reviews": "construction"},
         {"id": "integration", "kind": "dispatch", "title": "Integration", "phase": "integration", "dependsOn": ["codeReview"], "command": "service-integration", "workerClass": "system-architect", "artifactKind": "Integration"},
-        {"id": "stp", "kind": "dispatch", "title": "STP", "phase": "test_plan", "dependsOn": ["srsReview"], "command": "service-test-plan", "workerClass": "test-engineer", "artifactKind": "STP"},
-        {"id": "stpReview", "kind": "review", "title": "STP Review", "phase": "test_plan", "dependsOn": ["stp"], "reviews": "stp"},
         {"id": "testing", "kind": "review", "title": "Testing", "phase": "integration", "dependsOn": ["integration", "stpReview"], "reviews": "integration"}
       ]
     },
@@ -65,37 +65,21 @@
       "phases": [
         {"id": "requirements", "label": "UX Requirements", "weight": 15, "gate": "srsReview", "exitCriterion": "The UX requirements for this surface are written and pass review"},
         {"id": "detailed_design", "label": "Design", "weight": 25, "gate": "designReview", "exitCriterion": "The UI design for this surface is drawn and passes design review"},
-        {"id": "test_plan", "label": "Flows", "weight": 10, "gate": "stpReview", "exitCriterion": "The user flows this surface must support are written as tests and pass review"},
+        {"id": "test_plan", "label": "Flows", "weight": 10, "gate": "stpReview", "exitCriterion": "Every projected scenario is bound and the TP-* rules pass"},
         {"id": "construction", "label": "Construction", "weight": 35, "gate": "codeReview", "exitCriterion": "The surface is built and passes code review, not merely checked in"},
-        {"id": "integration", "label": "Integration", "weight": 15, "gate": "testing", "exitCriterion": "The surface is wired to its managers and its flows pass against the integrated system"}
+        {"id": "integration", "label": "Integration", "weight": 15, "gate": "testing", "exitCriterion": "A test run at the current revision covers every scenario, all pass, and the results render"}
       ],
       "tasks": [
         {"id": "srs", "kind": "dispatch", "title": "UX Requirements", "phase": "requirements", "dependsOn": [], "command": "frontend-requirements", "workerClass": "ui-designer", "artifactKind": "SRS"},
         {"id": "srsReview", "kind": "review", "title": "UX Requirements Review", "phase": "requirements", "dependsOn": ["srs"], "reviews": "srs"},
         {"id": "detailedDesign", "kind": "dispatch", "title": "Design", "phase": "detailed_design", "dependsOn": ["srsReview"], "command": "frontend-detailed-design", "workerClass": "ui-designer", "artifactKind": "DetailedDesign"},
         {"id": "designReview", "kind": "review", "title": "Design Review", "phase": "detailed_design", "dependsOn": ["detailedDesign"], "reviews": "detailedDesign"},
-        {"id": "construction", "kind": "dispatch", "title": "Construction", "phase": "construction", "dependsOn": ["designReview"], "command": "frontend-construction", "workerClass": "junior-developer", "artifactKind": "Construction"},
+        {"id": "stp", "kind": "dispatch", "title": "Flows", "phase": "test_plan", "dependsOn": ["designReview"], "command": "frontend-test-plan", "workerClass": "test-engineer", "artifactKind": "STP"},
+        {"id": "stpReview", "kind": "review", "title": "Flow Review", "phase": "test_plan", "dependsOn": ["stp"], "reviews": "stp"},
+        {"id": "construction", "kind": "dispatch", "title": "Construction", "phase": "construction", "dependsOn": ["stpReview"], "command": "frontend-construction", "workerClass": "junior-developer", "artifactKind": "Construction"},
         {"id": "codeReview", "kind": "review", "title": "Code Review", "phase": "construction", "dependsOn": ["construction"], "reviews": "construction"},
         {"id": "integration", "kind": "dispatch", "title": "Integration", "phase": "integration", "dependsOn": ["codeReview"], "command": "frontend-integration", "workerClass": "system-architect", "artifactKind": "Integration"},
-        {"id": "stp", "kind": "dispatch", "title": "Flows", "phase": "test_plan", "dependsOn": ["srsReview"], "command": "frontend-test-plan", "workerClass": "test-engineer", "artifactKind": "STP"},
-        {"id": "stpReview", "kind": "review", "title": "Flow Review", "phase": "test_plan", "dependsOn": ["stp"], "reviews": "stp"},
         {"id": "testing", "kind": "review", "title": "Flow Testing", "phase": "integration", "dependsOn": ["integration", "stpReview"], "reviews": "integration"}
-      ]
-    },
-    {
-      "type": "testing:plan",
-      "phases": [
-        {"id": "requirements", "label": "Use-Case Trace", "weight": 20, "gate": "srsReview", "exitCriterion": "Every core use case is traced to the scenarios that will exercise it, and the trace passes review"},
-        {"id": "construction", "label": "Plan Authoring", "weight": 45, "gate": "codeReview", "exitCriterion": "The black-box scenarios are written and pass scenario review"},
-        {"id": "integration", "label": "Plan Review", "weight": 35, "gate": "testing", "exitCriterion": "The assembled system test plan passes review and is signed off"}
-      ],
-      "tasks": [
-        {"id": "srs", "kind": "dispatch", "title": "Use-Case Trace", "phase": "requirements", "dependsOn": [], "command": "testing-plan-requirements", "workerClass": "test-engineer", "artifactKind": "SRS"},
-        {"id": "srsReview", "kind": "review", "title": "Trace Review", "phase": "requirements", "dependsOn": ["srs"], "reviews": "srs"},
-        {"id": "construction", "kind": "dispatch", "title": "Plan Authoring", "phase": "construction", "dependsOn": ["srsReview"], "command": "testing-plan-construction", "workerClass": "test-engineer", "artifactKind": "Construction"},
-        {"id": "codeReview", "kind": "review", "title": "Scenario Review", "phase": "construction", "dependsOn": ["construction"], "reviews": "construction"},
-        {"id": "integration", "kind": "dispatch", "title": "Plan Assembly", "phase": "integration", "dependsOn": ["codeReview"], "command": "testing-plan-integration", "workerClass": "qa-engineer", "artifactKind": "Integration"},
-        {"id": "testing", "kind": "review", "title": "Plan Review", "phase": "integration", "dependsOn": ["integration"], "reviews": "integration"}
       ]
     },
     {
@@ -128,22 +112,6 @@
         {"id": "codeReview", "kind": "review", "title": "Code Review", "phase": "construction", "dependsOn": ["construction"], "reviews": "construction"},
         {"id": "integration", "kind": "dispatch", "title": "Rig Integration", "phase": "integration", "dependsOn": ["codeReview"], "command": "testing-perf-integration", "workerClass": "qa-engineer", "artifactKind": "Integration"},
         {"id": "testing", "kind": "review", "title": "Rig Review", "phase": "integration", "dependsOn": ["integration"], "reviews": "integration"}
-      ]
-    },
-    {
-      "type": "testing:systemTest",
-      "phases": [
-        {"id": "requirements", "label": "Smoke Pass", "weight": 10, "gate": "srsReview", "exitCriterion": "A smoke pass runs over the integrated build and shows it is testable"},
-        {"id": "construction", "label": "Use-Case Execution", "weight": 45, "gate": "codeReview", "exitCriterion": "Every use case has run against the real build and its results are reviewed"},
-        {"id": "integration", "label": "Regression & Sign-off", "weight": 45, "gate": "testing", "exitCriterion": "The regression run is green and the system test is signed off"}
-      ],
-      "tasks": [
-        {"id": "srs", "kind": "dispatch", "title": "Smoke Pass", "phase": "requirements", "dependsOn": [], "command": "testing-systemtest-requirements", "workerClass": "software-tester", "artifactKind": "SRS"},
-        {"id": "srsReview", "kind": "review", "title": "Testability Check", "phase": "requirements", "dependsOn": ["srs"], "reviews": "srs"},
-        {"id": "construction", "kind": "dispatch", "title": "Use-Case Execution", "phase": "construction", "dependsOn": ["srsReview"], "command": "testing-systemtest-construction", "workerClass": "software-tester", "artifactKind": "Construction"},
-        {"id": "codeReview", "kind": "review", "title": "Results Review", "phase": "construction", "dependsOn": ["construction"], "reviews": "construction"},
-        {"id": "integration", "kind": "dispatch", "title": "Regression", "phase": "integration", "dependsOn": ["codeReview"], "command": "testing-systemtest-integration", "workerClass": "software-tester", "artifactKind": "Integration"},
-        {"id": "testing", "kind": "review", "title": "Sign-off", "phase": "integration", "dependsOn": ["integration"], "reviews": "integration"}
       ]
     },
     {
