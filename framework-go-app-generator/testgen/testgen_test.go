@@ -152,6 +152,34 @@ func TestGenerate_PlaywrightSpec(t *testing.T) {
 	}
 }
 
+// TestGenerate_PlaywrightResultsDepthIgnoresUITestsDir pins the plan's
+// literal: the config lives at <uitests module>/generated/<comp>/ and its
+// results tree is <uitests module>/test-results/<comp>, so the up-path is
+// always ../../ — never a function of how -uitests was spelled (the CLI
+// default is ../uitests/generated, whose `..` segment must not count as a
+// level).
+func TestGenerate_PlaywrightResultsDepthIgnoresUITestsDir(t *testing.T) {
+	raw, err := os.ReadFile("testdata/project_tp.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{"../uitests/generated", "a/b/c/uitests/generated", "generated"} {
+		out, err := Generate(raw, Config{ModulePath: "example.com/app/server", UITestsDir: dir})
+		if err != nil {
+			t.Fatal(err)
+		}
+		cfg, ok := out.Generated[dir+"/shopClient/playwright.config.gen.ts"]
+		if !ok {
+			t.Fatalf("UITestsDir=%q: missing config; have %v", dir, keys(out.Generated))
+		}
+		for _, want := range []string{"outputDir: '../../test-results/shopClient'", "outputFile: '../../test-results/shopClient/playwright.json'"} {
+			if !strings.Contains(string(cfg), want) {
+				t.Errorf("UITestsDir=%q: missing %q in config\n%s", dir, want, cfg)
+			}
+		}
+	}
+}
+
 func TestGenerate_NoGoPackageWarns(t *testing.T) {
 	raw, err := os.ReadFile("testdata/project_tp.json")
 	if err != nil {

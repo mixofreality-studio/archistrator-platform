@@ -66,7 +66,11 @@ func TestRun_WriteThenCheck(t *testing.T) {
 	if !errors.Is(err, errDrift) {
 		t.Fatalf("check must report drift, got err=%v", err)
 	}
-	for _, want := range []string{"stale: internal/manager/billing/manager_scenarios.gen_test.go", "orphan hook Step_extra in internal/manager/billing/manager_hooks_test.go"} {
+	for _, want := range []string{
+		"stale: internal/manager/billing/manager_scenarios.gen_test.go",
+		"orphan hook Step_extra in internal/manager/billing/manager_hooks_test.go",
+		"orphan generated file internal/manager/gone/manager_scenarios.gen_test.go", // no plan produces it any more; a write run would prune it
+	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("check output lacks %q:\n%s", want, out.String())
 		}
@@ -89,5 +93,42 @@ func TestRun_WriteThenCheck(t *testing.T) {
 	regen, err := os.ReadFile(gen)
 	if err != nil || string(regen) == "// edited\n" {
 		t.Errorf("rerun must rewrite the generated file")
+	}
+}
+
+// TestRun_DefaultUITestsDir drives the CLI with its own defaults for -root
+// (the server module, here <tmp>/server) and -uitests (../uitests/generated):
+// the Playwright config lands in the sibling uitests module and its results
+// tree is spelled relative to that module's root (../../test-results/<comp>),
+// not relative to however -uitests was written; -check is then silent.
+func TestRun_DefaultUITestsDir(t *testing.T) {
+	repo := t.TempDir()
+	root := filepath.Join(repo, "server")
+	if err := os.MkdirAll(root, 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/app/server\n\ngo 1.25\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	project := filepath.Join("..", "..", "testgen", "testdata", "project_tp.json")
+	args := []string{"-project", project, "-root", root}
+
+	var out, errOut bytes.Buffer
+	if err := run(args, &out, &errOut); err != nil {
+		t.Fatalf("run: %v\n%s", err, errOut.String())
+	}
+	cfg, err := os.ReadFile(filepath.Join(repo, "uitests", "generated", "shopClient", "playwright.config.gen.ts"))
+	if err != nil {
+		t.Fatalf("config not written under the sibling uitests module: %v", err)
+	}
+	for _, want := range []string{"outputDir: '../../test-results/shopClient'", "outputFile: '../../test-results/shopClient/playwright.json'"} {
+		if !strings.Contains(string(cfg), want) {
+			t.Errorf("missing %q in config\n%s", want, cfg)
+		}
+	}
+
+	out.Reset()
+	if err := run(append(args, "-check"), &out, &errOut); err != nil || out.Len() != 0 {
+		t.Fatalf("check on a fresh tree: err=%v out=%s", err, out.String())
 	}
 }

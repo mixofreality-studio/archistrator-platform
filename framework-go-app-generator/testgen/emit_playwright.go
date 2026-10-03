@@ -19,9 +19,7 @@ func emitPlaywright(out *Output, cfg Config, plan componentPlan) {
 	for _, bs := range plan.Scenarios {
 		out.Generated[path.Join(dir, bs.Scenario.ID+".spec.gen.ts")] = []byte(playwrightSpec(plan, bs))
 	}
-	up := strings.Repeat("../", strings.Count(dir, "/"))
-	results := up + "test-results/" + plan.Key
-	out.Generated[path.Join(dir, "playwright.config.gen.ts")] = []byte(playwrightConfig(results))
+	out.Generated[path.Join(dir, "playwright.config.gen.ts")] = []byte(playwrightConfig(playwrightResultsDir(plan.Key)))
 	out.Generated[path.Join(dir, "reporter.gen.ts")] = []byte(playwrightReporter)
 	out.HooksOnce[path.Join(dir, "hooks.ts")] = []byte(playwrightHooks(plan))
 }
@@ -137,6 +135,20 @@ func playwrightAssertion(o uiObservable, raw string) string {
 	default:
 		return fmt.Sprintf("  // expected result: %s\n", raw)
 	}
+}
+
+// componentDirDepth is how many levels a component's Playwright directory
+// sits below the uitests module root: <module>/generated/<component>/. The
+// results tree lives at the module root (<module>/test-results/<component>,
+// the analogue of scenariohost's moduleRoot()/test-results/<component> for
+// Go), so the config's up-path is this constant — never a function of how
+// Config.UITestsDir was spelled, whose `..` segments are not levels.
+const componentDirDepth = 2
+
+// playwrightResultsDir is the results tree for one component, relative to
+// that component's Playwright directory: ../../test-results/<component>.
+func playwrightResultsDir(component string) string {
+	return strings.Repeat("../", componentDirDepth) + "test-results/" + component
 }
 
 // playwrightConfig is the generated config: video and trace always on, the
