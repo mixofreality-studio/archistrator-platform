@@ -1,0 +1,26 @@
+{
+  "diagrams": [{
+    "useCaseID": "x", "title": "Two entries",
+    "nodes": [
+      {"id":"start","kind":"start"},
+      {"id":"a","kind":"action","label":"Do a"},
+      {"id":"end","kind":"end"},
+      {"id":"tick","kind":"timeEvent","label":"Every minute","roleName":"scheduler-manager"},
+      {"id":"b","kind":"action","label":"Do b"},
+      {"id":"c","kind":"action","label":"Do c"}
+    ],
+    "edges": [
+      {"from":"start","to":"a"},
+      {"from":"a","to":"end"},
+      {"from":"tick","to":"b"},
+      {"from":"b","to":"end"},
+      {"from":"b","to":"c"},
+      {"from":"c","to":"b"}
+    ]
+  }],
+  "views": [],
+  "actors": {},
+  "contracts": {
+    "schedulerManager": {"component":"schedulerManager","ops":[{"name":"Tick","params":[]}]}
+  }
+}

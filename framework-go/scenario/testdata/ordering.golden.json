@@ -1,0 +1,135 @@
+[
+  {
+    "id": "order-P1",
+    "useCase": "order",
+    "title": "Process an order — [not accepted]",
+    "path": [
+      "start",
+      "receive",
+      "accepted",
+      "reject",
+      "merge",
+      "end"
+    ],
+    "guards": [
+      {
+        "at": "accepted",
+        "guard": "[not accepted]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "receive",
+        "input": {
+          "kind": "acceptEvent",
+          "from": "customer",
+          "to": "ordermanager",
+          "op": "PlaceOrder",
+          "call": "order/receive/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      }
+    ]
+  },
+  {
+    "id": "order-P2",
+    "useCase": "order",
+    "title": "Process an order — [accepted]",
+    "path": [
+      "start",
+      "receive",
+      "accepted",
+      "send-invoice",
+      "inv-req",
+      "validate",
+      "inv-chk",
+      "pay",
+      "pay-paid",
+      "notify",
+      "merge",
+      "end"
+    ],
+    "guards": [
+      {
+        "at": "accepted",
+        "guard": "[accepted]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "receive",
+        "input": {
+          "kind": "acceptEvent",
+          "from": "customer",
+          "to": "ordermanager",
+          "op": "PlaceOrder",
+          "call": "order/receive/0"
+        },
+        "expectedOutputs": [
+          {
+            "node": "send-invoice",
+            "kind": "sendSignal",
+            "to": "customer",
+            "label": "Send invoice"
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "inv-req",
+            "object": "Invoice",
+            "inState": "[requested]"
+          },
+          {
+            "node": "inv-chk",
+            "object": "Invoice",
+            "inState": "[checked]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 2,
+        "node": "pay",
+        "input": {
+          "kind": "acceptEvent",
+          "from": "customer",
+          "to": "billingmanager",
+          "op": "RecordPayment",
+          "call": "order/pay/0"
+        },
+        "expectedOutputs": [
+          {
+            "node": "notify",
+            "kind": "sendSignal",
+            "to": "customer",
+            "label": "Notify order"
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "pay-paid",
+            "object": "Payment",
+            "inState": "[paid]"
+          }
+        ],
+        "hints": [
+          "Amounts in minor units"
+        ]
+      }
+    ]
+  }
+]
