@@ -1,6 +1,7 @@
 package methodcheck
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
 )
@@ -148,5 +149,99 @@ func TestUCIO_WiredIntoValidateArchitecture(t *testing.T) {
 	}
 	if !hasRuleFindings(res.Findings, ruleUCIOKinds) {
 		t.Fatalf("UC-IO-KINDS not reachable through validateArchitecture:\n%s", dumpFindings(res.Findings))
+	}
+}
+
+// projectWithUseCases commits c as slot 4 of an otherwise empty project.
+func projectWithUseCases(t *testing.T, c CoreUseCases) Project {
+	t.Helper()
+	raw, err := json.Marshal(c)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return Project{Slots: map[string]Slot{"4": {Status: reviewCommitted, Kind: kindCoreUseCases, Model: raw}}}
+}
+
+// UC-START-REDUNDANT (Amendment A3): a diagram with both a start node and an event
+// entry whose start family carries no stimulus of its own is reported once, as a
+// Warning located on the use case's diagram; the derivation drops that family.
+func TestUCStartRedundant_FiresOncePerUseCase(t *testing.T) {
+	c := ioUseCase([]ActivityNode{
+		{ID: "s", Kind: nodeStart},
+		{ID: "tick", Kind: kindTimeEvent, Label: "Pump due"},
+		{ID: "a", Kind: nodeAction, Label: "Work"},
+		{ID: "d", Kind: nodeDecision, Label: "Done?"},
+		{ID: "b", Kind: nodeAction, Label: "More"},
+		{ID: "e", Kind: nodeEnd},
+	}, []ActivityEdge{
+		{From: "s", To: "a", Kind: edgeControlFlow},
+		{From: "tick", To: "a", Kind: edgeControlFlow},
+		{From: "a", To: "d", Kind: edgeControlFlow},
+		{From: "d", To: "e", Kind: edgeGuardedFlow, Guard: "yes"},
+		{From: "d", To: "b", Kind: edgeGuardedFlow, Guard: "no"},
+		{From: "b", To: "e", Kind: edgeControlFlow},
+	})
+	fs, err := startRedundantFindings(projectWithUseCases(t, c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRules(t, fs, ruleUCStartRedundant, 1)
+	f := fs[0]
+	if f.Severity != SeverityWarning || !strings.Contains(f.Message, "2 path") ||
+		f.Location == nil || f.Location.Section != "useCases[uc-io].activity" {
+		t.Fatalf("UC-START-REDUNDANT shape: %+v %+v", f, f.Location)
+	}
+}
+
+// A diagram with only a start entry, or a start family with a stimulus of its
+// own, is silent.
+func TestUCStartRedundant_SilentWithoutRedundancy(t *testing.T) {
+	startOnly := ioUseCase([]ActivityNode{
+		{ID: "s", Kind: nodeStart},
+		{ID: "a", Kind: nodeAction, Label: "Work"},
+		{ID: "e", Kind: nodeEnd},
+	}, ioLinear("s", "a", "e"))
+	ownStimulus := ioUseCase([]ActivityNode{
+		{ID: "s", Kind: nodeStart},
+		{ID: "in", Kind: kindAcceptEvent, Label: "Order received", LinkedActorID: "customer"},
+		{ID: "tick", Kind: kindTimeEvent, Label: "Pump due"},
+		{ID: "e", Kind: nodeEnd},
+	}, []ActivityEdge{
+		{From: "s", To: "in", Kind: edgeControlFlow},
+		{From: "in", To: "e", Kind: edgeControlFlow},
+		{From: "tick", To: "e", Kind: edgeControlFlow},
+	})
+	for name, c := range map[string]CoreUseCases{"start only": startOnly, "own stimulus": ownStimulus} {
+		t.Run(name, func(t *testing.T) {
+			fs, err := startRedundantFindings(projectWithUseCases(t, c))
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantRules(t, fs, ruleUCStartRedundant, 0)
+		})
+	}
+}
+
+// The rule is wired into ValidateProject and registered as an emitted rule.
+func TestUCStartRedundant_Wired(t *testing.T) {
+	c := ioUseCase([]ActivityNode{
+		{ID: "s", Kind: nodeStart},
+		{ID: "tick", Kind: kindTimeEvent, Label: "Pump due"},
+		{ID: "a", Kind: nodeAction, Label: "Work"},
+		{ID: "e", Kind: nodeEnd},
+	}, []ActivityEdge{
+		{From: "s", To: "a", Kind: edgeControlFlow},
+		{From: "tick", To: "a", Kind: edgeControlFlow},
+		{From: "a", To: "e", Kind: edgeControlFlow},
+	})
+	fs, err := ValidateProject(projectWithUseCases(t, c))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !hasRuleFindings(fs, ruleUCStartRedundant) {
+		t.Fatalf("ValidateProject must surface UC-START-REDUNDANT:\n%s", dumpFindings(fs))
+	}
+	if !emittedRuleIDs()[ruleUCStartRedundant] {
+		t.Fatal("UC-START-REDUNDANT missing from the emitted-rule registry")
 	}
 }
