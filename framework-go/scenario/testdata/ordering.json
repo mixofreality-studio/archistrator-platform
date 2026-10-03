@@ -1,0 +1,45 @@
+{
+  "diagrams": [{
+    "useCaseID": "order", "title": "Process an order",
+    "nodes": [
+      {"id":"start","kind":"start"},
+      {"id":"receive","kind":"acceptEvent","label":"Order received","linkedActorID":"customer"},
+      {"id":"accepted","kind":"decision","label":"Order accepted?","decidedBy":"order-manager"},
+      {"id":"send-invoice","kind":"sendSignal","label":"Send invoice","linkedActorID":"customer"},
+      {"id":"inv-req","kind":"objectNode","label":"Invoice","inState":"[requested]"},
+      {"id":"validate","kind":"action","label":"Validate invoice"},
+      {"id":"inv-chk","kind":"objectNode","label":"Invoice","inState":"[checked]"},
+      {"id":"pay","kind":"acceptEvent","label":"Payment received","linkedActorID":"customer"},
+      {"id":"pay-paid","kind":"objectNode","label":"Payment","inState":"[paid]"},
+      {"id":"hint","kind":"note","label":"Amounts in minor units","anchor":"pay"},
+      {"id":"notify","kind":"sendSignal","label":"Notify order","linkedActorID":"customer"},
+      {"id":"reject","kind":"action","label":"Reject order"},
+      {"id":"merge","kind":"merge"},
+      {"id":"end","kind":"end"}
+    ],
+    "edges": [
+      {"from":"start","to":"receive"},
+      {"from":"receive","to":"accepted"},
+      {"from":"accepted","to":"send-invoice","guard":"[accepted]"},
+      {"from":"accepted","to":"reject","guard":"[not accepted]"},
+      {"from":"send-invoice","to":"inv-req"},
+      {"from":"inv-req","to":"validate"},
+      {"from":"validate","to":"inv-chk"},
+      {"from":"inv-chk","to":"pay"},
+      {"from":"pay","to":"pay-paid"},
+      {"from":"pay-paid","to":"notify"},
+      {"from":"notify","to":"merge"},
+      {"from":"reject","to":"merge"},
+      {"from":"merge","to":"end"}
+    ]
+  }],
+  "views": [{"useCaseID":"order","steps":[
+    {"nodeID":"receive","calls":[{"from":"customer","to":"order-manager","mode":"queued","label":"PlaceOrder"}]},
+    {"nodeID":"pay","calls":[{"from":"customer","to":"billing-manager","mode":"queued","label":"RecordPayment"}]}
+  ]}],
+  "actors": {"customer": true},
+  "contracts": {
+    "orderManager": {"component":"orderManager","ops":[{"name":"PlaceOrder","params":["order"]}]},
+    "billingManager": {"component":"billingManager","ops":[{"name":"RecordPayment","params":["invoiceId","amount"]}]}
+  }
+}

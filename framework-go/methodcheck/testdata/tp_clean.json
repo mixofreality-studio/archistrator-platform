@@ -1,0 +1,1188 @@
+{
+  "id": "tp-demo",
+  "version": 3,
+  "phase": 0,
+  "owner": "owner@x",
+  "name": "Test Plan Demo",
+  "research": {
+    "Sources": null
+  },
+  "slots": {
+    "4": {
+      "status": 2,
+      "kind": 4,
+      "model": {
+        "decisions": [
+          {
+            "useCase": {
+              "id": "process-order",
+              "name": "Process an order",
+              "actors": [
+                {
+                  "id": "customer",
+                  "role": "Customer"
+                }
+              ],
+              "trigger": "busMessage",
+              "classification": "core",
+              "variationOf": null,
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "lane-customer",
+                    "kind": "swimLane",
+                    "label": "Customer",
+                    "roleName": "Customer",
+                    "linkedActorId": "customer",
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "lane-order",
+                    "kind": "swimLane",
+                    "label": "OrderManager",
+                    "roleName": "order-manager",
+                    "linkedActorId": null,
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "lane-billing",
+                    "kind": "swimLane",
+                    "label": "BillingManager",
+                    "roleName": "billing-manager",
+                    "linkedActorId": null,
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null,
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "receive",
+                    "kind": "acceptEvent",
+                    "label": "Order received",
+                    "roleName": "Customer",
+                    "linkedActorId": "customer",
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "accepted",
+                    "kind": "decision",
+                    "label": "Order accepted?",
+                    "roleName": "order-manager",
+                    "linkedActorId": null,
+                    "linkedCompId": null,
+                    "decidedBy": "order-manager"
+                  },
+                  {
+                    "id": "send-invoice",
+                    "kind": "sendSignal",
+                    "label": "Send invoice",
+                    "roleName": "order-manager",
+                    "linkedActorId": "customer",
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "inv-req",
+                    "kind": "objectNode",
+                    "label": "Invoice",
+                    "roleName": "order-manager",
+                    "linkedActorId": null,
+                    "linkedCompId": null,
+                    "inState": "[requested]"
+                  },
+                  {
+                    "id": "pay",
+                    "kind": "acceptEvent",
+                    "label": "Payment received",
+                    "roleName": "Customer",
+                    "linkedActorId": "customer",
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "pay-paid",
+                    "kind": "objectNode",
+                    "label": "Payment",
+                    "roleName": "billing-manager",
+                    "linkedActorId": null,
+                    "linkedCompId": null,
+                    "inState": "[paid]"
+                  },
+                  {
+                    "id": "hint",
+                    "kind": "note",
+                    "label": "Amounts in minor units",
+                    "roleName": "",
+                    "linkedActorId": null,
+                    "linkedCompId": null,
+                    "anchor": "receive"
+                  },
+                  {
+                    "id": "reject",
+                    "kind": "action",
+                    "label": "Reject order",
+                    "roleName": "order-manager",
+                    "linkedActorId": null,
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "merge",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null,
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null,
+                    "linkedCompId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "receive",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "receive",
+                    "to": "accepted",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "accepted",
+                    "to": "send-invoice",
+                    "kind": "guardedFlow",
+                    "guard": "[accepted]"
+                  },
+                  {
+                    "from": "accepted",
+                    "to": "reject",
+                    "kind": "guardedFlow",
+                    "guard": "[not accepted]"
+                  },
+                  {
+                    "from": "send-invoice",
+                    "to": "inv-req",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "inv-req",
+                    "to": "pay",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "pay",
+                    "to": "pay-paid",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "pay-paid",
+                    "to": "merge",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "reject",
+                    "to": "merge",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "merge",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": ""
+          },
+          {
+            "useCase": {
+              "id": "track-order",
+              "name": "Track an order",
+              "actors": [
+                {
+                  "id": "customer",
+                  "role": "Customer"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "core",
+              "variationOf": null,
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "lane-customer",
+                    "kind": "swimLane",
+                    "label": "Customer",
+                    "roleName": "Customer",
+                    "linkedActorId": "customer",
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "lane-order",
+                    "kind": "swimLane",
+                    "label": "OrderManager",
+                    "roleName": "order-manager",
+                    "linkedActorId": null,
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null,
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "ask-order",
+                    "kind": "acceptEvent",
+                    "label": "Order status asked",
+                    "roleName": "Customer",
+                    "linkedActorId": "customer",
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "lookup",
+                    "kind": "action",
+                    "label": "Look the order up",
+                    "roleName": "order-manager",
+                    "linkedActorId": null,
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "ask-invoice",
+                    "kind": "acceptEvent",
+                    "label": "Invoice asked",
+                    "roleName": "Customer",
+                    "linkedActorId": "customer",
+                    "linkedCompId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null,
+                    "linkedCompId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "ask-order",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-order",
+                    "to": "lookup",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "lookup",
+                    "to": "ask-invoice",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-invoice",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": ""
+          }
+        ]
+      }
+    },
+    "5": {
+      "status": 2,
+      "kind": 5,
+      "model": {
+        "components": [
+          {
+            "id": "shop-client",
+            "name": "ShopClient",
+            "kind": "client",
+            "layer": "client",
+            "encapsulates": "",
+            "atomicBusinessVerbs": null
+          },
+          {
+            "id": "order-manager",
+            "name": "OrderManager",
+            "kind": "manager",
+            "layer": "manager",
+            "encapsulates": "ordering",
+            "atomicBusinessVerbs": null
+          },
+          {
+            "id": "billing-manager",
+            "name": "BillingManager",
+            "kind": "manager",
+            "layer": "manager",
+            "encapsulates": "billing",
+            "atomicBusinessVerbs": null
+          }
+        ],
+        "relationships": [
+          {
+            "from": "shop-client",
+            "to": "order-manager",
+            "mode": "queued",
+            "label": "PlaceOrder"
+          },
+          {
+            "from": "shop-client",
+            "to": "billing-manager",
+            "mode": "queued",
+            "label": "RecordPayment"
+          }
+        ],
+        "dynamicViews": [
+          {
+            "useCaseId": "process-order",
+            "key": "uc1",
+            "title": "Process an order",
+            "steps": [
+              {
+                "activityNodeId": "receive",
+                "calls": [
+                  {
+                    "from": "customer",
+                    "to": "order-manager",
+                    "mode": "queued",
+                    "label": "PlaceOrder",
+                    "alt": null
+                  }
+                ]
+              },
+              {
+                "activityNodeId": "send-invoice",
+                "calls": [
+                  {
+                    "from": "order-manager",
+                    "to": "customer",
+                    "mode": "queued",
+                    "label": "Invoice",
+                    "alt": null
+                  }
+                ]
+              },
+              {
+                "activityNodeId": "pay",
+                "calls": [
+                  {
+                    "from": "customer",
+                    "to": "billing-manager",
+                    "mode": "queued",
+                    "label": "RecordPayment",
+                    "alt": null
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "useCaseId": "track-order",
+            "key": "uc2",
+            "title": "Track an order",
+            "steps": [
+              {
+                "activityNodeId": "ask-order",
+                "calls": [
+                  {
+                    "from": "customer",
+                    "to": "order-manager",
+                    "mode": "sync",
+                    "label": "GetOrder",
+                    "alt": null
+                  }
+                ]
+              },
+              {
+                "activityNodeId": "ask-invoice",
+                "calls": [
+                  {
+                    "from": "customer",
+                    "to": "billing-manager",
+                    "mode": "sync",
+                    "label": "GetInvoice",
+                    "alt": null
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      }
+    }
+  },
+  "serviceContracts": {
+    "orderManager": {
+      "component": "orderManager",
+      "layer": "Manager",
+      "title": "order contract",
+      "$defs": {
+        "Order": {
+          "type": "object"
+        },
+        "OrderID": {
+          "type": "string"
+        }
+      },
+      "interface": {
+        "name": "OrderManager",
+        "layer": "Manager",
+        "operations": [
+          {
+            "name": "PlaceOrder",
+            "params": [
+              {
+                "name": "order",
+                "schema": {
+                  "$ref": "#/$defs/Order"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/OrderID"
+            },
+            "error": true
+          },
+          {
+            "name": "GetOrder",
+            "params": [
+              {
+                "name": "orderId",
+                "schema": {
+                  "$ref": "#/$defs/OrderID"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/Order"
+            },
+            "error": true
+          }
+        ]
+      }
+    },
+    "billingManager": {
+      "component": "billingManager",
+      "layer": "Manager",
+      "title": "billing contract",
+      "$defs": {
+        "Invoice": {
+          "type": "object"
+        }
+      },
+      "interface": {
+        "name": "BillingManager",
+        "layer": "Manager",
+        "operations": [
+          {
+            "name": "RecordPayment",
+            "params": [
+              {
+                "name": "invoiceId",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              {
+                "name": "amount",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            ],
+            "error": true
+          },
+          {
+            "name": "GetInvoice",
+            "params": [
+              {
+                "name": "invoiceId",
+                "schema": {
+                  "type": "string"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/Invoice"
+            },
+            "error": true
+          }
+        ]
+      }
+    }
+  },
+  "phaseArtifacts": {
+    "testPlan": {
+      "orderManager": {
+        "component": "orderManager",
+        "bindings": [
+          {
+            "scenario": "process-order-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "PlaceOrder",
+                "inputs": [
+                  {
+                    "name": "order",
+                    "value": "{\"id\":\"o-1\",\"total\":-1}",
+                    "schemaRef": "#/$defs/Order"
+                  }
+                ],
+                "expect": {
+                  "errorExpected": true,
+                  "errorCode": "OrderRejected"
+                },
+                "probes": [],
+                "unobservable": [],
+                "hook": false
+              }
+            ],
+            "skip": null
+          },
+          {
+            "scenario": "process-order-P2",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "PlaceOrder",
+                "inputs": [
+                  {
+                    "name": "order",
+                    "value": "{\"id\":\"o-2\",\"total\":1200}",
+                    "schemaRef": "#/$defs/Order"
+                  }
+                ],
+                "expect": {
+                  "result": "o-2",
+                  "errorExpected": false
+                },
+                "probes": [
+                  {
+                    "for": "inv-req",
+                    "component": "billingManager",
+                    "operation": "GetInvoice",
+                    "inputs": [
+                      {
+                        "name": "invoiceId",
+                        "value": "inv-o-2"
+                      }
+                    ],
+                    "expect": {
+                      "result": "{\"id\":\"inv-o-2\",\"state\":\"requested\"}",
+                      "errorExpected": false
+                    }
+                  }
+                ],
+                "unobservable": [
+                  "send-invoice"
+                ],
+                "hook": true
+              }
+            ],
+            "skip": null
+          },
+          {
+            "scenario": "track-order-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "GetOrder",
+                "inputs": [
+                  {
+                    "name": "orderId",
+                    "value": "o-2",
+                    "schemaRef": "#/$defs/OrderID"
+                  }
+                ],
+                "expect": {
+                  "result": "{\"id\":\"o-2\",\"status\":\"accepted\"}",
+                  "errorExpected": false
+                },
+                "probes": [],
+                "unobservable": [],
+                "hook": false
+              }
+            ],
+            "skip": null
+          }
+        ]
+      },
+      "billingManager": {
+        "component": "billingManager",
+        "bindings": [
+          {
+            "scenario": "process-order-P2",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "RecordPayment",
+                "inputs": [
+                  {
+                    "name": "invoiceId",
+                    "value": "inv-o-2"
+                  },
+                  {
+                    "name": "amount",
+                    "value": "1200"
+                  }
+                ],
+                "expect": {
+                  "errorExpected": false
+                },
+                "probes": [
+                  {
+                    "for": "pay-paid",
+                    "component": "billingManager",
+                    "operation": "GetInvoice",
+                    "inputs": [
+                      {
+                        "name": "invoiceId",
+                        "value": "inv-o-2"
+                      }
+                    ],
+                    "expect": {
+                      "result": "{\"id\":\"inv-o-2\",\"state\":\"paid\"}",
+                      "errorExpected": false
+                    }
+                  }
+                ],
+                "unobservable": [],
+                "hook": true
+              }
+            ],
+            "skip": null
+          },
+          {
+            "scenario": "track-order-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "GetInvoice",
+                "inputs": [
+                  {
+                    "name": "invoiceId",
+                    "value": "inv-o-2"
+                  }
+                ],
+                "expect": {
+                  "result": "{\"id\":\"inv-o-2\",\"state\":\"paid\"}",
+                  "errorExpected": false
+                },
+                "probes": [],
+                "unobservable": [],
+                "hook": false
+              }
+            ],
+            "skip": null
+          }
+        ]
+      }
+    }
+  },
+  "activityExecution": {
+    "C-order-manager": {
+      "activityID": "C-order-manager",
+      "startedAt": "2026-10-01T10:00:00Z"
+    },
+    "C-billing-manager": {
+      "activityID": "C-billing-manager",
+      "startedAt": "2026-10-01T10:00:00Z",
+      "completedAt": "2026-10-02T10:00:00Z"
+    },
+    "C-shop-client": {
+      "activityID": "C-shop-client",
+      "startedAt": "2026-10-01T10:00:00Z",
+      "completedAt": "2026-10-02T10:00:00Z",
+      "failureReason": 1,
+      "failureDetail": "pipeline failed"
+    },
+    "C-ledger-engine": {
+      "activityID": "C-ledger-engine",
+      "startedAt": "2026-10-01T10:00:00Z",
+      "completedAt": "2026-10-02T10:00:00Z",
+      "tailFailureDetail": "merge tail failed: push rejected"
+    },
+    "C-inventory-engine": {
+      "activityID": "C-inventory-engine",
+      "attempts": [
+        {
+          "attemptId": "C-inventory-engine:srs:1",
+          "task": "srs",
+          "phase": "requirements",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-inventory-engine:srsReview:1",
+          "task": "srsReview",
+          "phase": "requirements",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-inventory-engine:detailedDesign:1",
+          "task": "detailedDesign",
+          "phase": "detailed_design",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-inventory-engine:designReview:1",
+          "task": "designReview",
+          "phase": "detailed_design",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-inventory-engine:stp:1",
+          "task": "stp",
+          "phase": "test_plan",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-inventory-engine:stpReview:1",
+          "task": "stpReview",
+          "phase": "test_plan",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-inventory-engine:construction:1",
+          "task": "construction",
+          "phase": "construction",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-inventory-engine:codeReview:1",
+          "task": "codeReview",
+          "phase": "construction",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-inventory-engine:integration:1",
+          "task": "integration",
+          "phase": "integration",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-inventory-engine:testing:1",
+          "task": "testing",
+          "phase": "integration",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        }
+      ],
+      "version": 0
+    },
+    "C-pricing-engine": {
+      "activityID": "C-pricing-engine",
+      "attempts": [
+        {
+          "attemptId": "C-pricing-engine:srs:1",
+          "task": "srs",
+          "phase": "requirements",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-pricing-engine:srsReview:1",
+          "task": "srsReview",
+          "phase": "requirements",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-pricing-engine:detailedDesign:1",
+          "task": "detailedDesign",
+          "phase": "detailed_design",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-pricing-engine:designReview:1",
+          "task": "designReview",
+          "phase": "detailed_design",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-pricing-engine:stp:1",
+          "task": "stp",
+          "phase": "test_plan",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-pricing-engine:stpReview:1",
+          "task": "stpReview",
+          "phase": "test_plan",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-pricing-engine:construction:1",
+          "task": "construction",
+          "phase": "construction",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-pricing-engine:codeReview:1",
+          "task": "codeReview",
+          "phase": "construction",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        }
+      ],
+      "version": 0
+    },
+    "C-catalog-access": {
+      "activityID": "C-catalog-access",
+      "attempts": [
+        {
+          "attemptId": "C-catalog-access:srs:1",
+          "task": "srs",
+          "phase": "requirements",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-catalog-access:srsReview:1",
+          "task": "srsReview",
+          "phase": "requirements",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-catalog-access:detailedDesign:1",
+          "task": "detailedDesign",
+          "phase": "detailed_design",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-catalog-access:designReview:1",
+          "task": "designReview",
+          "phase": "detailed_design",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-catalog-access:stp:1",
+          "task": "stp",
+          "phase": "test_plan",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-catalog-access:stpReview:1",
+          "task": "stpReview",
+          "phase": "test_plan",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-catalog-access:construction:1",
+          "task": "construction",
+          "phase": "construction",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-catalog-access:codeReview:1",
+          "task": "codeReview",
+          "phase": "construction",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-catalog-access:integration:1",
+          "task": "integration",
+          "phase": "integration",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-catalog-access:testing:1",
+          "task": "testing",
+          "phase": "integration",
+          "attempt": 1,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "passed",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        },
+        {
+          "attemptId": "C-catalog-access:testing:2",
+          "task": "testing",
+          "phase": "integration",
+          "attempt": 2,
+          "actor": "agent",
+          "startedAt": "2026-10-01T10:00:00Z",
+          "endedAt": "2026-10-01T11:00:00Z",
+          "outcome": "rejected",
+          "evidence": {},
+          "provenance": {
+            "origin": "backfilled",
+            "basis": "fixture"
+          }
+        }
+      ],
+      "version": 0
+    }
+  }
+}

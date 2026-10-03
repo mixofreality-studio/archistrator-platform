@@ -70,10 +70,12 @@ func emittedRuleIDs() map[RuleID]bool {
 		// ---- Code↔model conformance (rules_conformance.go) ----
 		ruleCodeEdgeNotInModel, ruleModelEdgeNotInCode,
 
-		// ---- System-test-plan (rules_testplan.go) ----
-		ruleSTPOpExists, ruleSTPStaleContract, ruleSTPArgName, ruleSTPArgType,
-		ruleSTPExpectShape, ruleSTPChainCover, ruleSTPWalkLegal, ruleSTPWalkParticipant,
-		ruleSTPWalkMode, ruleSTPUCTrace, ruleSTPCaseKind,
+		// ---- Per-component test plans (rules_testplan.go) ----
+		ruleTPBound, ruleTPStep, ruleTPStepOp, ruleTPArgName, ruleTPArgType,
+		ruleTPExpect, ruleTPProbe, ruleTPState, ruleTPOpReached, ruleTPSkip,
+
+		// ---- Use-case I/O kinds (rules_usecase_io.go) ----
+		ruleUCIOKinds, ruleUCNoIO,
 	}
 	set := make(map[RuleID]bool, len(ids))
 	for _, id := range ids {

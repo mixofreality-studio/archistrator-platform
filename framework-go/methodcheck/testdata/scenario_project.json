@@ -1,0 +1,135 @@
+{
+  "id": "scenario-demo",
+  "version": 3,
+  "phase": 0,
+  "owner": "owner@x",
+  "name": "Scenario Demo",
+  "research": { "Sources": null },
+  "slots": {
+    "4": {
+      "status": 2,
+      "kind": 4,
+      "model": {
+        "decisions": [
+          {
+            "useCase": {
+              "id": "process-order",
+              "name": "Process an order",
+              "actors": [ { "id": "customer", "role": "Customer" } ],
+              "trigger": "busMessage",
+              "classification": "core",
+              "variationOf": null,
+              "activity": {
+                "nodes": [
+                  { "id": "lane-customer", "kind": "swimLane", "label": "Customer", "roleName": "Customer", "linkedActorId": "customer", "linkedCompId": null },
+                  { "id": "lane-order", "kind": "swimLane", "label": "OrderManager", "roleName": "order-manager", "linkedActorId": null, "linkedCompId": null },
+                  { "id": "start", "kind": "start", "label": "", "roleName": "", "linkedActorId": null, "linkedCompId": null },
+                  { "id": "receive", "kind": "acceptEvent", "label": "Order received", "roleName": "Customer", "linkedActorId": "customer", "linkedCompId": null },
+                  { "id": "accepted", "kind": "decision", "label": "Order accepted?", "roleName": "order-manager", "linkedActorId": null, "linkedCompId": null, "decidedBy": "order-manager" },
+                  { "id": "send-invoice", "kind": "sendSignal", "label": "Send invoice", "roleName": "order-manager", "linkedActorId": "customer", "linkedCompId": null },
+                  { "id": "inv-req", "kind": "objectNode", "label": "Invoice", "roleName": "order-manager", "linkedActorId": null, "linkedCompId": null, "inState": "[requested]" },
+                  { "id": "hint", "kind": "note", "label": "Amounts in minor units", "roleName": "", "linkedActorId": null, "linkedCompId": null, "anchor": "receive" },
+                  { "id": "reject", "kind": "action", "label": "Reject order", "roleName": "order-manager", "linkedActorId": null, "linkedCompId": null },
+                  { "id": "merge", "kind": "merge", "label": "", "roleName": "", "linkedActorId": null, "linkedCompId": null },
+                  { "id": "end", "kind": "end", "label": "", "roleName": "", "linkedActorId": null, "linkedCompId": null }
+                ],
+                "edges": [
+                  { "from": "start", "to": "receive", "kind": "controlFlow", "guard": "" },
+                  { "from": "receive", "to": "accepted", "kind": "controlFlow", "guard": "" },
+                  { "from": "accepted", "to": "send-invoice", "kind": "guardedFlow", "guard": "[accepted]" },
+                  { "from": "accepted", "to": "reject", "kind": "guardedFlow", "guard": "[not accepted]" },
+                  { "from": "send-invoice", "to": "inv-req", "kind": "controlFlow", "guard": "" },
+                  { "from": "inv-req", "to": "merge", "kind": "controlFlow", "guard": "" },
+                  { "from": "reject", "to": "merge", "kind": "controlFlow", "guard": "" },
+                  { "from": "merge", "to": "end", "kind": "controlFlow", "guard": "" }
+                ]
+              }
+            },
+            "rejectionReason": ""
+          },
+          {
+            "useCase": {
+              "id": "browse-catalog",
+              "name": "Browse the catalog",
+              "actors": [ { "id": "visitor", "role": "Visitor" } ],
+              "trigger": "clientAction",
+              "classification": "core",
+              "variationOf": null,
+              "activity": null
+            },
+            "rejectionReason": ""
+          }
+        ]
+      }
+    },
+    "5": {
+      "status": 2,
+      "kind": 5,
+      "model": {
+        "components": [
+          { "id": "shop-client", "name": "ShopClient", "kind": "client", "layer": "client", "encapsulates": "", "atomicBusinessVerbs": null },
+          { "id": "order-manager", "name": "OrderManager", "kind": "manager", "layer": "manager", "encapsulates": "ordering", "atomicBusinessVerbs": null },
+          { "id": "billing-manager", "name": "BillingManager", "kind": "manager", "layer": "manager", "encapsulates": "billing", "atomicBusinessVerbs": null }
+        ],
+        "relationships": [
+          { "from": "shop-client", "to": "order-manager", "mode": "queued", "label": "PlaceOrder" },
+          { "from": "order-manager", "to": "billing-manager", "mode": "queued", "label": "RecordPayment" }
+        ],
+        "dynamicViews": [
+          {
+            "useCaseId": "process-order",
+            "key": "uc1",
+            "title": "Process an order",
+            "steps": [
+              {
+                "activityNodeId": "receive",
+                "calls": [
+                  { "from": "customer", "to": "order-manager", "mode": "queued", "label": "PlaceOrder", "alt": null }
+                ]
+              },
+              {
+                "activityNodeId": "send-invoice",
+                "calls": [
+                  { "from": "order-manager", "to": "customer", "mode": "queued", "label": "Invoice", "alt": null }
+                ]
+              }
+            ]
+          },
+          {
+            "useCaseId": "browse-catalog",
+            "key": "uc2",
+            "title": "Browse the catalog",
+            "steps": null
+          }
+        ]
+      }
+    }
+  },
+  "serviceContracts": {
+    "orderManager": {
+      "component": "orderManager",
+      "layer": "Manager",
+      "title": "order contract",
+      "$defs": { "Order": { "type": "object" } },
+      "interface": {
+        "name": "OrderManager",
+        "layer": "Manager",
+        "operations": [
+          { "name": "PlaceOrder", "params": [ { "name": "order", "schema": { "$ref": "#/$defs/Order" } } ], "error": true }
+        ]
+      }
+    },
+    "billingManager": {
+      "component": "billingManager",
+      "layer": "Manager",
+      "title": "billing contract",
+      "interface": {
+        "name": "BillingManager",
+        "layer": "Manager",
+        "operations": [
+          { "name": "RecordPayment", "params": [ { "name": "invoiceId", "schema": { "type": "string" } }, { "name": "amount", "schema": { "type": "integer" } } ], "error": true }
+        ]
+      }
+    }
+  }
+}

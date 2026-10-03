@@ -3,464 +3,357 @@ package methodcheck
 import (
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
 
-// rules_testplan.go is the STP-* System-Test-Plan validation family: it cross-checks
-// the committed `.testingState.systemTestPlan` against the designed service contracts
-// (`.serviceContracts`), the committed System architecture (slot 5) and the core use
-// cases (slot 4). A black-box system-test plan is authored at MANAGER-OPERATION
-// granularity ({component, operation} steps); these rules prove each step actually
-// resolves to a real designed operation, that its arguments and expected outcomes are
-// contract-consistent, and that every scenario traces to a real core use case with
-// adversarial cover.
-//
-// ENTRY-EDGE MATCHING MODEL (the walk family). System tests are wire-level black-box
-// tests driven ONLY against the system's Client surfaces — the-method-testing §7
-// R1/R2: "system tests are wire-level black-box against Client surfaces; interior
-// edges are architecture tests they may not drive; call chains are validation
-// artifacts, not operation catalogs." A scenario's dynamic view therefore has an
-// ENTRY SURFACE: the edges whose From component is Kind=Client (under DV-SINGLE-MGR
-// these all target the use case's one Manager). Only those ENTRY EDGES define the
-// operations a system test may drive. The walk family reasons exclusively over entry
-// edges:
-//   - STP-CHAIN-COVER (Error): ≥1 happy case must by itself cover every distinct
-//     entry operation of the view, in view-edge order.
-//   - STP-WALK-LEGAL (Error): a step that DOES match an entry edge must respect
-//     view-edge order; a step matching NO entry edge is silent here (it is exercising
-//     an interior/contract operation — the contract family's jurisdiction, not the
-//     walk's — which is why interior contract ops no longer raise false walk faults).
-//   - STP-WALK-PARTICIPANT (Warning): a step's component should be a declared view
-//     participant; a foreign component is a drift signal, not a hard error (adversarial
-//     staging may legitimately touch outside the footprint).
-//   - STP-WALK-MODE (Error): matching restricted to QUEUED entry edges.
-//
-// The family runs ONLY when the plan is non-empty AND its prerequisites (service
-// contracts + slot 5 + slot 4) are committed; a plan authored without them is a
-// ContractMisuse coherence fault (surfaced by validateSystemTestPlan's error return,
-// NOT a finding). The family is wired into ValidateProject via systemTestPlanFindings
-// (validate.go), which passes a nil normalizer so the walk case-folds through
-// defaultNormalizer.
-//
-// Component naming bridge: STP steps name a contract KEY (camelCase, e.g.
-// settlementManager); dynamic-view participants are kebab-case slot-5 ids
-// (settlement-manager). Both reduce to the same key under the shared normalizer, so
-// the walk check matches across the two vocabularies.
+// rules_testplan.go is the TP-* per-component test-plan family (deterministic-
+// component-testing design §5.2), replacing the retired STP-* system-test-plan rules.
+// The plan under test is `.phaseArtifacts.testPlan[<component>]`: one ScenarioBinding
+// per scenario the derivation projects onto that component (DeriveScenarios +
+// scenario.ForComponent). Every rule here is a check of a binding against the
+// projected scenario and the committed contract surface, except TP-OP-REACHED, which
+// is a check of the DESIGN (a contract op no scenario ever drives) and therefore a
+// Warning: it must not block recordPhaseArtifact; design-health renders it and the
+// workflow reports it for a founder ruling.
 
+// Rule ids of the TP family.
 const (
-	ruleSTPOpExists        RuleID = "STP-OP-EXISTS"
-	ruleSTPStaleContract   RuleID = "STP-STALE-CONTRACT"
-	ruleSTPArgName         RuleID = "STP-ARG-NAME"
-	ruleSTPArgType         RuleID = "STP-ARG-TYPE"
-	ruleSTPExpectShape     RuleID = "STP-EXPECT-SHAPE"
-	ruleSTPChainCover      RuleID = "STP-CHAIN-COVER"
-	ruleSTPWalkLegal       RuleID = "STP-WALK-LEGAL"       //nolint:gosec // G101 false positive: a rule identifier, not a credential
-	ruleSTPWalkParticipant RuleID = "STP-WALK-PARTICIPANT" //nolint:gosec // G101 false positive: a rule identifier, not a credential
-	ruleSTPWalkMode        RuleID = "STP-WALK-MODE"        //nolint:gosec // G101 false positive: a rule identifier, not a credential
-	ruleSTPUCTrace         RuleID = "STP-UC-TRACE"
-	ruleSTPCaseKind        RuleID = "STP-CASE-KIND"
+	ruleTPBound     RuleID = "TP-BOUND"
+	ruleTPStep      RuleID = "TP-STEP"
+	ruleTPStepOp    RuleID = "TP-STEP-OP"
+	ruleTPArgName   RuleID = "TP-ARG-NAME"
+	ruleTPArgType   RuleID = "TP-ARG-TYPE"
+	ruleTPExpect    RuleID = "TP-EXPECT"
+	ruleTPProbe     RuleID = "TP-PROBE"
+	ruleTPState     RuleID = "TP-STATE"
+	ruleTPOpReached RuleID = "TP-OP-REACHED"
+	ruleTPSkip      RuleID = "TP-SKIP"
 )
 
-// stpContext carries the resolved, indexed inputs one validateSystemTestPlan run
-// shares across every scenario/case/step — built once so the per-step predicates
-// stay allocation-light.
-type stpContext struct {
-	normalize     func(string) string
-	contractByKey map[string]ServiceContract // normalize(component key) → contract
-	coreUCIDs     map[string]bool            // normalize(core use-case id) → true
-	viewByUC      map[string]stpViewIndex    // normalize(dynamic-view UseCaseID) → precomputed view index
-	compIDByKey   map[string]string          // normalize(component id or name) → canonical id
-	kindByComp    map[string]string          // normalize(component id or name) → Kind
-	seenStale     map[string]bool            // stale-contract keys already reported (dedup)
-}
+// opLookup resolves an operation of one contract by its exact (case-sensitive) name.
+type opLookup func(name string) (ContractOperation, bool)
 
-// stpViewIndex is the per-dynamic-view precompute the walk family reasons over: the
-// ENTRY EDGES (edges whose From is a Client component) in view-edge order, the set of
-// declared participants, and the ordered list of distinct entry OPERATIONS named by
-// those entry edges (R4 web/mcp duplicates of the same op collapse to one).
-type stpViewIndex struct {
-	entryEdges   []Relationship  // entry edges (From is Kind=Client), in view-edge order
-	participants map[string]bool // normalize(participant id/name) → true
-	entryOps     []string        // ordered distinct normalized entry-op keys
-}
-
-// validateSystemTestPlan is the STP-* family orchestration. It returns findings for a
-// committed System Test Plan, or a *ContractMisuseError when the plan is present but a
-// prerequisite artifact (service contracts, System, core use cases) is not committed —
-// the same coherence-fault posture the design verbs use. When the plan is absent or
-// empty the whole family is a no-op (nil, nil). normalize may be nil (defaults to
-// defaultNormalizer); pass a spec's NameNormalizer to honor a module's match keys.
-func validateSystemTestPlan(p Project, normalize func(string) string) ([]Finding, error) {
-	stp := p.systemTestPlan()
-	if stp == nil || len(stp.Scenarios) == 0 {
-		return nil, nil // the family is a no-op when the plan is absent/empty
-	}
-	if normalize == nil {
-		normalize = defaultNormalizer
-	}
-	sys, cuc, err := stpPrerequisites(p)
+// testPlanFindings runs the family. TP-OP-REACHED runs over the whole derived set
+// regardless of any committed plan; the binding rules run per committed component
+// plan, in key order so the findings are deterministic.
+func testPlanFindings(p Project) ([]Finding, error) {
+	all, err := DeriveScenarios(p)
 	if err != nil {
 		return nil, err
 	}
-
-	ctx := buildSTPContext(p, sys, cuc, normalize)
-	var out []Finding
-	for si, scn := range stp.Scenarios {
-		out = append(out, stpUCTrace(scn, ctx, si)...)
-		out = append(out, stpCaseKind(scn, si)...)
-		vi, hasDV := ctx.viewByUC[normalize(scn.UseCase)]
-		if hasDV {
-			out = append(out, stpChainCover(scn, vi, ctx, si)...)
-		}
-		for _, cs := range scn.Cases {
-			out = append(out, stpValidateCase(scn, cs, vi, hasDV, ctx, si)...)
-		}
+	out := opReachedFindings(p, all)
+	if p.PhaseArtifacts == nil {
+		return out, nil
 	}
-	sortFindings(out)
+	comps := make([]string, 0, len(p.PhaseArtifacts.TestPlan))
+	for comp := range p.PhaseArtifacts.TestPlan {
+		comps = append(comps, comp)
+	}
+	sort.Strings(comps)
+	for _, comp := range comps {
+		rec := p.PhaseArtifacts.TestPlan[comp]
+		out = append(out, componentPlanFindings(p, comp, rec, scenario.ForComponent(all, comp))...)
+	}
 	return out, nil
 }
 
-// stpPrerequisites resolves the committed inputs the family depends on, returning a
-// *ContractMisuseError when the plan is present but a prerequisite (service contracts,
-// System, core use cases) is not committed — the same coherence-fault posture as the
-// design verbs.
-func stpPrerequisites(p Project) (System, CoreUseCases, error) {
-	if len(p.ServiceContracts) == 0 {
-		return System{}, CoreUseCases{}, &ContractMisuseError{Msg: "validateSystemTestPlan: systemTestPlan present but no service contracts are committed (cannot resolve any step operation)"}
+// componentPlanFindings is TP-BOUND over one component's plan (every projected
+// scenario bound exactly once, no unknown ids) plus the per-binding rules.
+func componentPlanFindings(p Project, comp string, rec TestPlanRecord, projected []scenario.Scenario) []Finding {
+	l := loc(0, "phaseArtifacts.testPlan."+comp)
+	byID := make(map[string]scenario.Scenario, len(projected))
+	for _, s := range projected {
+		byID[s.ID] = s
 	}
-	sys, sysOK, err := p.system()
-	if err != nil {
-		return System{}, CoreUseCases{}, err
-	}
-	if !sysOK {
-		return System{}, CoreUseCases{}, &ContractMisuseError{Msg: "validateSystemTestPlan: systemTestPlan present but the System architecture (slot 5) is not committed"}
-	}
-	cuc, cucOK, err := p.coreUseCases()
-	if err != nil {
-		return System{}, CoreUseCases{}, err
-	}
-	if !cucOK {
-		return System{}, CoreUseCases{}, &ContractMisuseError{Msg: "validateSystemTestPlan: systemTestPlan present but the core use cases (slot 4) are not committed"}
-	}
-	return sys, cuc, nil
-}
-
-// buildSTPContext indexes the committed inputs for one plan validation run.
-func buildSTPContext(p Project, sys System, cuc CoreUseCases, normalize func(string) string) stpContext {
-	ctx := stpContext{
-		normalize:     normalize,
-		contractByKey: make(map[string]ServiceContract, len(p.ServiceContracts)),
-		coreUCIDs:     make(map[string]bool),
-		viewByUC:      make(map[string]stpViewIndex, len(sys.DynamicViews)),
-		compIDByKey:   make(map[string]string, len(sys.Components)*2),
-		kindByComp:    make(map[string]string, len(sys.Components)*2),
-		seenStale:     make(map[string]bool),
-	}
-	for key, c := range p.ServiceContracts {
-		ctx.contractByKey[normalize(key)] = c
-	}
-	indexCoreUseCases(&ctx, cuc)
-	indexComponents(&ctx, sys)
-	indexComponentKinds(&ctx, sys)
-	indexDynamicViews(&ctx, sys) // depends on kindByComp — must follow indexComponentKinds
-	return ctx
-}
-
-// indexCoreUseCases records the normalized ids of the CORE use cases for STP-UC-TRACE.
-func indexCoreUseCases(ctx *stpContext, cuc CoreUseCases) {
-	for _, d := range cuc.Decisions {
-		if d.UseCase.Classification == classCore && d.UseCase.ID != "" {
-			ctx.coreUCIDs[ctx.normalize(d.UseCase.ID)] = true
-		}
-	}
-}
-
-// indexComponentKinds maps each component's normalized id AND name to its Kind, so the
-// entry-edge computation can classify an edge's From component as Client. The id wins
-// when both are present.
-func indexComponentKinds(ctx *stpContext, sys System) {
-	for _, c := range sys.Components {
-		if c.Kind == "" {
+	bound := map[string]bool{}
+	var out []Finding
+	for _, b := range rec.Bindings {
+		s, ok := byID[b.Scenario]
+		if !ok {
+			out = append(out, tpFinding(ruleTPBound, l, "%s binds unknown scenario %q (stale after a use-case edit?)", comp, b.Scenario))
 			continue
 		}
-		if c.ID != "" {
-			ctx.kindByComp[ctx.normalize(c.ID)] = c.Kind
-		}
-		if c.Name == "" {
+		if bound[b.Scenario] {
+			out = append(out, tpFinding(ruleTPBound, l, "%s binds %q twice", comp, b.Scenario))
 			continue
 		}
-		if _, ok := ctx.kindByComp[ctx.normalize(c.Name)]; !ok {
-			ctx.kindByComp[ctx.normalize(c.Name)] = c.Kind
+		bound[b.Scenario] = true
+		out = append(out, bindingFindings(p, comp, s, b, l)...)
+	}
+	for _, s := range projected {
+		if !bound[s.ID] {
+			out = append(out, tpFinding(ruleTPBound, l, "%s has no binding for scenario %s", comp, s.ID))
 		}
 	}
+	return out
 }
 
-// indexDynamicViews precomputes each dynamic view's stpViewIndex, keyed by normalized
-// UseCaseID. Depends on ctx.kindByComp being populated first.
-func indexDynamicViews(ctx *stpContext, sys System) {
-	for _, dv := range sys.DynamicViews {
-		if dv.UseCaseID != "" {
-			ctx.viewByUC[ctx.normalize(dv.UseCaseID)] = buildViewIndex(dv, *ctx)
-		}
+// bindingFindings checks one binding: a skip (TP-SKIP) or the step list (TP-STEP
+// cardinality, then every step).
+func bindingFindings(p Project, comp string, s scenario.Scenario, b ScenarioBinding, l *Location) []Finding {
+	if b.Skip != nil {
+		return skipFindings(p, comp, b, l)
 	}
+	if len(b.Steps) != len(s.Stimuli) {
+		return []Finding{tpFinding(ruleTPStep, l, "%s %s: %d steps bound, %d stimuli projected", comp, s.ID, len(b.Steps), len(s.Stimuli))}
+	}
+	contract, op := findContract(p, comp)
+	sc := tpScope{p: p, comp: comp, scenario: s.ID, contract: contract, op: op, l: l}
+	var out []Finding
+	for i, st := range b.Steps {
+		out = append(out, sc.stepFindings(s.Stimuli[i], st)...)
+	}
+	return out
 }
 
-// buildViewIndex derives the entry surface of one dynamic view: its entry edges (From
-// is Kind=Client), participant set, and ordered distinct entry-op list.
-func buildViewIndex(dv DynamicView, ctx stpContext) stpViewIndex {
-	ids := participantIDs(dv)
-	vi := stpViewIndex{participants: make(map[string]bool, len(ids))}
-	for _, p := range ids {
-		vi.participants[ctx.normalize(p)] = true
+// tpScope is one binding's evaluation context: the component, its scenario, its
+// resolved contract, and the plan's location.
+type tpScope struct {
+	p        Project
+	comp     string
+	scenario string
+	contract ServiceContract
+	op       opLookup
+	l        *Location
+}
+
+// section labels one step for messages.
+func (sc tpScope) section(seq int) string {
+	return fmt.Sprintf("%s %s step %d", sc.comp, sc.scenario, seq)
+}
+
+// stepFindings is TP-STEP (seq), TP-STEP-OP (the op exists and agrees with the call
+// chain), then the arg/expect/probe/state rules over the resolved op.
+func (sc tpScope) stepFindings(stim scenario.Stimulus, st StepBinding) []Finding {
+	var out []Finding
+	if st.Seq != stim.Seq {
+		out = append(out, tpFinding(ruleTPStep, sc.l, "%s %s: step bound as seq %d where stimulus %d is projected", sc.comp, sc.scenario, st.Seq, stim.Seq))
 	}
-	seen := make(map[string]bool)
-	for _, e := range stepCalls(dv) {
-		if ctx.kindByComp[ctx.normalize(e.From)] != kindClient {
+	section := sc.section(stim.Seq)
+	cop, ok := sc.op(st.Operation)
+	if !ok {
+		return append(out, tpFinding(ruleTPStepOp, sc.l, "%s: %q is not an operation of %s", section, st.Operation, sc.comp))
+	}
+	if stim.Input.Op != "" && st.Operation != stim.Input.Op {
+		return append(out, tpFinding(ruleTPStepOp, sc.l, "%s: operation %q but the call chain resolves %q", section, st.Operation, stim.Input.Op))
+	}
+	out = append(out, argFindings(st.Inputs, cop, sc.contract, ruleTPArgName, ruleTPArgType, section, sc.l)...)
+	out = append(out, expectFindings(st.Expect, cop, sc.contract, ruleTPExpect, section, sc.l)...)
+	proved, pf := sc.probeFindings(section, st.Probes)
+	out = append(out, pf...)
+	return append(out, sc.stateFindings(section, stim, st, proved)...)
+}
+
+// probeFindings is TP-PROBE: every probe names a designed operation and supplies its
+// params; the result is the set of scenario nodes the probes claim to prove.
+//
+// EARMARK (spec §5.2 drift): the spec says probes name real READ-ONLY ops. The mirror's
+// ContractOperation carries no read-only/mutating marker, so only existence is
+// checked here; the wave that adds that flag to the contract surface owns the other
+// half of the predicate.
+func (sc tpScope) probeFindings(section string, probes []Probe) (map[string]bool, []Finding) {
+	proved := map[string]bool{}
+	var out []Finding
+	for _, pr := range probes {
+		pc, pop := findContract(sc.p, pr.Component)
+		cpop, ok := pop(pr.Operation)
+		if !ok {
+			out = append(out, tpFinding(ruleTPProbe, sc.l, "%s: probe %s.%s is not a designed operation", section, pr.Component, pr.Operation))
 			continue
 		}
-		vi.entryEdges = append(vi.entryEdges, e)
-		opKey := entryOpKey(e.Label, ctx.normalize)
-		if opKey == "" || seen[opKey] {
-			continue
+		psec := fmt.Sprintf("%s probe %s.%s", section, pr.Component, pr.Operation)
+		out = append(out, argFindings(pr.Inputs, cpop, pc, ruleTPProbe, ruleTPProbe, psec, sc.l)...)
+		out = append(out, expectFindings(pr.Expect, cpop, pc, ruleTPProbe, psec, sc.l)...)
+		if pr.For != "" {
+			proved[pr.For] = true
 		}
-		seen[opKey] = true
-		vi.entryOps = append(vi.entryOps, opKey)
 	}
-	return vi
+	return proved, out
 }
 
-// entryOpKey reduces an edge label ("closeSettlementCycle(customerId, cycleId)") to the
-// normalized operation name it carries — the label text before the argument gloss.
-func entryOpKey(label string, normalize func(string) string) string {
-	tok := label
-	if i := strings.IndexByte(tok, '('); i >= 0 {
-		tok = tok[:i]
-	}
-	return normalize(strings.TrimSpace(tok))
-}
-
-// indexComponents maps each component's normalized id AND name to its canonical id, so
-// a step keyed on either form resolves. Both reduce to the same key under the shared
-// normalizer; the id wins when both are present.
-func indexComponents(ctx *stpContext, sys System) {
-	for _, c := range sys.Components {
-		if c.ID != "" {
-			ctx.compIDByKey[ctx.normalize(c.ID)] = c.ID
-		}
-		if c.Name == "" {
-			continue
-		}
-		if _, ok := ctx.compIDByKey[ctx.normalize(c.Name)]; !ok {
-			ctx.compIDByKey[ctx.normalize(c.Name)] = c.ID
-		}
-	}
-}
-
-// ---- STP-UC-TRACE ----
-
-// stpUCTrace emits STP-UC-TRACE (Error) when a scenario's useCase does not resolve to
-// a real CORE use-case id in slot 4.
-func stpUCTrace(scn TestScenario, ctx stpContext, si int) []Finding {
-	if ctx.coreUCIDs[ctx.normalize(scn.UseCase)] {
-		return nil
-	}
-	section := fmt.Sprintf("scenario %s", scn.ID)
-	return []Finding{{
-		RuleID:   ruleSTPUCTrace,
-		Severity: SeverityError,
-		Message:  fmt.Sprintf("%s: useCase %q does not resolve to a core use case in slot 4; every scenario must trace to a real core use case", section, scn.UseCase),
-		Location: loc(si+1, section),
-	}}
-}
-
-// ---- STP-CASE-KIND ----
-
-// stpCaseKind emits STP-CASE-KIND. A scenario with zero cases is an Error (nothing is
-// proven). Otherwise: no happy case → Warning; no negative/boundary case → Warning
-// (the plan's value is its adversarial cover — Righting Software ch.14).
-func stpCaseKind(scn TestScenario, si int) []Finding {
-	section := fmt.Sprintf("scenario %s", scn.ID)
-	if len(scn.Cases) == 0 {
-		return []Finding{{
-			RuleID:   ruleSTPCaseKind,
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: scenario has zero test cases; a scenario must carry at least one case (and ≥1 happy + ≥1 adversarial)", section),
-			Location: loc(si+1, section),
-		}}
-	}
-	var happy, adversarial int
-	for _, c := range scn.Cases {
-		switch strings.ToLower(c.Kind) {
-		case "happy":
-			happy++
-		case "negative", "boundary":
-			adversarial++
-		}
+// stateFindings is TP-STATE: every expected state on the stimulus has a probe For its
+// node; every expected output has a probe or an Unobservable declaration.
+func (sc tpScope) stateFindings(section string, stim scenario.Stimulus, st StepBinding, proved map[string]bool) []Finding {
+	unobs := make(map[string]bool, len(st.Unobservable))
+	for _, u := range st.Unobservable {
+		unobs[u] = true
 	}
 	var out []Finding
-	if happy == 0 {
-		out = append(out, Finding{
-			RuleID:   ruleSTPCaseKind,
-			Severity: SeverityWarning,
-			Message:  fmt.Sprintf("%s: scenario has no happy case; a scenario should prove the use case holds on at least one happy path", section),
-			Location: loc(si+1, section),
-		})
-	}
-	if adversarial == 0 {
-		out = append(out, Finding{
-			RuleID:   ruleSTPCaseKind,
-			Severity: SeverityWarning,
-			Message:  fmt.Sprintf("%s: scenario has no negative/boundary case; the plan's value is its adversarial cover — add ≥1 failure or boundary case", section),
-			Location: loc(si+1, section),
-		})
-	}
-	return out
-}
-
-// ---- STP-CHAIN-COVER ----
-
-// stpChainCover emits STP-CHAIN-COVER (Error) per scenario with a dynamic view: at
-// least one kind=happy case must BY ITSELF contain entry-matched steps covering every
-// distinct entry operation of the view, in view-edge order. A scenario with no happy
-// case fails outright. When the view exposes no entry operations (no Client-surface
-// edges) there is nothing a black-box test can drive and the rule is a no-op.
-func stpChainCover(scn TestScenario, vi stpViewIndex, ctx stpContext, si int) []Finding {
-	section := fmt.Sprintf("scenario %s", scn.ID)
-	if len(vi.entryOps) == 0 {
-		return nil
-	}
-	happy := happyCases(scn)
-	if len(happy) == 0 {
-		return []Finding{chainCoverFinding(section, si,
-			fmt.Sprintf("scenario has no happy case; a happy case must by itself walk the full entry chain (%s)", strings.Join(vi.entryOps, " → ")))}
-	}
-	coveredAnywhere := make(map[string]bool)
-	for _, c := range happy {
-		seq := caseEntryOpSequence(c, vi, ctx)
-		for _, k := range seq {
-			coveredAnywhere[k] = true
-		}
-		if isSubsequence(vi.entryOps, seq) {
-			return nil // this happy case walks the full chain in order — scenario is covered
+	for _, es := range stim.ExpectedStates {
+		if !proved[es.Node] {
+			out = append(out, tpFinding(ruleTPState, sc.l, "%s: expected state %s %s (node %s) has no probe", section, es.Object, es.InState, es.Node))
 		}
 	}
-	return []Finding{chainCoverFinding(section, si, chainCoverGapMessage(vi.entryOps, coveredAnywhere))}
-}
-
-// happyCases returns the scenario's kind=happy cases.
-func happyCases(scn TestScenario) []TestCase {
-	var out []TestCase
-	for _, c := range scn.Cases {
-		if strings.ToLower(c.Kind) == "happy" {
-			out = append(out, c)
+	for _, eo := range stim.ExpectedOutputs {
+		if !proved[eo.Node] && !unobs[eo.Node] {
+			out = append(out, tpFinding(ruleTPState, sc.l, "%s: expected output %q (node %s) has neither a probe nor an unobservable declaration", section, eo.Label, eo.Node))
 		}
 	}
 	return out
 }
 
-// caseEntryOpSequence returns, in step order, the entry-op key each entry-matched step
-// of the case covers (steps that match no entry edge contribute nothing).
-func caseEntryOpSequence(cs TestCase, vi stpViewIndex, ctx stpContext) []string {
-	var seq []string
-	for _, step := range cs.Steps {
-		firstMatch, _ := scanEntryEdges(step, vi.entryEdges, ctx, 0)
-		if firstMatch == -1 {
-			continue
-		}
-		if k := entryOpKey(vi.entryEdges[firstMatch].Label, ctx.normalize); k != "" {
-			seq = append(seq, k)
-		}
+// opReachedFindings is TP-OP-REACHED (Warning): every operation of every contract is
+// the input of at least one derived scenario. Contracts are visited in key order.
+func opReachedFindings(p Project, all []scenario.Scenario) []Finding {
+	reached := reachedOps(all)
+	keys := make([]string, 0, len(p.ServiceContracts))
+	for key := range p.ServiceContracts {
+		keys = append(keys, key)
 	}
-	return seq
-}
-
-// chainCoverFinding builds a scenario-level STP-CHAIN-COVER Error.
-func chainCoverFinding(section string, si int, msg string) Finding {
-	return Finding{
-		RuleID:   ruleSTPChainCover,
-		Severity: SeverityError,
-		Message:  fmt.Sprintf("%s: %s", section, msg),
-		Location: loc(si+1, section),
-	}
-}
-
-// chainCoverGapMessage names the entry ops no happy case covers, or (when every op is
-// covered somewhere but no single case walks them in order) the required order.
-func chainCoverGapMessage(entryOps []string, covered map[string]bool) string {
-	var missing []string
-	for _, k := range entryOps {
-		if !covered[k] {
-			missing = append(missing, k)
-		}
-	}
-	order := strings.Join(entryOps, " → ")
-	if len(missing) > 0 {
-		return fmt.Sprintf("no happy case walks the full entry chain by itself; entry operation(s) [%s] are never exercised by a happy case (required order: %s)", strings.Join(missing, ", "), order)
-	}
-	return fmt.Sprintf("no single happy case walks the entry chain in view-edge order (required order: %s)", order)
-}
-
-// isSubsequence reports whether need appears, in order, as a subsequence of seq.
-func isSubsequence(need, seq []string) bool {
-	i := 0
-	for _, s := range seq {
-		if i < len(need) && s == need[i] {
-			i++
-		}
-	}
-	return i == len(need)
-}
-
-// ---- per-case step validation ----
-
-// stpValidateCase runs the per-step contract predicates for one case, then the walk
-// family (entry-edge order, participant, queued-mode) over the same step sequence.
-func stpValidateCase(scn TestScenario, cs TestCase, vi stpViewIndex, hasDV bool, ctx stpContext, si int) []Finding {
+	sort.Strings(keys)
 	var out []Finding
-	lastEntry := -1 // highest matched ENTRY-edge index (walk order monotonicity)
-	for _, step := range cs.Steps {
-		section := fmt.Sprintf("scenario %s case %s step %d (%s.%s)", scn.ID, cs.ID, step.Seq, step.Component, step.Operation)
-		l := loc(si+1, section)
-		out = append(out, stpContractChecks(step, ctx, section, l)...)
-		out = append(out, stpWalkLegal(step, vi, hasDV, ctx, section, l, &lastEntry)...)
-		out = append(out, stpWalkParticipant(step, vi, hasDV, ctx, section, l)...)
-		out = append(out, stpWalkMode(step, cs, vi, hasDV, ctx, section, l)...)
+	for _, key := range keys {
+		for _, op := range p.ServiceContracts[key].Interface.Operations {
+			if reached[scenario.Normalize(key)+"."+op.Name] {
+				continue
+			}
+			out = append(out, Finding{
+				RuleID:   ruleTPOpReached,
+				Severity: SeverityWarning,
+				Message:  fmt.Sprintf("%s.%s is reached by no scenario: dead operation or missing use case", key, op.Name),
+				Location: loc(0, "serviceContracts."+key),
+			})
+		}
 	}
 	return out
 }
 
-// stpContractChecks resolves a step against its committed contract: STP-OP-EXISTS when
-// the component/operation does not resolve, STP-STALE-CONTRACT for a never-detailed-
-// designed stub (which suppresses the STP-ARG-* checks), else the arg/expect predicates.
-func stpContractChecks(step TestStep, ctx stpContext, section string, l *Location) []Finding {
-	contract, cOK := ctx.contractByKey[ctx.normalize(step.Component)]
-	if !cOK {
-		return []Finding{opNotFoundFinding(step, section, l, "no service contract is committed for that component")}
+// reachedOps is the set of "<normalized component>.<op>" some stimulus drives.
+func reachedOps(all []scenario.Scenario) map[string]bool {
+	reached := map[string]bool{}
+	for _, s := range all {
+		for _, st := range s.Stimuli {
+			if st.Input.Op != "" {
+				reached[st.Input.To+"."+st.Input.Op] = true
+			}
+		}
 	}
-	var out []Finding
-	op, opOK := findOperation(contract, step.Operation)
-	if !opOK {
-		out = append(out, opNotFoundFinding(step, section, l, fmt.Sprintf("its contract %q declares no operation with that exact (case-sensitive) name", contract.Component)))
-	}
-	if contractAllParamsNull(contract) {
-		return append(out, staleFinding(contract, section, l, ctx)...)
-	}
-	if opOK {
-		out = append(out, stpArgName(step, op, section, l)...)
-		out = append(out, stpArgType(step, op, contract, section, l)...)
-		out = append(out, stpExpectShape(step, op, contract, section, l)...)
-	}
-	return out
+	return reached
 }
 
-// opNotFoundFinding builds the STP-OP-EXISTS finding with a caller-supplied reason.
-func opNotFoundFinding(step TestStep, section string, l *Location, reason string) Finding {
-	return Finding{
-		RuleID:   ruleSTPOpExists,
-		Severity: SeverityError,
-		Message:  fmt.Sprintf("%s: step operation does not resolve — %s; every step must name a real designed {component, operation}", section, reason),
-		Location: l,
+// skipFindings is TP-SKIP: a skip carries a reason and names an activity that is
+// genuinely not yet integrated (§3.1 — there is no other skip).
+func skipFindings(p Project, comp string, b ScenarioBinding, l *Location) []Finding {
+	if b.Skip.Until == "" || b.Skip.Reason == "" {
+		return []Finding{tpFinding(ruleTPSkip, l, "%s %s: skip needs reason and until", comp, b.Scenario)}
 	}
+	if integrated(p, b.Skip.Until) {
+		return []Finding{tpFinding(ruleTPSkip, l, "%s %s: skip waits on %s, which is already integrated", comp, b.Scenario, b.Skip.Until)}
+	}
+	return nil
+}
+
+// integrated reports whether activityID's execution row derives to Done — the server's
+// CoarsePhaseFor read over the row the server's decoder would hand it. An activity with
+// no row has not integrated. The current member is read when the document carries it
+// and the legacy `.activityConstruction` member otherwise (activityExecutionOrLegacy).
+//
+// The precedence is CoarsePhaseFor's:
+//   - a recorded FailureReason is sticky: Failed, whatever else the row holds. A legacy
+//     row whose stored phase is Failed with no reason recorded is carried forward as
+//     PipelineFailed (toActivityExecution), so the stored ordinal fails it too.
+//   - a CompletedAt with a TailFailureDetail is CompletedNotLanded — it completed its
+//     work and FAILED TO LAND IT; its dependents stay blocked, so a skip waiting on it
+//     is legitimate. Read BEFORE Done, and never falls through to the ledger.
+//   - a CompletedAt is the binary exit: Done. A legacy row whose stored phase is Done
+//     has its exit minted by the carry-forward, so the ordinal counts as one.
+//   - otherwise the attempt ledger decides (ledgerIntegrated). A legacy row whose stored
+//     buildStatus is Integrated has a passed gate attempt minted for every phase of its
+//     profile, so the ordinal reads as a ledger that passed.
+func integrated(p Project, activityID string) bool {
+	rows := p.ActivityExecution
+	if rows == nil {
+		rows = p.LegacyActivityConstruction
+	}
+	row, ok := rows[activityID]
+	return ok && row.done()
+}
+
+// done is CoarsePhaseFor's precedence over one row (see integrated).
+func (row ActivityRow) done() bool {
+	if row.FailureReason != 0 || row.Phase == legacyPhaseFailed {
+		return false
+	}
+	completed := len(row.CompletedAt) > 0 && string(row.CompletedAt) != "null"
+	if completed && row.TailFailureDetail != "" {
+		return false
+	}
+	if completed || row.Phase == legacyPhaseDone {
+		return true
+	}
+	return row.BuildStatus == legacyBuildIntegrated || ledgerIntegrated(row.Attempts)
+}
+
+// ledgerIntegrated is the mirror of the server's ledger arm — ResolvePhaseCompletions
+// then CoarsePhase: Done when EVERY phase of the activity's profile has its gate task's
+// LATEST attempt passed. This is the shape of every row on the live dogfood document
+// (no head facts, a backfilled ledger), so without it TP-SKIP's "already integrated"
+// arm could never fire on the one document the rule exists to gate.
+//
+// THE MIRROR IS DELIBERATELY STRICTER THAN THE SERVER, NEVER LOOSER. The server's
+// profile comes from classifying the activity (ClassifyType over the committed activity
+// list's id/workerClass/coding) and looking its lifecycle up in method-assets'
+// lifecycles.json. Neither the classification rules nor the lifecycle data belong to
+// this package (framework-go carries no method-assets dependency), so the mirror reads
+// what the LEDGER says about itself instead:
+//   - the Integration phase's gate ("testing") — the final gate of every construction
+//     lifecycle that carries an Integration phase — has a latest attempt and it passed.
+//     A ledger that never reached it (the live C-billing-manager shape: four phases
+//     passed, Integration undecided) is not Done on the server either.
+//   - every task the ledger mentions has its latest attempt passed: a gate re-attempted
+//     and rejected after an earlier pass, or a task still pending after a requeue
+//     re-opened the walk, is not Done on the server and is not Done here.
+//
+// What the mirror cannot see is a profile phase the ledger never mentions at all. A
+// walk reaches "testing" only after the gates before it, so an observed ledger has
+// mentioned them; a backfilled one is the residual window, and it errs toward the
+// server's Done (a false "already integrated" would BLOCK a legitimate skip's write;
+// a missed one accepts a stale skip). EARMARK: the two lifecycles whose final gate is
+// not "testing" (uiDesign ends at designReview, testing:qaProcess at codeReview) and
+// the three design lifecycles never read integrated by ledger here — a false negative
+// in the safe direction, closed only by giving this package the profile.
+func ledgerIntegrated(attempts []TaskAttempt) bool {
+	if len(attempts) == 0 {
+		return false
+	}
+	latest := make(map[string]TaskAttempt, len(attempts))
+	for _, a := range attempts {
+		if cur, ok := latest[a.Task]; !ok || a.Attempt > cur.Attempt {
+			latest[a.Task] = a
+		}
+	}
+	gate, ok := latest[taskIntegrationGate]
+	if !ok || gate.Outcome != attemptPassed {
+		return false
+	}
+	for _, a := range latest {
+		if a.Outcome != attemptPassed {
+			return false
+		}
+	}
+	return true
+}
+
+// findContract resolves comp's contract by scenario.Normalize key equality (the
+// contract key is camelCase, slot-5 ids are kebab-case; both fold to one key). When
+// several keys fold together the lowest wins, so the result never depends on map
+// order. The lookup always fails when no contract is committed for comp.
+func findContract(p Project, comp string) (ServiceContract, opLookup) {
+	want := scenario.Normalize(comp)
+	best, found := "", false
+	for key := range p.ServiceContracts {
+		if scenario.Normalize(key) == want && (!found || key < best) {
+			best, found = key, true
+		}
+	}
+	if !found {
+		return ServiceContract{}, func(string) (ContractOperation, bool) { return ContractOperation{}, false }
+	}
+	c := p.ServiceContracts[best]
+	return c, func(name string) (ContractOperation, bool) { return findOperation(c, name) }
 }
 
 // findOperation returns the exact (case-sensitive) operation on a contract.
@@ -473,334 +366,96 @@ func findOperation(c ServiceContract, opName string) (ContractOperation, bool) {
 	return ContractOperation{}, false
 }
 
-// contractAllParamsNull reports whether a contract has ≥1 op and EVERY op carries a
-// nil (JSON `null`) Params slice — the never-detailed-designed stub shape.
-func contractAllParamsNull(c ServiceContract) bool {
-	if len(c.Interface.Operations) == 0 {
-		return false
-	}
-	for _, op := range c.Interface.Operations {
-		if op.Params != nil {
-			return false
-		}
-	}
-	return true
+// tpFinding builds an Error finding of the family.
+func tpFinding(id RuleID, l *Location, format string, args ...any) Finding {
+	return Finding{RuleID: id, Severity: SeverityError, Message: fmt.Sprintf(format, args...), Location: l}
 }
 
-// staleFinding emits STP-STALE-CONTRACT once per stale component per plan (deduped).
-func staleFinding(c ServiceContract, section string, l *Location, ctx stpContext) []Finding {
-	key := ctx.normalize(c.Component)
-	if ctx.seenStale[key] {
-		return nil
-	}
-	ctx.seenStale[key] = true
-	return []Finding{{
-		RuleID:   ruleSTPStaleContract,
-		Severity: SeverityError,
-		Message:  fmt.Sprintf("%s: contract %q is a never-detailed-designed stub (every operation has params:null); a scenario cannot exercise it until it is detailed-designed — STP-ARG-* checks are suppressed for it", section, c.Component),
-		Location: l,
-	}}
-}
+// ---- argument rules (restored from the STP-ARG-* predicates) ----
 
-// ---- STP-ARG-NAME ----
-
-// stpArgName emits STP-ARG-NAME (Error) for unknown args (an input naming no param)
-// and for missing required (non-pointer) params.
-func stpArgName(step TestStep, op ContractOperation, section string, l *Location) []Finding {
+// argFindings is TP-ARG-NAME (every input names a param; every non-pointer param is
+// supplied) and TP-ARG-TYPE (each matched input's type agrees with its param),
+// labelled with the caller's rule ids so probes report under TP-PROBE.
+func argFindings(inputs []TestArg, op ContractOperation, contract ServiceContract, nameRule, typeRule RuleID, section string, l *Location) []Finding {
 	paramByName := make(map[string]ContractParam, len(op.Params))
 	for _, p := range op.Params {
 		paramByName[p.Name] = p
 	}
-	suppliedByName := make(map[string]bool, len(step.Inputs))
+	supplied := make(map[string]bool, len(inputs))
 	var out []Finding
-	for _, in := range step.Inputs {
-		suppliedByName[in.Name] = true
-		if _, ok := paramByName[in.Name]; !ok {
-			out = append(out, Finding{
-				RuleID:   ruleSTPArgName,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: input %q matches no parameter of operation %q; every input must name a contract parameter", section, in.Name, op.Name),
-				Location: l,
-			})
-		}
-	}
-	for _, p := range op.Params {
-		if p.Pointer {
-			continue // pointer params are optional — absence is legal
-		}
-		if !suppliedByName[p.Name] {
-			out = append(out, Finding{
-				RuleID:   ruleSTPArgName,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: required parameter %q of operation %q is not supplied by any input", section, p.Name, op.Name),
-				Location: l,
-			})
-		}
-	}
-	return out
-}
-
-// ---- STP-ARG-TYPE ----
-
-// stpArgType emits STP-ARG-TYPE (Error). For an input that matches a param: a set
-// schemaRef must resolve to the SAME $defs entry (or primitive) as the param schema;
-// an empty schemaRef falls back to a best-effort JSON-kind check of the value against
-// the param's kind. Inputs that match no param are STP-ARG-NAME's concern, not this.
-func stpArgType(step TestStep, op ContractOperation, contract ServiceContract, section string, l *Location) []Finding {
-	paramByName := make(map[string]ContractParam, len(op.Params))
-	for _, p := range op.Params {
-		paramByName[p.Name] = p
-	}
-	var out []Finding
-	for _, in := range step.Inputs {
+	for _, in := range inputs {
+		supplied[in.Name] = true
 		p, ok := paramByName[in.Name]
 		if !ok {
+			out = append(out, tpFinding(nameRule, l, "%s: input %q matches no parameter of operation %q; every input must name a contract parameter", section, in.Name, op.Name))
 			continue
 		}
-		if f := argTypeFinding(in, p, contract, op, section, l); f != nil {
+		if f := argTypeFinding(in, p, contract, op, typeRule, section, l); f != nil {
 			out = append(out, *f)
 		}
 	}
+	for _, p := range op.Params {
+		if !p.Pointer && !supplied[p.Name] {
+			out = append(out, tpFinding(nameRule, l, "%s: required parameter %q of operation %q is not supplied by any input", section, p.Name, op.Name))
+		}
+	}
 	return out
 }
 
-// argTypeFinding computes the STP-ARG-TYPE finding for one matched (input, param), or
-// nil when consistent / indeterminate (best-effort — never fires on ambiguity).
-func argTypeFinding(in TestArg, p ContractParam, contract ServiceContract, op ContractOperation, section string, l *Location) *Finding {
+// argTypeFinding computes the type finding for one matched (input, param), or nil
+// when consistent / indeterminate (best-effort — never fires on ambiguity). A set
+// schemaRef must resolve to the SAME $defs entry as the param schema (or the param
+// must be a named type at all); an empty schemaRef falls back to a value-kind check.
+func argTypeFinding(in TestArg, p ContractParam, contract ServiceContract, op ContractOperation, rule RuleID, section string, l *Location) *Finding {
 	paramRef, paramHasRef := schemaRefTail(p.Schema)
 	if in.SchemaRef != "" {
 		argRef := refTail(in.SchemaRef)
-		if paramHasRef {
-			if argRef != paramRef {
-				return &Finding{
-					RuleID:   ruleSTPArgType,
-					Severity: SeverityError,
-					Message:  fmt.Sprintf("%s: input %q declares schemaRef %q but parameter %q of operation %q is typed %q; the argument type contradicts the contract", section, in.Name, argRef, p.Name, op.Name, paramRef),
-					Location: l,
-				}
-			}
-			return nil
+		switch {
+		case paramHasRef && argRef != paramRef:
+			f := tpFinding(rule, l, "%s: input %q declares schemaRef %q but parameter %q of operation %q is typed %q; the argument type contradicts the contract", section, in.Name, argRef, p.Name, op.Name, paramRef)
+			return &f
+		case !paramHasRef:
+			f := tpFinding(rule, l, "%s: input %q declares schemaRef %q but parameter %q of operation %q is a primitive (%s); named-type argument contradicts a primitive parameter", section, in.Name, argRef, p.Name, op.Name, schemaPrimitiveKind(p.Schema))
+			return &f
 		}
-		// Param is a primitive but the arg claims a named $def — a contradiction.
-		return &Finding{
-			RuleID:   ruleSTPArgType,
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: input %q declares schemaRef %q but parameter %q of operation %q is a primitive (%s); named-type argument contradicts a primitive parameter", section, in.Name, argRef, p.Name, op.Name, schemaPrimitiveKind(p.Schema)),
-			Location: l,
-		}
+		return nil
 	}
-	// Empty schemaRef → best-effort value-kind vs param-kind check.
 	paramKind := schemaKind(p.Schema, contract.Defs)
 	valueKind := jsonValueKind(in.Value)
-	if paramKind == kindClassUnknown || valueKind == kindClassUnknown {
+	if !kindsConflict(paramKind, valueKind) {
 		return nil
 	}
-	if paramKind != valueKind {
-		return &Finding{
-			RuleID:   ruleSTPArgType,
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: input %q value is a %s but parameter %q of operation %q expects a %s", section, in.Name, valueKind, p.Name, op.Name, paramKind),
-			Location: l,
-		}
-	}
-	return nil
+	f := tpFinding(rule, l, "%s: input %q value is a %s but parameter %q of operation %q expects a %s", section, in.Name, valueKind, p.Name, op.Name, paramKind)
+	return &f
 }
 
-// ---- STP-EXPECT-SHAPE ----
+// ---- expectation rule (restored from STP-EXPECT-SHAPE) ----
 
-// stpExpectShape emits STP-EXPECT-SHAPE (Error): an error-expected step requires the
-// operation to declare error:true; a non-error step's declared result value must match
-// the operation's result kind (object/array/scalar class — not full validation).
-func stpExpectShape(step TestStep, op ContractOperation, contract ServiceContract, section string, l *Location) []Finding {
-	var out []Finding
-	if step.Expect.ErrorExpected {
+// expectFindings is TP-EXPECT: an error-expected step requires the operation to
+// declare error:true; a non-error step's declared result value must agree with the
+// operation's result kind (coarse class — not full schema validation).
+func expectFindings(expect TestExpect, op ContractOperation, contract ServiceContract, rule RuleID, section string, l *Location) []Finding {
+	if expect.ErrorExpected {
 		if !op.Error {
-			out = append(out, Finding{
-				RuleID:   ruleSTPExpectShape,
-				Severity: SeverityError,
-				Message:  fmt.Sprintf("%s: the step expects an error but operation %q does not declare error:true; it cannot fail the way the case asserts", section, op.Name),
-				Location: l,
-			})
+			return []Finding{tpFinding(rule, l, "%s: the step expects an error but operation %q does not declare error:true; it cannot fail the way the binding asserts", section, op.Name)}
 		}
-		return out // an error-expected step asserts no result value
+		return nil // an error-expected step asserts no result value
 	}
-	if step.Expect.Result == "" {
-		return out // no result asserted → nothing to shape-check
+	if expect.Result == "" {
+		return nil // no result asserted → nothing to shape-check
 	}
 	if len(op.Result) == 0 {
-		out = append(out, Finding{
-			RuleID:   ruleSTPExpectShape,
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: the step asserts a result value but operation %q declares no result (void)", section, op.Name),
-			Location: l,
-		})
-		return out
+		return []Finding{tpFinding(rule, l, "%s: the step asserts a result value but operation %q declares no result (void)", section, op.Name)}
 	}
 	resultKind := schemaKind(op.Result, contract.Defs)
-	valueKind := jsonValueKind(step.Expect.Result)
-	if resultKind == kindClassUnknown || valueKind == kindClassUnknown {
-		return out // best-effort — do not fire on an indeterminate shape
-	}
-	if resultKind != valueKind {
-		out = append(out, Finding{
-			RuleID:   ruleSTPExpectShape,
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: the expected result is a %s but operation %q returns a %s", section, valueKind, op.Name, resultKind),
-			Location: l,
-		})
-	}
-	return out
-}
-
-// ---- STP-WALK-LEGAL ----
-
-// stpWalkLegal emits STP-WALK-LEGAL (Error) only when a step that DOES match an ENTRY
-// edge violates view-edge order relative to earlier entry-matched steps in the same
-// case. A step matching NO entry edge is silent here — it exercises an interior /
-// contract operation the black-box plan may legitimately assert against, which is the
-// contract family's jurisdiction, not the walk's. When the use case has no dynamic
-// view the walk cannot be checked and the step is skipped.
-func stpWalkLegal(step TestStep, vi stpViewIndex, hasDV bool, ctx stpContext, section string, l *Location, lastEntry *int) []Finding {
-	if !hasDV {
+	valueKind := jsonValueKind(expect.Result)
+	if !kindsConflict(resultKind, valueKind) {
 		return nil
 	}
-	firstMatch, orderedMatch := scanEntryEdges(step, vi.entryEdges, ctx, *lastEntry)
-	if firstMatch == -1 {
-		return nil // matches no entry edge — nothing for the walk to say
-	}
-	if orderedMatch == -1 {
-		// A match exists, but only before an already-consumed entry edge — out of order.
-		return []Finding{{
-			RuleID:   ruleSTPWalkLegal,
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("%s: the matching entry edge precedes an earlier step's entry edge; the case does not walk the entry chain in view-edge order", section),
-			Location: l,
-		}}
-	}
-	*lastEntry = orderedMatch
-	return nil
+	return []Finding{tpFinding(rule, l, "%s: the expected result is a %s but operation %q returns a %s", section, valueKind, op.Name, resultKind)}
 }
 
-// scanEntryEdges finds, among the view's ENTRY edges that target the step's component
-// and name its operation, the index of the FIRST such edge and the first such edge at
-// or after lastEntry (the order-respecting match). Either is -1 when none qualifies.
-func scanEntryEdges(step TestStep, entryEdges []Relationship, ctx stpContext, lastEntry int) (firstMatch, orderedMatch int) {
-	compKeyN := ctx.normalize(step.Component)
-	opN := ctx.normalize(step.Operation)
-	firstMatch, orderedMatch = -1, -1
-	for ei, e := range entryEdges {
-		if ctx.normalize(e.To) != compKeyN || !labelNamesOp(e.Label, opN, ctx.normalize) {
-			continue
-		}
-		if firstMatch == -1 {
-			firstMatch = ei
-		}
-		if ei >= lastEntry && orderedMatch == -1 {
-			orderedMatch = ei
-		}
-	}
-	return firstMatch, orderedMatch
-}
-
-// ---- STP-WALK-PARTICIPANT ----
-
-// stpWalkParticipant emits STP-WALK-PARTICIPANT (Warning) when a step's component is not
-// a declared participant of the scenario's dynamic view. Adversarial staging may
-// legitimately touch outside the view footprint, so a foreign component is a drift
-// SIGNAL (Warning), not a hard error.
-func stpWalkParticipant(step TestStep, vi stpViewIndex, hasDV bool, ctx stpContext, section string, l *Location) []Finding {
-	if !hasDV {
-		return nil
-	}
-	if vi.participants[ctx.normalize(step.Component)] {
-		return nil
-	}
-	return []Finding{{
-		RuleID:   ruleSTPWalkParticipant,
-		Severity: SeverityWarning,
-		Message:  fmt.Sprintf("%s: step component %q is not a declared participant of the use-case dynamic view; a step outside the view footprint is a drift signal (adversarial staging may legitimately touch outside it)", section, step.Component),
-		Location: l,
-	}}
-}
-
-// labelNamesOp reports whether a dynamic-view edge label names the operation: the
-// normalized operation is a substring of the normalized label (edge labels carry the
-// op plus its argument gloss, e.g. "startSystemDesign(projectId)").
-func labelNamesOp(label, opN string, normalize func(string) string) bool {
-	if opN == "" {
-		return false
-	}
-	return strings.Contains(normalize(label), opN)
-}
-
-// ---- STP-WALK-MODE ----
-
-// stpWalkMode emits STP-WALK-MODE (Error) when a step maps onto a QUEUED dynamic-view
-// edge but is encoded as a synchronous expect-then-assert (it asserts a result or an
-// error inline) without any later poll/observe step in the case — mirroring ruleDVMode
-// granularity: queued work is fire-and-forget, so its outcome must be observed, not
-// asserted synchronously. All-sync plans never trip this.
-func stpWalkMode(step TestStep, cs TestCase, vi stpViewIndex, hasDV bool, ctx stpContext, section string, l *Location) []Finding {
-	if !hasDV {
-		return nil
-	}
-	if !stepMapsToQueuedEntryEdge(step, vi.entryEdges, ctx) {
-		return nil
-	}
-	// A synchronous assertion = the step asserts a concrete result or an inline error.
-	synchronous := step.Expect.Result != "" || step.Expect.ErrorExpected
-	if !synchronous {
-		return nil
-	}
-	if caseHasLaterObserveStep(cs, step.Seq) {
-		return nil
-	}
-	return []Finding{{
-		RuleID:   ruleSTPWalkMode,
-		Severity: SeverityError,
-		Message:  fmt.Sprintf("%s: the step maps to a queued dynamic-view edge but asserts its outcome synchronously with no later poll/observe step; queued work must be observed, not asserted inline", section),
-		Location: l,
-	}}
-}
-
-// stepMapsToQueuedEntryEdge reports whether some queued ENTRY edge targets the step's
-// component with a label naming its operation.
-func stepMapsToQueuedEntryEdge(step TestStep, entryEdges []Relationship, ctx stpContext) bool {
-	compKeyN := ctx.normalize(step.Component)
-	opN := ctx.normalize(step.Operation)
-	for _, e := range entryEdges {
-		if e.Mode != modeQueued {
-			continue
-		}
-		if ctx.normalize(e.To) == compKeyN && labelNamesOp(e.Label, opN, ctx.normalize) {
-			return true
-		}
-	}
-	return false
-}
-
-// observeVerbs are the operation-name fragments that mark a poll/observe step — a
-// synchronous read that observes the outcome of prior queued work.
-var observeVerbs = []string{"poll", "observe", "get", "query", "read", "reconcile", "await", "wait"}
-
-// caseHasLaterObserveStep reports whether a case has a step after afterSeq whose
-// operation reads/observes (a poll for the queued outcome).
-func caseHasLaterObserveStep(cs TestCase, afterSeq int) bool {
-	for _, s := range cs.Steps {
-		if s.Seq <= afterSeq {
-			continue
-		}
-		op := strings.ToLower(s.Operation)
-		for _, v := range observeVerbs {
-			if strings.Contains(op, v) {
-				return true
-			}
-		}
-	}
-	return false
-}
-
-// ---- schema-kind helpers ----
+// ---- schema-kind helpers (restored) ----
 
 // kindClass is a coarse JSON value class for best-effort type checks.
 type kindClass string
@@ -809,8 +464,24 @@ const (
 	kindClassUnknown kindClass = ""
 	kindClassObject  kindClass = "object"
 	kindClassArray   kindClass = "array"
-	kindClassScalar  kindClass = "scalar"
+	kindClassString  kindClass = "string"
+	kindClassNumber  kindClass = "number"
+	kindClassBoolean kindClass = "boolean"
 )
+
+// kindsConflict reports whether a value of class value definitely cannot satisfy a
+// schema of class want. Unknown on either side is indeterminate. A number or boolean
+// value against a string schema is NOT a conflict: plan values are stored as text, so
+// an unquoted "42" may well be the string "42".
+func kindsConflict(want, value kindClass) bool {
+	if want == kindClassUnknown || value == kindClassUnknown || want == value {
+		return false
+	}
+	if want == kindClassString && (value == kindClassNumber || value == kindClassBoolean) {
+		return false
+	}
+	return true
+}
 
 // refTail returns the trailing $def name of a "#/$defs/Name" ref (or the input when it
 // carries no path separator).
@@ -877,16 +548,20 @@ func schemaKindFromType(schema json.RawMessage) kindClass {
 		return kindClassObject
 	case "array":
 		return kindClassArray
-	case "string", "integer", "number", "boolean":
-		return kindClassScalar
+	case "string":
+		return kindClassString
+	case "integer", "number":
+		return kindClassNumber
+	case "boolean":
+		return kindClassBoolean
 	default:
 		return kindClassUnknown
 	}
 }
 
-// jsonValueKind classifies a concrete step value (JSON or bare text) into a kindClass.
-// A value that does not parse as JSON is treated as a bare string scalar (the plan
-// stores unquoted scalars like "proj-aiarch-01").
+// jsonValueKind classifies a concrete plan value (JSON or bare text) into a kindClass.
+// A value that does not parse as JSON is a bare string (the plan stores unquoted
+// scalars like "proj-aiarch-01"); a JSON null is indeterminate.
 func jsonValueKind(value string) kindClass {
 	trimmed := strings.TrimSpace(value)
 	if trimmed == "" {
@@ -894,14 +569,20 @@ func jsonValueKind(value string) kindClass {
 	}
 	var v any
 	if err := json.Unmarshal([]byte(trimmed), &v); err != nil {
-		return kindClassScalar // bare, unquoted text → a string scalar
+		return kindClassString
 	}
 	switch v.(type) {
 	case map[string]any:
 		return kindClassObject
 	case []any:
 		return kindClassArray
+	case string:
+		return kindClassString
+	case float64:
+		return kindClassNumber
+	case bool:
+		return kindClassBoolean
 	default:
-		return kindClassScalar
+		return kindClassUnknown
 	}
 }
