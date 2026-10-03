@@ -3,7 +3,9 @@
 # Deterministic component testing (spec §4.3): the scenario tests are GENERATED
 # from the committed per-component test plan in .aiarch/state/project.json by
 # the platform's testgen; the hooks files beside them are hand-filled once.
-# Paths are module-root-relative — the app module lives at the repo root.
+# Paths are module-root-relative — the app module lives at the repo root, and
+# -uitests is spelled explicitly because testgen's default resolves one level
+# ABOVE -root (it assumes a nested Go module this layout does not have).
 #
 #   gen-tests        — (re)write every *_scenarios_test.gen.go / *.spec.gen.ts and
 #                      seed any missing hooks file (never overwrites a hooks file)
@@ -14,10 +16,10 @@
 .PHONY: gen-tests gen-tests-check test-scenarios
 
 gen-tests:
-	GOWORK=off go run [[.AppGeneratorModulePath]]/cmd/testgen@[[.AppGeneratorVersion]] -project .aiarch/state/project.json -root .
+	GOWORK=off go run [[.AppGeneratorModulePath]]/cmd/testgen@[[.AppGeneratorVersion]] -project .aiarch/state/project.json -root . -uitests uitests/generated
 
 gen-tests-check:
-	GOWORK=off go run [[.AppGeneratorModulePath]]/cmd/testgen@[[.AppGeneratorVersion]] -project .aiarch/state/project.json -root . -check
+	GOWORK=off go run [[.AppGeneratorModulePath]]/cmd/testgen@[[.AppGeneratorVersion]] -project .aiarch/state/project.json -root . -uitests uitests/generated -check
 
 test-scenarios:
 	mkdir -p test-results

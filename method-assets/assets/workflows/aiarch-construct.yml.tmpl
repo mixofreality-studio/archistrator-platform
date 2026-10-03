@@ -295,7 +295,8 @@ jobs:
       # results are ALWAYS uploaded and the run is ALWAYS recorded; the record step
       # re-asserts the outcome, so a red scenario still fails the job.
       # Paths are module-root-relative: the seated app module lives at the repo
-      # root (go.mod), so there is no server/ prefix.
+      # root (go.mod), so there is no server/ prefix and -uitests is spelled
+      # (testgen's default ../uitests/generated assumes a server/ subdirectory).
       # -----------------------------------------------------------------------
       - name: Run scenario tests
         if: ${{ inputs.phase == 'integration' }}
@@ -307,21 +308,27 @@ jobs:
         run: |
           set -o pipefail
           mkdir -p test-results
-          go run [[.AppGeneratorModulePath]]/cmd/testgen@[[.AppGeneratorVersion]] -project .aiarch/state/project.json -root . -check
+          go run [[.AppGeneratorModulePath]]/cmd/testgen@[[.AppGeneratorVersion]] -project .aiarch/state/project.json -root . -uitests uitests/generated -check
           go test ./internal/... -run 'TestScenario_' -json 2>&1 | tee test-results/go-test.jsonl
           if [ -d "uitests/generated/${AIARCH_COMPONENT_ID}" ]; then
             (cd uitests && npx playwright install --with-deps chromium && npx playwright test -c "generated/${AIARCH_COMPONENT_ID}/playwright.config.gen.ts")
           fi
 
-      # results.json + the go test -json stream + Playwright videos/traces, named
-      # test-results-<activityId>-<runId> so the run record (below) and the
-      # delivery rail's artifact fetch agree on one name.
+      # results.json + the go test -json stream under test-results/, and the
+      # Playwright videos/traces/results under uitests/test-results/<component>
+      # (the generated playwright.config.gen.ts writes ../../test-results/<c>
+      # relative to uitests/generated/<c>/), named test-results-<activityId>-<runId>
+      # so the run record (below) and the delivery rail's artifact fetch agree on
+      # one name. Two paths: upload-artifact roots the archive at their common
+      # ancestor (the checkout), so both trees keep their repo-relative paths.
       - name: Upload test results
         if: ${{ inputs.phase == 'integration' }}
         uses: actions/upload-artifact@v4
         with:
           name: test-results-${{ inputs.activity_id }}-${{ github.run_id }}
-          path: test-results/**
+          path: |
+            test-results/**
+            uitests/test-results/**
           retention-days: 90
           if-no-files-found: error
 

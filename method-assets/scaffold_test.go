@@ -66,32 +66,48 @@ func TestScaffoldFiles(t *testing.T) {
 	}
 }
 
+// testgenModuleRootArgs is the testgen invocation every scaffolded caller
+// must use on the module-root layout. The pinned CLI defaults -uitests to
+// ../uitests/generated RELATIVE TO -root (the server/ layout), so a caller that
+// passes only `-root .` writes the Playwright specs, config and hooks.ts
+// OUTSIDE the checkout and its -check is permanently red for any project with
+// a UI client; -uitests must be spelled explicitly.
+const testgenModuleRootArgs = "-project .aiarch/state/project.json -root . -uitests uitests/generated"
+
 // TestConstructTemplateHasScenarioSteps pins the venue half of deterministic
 // component testing (spec §6.2): on the integration phase the construct
-// workflow runs the scenario tests, uploads test-results/** as a GitHub
-// artifact and records the run through the aiarch-state MCP binary; go-checks
-// runs the testgen drift check on every PR (spec §5.3).
+// workflow runs the scenario tests, uploads the Go results tree AND the
+// Playwright results tree (the generated config writes to
+// uitests/test-results/<component>, emit_playwright.go componentDirDepth=2) as
+// a GitHub artifact and records the run through the aiarch-state MCP binary;
+// go-checks runs the testgen drift check on every PR (spec §5.3). Both testgen
+// invocations spell the module-root -uitests dir.
 func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 	out, err := ScaffoldFiles(testData)
 	if err != nil {
 		t.Fatal(err)
 	}
+	testgen := AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion
 	y := string(out[".github/workflows/aiarch-construct.yml"])
 	for _, s := range []string{
 		"name: Run scenario tests", "name: Upload test results", "actions/upload-artifact@v4",
 		"name: Record test run", "record-test-run",
-		AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion,
+		testgen + " " + testgenModuleRootArgs + " -check",
 	} {
 		if !strings.Contains(y, s) {
 			t.Errorf("aiarch-construct.yml missing %q", s)
 		}
 	}
-	g := string(out[".github/workflows/go-checks.yml"])
-	if !strings.Contains(g, "testgen@") || !strings.Contains(g, "-check") {
-		t.Error("go-checks must run the testgen drift check")
+	upload := y[strings.Index(y, "name: Upload test results"):]
+	upload = upload[:strings.Index(upload, "name: Record test run")]
+	for _, p := range []string{"test-results/**", "uitests/test-results/**"} {
+		if !strings.Contains(upload, p) {
+			t.Errorf("Upload test results must include %q in its path:\n%s", p, upload)
+		}
 	}
-	if !strings.Contains(g, AppGeneratorModulePath+"/cmd/testgen@"+AppGeneratorVersion) {
-		t.Error("go-checks must pin testgen to the scaffold's app-generator version")
+	g := string(out[".github/workflows/go-checks.yml"])
+	if !strings.Contains(g, testgen+" "+testgenModuleRootArgs+" -check") {
+		t.Errorf("go-checks must run the pinned testgen drift check with module-root paths:\n%s", g)
 	}
 }
 
@@ -109,15 +125,21 @@ func TestScaffoldMakefileScenariosInclude(t *testing.T) {
 		t.Fatal("missing Makefile.scenarios.mk")
 	}
 	m := string(mk)
+	testgen := AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion
 	for _, s := range []string{
 		"gen-tests:", "gen-tests-check:", "test-scenarios:",
-		AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion,
-		"-project .aiarch/state/project.json", "-root .",
+		testgen + " " + testgenModuleRootArgs + "\n",
+		testgen + " " + testgenModuleRootArgs + " -check\n",
 		"-run 'TestScenario_'", "test-results/go-test.jsonl",
 	} {
 		if !strings.Contains(m, s) {
 			t.Errorf("Makefile.scenarios.mk missing %q", s)
 		}
+	}
+	// Every testgen call (write and check) spells -uitests: a bare -root . would
+	// default it to ../uitests/generated and write outside the checkout.
+	if got := strings.Count(m, "cmd/testgen@"); got != strings.Count(m, "-uitests uitests/generated") {
+		t.Errorf("every testgen invocation must pass -uitests uitests/generated (%d invocations):\n%s", got, m)
 	}
 	if strings.Contains(m, "../") || strings.Contains(m, "server/") {
 		t.Errorf("Makefile.scenarios.mk must be module-root-relative:\n%s", m)

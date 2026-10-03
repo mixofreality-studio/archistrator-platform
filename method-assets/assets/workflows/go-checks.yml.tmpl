@@ -68,9 +68,10 @@ jobs:
       # committed test plan, and every hook the generated tests reference must
       # exist in the hand-filled hooks file with no orphans. `go run pkg@version`
       # needs no go.mod entry; the pin is the scaffold's app-generator version.
-      # Module-root-relative: the app module lives at the repo root.
+      # Module-root-relative: the app module lives at the repo root, so -uitests
+      # is spelled (testgen's default ../uitests/generated assumes a server/ dir).
       - name: Scenario test drift
-        run: go run [[.AppGeneratorModulePath]]/cmd/testgen@[[.AppGeneratorVersion]] -project .aiarch/state/project.json -root . -check
+        run: go run [[.AppGeneratorModulePath]]/cmd/testgen@[[.AppGeneratorVersion]] -project .aiarch/state/project.json -root . -uitests uitests/generated -check
 
       # aiarch_method_test.go (scaffolded) runs methodcheck.Check, which calls
       # arch.CheckFileLayout — so the scenario-tests-only arch gate runs on every
