@@ -2,6 +2,7 @@ package webgen
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -128,10 +129,8 @@ func (s *skel) ref(ref Value, at string) (Value, error) {
 	if !ok || !found {
 		return nil, fmt.Errorf("webgen: skeleton: %s: unresolvable $ref %q", at, r)
 	}
-	for _, seen := range s.stack {
-		if seen == name {
-			return nil, fmt.Errorf("webgen: skeleton: %s: a required cycle through %s", at, name)
-		}
+	if slices.Contains(s.stack, name) {
+		return nil, fmt.Errorf("webgen: skeleton: %s: a required cycle through %s", at, name)
 	}
 	s.stack = append(s.stack, name)
 	defer func() { s.stack = s.stack[:len(s.stack)-1] }()

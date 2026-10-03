@@ -2,6 +2,7 @@ package composegen
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -661,10 +662,8 @@ func requiresTemporalClient(m *projectmodel.Model) bool {
 		if c == nil || !strings.EqualFold(c.Layer, "manager") || c.Doc == nil || len(c.Deps) == 0 || c.GoPackage == "" {
 			continue
 		}
-		for _, dep := range c.Deps {
-			if isTemporalClient(dep) {
-				return true
-			}
+		if slices.ContainsFunc(c.Deps, isTemporalClient) {
+			return true
 		}
 	}
 	return false

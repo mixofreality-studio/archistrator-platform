@@ -2,6 +2,7 @@ package temporalgen
 
 import (
 	"path"
+	"slices"
 	"sort"
 	"strings"
 
@@ -127,12 +128,7 @@ func isBareRAType(n *projectmodel.SchemaNode) bool {
 // isCallerKeyed reports whether op opName on dep depName takes an explicit
 // caller-supplied idempotency key.
 func isCallerKeyed(ec emitContext, depName, opName string) bool {
-	for _, o := range ec.cfg.CallerKeyedOps[depName] {
-		if o == opName {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(ec.cfg.CallerKeyedOps[depName], opName)
 }
 
 // fwraIdempotencyKeyType is the canonical Go type an RA contract op binds
@@ -220,8 +216,8 @@ func importLine(p string) string { return `"` + p + `"` }
 // first path segment carries no dot, i.e. no domain).
 func isStdlib(p string) bool {
 	seg := p
-	if i := strings.Index(p, "/"); i >= 0 {
-		seg = p[:i]
+	if before, _, ok := strings.Cut(p, "/"); ok {
+		seg = before
 	}
 	return !strings.Contains(seg, ".")
 }

@@ -23,6 +23,7 @@ package transportgen
 import (
 	"fmt"
 	"sort"
+	"strings"
 
 	httpgen "github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/httpgen"
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
@@ -238,13 +239,14 @@ func routeTable(m *projectmodel.Model, managers []string) ([]route, error) {
 // routePath renders an OpPlan's mounted template plus any query params as {name}
 // placeholders in declared order.
 func routePath(p httpgen.OpPlan) string {
-	path := p.PathTemplate
+	var path strings.Builder
+	path.WriteString(p.PathTemplate)
 	for i, q := range p.QueryParams {
 		sep := "&"
 		if i == 0 {
 			sep = "?"
 		}
-		path += sep + q.Name + "={" + q.Name + "}"
+		path.WriteString(sep + q.Name + "={" + q.Name + "}")
 	}
-	return path
+	return path.String()
 }

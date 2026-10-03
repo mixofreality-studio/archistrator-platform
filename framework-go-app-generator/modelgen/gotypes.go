@@ -1,6 +1,8 @@
 package modelgen
 
 import (
+	"slices"
+	"sort"
 	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
@@ -25,6 +27,29 @@ var uuidAsString bool
 // uuidAsString/pendingImports); Generate/EmitTypes never set it, so their
 // output is completely unaffected.
 var fakeQualifyAlias string
+
+// GoTypeFor is goType for a consumer OUTSIDE the contract package — testgen,
+// which spells a contract's parameter types from the black-box <pkg>_test
+// package. A `$def` name and a bare exported x-go-type binding (a type
+// hand-written in the contract package) are qualified with alias, the contract
+// package's import alias, exactly as GenerateFakes qualifies them from its
+// sibling fake package; an x-go-import binding (uuid.UUID, time.Time, …) keeps
+// its own selector and its import path is returned in imports. The naming is
+// the same function modelgen itself emits contract.gen.go with, so the type a
+// generated test unmarshals into is the type the generated interface takes.
+// The call is self-contained: it saves and restores the package's one-pass
+// emission state, so it can run between or inside Generate passes.
+func GoTypeFor(s *jsonschema.Schema, alias string) (typ string, imports []string) {
+	savedImports, savedAlias := pendingImports, fakeQualifyAlias
+	pendingImports, fakeQualifyAlias = map[string]string{}, alias
+	defer func() { pendingImports, fakeQualifyAlias = savedImports, savedAlias }()
+	typ = goType(s)
+	for p := range pendingImports {
+		imports = append(imports, p)
+	}
+	sort.Strings(imports)
+	return typ, imports
+}
 
 // goType maps a resolved schema node to its Go type.
 func goType(s *jsonschema.Schema) string {
@@ -139,12 +164,7 @@ func effectiveType(s *jsonschema.Schema) string {
 }
 
 func hasNull(s *jsonschema.Schema) bool {
-	for _, t := range s.Types {
-		if t == "null" {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(s.Types, "null")
 }
 
 // isValueType reports whether t is a Go value type that needs a pointer to be
