@@ -31,6 +31,7 @@ import (
 	"go/format"
 	"os"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -255,7 +256,7 @@ func manifestFor(slug, body string, skillLinks map[string][]string, charters map
 
 // agentSkillsLine returns the command's "**Agent + skills.**" line.
 func agentSkillsLine(body string) string {
-	for _, l := range strings.Split(body, "\n") {
+	for l := range strings.SplitSeq(body, "\n") {
 		if strings.Contains(l, "Agent + skills") {
 			return l
 		}
@@ -338,11 +339,11 @@ func skillName(p string) (string, bool) {
 	if !ok {
 		return "", false
 	}
-	i := strings.IndexByte(rest, '/')
-	if i < 0 {
+	before, _, ok0 := strings.Cut(rest, "/")
+	if !ok0 {
 		return "", false
 	}
-	return rest[:i], true
+	return before, true
 }
 
 // closeOver returns the transitive closure of seeds over the skill link graph,
@@ -391,7 +392,7 @@ func parseToolsBlock(body string) []string {
 	}
 	tools := []string{}
 	inBlock := false
-	for _, l := range strings.Split(fm, "\n") {
+	for l := range strings.SplitSeq(fm, "\n") {
 		if strings.HasPrefix(l, "tools:") {
 			inBlock = true
 			continue
@@ -409,12 +410,7 @@ func parseToolsBlock(body string) []string {
 }
 
 func contains(hay []string, needle string) bool {
-	for _, h := range hay {
-		if h == needle {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(hay, needle)
 }
 
 // ---------------------------------------------------------------------------
