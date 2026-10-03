@@ -19,7 +19,8 @@
 // only when absent, and prunes generated files (*_scenarios.gen_test.go under
 // root; *.spec.gen.ts, playwright.config.gen.ts, reporter.gen.ts under the
 // Playwright directory) that the current plan no longer produces. With -check
-// it prints one line per drifted or stale file and per missing/orphan hook.
+// it prints one line per drifted or stale file, per missing/orphan hook, and
+// per orphan generated file a write run would prune, then exits 1.
 package main
 
 import (
@@ -83,7 +84,7 @@ func run(args []string, out, errOut io.Writer) error {
 		}
 	}
 	if o.check {
-		return check(o.root, gen, out)
+		return check(o, gen, out)
 	}
 	return write(o, gen, out)
 }
@@ -102,10 +103,20 @@ func modulePath(goMod string) (string, error) {
 	return "", fmt.Errorf("testgen: %s has no module line", goMod)
 }
 
-func check(root string, gen testgen.Output, out io.Writer) error {
-	msgs, err := testgen.Drift(root, gen)
+// check reports every way the tree differs from what a write run would
+// leave: Drift over the generated and hooks files, plus the generated files a
+// write run would prune (spec §5.3: any diff in generated files fails).
+func check(o options, gen testgen.Output, out io.Writer) error {
+	msgs, err := testgen.Drift(o.root, gen)
 	if err != nil {
 		return err
+	}
+	orphans, err := orphanGenerated(o, gen)
+	if err != nil {
+		return err
+	}
+	for _, p := range orphans {
+		msgs = append(msgs, "orphan generated file "+p)
 	}
 	for _, m := range msgs {
 		if err := say(out, m); err != nil {
@@ -176,11 +187,11 @@ func writeFile(root, p string, b []byte) error {
 	return nil
 }
 
-// prune removes generated files the plan no longer produces: Go scenario
-// files anywhere under root, Playwright generated files under the uitests
-// directory. Hooks files are never pruned (they are agent-owned).
-func prune(o options, gen testgen.Output) ([]string, error) {
-	var pruned []string
+// orphanGenerated lists, root-relative with slashes, the generated files the
+// plan no longer produces: Go scenario files anywhere under root, Playwright
+// generated files under the uitests directory. Hooks files are never listed
+// (they are agent-owned).
+func orphanGenerated(o options, gen testgen.Output) ([]string, error) {
 	keep := func(rel string) bool { _, ok := gen.Generated[filepath.ToSlash(rel)]; return ok }
 	goStale, err := staleFiles(o.root, o.root, isGoScenarioFile, keep)
 	if err != nil {
@@ -190,13 +201,25 @@ func prune(o options, gen testgen.Output) ([]string, error) {
 	if err != nil {
 		return nil, err
 	}
+	var orphans []string
 	for _, rel := range append(goStale, tsStale...) {
-		if err := os.Remove(filepath.Join(o.root, rel)); err != nil {
+		orphans = append(orphans, filepath.ToSlash(rel))
+	}
+	return orphans, nil
+}
+
+// prune removes the orphan generated files and returns their paths.
+func prune(o options, gen testgen.Output) ([]string, error) {
+	orphans, err := orphanGenerated(o, gen)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range orphans {
+		if err := os.Remove(filepath.Join(o.root, filepath.FromSlash(p))); err != nil {
 			return nil, fmt.Errorf("testgen: prune: %w", err)
 		}
-		pruned = append(pruned, filepath.ToSlash(rel))
 	}
-	return pruned, nil
+	return orphans, nil
 }
 
 // staleFiles walks dir and returns, relative to root, every file match
