@@ -7,7 +7,10 @@ package github
 // requires — trigger a workflow_dispatch, list/get workflow runs (to map to a
 // pipeline observation), cancel a run — kept HERE (the github satellite), out of
 // the product RA, exactly as the App-JWT / installation-token / PR-rail / git-data
-// wire code is, so the RA stays provider-opaque.
+// wire code is, so the RA stays provider-opaque. It also carries the two run-
+// ARTIFACT operations (list a run's artifacts, stream one as a zip) the
+// artifactAccess RA needs to fetch cloud test results (deterministic component
+// testing, spec §T4).
 //
 // WHY THE SATELLITE OWNS THIS (CustomerAppInfrastructure governance + C-SC split):
 // CI dispatch was explicitly deferred from C-SC (sourceControlAccess) to C-CP-R;
@@ -41,9 +44,11 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/url"
 	"strings"
+	"time"
 
 	fwra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
 )
@@ -141,6 +146,42 @@ func (d workflowRunDTO) toWorkflowRun() WorkflowRun {
 		Name:       d.Name,
 		Status:     RunStatus(d.Status),
 		Conclusion: RunConclusion(d.Conclusion),
+	}
+}
+
+// Artifact is the satellite's view of one GitHub Actions run artifact — the
+// uploaded `test-results-<activityId>-<revision>` bundle a construction run
+// produces (deterministic component testing, spec §T4). GitHub-specific by
+// design; the consuming RA (artifactAccess) maps it onto its own neutral shape.
+type Artifact struct {
+	// ID is the artifact id — the durable address DownloadArtifact takes.
+	ID int64
+	// Name is the artifact's upload name (e.g. "test-results-C-BG-3").
+	Name string
+	// SizeBytes is the artifact's size as GitHub reports it (size_in_bytes).
+	SizeBytes int64
+	// Expired reports that GitHub's retention window elapsed; the zip is gone and
+	// DownloadArtifact will fail (the run renders as "expired" upstream).
+	Expired bool
+	// CreatedAt is the artifact's upload time.
+	CreatedAt time.Time
+}
+
+type artifactDTO struct {
+	ID          int64     `json:"id"`
+	Name        string    `json:"name"`
+	SizeInBytes int64     `json:"size_in_bytes"`
+	Expired     bool      `json:"expired"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
+func (d artifactDTO) toArtifact() Artifact {
+	return Artifact{
+		ID:        d.ID,
+		Name:      d.Name,
+		SizeBytes: d.SizeInBytes,
+		Expired:   d.Expired,
+		CreatedAt: d.CreatedAt,
 	}
 }
 
@@ -267,4 +308,80 @@ func (c *AppClient) CancelRun(ctx context.Context, owner, repo string, runID int
 	default:
 		return ClassifyStatus(status, "CancelRun")
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Run artifacts (the artifactAccess back contract for cloud test results).
+// ---------------------------------------------------------------------------
+
+// maxArtifactRedirects bounds the redirect chain DownloadArtifact follows. GitHub
+// answers with ONE 302 to blob storage; anything deeper is not GitHub.
+const maxArtifactRedirects = 5
+
+// ListArtifacts lists the artifacts a workflow run uploaded. An empty result is not
+// an error (the run uploaded nothing, or retention expired them all — expired
+// artifacts are still listed with Expired=true). A non-2xx maps via ClassifyStatus.
+//
+//	GET /repos/{owner}/{repo}/actions/runs/{runID}/artifacts?per_page=100
+func (c *AppClient) ListArtifacts(ctx context.Context, owner, repo string, runID int64, instToken string) ([]Artifact, error) {
+	u := fmt.Sprintf("%s/repos/%s/%s/actions/runs/%d/artifacts?per_page=100", c.baseURL, owner, repo, runID)
+	status, body, err := c.do(ctx, http.MethodGet, u, nil, "", instToken)
+	if err != nil {
+		return nil, err
+	}
+	if status < 200 || status >= 300 {
+		return nil, ClassifyStatus(status, "ListArtifacts")
+	}
+	var d struct {
+		Artifacts []artifactDTO `json:"artifacts"`
+	}
+	if uerr := json.Unmarshal(body, &d); uerr != nil {
+		return nil, fwra.Wrap(fwra.Infrastructure, uerr, "ListArtifacts: decode")
+	}
+	out := make([]Artifact, 0, len(d.Artifacts))
+	for _, a := range d.Artifacts {
+		out = append(out, a.toArtifact())
+	}
+	return out, nil
+}
+
+// DownloadArtifact streams the artifact zip. It follows GitHub's 302 to blob storage
+// and never forwards the installation token to a different host.
+//
+// WHY THE EXPLICIT REDIRECT RULE: Go's http.Client drops Authorization on a
+// cross-DOMAIN redirect only; GitHub's blob host is a different domain in
+// production, but the rule here compares the full host (incl. port) so the
+// guarantee holds for any redirect target and is pinned by a two-host test. The
+// caller owns the returned body (Close it); an expired/absent artifact surfaces as
+// fwra.NotFound via ClassifyStatus's 404 mapping.
+//
+//	GET /repos/{owner}/{repo}/actions/artifacts/{artifactID}/zip → 302 → blob
+func (c *AppClient) DownloadArtifact(ctx context.Context, owner, repo string, artifactID int64, instToken string) (io.ReadCloser, error) {
+	u := fmt.Sprintf("%s/repos/%s/%s/actions/artifacts/%d/zip", c.baseURL, owner, repo, artifactID)
+	req, err := c.newRequest(ctx, http.MethodGet, u, nil, "", instToken)
+	if err != nil {
+		return nil, err
+	}
+	client := *c.http
+	// The body is STREAMED to the caller; the client-wide request timeout would cap
+	// the whole download at httpTimeout, so the caller's ctx governs its lifetime.
+	client.Timeout = 0
+	client.CheckRedirect = func(r *http.Request, via []*http.Request) error {
+		if r.URL.Host != via[0].URL.Host {
+			r.Header.Del("Authorization")
+		}
+		if len(via) >= maxArtifactRedirects {
+			return fwra.New(fwra.Infrastructure, "DownloadArtifact: too many redirects")
+		}
+		return nil
+	}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, fwra.Wrap(fwra.Transient, err, "DownloadArtifact")
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		_ = resp.Body.Close()
+		return nil, ClassifyStatus(resp.StatusCode, "DownloadArtifact")
+	}
+	return resp.Body, nil
 }
