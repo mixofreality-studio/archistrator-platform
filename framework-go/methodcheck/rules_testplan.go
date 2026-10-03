@@ -246,25 +246,95 @@ func skipFindings(p Project, comp string, b ScenarioBinding, l *Location) []Find
 	return nil
 }
 
-// integrated reports whether activityID's execution row records a landed binary
-// exit: a current row with a CompletedAt, no FailureReason and no TailFailureDetail
-// (the server's CoarsePhaseFor precedence — a completion whose merge tail failed is
-// CompletedNotLanded, not Done, and its dependents stay blocked), or a legacy row
-// whose buildStatus says integrated/done. An activity with no row has not integrated.
+// integrated reports whether activityID's execution row derives to Done — the server's
+// CoarsePhaseFor read over the row the server's decoder would hand it. An activity with
+// no row has not integrated. The current member is read when the document carries it
+// and the legacy `.activityConstruction` member otherwise (activityExecutionOrLegacy).
+//
+// The precedence is CoarsePhaseFor's:
+//   - a recorded FailureReason is sticky: Failed, whatever else the row holds. A legacy
+//     row whose stored phase is Failed with no reason recorded is carried forward as
+//     PipelineFailed (toActivityExecution), so the stored ordinal fails it too.
+//   - a CompletedAt with a TailFailureDetail is CompletedNotLanded — it completed its
+//     work and FAILED TO LAND IT; its dependents stay blocked, so a skip waiting on it
+//     is legitimate. Read BEFORE Done, and never falls through to the ledger.
+//   - a CompletedAt is the binary exit: Done. A legacy row whose stored phase is Done
+//     has its exit minted by the carry-forward, so the ordinal counts as one.
+//   - otherwise the attempt ledger decides (ledgerIntegrated). A legacy row whose stored
+//     buildStatus is Integrated has a passed gate attempt minted for every phase of its
+//     profile, so the ordinal reads as a ledger that passed.
 func integrated(p Project, activityID string) bool {
 	rows := p.ActivityExecution
 	if rows == nil {
 		rows = p.LegacyActivityConstruction
 	}
 	row, ok := rows[activityID]
-	if !ok {
+	return ok && row.done()
+}
+
+// done is CoarsePhaseFor's precedence over one row (see integrated).
+func (row ActivityRow) done() bool {
+	if row.FailureReason != 0 || row.Phase == legacyPhaseFailed {
 		return false
 	}
-	if row.BuildStatus != "" {
-		return strings.EqualFold(row.BuildStatus, "integrated") || strings.EqualFold(row.BuildStatus, "done")
-	}
 	completed := len(row.CompletedAt) > 0 && string(row.CompletedAt) != "null"
-	return completed && row.FailureReason == 0 && row.TailFailureDetail == ""
+	if completed && row.TailFailureDetail != "" {
+		return false
+	}
+	if completed || row.Phase == legacyPhaseDone {
+		return true
+	}
+	return row.BuildStatus == legacyBuildIntegrated || ledgerIntegrated(row.Attempts)
+}
+
+// ledgerIntegrated is the mirror of the server's ledger arm — ResolvePhaseCompletions
+// then CoarsePhase: Done when EVERY phase of the activity's profile has its gate task's
+// LATEST attempt passed. This is the shape of every row on the live dogfood document
+// (no head facts, a backfilled ledger), so without it TP-SKIP's "already integrated"
+// arm could never fire on the one document the rule exists to gate.
+//
+// THE MIRROR IS DELIBERATELY STRICTER THAN THE SERVER, NEVER LOOSER. The server's
+// profile comes from classifying the activity (ClassifyType over the committed activity
+// list's id/workerClass/coding) and looking its lifecycle up in method-assets'
+// lifecycles.json. Neither the classification rules nor the lifecycle data belong to
+// this package (framework-go carries no method-assets dependency), so the mirror reads
+// what the LEDGER says about itself instead:
+//   - the Integration phase's gate ("testing") — the final gate of every construction
+//     lifecycle that carries an Integration phase — has a latest attempt and it passed.
+//     A ledger that never reached it (the live C-billing-manager shape: four phases
+//     passed, Integration undecided) is not Done on the server either.
+//   - every task the ledger mentions has its latest attempt passed: a gate re-attempted
+//     and rejected after an earlier pass, or a task still pending after a requeue
+//     re-opened the walk, is not Done on the server and is not Done here.
+//
+// What the mirror cannot see is a profile phase the ledger never mentions at all. A
+// walk reaches "testing" only after the gates before it, so an observed ledger has
+// mentioned them; a backfilled one is the residual window, and it errs toward the
+// server's Done (a false "already integrated" would BLOCK a legitimate skip's write;
+// a missed one accepts a stale skip). EARMARK: the two lifecycles whose final gate is
+// not "testing" (uiDesign ends at designReview, testing:qaProcess at codeReview) and
+// the three design lifecycles never read integrated by ledger here — a false negative
+// in the safe direction, closed only by giving this package the profile.
+func ledgerIntegrated(attempts []TaskAttempt) bool {
+	if len(attempts) == 0 {
+		return false
+	}
+	latest := make(map[string]TaskAttempt, len(attempts))
+	for _, a := range attempts {
+		if cur, ok := latest[a.Task]; !ok || a.Attempt > cur.Attempt {
+			latest[a.Task] = a
+		}
+	}
+	gate, ok := latest[taskIntegrationGate]
+	if !ok || gate.Outcome != attemptPassed {
+		return false
+	}
+	for _, a := range latest {
+		if a.Outcome != attemptPassed {
+			return false
+		}
+	}
+	return true
 }
 
 // findContract resolves comp's contract by scenario.Normalize key equality (the

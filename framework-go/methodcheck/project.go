@@ -578,24 +578,58 @@ type Project struct {
 	// an activity has integrated. LegacyActivityConstruction is the pre-rename
 	// `.activityConstruction` map a document committed before the rename still
 	// carries; it is consulted only when ActivityExecution is absent, exactly as the
-	// server's decoder falls back.
+	// server's decoder falls back (activityExecutionOrLegacy).
 	ActivityExecution          map[string]ActivityRow `json:"activityExecution,omitempty"`
 	LegacyActivityConstruction map[string]ActivityRow `json:"activityConstruction,omitempty"`
 }
 
-// ActivityRow is the minimal mirror of one activity's execution row: the three head
-// facts the server's CoarsePhaseFor reads in precedence (projectstateaccess.go). A
-// current row is integrated when it carries a CompletedAt, no FailureReason, and no
-// TailFailureDetail — the last is the row that completed its work and FAILED TO LAND
-// IT (CompletedNotLanded): the server derives it before Done and keeps the activity's
-// dependents blocked, so a skip waiting on it is legitimate. A legacy row says
-// integrated through BuildStatus ("integrated"/"Integrated"/"Done").
+// ActivityRow is the minimal mirror of one activity's execution row: the head facts the
+// server's CoarsePhaseFor reads in precedence, the attempt ledger it falls through to,
+// and the two stored roll-ups a legacy row carries (projectstateaccess.go). The mirror
+// is ONE struct for both members because a current row simply never carries the two
+// legacy members (they decode to zero, which is what the server's carry-forward reads
+// them as too) — see integrated() for the derivation.
+//
+// Every field is in the server's WIRE form. The legacy roll-ups are the integer
+// ordinals the server stores (LegacyActivityConstructionRow: ActivityBuildStatus and
+// LegacyCoarsePhase), never their names: a string here does not decode the document
+// ValidateProjectJSON is handed on every MCP state write.
 type ActivityRow struct {
 	CompletedAt       json.RawMessage `json:"completedAt,omitempty"`
 	FailureReason     int             `json:"failureReason,omitempty"`
 	TailFailureDetail string          `json:"tailFailureDetail,omitempty"`
-	BuildStatus       string          `json:"buildStatus,omitempty"`
+	Attempts          []TaskAttempt   `json:"attempts,omitempty"`
+	// Phase and BuildStatus are read only off a LEGACY row (the pre-rename member); a
+	// current row stores neither. Ordinals mirror LegacyCoarsePhase / ActivityBuildStatus.
+	Phase       int `json:"phase,omitempty"`
+	BuildStatus int `json:"buildStatus,omitempty"`
 }
+
+// TaskAttempt is the minimal mirror of one attempt in the APPEND-ONLY Figure A-1 task
+// ledger (projectstateaccess.go TaskAttempt): the task it was at, its 1-based number
+// (the ledger's "latest" is the highest number per task), and its outcome ("passed",
+// "rejected", "failed", "skipped", or "" while pending).
+type TaskAttempt struct {
+	Task    string `json:"task"`
+	Attempt int    `json:"attempt"`
+	Outcome string `json:"outcome,omitempty"`
+}
+
+// Legacy-row ordinals, mirrored from projectstate (LegacyCoarsePhase and
+// ActivityBuildStatus). Wire-visible ordinals are never renumbered.
+const (
+	legacyPhaseDone       = 2
+	legacyPhaseFailed     = 3
+	legacyBuildIntegrated = 2
+)
+
+// attemptPassed is the server's TaskOutcome wire name for a passed attempt, and
+// taskIntegrationGate the Integration phase's gate task — the final gate of every
+// construction lifecycle that carries an Integration phase (lifecycles.json).
+const (
+	attemptPassed       = "passed"
+	taskIntegrationGate = "testing"
+)
 
 // ---- service-contract corpus (mirror projectstate/servicecontract.go) ----
 

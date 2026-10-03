@@ -708,34 +708,38 @@
       }
     }
   },
-  "activityExecution": {
-    "C-order-manager": {
-      "activityID": "C-order-manager",
-      "startedAt": "2026-10-01T10:00:00Z"
-    },
+  "activityConstruction": {
     "C-billing-manager": {
       "activityID": "C-billing-manager",
+      "phase": 2,
+      "buildStatus": 2,
+      "attempts": [],
+      "phases": []
+    },
+    "C-order-manager": {
+      "activityID": "C-order-manager",
+      "phase": 1,
+      "buildStatus": 0,
       "startedAt": "2026-10-01T10:00:00Z",
-      "completedAt": "2026-10-02T10:00:00Z"
+      "attempts": [],
+      "phases": []
     },
     "C-shop-client": {
       "activityID": "C-shop-client",
+      "phase": 3,
+      "buildStatus": 3,
       "startedAt": "2026-10-01T10:00:00Z",
-      "completedAt": "2026-10-02T10:00:00Z",
-      "failureReason": 1,
-      "failureDetail": "pipeline failed"
+      "attempts": [],
+      "phases": []
     },
     "C-ledger-engine": {
       "activityID": "C-ledger-engine",
+      "phase": 1,
+      "buildStatus": 1,
       "startedAt": "2026-10-01T10:00:00Z",
-      "completedAt": "2026-10-02T10:00:00Z",
-      "tailFailureDetail": "merge tail failed: push rejected"
-    },
-    "C-inventory-engine": {
-      "activityID": "C-inventory-engine",
       "attempts": [
         {
-          "attemptId": "C-inventory-engine:srs:1",
+          "attemptId": "C-ledger-engine:srs:1",
           "task": "srs",
           "phase": "requirements",
           "attempt": 1,
@@ -750,7 +754,7 @@
           }
         },
         {
-          "attemptId": "C-inventory-engine:srsReview:1",
+          "attemptId": "C-ledger-engine:srsReview:1",
           "task": "srsReview",
           "phase": "requirements",
           "attempt": 1,
@@ -765,7 +769,7 @@
           }
         },
         {
-          "attemptId": "C-inventory-engine:detailedDesign:1",
+          "attemptId": "C-ledger-engine:detailedDesign:1",
           "task": "detailedDesign",
           "phase": "detailed_design",
           "attempt": 1,
@@ -780,7 +784,7 @@
           }
         },
         {
-          "attemptId": "C-inventory-engine:designReview:1",
+          "attemptId": "C-ledger-engine:designReview:1",
           "task": "designReview",
           "phase": "detailed_design",
           "attempt": 1,
@@ -795,7 +799,7 @@
           }
         },
         {
-          "attemptId": "C-inventory-engine:stp:1",
+          "attemptId": "C-ledger-engine:stp:1",
           "task": "stp",
           "phase": "test_plan",
           "attempt": 1,
@@ -810,7 +814,7 @@
           }
         },
         {
-          "attemptId": "C-inventory-engine:stpReview:1",
+          "attemptId": "C-ledger-engine:stpReview:1",
           "task": "stpReview",
           "phase": "test_plan",
           "attempt": 1,
@@ -825,7 +829,7 @@
           }
         },
         {
-          "attemptId": "C-inventory-engine:construction:1",
+          "attemptId": "C-ledger-engine:construction:1",
           "task": "construction",
           "phase": "construction",
           "attempt": 1,
@@ -840,7 +844,7 @@
           }
         },
         {
-          "attemptId": "C-inventory-engine:codeReview:1",
+          "attemptId": "C-ledger-engine:codeReview:1",
           "task": "codeReview",
           "phase": "construction",
           "attempt": 1,
@@ -855,7 +859,7 @@
           }
         },
         {
-          "attemptId": "C-inventory-engine:integration:1",
+          "attemptId": "C-ledger-engine:integration:1",
           "task": "integration",
           "phase": "integration",
           "attempt": 1,
@@ -870,7 +874,7 @@
           }
         },
         {
-          "attemptId": "C-inventory-engine:testing:1",
+          "attemptId": "C-ledger-engine:testing:1",
           "task": "testing",
           "phase": "integration",
           "attempt": 1,
@@ -885,304 +889,16 @@
           }
         }
       ],
-      "version": 0
-    },
-    "C-pricing-engine": {
-      "activityID": "C-pricing-engine",
-      "attempts": [
-        {
-          "attemptId": "C-pricing-engine:srs:1",
-          "task": "srs",
-          "phase": "requirements",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-pricing-engine:srsReview:1",
-          "task": "srsReview",
-          "phase": "requirements",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-pricing-engine:detailedDesign:1",
-          "task": "detailedDesign",
-          "phase": "detailed_design",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-pricing-engine:designReview:1",
-          "task": "designReview",
-          "phase": "detailed_design",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-pricing-engine:stp:1",
-          "task": "stp",
-          "phase": "test_plan",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-pricing-engine:stpReview:1",
-          "task": "stpReview",
-          "phase": "test_plan",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-pricing-engine:construction:1",
-          "task": "construction",
-          "phase": "construction",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-pricing-engine:codeReview:1",
-          "task": "codeReview",
-          "phase": "construction",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        }
-      ],
-      "version": 0
+      "phases": []
     },
     "C-catalog-access": {
       "activityID": "C-catalog-access",
-      "attempts": [
-        {
-          "attemptId": "C-catalog-access:srs:1",
-          "task": "srs",
-          "phase": "requirements",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-catalog-access:srsReview:1",
-          "task": "srsReview",
-          "phase": "requirements",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-catalog-access:detailedDesign:1",
-          "task": "detailedDesign",
-          "phase": "detailed_design",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-catalog-access:designReview:1",
-          "task": "designReview",
-          "phase": "detailed_design",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-catalog-access:stp:1",
-          "task": "stp",
-          "phase": "test_plan",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-catalog-access:stpReview:1",
-          "task": "stpReview",
-          "phase": "test_plan",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-catalog-access:construction:1",
-          "task": "construction",
-          "phase": "construction",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-catalog-access:codeReview:1",
-          "task": "codeReview",
-          "phase": "construction",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-catalog-access:integration:1",
-          "task": "integration",
-          "phase": "integration",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-catalog-access:testing:1",
-          "task": "testing",
-          "phase": "integration",
-          "attempt": 1,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "passed",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        },
-        {
-          "attemptId": "C-catalog-access:testing:2",
-          "task": "testing",
-          "phase": "integration",
-          "attempt": 2,
-          "actor": "agent",
-          "startedAt": "2026-10-01T10:00:00Z",
-          "endedAt": "2026-10-01T11:00:00Z",
-          "outcome": "rejected",
-          "evidence": {},
-          "provenance": {
-            "origin": "backfilled",
-            "basis": "fixture"
-          }
-        }
-      ],
-      "version": 0
+      "phase": 2,
+      "buildStatus": 2,
+      "failureReason": 4,
+      "failureDetail": "variance exhausted",
+      "attempts": [],
+      "phases": []
     }
   }
 }

@@ -345,20 +345,92 @@ func TestTP_Skip_NeedsReasonAndUntil(t *testing.T) {
 	wantRules(t, runTP(t, p), ruleTPSkip, 1)
 }
 
-// A legacy document (pre-rename `.activityConstruction` rows carrying buildStatus)
-// still answers TP-SKIP.
-func TestTP_Skip_LegacyActivityRows(t *testing.T) {
+// The ledger arm. The server's CoarsePhaseFor falls through to the attempt ledger when a
+// row carries no head facts (ResolvePhaseCompletions: Done when every profile phase's
+// gate attempt passed), and that is the shape of EVERY row on the live dogfood document:
+// no startedAt, no completedAt, hundreds of passed gate attempts. All three rows are
+// decoded from the fixture so the attempts' json tags are pinned.
+func TestTP_Skip_LedgerDecidesWhenHeadFactsAreAbsent(t *testing.T) {
 	p := loadProject(t, "tp_clean.json")
-	p.ActivityExecution = nil
-	p.LegacyActivityConstruction = map[string]ActivityRow{
-		"C-billing-manager": {BuildStatus: "Integrated"},
-		"C-order-manager":   {BuildStatus: "in-construction"},
+	b := binding(t, p, "billingManager", "process-order-P2")
+	b.Steps = nil
+
+	// every gate passed, no head facts at all: Done by the ledger, so the skip is stale
+	b.Skip = &SkipReason{Reason: "waiting", Until: "C-inventory-engine"}
+	wantRules(t, runTP(t, p), ruleTPSkip, 1)
+
+	// the live C-billing-manager shape: four phases passed, the integration gate never
+	// attempted — the server's profile walk is undecided on it, so not Done
+	b.Skip.Until = "C-pricing-engine"
+	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+
+	// the integration gate's LATEST attempt was rejected after an earlier pass: latest wins
+	b.Skip.Until = "C-catalog-access"
+	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+
+	// a completion whose merge tail failed does NOT fall through to a passing ledger:
+	// CoarsePhaseFor reads the tail failure before the ledger (CompletedNotLanded)
+	row := p.ActivityExecution["C-inventory-engine"]
+	row.CompletedAt = json.RawMessage(`"2026-10-02T10:00:00Z"`)
+	row.TailFailureDetail = "merge tail failed"
+	p.ActivityExecution["C-inventory-engine"] = row
+	b.Skip.Until = "C-inventory-engine"
+	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+
+	// a sticky failure short-circuits a passing ledger
+	row = p.ActivityExecution["C-inventory-engine"]
+	row.CompletedAt, row.TailFailureDetail, row.FailureReason = nil, "", 4
+	p.ActivityExecution["C-inventory-engine"] = row
+	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+}
+
+// A legacy document (pre-rename `.activityConstruction` rows) still decodes and still
+// answers TP-SKIP. tp_legacy.json carries the rows in the server's WIRE shape — the
+// integer ordinals of ActivityBuildStatus (Integrated == 2) and the stored coarse phase
+// (Done == 2, Failed == 3), empty ledgers — exactly as archistrator@aa536491 stored its
+// 69 rows. An in-memory string BuildStatus does not exist on the wire and proved
+// nothing: the real document crashed DecodeProject while that test passed.
+func TestTP_Skip_LegacyActivityRows(t *testing.T) {
+	p := loadProject(t, "tp_legacy.json")
+	if p.ActivityExecution != nil {
+		t.Fatalf("fixture must carry only the legacy member")
 	}
 	b := binding(t, p, "billingManager", "process-order-P2")
+	b.Steps = nil
+
+	// phase=Done, buildStatus=Integrated, no head facts: the carry-forward mints the exit
 	b.Skip = &SkipReason{Reason: "waiting", Until: "C-billing-manager"}
 	wantRules(t, runTP(t, p), ruleTPSkip, 1)
+
+	// Running, in construction
 	b.Skip.Until = "C-order-manager"
 	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+
+	// stored Failed roll-up with no failureReason: the carry-forward mints PipelineFailed
+	b.Skip.Until = "C-shop-client"
+	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+
+	// Running, but every gate in the ledger passed: the ledger decides Done
+	b.Skip.Until = "C-ledger-engine"
+	wantRules(t, runTP(t, p), ruleTPSkip, 1)
+
+	// Integrated roll-up contradicted by a recorded failure: the failure is sticky
+	b.Skip.Until = "C-catalog-access"
+	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+}
+
+// The integer wire form must decode on its own, before any rule runs: ValidateProjectJSON
+// runs on every MCP state write, so a decode error here fails every write of a pre-rename
+// project.
+func TestDecodeProject_LegacyBuildStatusOrdinal(t *testing.T) {
+	p, ok, err := DecodeProject([]byte(`{"id":"x","slots":{},"activityConstruction":{"C-AA":{"activityID":"C-AA","phase":2,"buildStatus":2,"attempts":[],"phases":[]}}}`))
+	if err != nil || !ok {
+		t.Fatalf("decode: ok=%v err=%v", ok, err)
+	}
+	row := p.LegacyActivityConstruction["C-AA"]
+	if row.BuildStatus != legacyBuildIntegrated || row.Phase != legacyPhaseDone {
+		t.Fatalf("legacy row decoded as %+v", row)
+	}
 }
 
 // tp_drift.json is tp_clean.json after a use-case edit the plan never followed: the
