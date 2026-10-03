@@ -100,7 +100,20 @@ func validateArchitecture(s System, c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, relDup(s)...)
 	findings = append(findings, dynamicViewConsistency(s, c)...)
 	findings = append(findings, callChainRules(s, c)...)
+	findings = append(findings, useCaseIORules(c, allActorIDs(c))...)
 	return finalize(findings), nil
+}
+
+// allActorIDs is the union of every use case's actor ids — the actor set the
+// scenario derivation reads (scenario.Input.Actors), which the UC-IO rules share.
+func allActorIDs(c CoreUseCases) map[string]bool {
+	actors := map[string]bool{}
+	for _, d := range c.Decisions {
+		for id := range actorIDs(d.UseCase) {
+			actors[id] = true
+		}
+	}
+	return actors
 }
 
 // validateOperationalConcepts ports ArtifactValidationEngine.ValidateOperationalConcepts.

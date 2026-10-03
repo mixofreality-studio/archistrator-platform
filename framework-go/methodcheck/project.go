@@ -572,6 +572,24 @@ type Project struct {
 	// TestingState mirrors the top-level `.testingState` record: the test runs the
 	// venues upload. Nil until the first run is recorded.
 	TestingState *TestingState `json:"testingState,omitempty"`
+
+	// ActivityExecution mirrors the per-activity execution rows (`.activityExecution`,
+	// keyed by activity id) MINIMALLY: only the facts TP-SKIP reads to decide whether
+	// an activity has integrated. LegacyActivityConstruction is the pre-rename
+	// `.activityConstruction` map a document committed before the rename still
+	// carries; it is consulted only when ActivityExecution is absent, exactly as the
+	// server's decoder falls back.
+	ActivityExecution          map[string]ActivityRow `json:"activityExecution,omitempty"`
+	LegacyActivityConstruction map[string]ActivityRow `json:"activityConstruction,omitempty"`
+}
+
+// ActivityRow is the minimal mirror of one activity's execution row. A current row
+// is integrated when it carries a CompletedAt and no FailureReason (the binary exit
+// landed); a legacy row says so through BuildStatus ("integrated"/"Integrated"/"Done").
+type ActivityRow struct {
+	CompletedAt   json.RawMessage `json:"completedAt,omitempty"`
+	FailureReason int             `json:"failureReason,omitempty"`
+	BuildStatus   string          `json:"buildStatus,omitempty"`
 }
 
 // ---- service-contract corpus (mirror projectstate/servicecontract.go) ----

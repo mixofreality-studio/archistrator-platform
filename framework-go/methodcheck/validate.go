@@ -23,6 +23,7 @@ func ValidateProject(p Project) ([]Finding, error) {
 		operationalConceptsFindings,
 		standardCheckFindings,
 		appCFindings,
+		testPlanFindings,
 	} {
 		f, err := run(p)
 		if err != nil {
