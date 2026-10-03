@@ -181,10 +181,7 @@ func TestUCStartRedundant_FiresOncePerUseCase(t *testing.T) {
 		{From: "d", To: "b", Kind: edgeGuardedFlow, Guard: "no"},
 		{From: "b", To: "e", Kind: edgeControlFlow},
 	})
-	fs, err := startRedundantFindings(projectWithUseCases(t, c))
-	if err != nil {
-		t.Fatal(err)
-	}
+	fs := runStartRedundant(t, projectWithUseCases(t, c))
 	wantRules(t, fs, ruleUCStartRedundant, 1)
 	f := fs[0]
 	if f.Severity != SeverityWarning || !strings.Contains(f.Message, "2 path") ||
@@ -213,13 +210,24 @@ func TestUCStartRedundant_SilentWithoutRedundancy(t *testing.T) {
 	})
 	for name, c := range map[string]CoreUseCases{"start only": startOnly, "own stimulus": ownStimulus} {
 		t.Run(name, func(t *testing.T) {
-			fs, err := startRedundantFindings(projectWithUseCases(t, c))
-			if err != nil {
-				t.Fatal(err)
-			}
-			wantRules(t, fs, ruleUCStartRedundant, 0)
+			wantRules(t, runStartRedundant(t, projectWithUseCases(t, c)), ruleUCStartRedundant, 0)
 		})
 	}
+}
+
+// runStartRedundant derives p's scenarios and runs UC-START-REDUNDANT over what
+// the derivation dropped, as scenarioFindings does.
+func runStartRedundant(t *testing.T, p Project) []Finding {
+	t.Helper()
+	r, err := deriveReport(p)
+	if err != nil {
+		t.Fatalf("deriveReport: %v", err)
+	}
+	fs, err := startRedundantFindings(p, r.StartRedundant)
+	if err != nil {
+		t.Fatalf("startRedundantFindings: %v", err)
+	}
+	return fs
 }
 
 // The rule is wired into ValidateProject and registered as an emitted rule.

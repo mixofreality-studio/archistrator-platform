@@ -100,19 +100,11 @@ func yieldsInput(n ActivityNode, actors map[string]bool) bool {
 
 // startRedundantFindings is UC-START-REDUNDANT: one Warning per use case whose
 // start-family paths scenario.DeriveReport dropped (Amendment A3). It reads the
-// same derivation input TP-* and testgen read, so the paths it names as dropped
-// are exactly the scenarios no plan can bind. A Warning: it describes the design
+// same derivation TP-* and testgen read, so the paths it names as dropped are
+// exactly the scenarios no plan can bind. A Warning: it describes the design
 // (the start node duplicates an event entry), never a binding being written.
-func startRedundantFindings(p Project) ([]Finding, error) {
-	in, err := ScenarioInput(p)
-	if err != nil {
-		return nil, err
-	}
-	r, err := scenario.DeriveReport(in)
-	if err != nil {
-		return nil, err
-	}
-	if len(r.StartRedundant) == 0 {
+func startRedundantFindings(p Project, dropped []scenario.StartRedundancy) ([]Finding, error) {
+	if len(dropped) == 0 {
 		return nil, nil
 	}
 	cu, _, err := p.coreUseCases()
@@ -123,8 +115,8 @@ func startRedundantFindings(p Project) ([]Finding, error) {
 	for i, d := range cu.Decisions {
 		ordinal[d.UseCase.ID] = i
 	}
-	out := make([]Finding, 0, len(r.StartRedundant))
-	for _, sr := range r.StartRedundant {
+	out := make([]Finding, 0, len(dropped))
+	for _, sr := range dropped {
 		out = append(out, Finding{
 			RuleID:   ruleUCStartRedundant,
 			Severity: SeverityWarning,

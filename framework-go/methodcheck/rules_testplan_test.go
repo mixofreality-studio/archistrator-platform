@@ -41,11 +41,11 @@ func dumpFindings(fs []Finding) string {
 
 func runTP(t *testing.T, p Project) []Finding {
 	t.Helper()
-	fs, err := testPlanFindings(p)
+	all, err := DeriveScenarios(p)
 	if err != nil {
-		t.Fatalf("testPlanFindings: %v", err)
+		t.Fatalf("DeriveScenarios: %v", err)
 	}
-	return fs
+	return testPlanFindings(p, all)
 }
 
 // binding returns a pointer into the fixture's binding list so a test can mutate it.

@@ -23,8 +23,7 @@ func ValidateProject(p Project) ([]Finding, error) {
 		operationalConceptsFindings,
 		standardCheckFindings,
 		appCFindings,
-		startRedundantFindings,
-		testPlanFindings,
+		scenarioFindings,
 	} {
 		f, err := run(p)
 		if err != nil {
@@ -33,6 +32,21 @@ func ValidateProject(p Project) ([]Finding, error) {
 		all = append(all, f...)
 	}
 	return all, nil
+}
+
+// scenarioFindings derives the project's scenarios ONCE and runs the rules that
+// read the derivation: UC-START-REDUNDANT over the start families it dropped, then
+// the TP-* family over the scenarios it kept.
+func scenarioFindings(p Project) ([]Finding, error) {
+	r, err := deriveReport(p)
+	if err != nil {
+		return nil, err
+	}
+	out, err := startRedundantFindings(p, r.StartRedundant)
+	if err != nil {
+		return nil, err
+	}
+	return append(out, testPlanFindings(p, r.Scenarios)...), nil
 }
 
 // glossaryFindings runs the GLOSS-FOURQ twin. It fires only when the Glossary slot is
