@@ -1,0 +1,1437 @@
+{
+ "diagrams": [
+  {
+   "useCaseID": "execute-a-project-activity",
+   "title": "Execute a Project Activity",
+   "nodes": [
+    {
+     "id": "pump-fires",
+     "kind": "timeEvent",
+     "label": "Delivery pump comes due",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "start",
+     "kind": "start",
+     "label": "",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "activity-eligible",
+     "kind": "action",
+     "label": "Activity eligible: predecessors done and the M0 fence honoured; open its lifecycle",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "activity-lifecycle-open",
+     "kind": "objectNode",
+     "label": "ActivityExecution",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "[lifecycle open, revision 1]",
+     "anchor": ""
+    },
+    {
+     "id": "next-task",
+     "kind": "action",
+     "label": "Take the next ready task of the activity's lifecycle DAG",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "task-kind",
+     "kind": "decision",
+     "label": "Dispatch task or review task?",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "dispatch-task",
+     "kind": "action",
+     "label": "Dispatch the task's agentic job; stage its artifact on the activity branch",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "observe-validate",
+     "kind": "action",
+     "label": "Read the result back and validate it against the task's exit criterion",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "staged-artifact",
+     "kind": "objectNode",
+     "label": "Task artifact",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "[staged on activity branch]",
+     "anchor": ""
+    },
+    {
+     "id": "attempt-episode",
+     "kind": "objectNode",
+     "label": "Agentic episode",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "[appended to episode ledger]",
+     "anchor": ""
+    },
+    {
+     "id": "exit-met",
+     "kind": "decision",
+     "label": "Exit criterion met?",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "retry-remain",
+     "kind": "decision",
+     "label": "Retries remain?",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "intervention-engine",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "escalate-operator",
+     "kind": "action",
+     "label": "Escalate to the operator; the steer is kept on the activity and delivered to its next attempt",
+     "roleName": "Operator",
+     "linkedActorID": "operator",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "operator-note-recorded",
+     "kind": "objectNode",
+     "label": "Operator note",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "[recorded on activity]",
+     "anchor": ""
+    },
+    {
+     "id": "operator-intervened",
+     "kind": "decision",
+     "label": "Operator intervened?",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "operator",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "propose-reviews",
+     "kind": "action",
+     "label": "Determine the reviewer set and whether a human must decide",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "review-pr-open",
+     "kind": "objectNode",
+     "label": "Pull request",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "[open: activity branch -> main]",
+     "anchor": ""
+    },
+    {
+     "id": "requires-human",
+     "kind": "decision",
+     "label": "Does the policy require a human decision?",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "review-engine",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "dispatch-reviewers",
+     "kind": "action",
+     "label": "Reviewers review the staged artifact",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "human-decision",
+     "kind": "action",
+     "label": "The architect user approves or sends back, with comments",
+     "roleName": "Architect User",
+     "linkedActorID": "architect-user",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "verdict",
+     "kind": "decision",
+     "label": "Approve or send back?",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "note-sendback-revision",
+     "kind": "note",
+     "label": "sendBack reopens the judged task as revision n+1 on the same activity branch; the revision counter is the bound value, the prior staged artifact is not committed.",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": "verdict"
+    },
+    {
+     "id": "commit-artifact",
+     "kind": "action",
+     "label": "Commit the staged artifact; the gate passes; the LifecyclePhase is earned",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "artifact-committed",
+     "kind": "objectNode",
+     "label": "Task artifact",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "[committed]",
+     "anchor": ""
+    },
+    {
+     "id": "review-pr-merged",
+     "kind": "objectNode",
+     "label": "Pull request",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "[approved, merged]",
+     "anchor": ""
+    },
+    {
+     "id": "merge-advance",
+     "kind": "merge",
+     "label": "",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "record-exit",
+     "kind": "action",
+     "label": "Record binary exit; recompute earned value and projection",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "activity-exit-recorded",
+     "kind": "objectNode",
+     "label": "Activity",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "[exited: LifecyclePhase earned]",
+     "anchor": ""
+    },
+    {
+     "id": "earned-value-recomputed",
+     "kind": "objectNode",
+     "label": "Earned-value projection",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "[recomputed]",
+     "anchor": ""
+    },
+    {
+     "id": "note-binary-exit",
+     "kind": "note",
+     "label": "Exit is binary (done / not done); no percent-complete value is ever recorded. Earned value counts only exited activities against the committed network.",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": "record-exit"
+    },
+    {
+     "id": "end",
+     "kind": "end",
+     "label": "",
+     "roleName": "",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    }
+   ],
+   "edges": [
+    {
+     "from": "pump-fires",
+     "to": "activity-eligible",
+     "guard": ""
+    },
+    {
+     "from": "start",
+     "to": "activity-eligible",
+     "guard": ""
+    },
+    {
+     "from": "activity-eligible",
+     "to": "activity-lifecycle-open",
+     "guard": ""
+    },
+    {
+     "from": "activity-lifecycle-open",
+     "to": "next-task",
+     "guard": ""
+    },
+    {
+     "from": "next-task",
+     "to": "task-kind",
+     "guard": ""
+    },
+    {
+     "from": "task-kind",
+     "to": "dispatch-task",
+     "guard": "dispatch"
+    },
+    {
+     "from": "task-kind",
+     "to": "propose-reviews",
+     "guard": "review"
+    },
+    {
+     "from": "dispatch-task",
+     "to": "observe-validate",
+     "guard": ""
+    },
+    {
+     "from": "observe-validate",
+     "to": "staged-artifact",
+     "guard": ""
+    },
+    {
+     "from": "staged-artifact",
+     "to": "attempt-episode",
+     "guard": ""
+    },
+    {
+     "from": "attempt-episode",
+     "to": "exit-met",
+     "guard": ""
+    },
+    {
+     "from": "exit-met",
+     "to": "merge-advance",
+     "guard": "yes"
+    },
+    {
+     "from": "exit-met",
+     "to": "retry-remain",
+     "guard": "no"
+    },
+    {
+     "from": "retry-remain",
+     "to": "dispatch-task",
+     "guard": "yes: retry"
+    },
+    {
+     "from": "retry-remain",
+     "to": "escalate-operator",
+     "guard": "no: exhausted"
+    },
+    {
+     "from": "escalate-operator",
+     "to": "operator-note-recorded",
+     "guard": ""
+    },
+    {
+     "from": "operator-note-recorded",
+     "to": "operator-intervened",
+     "guard": ""
+    },
+    {
+     "from": "operator-intervened",
+     "to": "escalate-operator",
+     "guard": "no"
+    },
+    {
+     "from": "operator-intervened",
+     "to": "merge-advance",
+     "guard": "yes"
+    },
+    {
+     "from": "propose-reviews",
+     "to": "review-pr-open",
+     "guard": ""
+    },
+    {
+     "from": "review-pr-open",
+     "to": "requires-human",
+     "guard": ""
+    },
+    {
+     "from": "requires-human",
+     "to": "dispatch-reviewers",
+     "guard": "agents only"
+    },
+    {
+     "from": "requires-human",
+     "to": "human-decision",
+     "guard": "human required"
+    },
+    {
+     "from": "dispatch-reviewers",
+     "to": "verdict",
+     "guard": ""
+    },
+    {
+     "from": "human-decision",
+     "to": "verdict",
+     "guard": ""
+    },
+    {
+     "from": "verdict",
+     "to": "commit-artifact",
+     "guard": "approve"
+    },
+    {
+     "from": "verdict",
+     "to": "next-task",
+     "guard": "sendBack: reopens the judged task as revision n+1"
+    },
+    {
+     "from": "commit-artifact",
+     "to": "artifact-committed",
+     "guard": ""
+    },
+    {
+     "from": "artifact-committed",
+     "to": "review-pr-merged",
+     "guard": ""
+    },
+    {
+     "from": "review-pr-merged",
+     "to": "merge-advance",
+     "guard": ""
+    },
+    {
+     "from": "merge-advance",
+     "to": "record-exit",
+     "guard": ""
+    },
+    {
+     "from": "record-exit",
+     "to": "activity-exit-recorded",
+     "guard": ""
+    },
+    {
+     "from": "activity-exit-recorded",
+     "to": "earned-value-recomputed",
+     "guard": ""
+    },
+    {
+     "from": "earned-value-recomputed",
+     "to": "note-binary-exit",
+     "guard": ""
+    },
+    {
+     "from": "note-binary-exit",
+     "to": "end",
+     "guard": ""
+    }
+   ]
+  }
+ ],
+ "views": [
+  {
+   "useCaseID": "execute-a-project-activity",
+   "steps": [
+    {
+     "nodeID": "pump-fires",
+     "calls": [
+      {
+       "from": "scheduler-client",
+       "to": "delivery-manager",
+       "mode": "sync",
+       "label": "executeNextActivity(projectId, tickId) — the pump starts a child for every eligible activity",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "activity-eligible",
+     "calls": [
+      {
+       "from": "architect-user",
+       "to": "web-client",
+       "mode": "sync",
+       "label": "opens the activity from the plan",
+       "alt": "s1"
+      },
+      {
+       "from": "architect-user",
+       "to": "mcp-client",
+       "mode": "sync",
+       "label": "opens the activity over the MCP surface (R4 cross-surface equivalence)",
+       "alt": "s1"
+      },
+      {
+       "from": "web-client",
+       "to": "delivery-manager",
+       "mode": "sync",
+       "label": "queryActivityView(projectId, activityId)",
+       "alt": "s2"
+      },
+      {
+       "from": "mcp-client",
+       "to": "delivery-manager",
+       "mode": "sync",
+       "label": "queryActivityView(projectId, activityId) — same Manager entry",
+       "alt": "s2"
+      },
+      {
+       "from": "delivery-manager",
+       "to": "project-state-access",
+       "mode": "sync",
+       "label": "readProject → the next ready tasks of the activity's lifecycle DAG",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "next-task",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "project-state-access",
+       "mode": "sync",
+       "label": "readActivityExecution → the ready frontier of the task DAG (predecessors passed, revision n)",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "dispatch-task",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "source-control-access",
+       "mode": "sync",
+       "label": "getInstallationToken(repo) → RepoCredential; openBranch(repo, activityBranch, cred) → BranchRef",
+       "alt": ""
+      },
+      {
+       "from": "delivery-manager",
+       "to": "agentic-job-access",
+       "mode": "sync",
+       "label": "submitAgenticJob(command, workerClass, branch, contract, cred) — the task's agentic job",
+       "alt": ""
+      },
+      {
+       "from": "agentic-job-access",
+       "to": "construction-pipeline-runtime",
+       "mode": "sync",
+       "label": "dispatch the job onto the venue's pipeline runtime",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "observe-validate",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "agentic-job-access",
+       "mode": "sync",
+       "label": "observeAgenticJob(handle) → terminal phase + summary",
+       "alt": ""
+      },
+      {
+       "from": "delivery-manager",
+       "to": "artifact-access",
+       "mode": "sync",
+       "label": "storeConstructionOutput / retrieveConstructionOutput — the produced artifact, staged against the task",
+       "alt": ""
+      },
+      {
+       "from": "artifact-access",
+       "to": "project-git-repo",
+       "mode": "sync",
+       "label": "write / read the staged output tree on the activity branch",
+       "alt": ""
+      },
+      {
+       "from": "delivery-manager",
+       "to": "episode-access",
+       "mode": "sync",
+       "label": "appendEpisode(record) — the terminal agentic episode of this attempt",
+       "alt": ""
+      },
+      {
+       "from": "episode-access",
+       "to": "project-git-repo",
+       "mode": "sync",
+       "label": "append the episode record to the project's episode ledger",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "retry-remain",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "intervention-engine",
+       "mode": "sync",
+       "label": "DecideOnVariance(variance) → {Retry | Escalate | Takeover} — the retry budget is the Engine's, not the Manager's",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "escalate-operator",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "project-state-access",
+       "mode": "sync",
+       "label": "recordOperatorNote(activityId, note) — the escalation is recorded on the activity, not held in a workflow variable",
+       "alt": ""
+      },
+      {
+       "from": "operator",
+       "to": "web-client",
+       "mode": "sync",
+       "label": "reads the escalation and steers the activity",
+       "alt": "s1"
+      },
+      {
+       "from": "operator",
+       "to": "mcp-client",
+       "mode": "sync",
+       "label": "steers the activity over the MCP surface (R4 cross-surface equivalence)",
+       "alt": "s1"
+      },
+      {
+       "from": "web-client",
+       "to": "delivery-manager",
+       "mode": "sync",
+       "label": "overrideActivity(projectId, activityId, override) — retry | skip | takeover",
+       "alt": "s2"
+      },
+      {
+       "from": "mcp-client",
+       "to": "delivery-manager",
+       "mode": "sync",
+       "label": "overrideActivity(projectId, activityId, override) — same Manager entry",
+       "alt": "s2"
+      }
+     ]
+    },
+    {
+     "nodeID": "operator-intervened",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "project-state-access",
+       "mode": "sync",
+       "label": "readProject → the operator override, if one landed before the escalation window closed",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "propose-reviews",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "source-control-access",
+       "mode": "sync",
+       "label": "openPullRequest(repo, head=activityBranch, base=main, cred) → PullRequestRef — the reviewable surface",
+       "alt": ""
+      },
+      {
+       "from": "delivery-manager",
+       "to": "review-engine",
+       "mode": "sync",
+       "label": "ProposeReviews(change, activityType, lifecyclePhase, componentId, policy, floorTouched, contracts) → ReviewSet",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "requires-human",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "review-engine",
+       "mode": "sync",
+       "label": "the ReviewSet's own seats decide it: a non-overridable floor row always holds for a human",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "dispatch-reviewers",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "agentic-job-access",
+       "mode": "sync",
+       "label": "submitAgenticJob(review command, reviewer role) per agent seat; observeAgenticJob → each seat's verdict",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "human-decision",
+     "calls": [
+      {
+       "from": "architect-user",
+       "to": "web-client",
+       "mode": "sync",
+       "label": "reads the staged artifact and the agent verdicts; approves or sends back with anchored comments",
+       "alt": "s1"
+      },
+      {
+       "from": "architect-user",
+       "to": "mcp-client",
+       "mode": "sync",
+       "label": "decides over the MCP surface (R4 cross-surface equivalence)",
+       "alt": "s1"
+      },
+      {
+       "from": "web-client",
+       "to": "delivery-manager",
+       "mode": "sync",
+       "label": "submitReviewDecision(projectId, activityId, taskId, decision, feedback?)",
+       "alt": "s2"
+      },
+      {
+       "from": "mcp-client",
+       "to": "delivery-manager",
+       "mode": "sync",
+       "label": "submitReviewDecision(projectId, activityId, taskId, decision, feedback?) — same Manager entry",
+       "alt": "s2"
+      }
+     ]
+    },
+    {
+     "nodeID": "commit-artifact",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "project-state-access",
+       "mode": "sync",
+       "label": "commitArtifactWithProvenance / commitActivityArtifacts — the staged artifact becomes committed state",
+       "alt": ""
+      },
+      {
+       "from": "delivery-manager",
+       "to": "source-control-access",
+       "mode": "sync",
+       "label": "postReview(pr, verdict, cred) · mergePullRequest(pr, cred) — the approval is relayed and the branch merges",
+       "alt": ""
+      },
+      {
+       "from": "delivery-manager",
+       "to": "design-health-engine",
+       "mode": "sync",
+       "label": "EvaluateDesignHealth(project, systemModel) → findings — the gate of a design artifact reads the live Method rules",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "record-exit",
+     "calls": [
+      {
+       "from": "delivery-manager",
+       "to": "project-state-access",
+       "mode": "sync",
+       "label": "recordActivityOutcome(activityId, binary exit) — the LifecyclePhase is earned, never asserted",
+       "alt": ""
+      },
+      {
+       "from": "delivery-manager",
+       "to": "estimation-engine",
+       "mode": "sync",
+       "label": "ComputeEarnedValue(exits, committedNetwork) → the earned-value point and the projection",
+       "alt": ""
+      },
+      {
+       "from": "delivery-manager",
+       "to": "operation-estimation-engine",
+       "mode": "sync",
+       "label": "EstimateOperatingCost(option) → the operating-cost headline of the projectDesign activity's M0 gate (§6)",
+       "alt": ""
+      },
+      {
+       "from": "delivery-manager",
+       "to": "billing-engine",
+       "mode": "sync",
+       "label": "PriceConstruction(estimate) → the M0 gate's cost in tokens and dollars (§6)",
+       "alt": ""
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "actors": {
+  "architect-user": true,
+  "customer": true,
+  "infrastructure": true,
+  "operated-system": true,
+  "operator": true,
+  "payment-provider": true,
+  "settlement-manager": true
+ },
+ "contracts": {
+  "activityExecutionAccess": {
+   "component": "activityExecutionAccess",
+   "ops": [
+    {
+     "name": "OpenActivity"
+    },
+    {
+     "name": "StageTaskOutput"
+    },
+    {
+     "name": "RecordAttemptOutcome"
+    },
+    {
+     "name": "OpenReviewRound"
+    },
+    {
+     "name": "AppendReviewVerdict"
+    },
+    {
+     "name": "SetReviewCommentStatus"
+    },
+    {
+     "name": "DecideReviewRound"
+    },
+    {
+     "name": "CommitActivityArtifacts"
+    },
+    {
+     "name": "RecordActivityOutcome"
+    },
+    {
+     "name": "RecordOperatorNote"
+    },
+    {
+     "name": "AcknowledgeStaleBasis"
+    },
+    {
+     "name": "ReadActivityExecution"
+    }
+   ]
+  },
+  "agenticJobAccess": {
+   "component": "agenticJobAccess",
+   "ops": [
+    {
+     "name": "CancelAgenticJob"
+    },
+    {
+     "name": "ObserveAgenticJob"
+    },
+    {
+     "name": "SubmitAgenticJob"
+    }
+   ]
+  },
+  "artifactAccess": {
+   "component": "artifactAccess",
+   "ops": [
+    {
+     "name": "GetTestRunIndex"
+    },
+    {
+     "name": "ReadTestRunFile"
+    },
+    {
+     "name": "RetrieveConstructionOutput"
+    },
+    {
+     "name": "RetrieveOutputTree"
+    },
+    {
+     "name": "StoreConstructionOutput"
+    }
+   ]
+  },
+  "autoscalerEngine": {
+   "component": "autoscalerEngine",
+   "ops": [
+    {
+     "name": "ProposeDesiredState"
+    }
+   ]
+  },
+  "billingEngine": {
+   "component": "billingEngine",
+   "ops": [
+    {
+     "name": "ComputeNet"
+    },
+    {
+     "name": "ProjectCommitTimeComputeCost"
+    },
+    {
+     "name": "RecomputeNet"
+    }
+   ]
+  },
+  "billingManager": {
+   "component": "billingManager",
+   "ops": [
+    {
+     "name": "CloseBillingCycle"
+    },
+    {
+     "name": "OnboardPaymentIntegration"
+    },
+    {
+     "name": "RecordInboundRevenue"
+    },
+    {
+     "name": "RecordRevenueReversal"
+    },
+    {
+     "name": "RegisterCustomer"
+    },
+    {
+     "name": "RunShortfallSweep"
+    }
+   ]
+  },
+  "billingStateAccess": {
+   "component": "billingStateAccess",
+   "ops": [
+    {
+     "name": "BindGatewayLive"
+    },
+    {
+     "name": "ReadPersistentlyDelinquentCustomers"
+    },
+    {
+     "name": "ReadBilling"
+    },
+    {
+     "name": "RegisterCustomer"
+    },
+    {
+     "name": "ResettleCycle"
+    },
+    {
+     "name": "SettleCycle"
+    }
+   ]
+  },
+  "constructionTransitionAccess": {
+   "component": "constructionTransitionAccess",
+   "ops": [
+    {
+     "name": "RecordChangeReviewed"
+    },
+    {
+     "name": "RecordActivityExited"
+    },
+    {
+     "name": "RecordActivityFailed"
+    },
+    {
+     "name": "RecordOperatorPaused"
+    },
+    {
+     "name": "RecordOperatorResumed"
+    },
+    {
+     "name": "RecordReviewPolicy"
+    },
+    {
+     "name": "RecordPhaseStarted"
+    },
+    {
+     "name": "RecordPhaseCompleted"
+    },
+    {
+     "name": "RecordServiceContractProduced"
+    },
+    {
+     "name": "RecordPhaseArtifactProduced"
+    },
+    {
+     "name": "RecordOperatorNote"
+    },
+    {
+     "name": "RecordOperatorNoteDelivered"
+    }
+   ]
+  },
+  "deliveryManager": {
+   "component": "deliveryManager",
+   "ops": [
+    {
+     "name": "StartProject"
+    },
+    {
+     "name": "ExecuteNextActivity"
+    },
+    {
+     "name": "DispatchActivityTask"
+    },
+    {
+     "name": "SubmitReviewDecision"
+    },
+    {
+     "name": "AskQuestions"
+    },
+    {
+     "name": "AcknowledgeStaleBasis"
+    },
+    {
+     "name": "SetProjectRunState"
+    },
+    {
+     "name": "OverrideActivity"
+    },
+    {
+     "name": "SetProjectExecutionPolicy"
+    },
+    {
+     "name": "QueryProjectView"
+    },
+    {
+     "name": "QueryActivityView"
+    }
+   ]
+  },
+  "designSessionAccess": {
+   "component": "designSessionAccess",
+   "ops": [
+    {
+     "name": "ReadProjectOnBranch"
+    },
+    {
+     "name": "StageArtifactForReviewOnBranch"
+    },
+    {
+     "name": "CommitArtifactWithProvenance"
+    },
+    {
+     "name": "RejectArtifactOnBranchWithComments"
+    },
+    {
+     "name": "WithdrawArtifactOnBranch"
+    },
+    {
+     "name": "ReconcileBranchFromMain"
+    },
+    {
+     "name": "SetReviewCommentStatusOnBranch"
+    },
+    {
+     "name": "SeedReviewCommentsOnBranch"
+    }
+   ]
+  },
+  "episodeAccess": {
+   "component": "episodeAccess",
+   "ops": [
+    {
+     "name": "AppendEpisode"
+    },
+    {
+     "name": "ListEpisodes"
+    },
+    {
+     "name": "ReadTraceEvents"
+    }
+   ]
+  },
+  "estimationEngine": {
+   "component": "estimationEngine",
+   "ops": [
+    {
+     "name": "ComputeEarnedValue"
+    },
+    {
+     "name": "ComputeNetwork"
+    },
+    {
+     "name": "EstimateForOption"
+    },
+    {
+     "name": "DerivePlan"
+    }
+   ]
+  },
+  "gitActivityStatusAccess": {
+   "component": "gitActivityStatusAccess",
+   "ops": [
+    {
+     "name": "RecordActivityBranchOpened"
+    },
+    {
+     "name": "RecordActivityCIObserved"
+    },
+    {
+     "name": "RecordActivityArchApproved"
+    },
+    {
+     "name": "RecordActivityMerged"
+    },
+    {
+     "name": "RecordActivityStarted"
+    },
+    {
+     "name": "RecordActivityCompleted"
+    }
+   ]
+  },
+  "interventionEngine": {
+   "component": "interventionEngine",
+   "ops": [
+    {
+     "name": "ApplyPausePolicy"
+    },
+    {
+     "name": "DecideOnHealth"
+    },
+    {
+     "name": "DecideOnSettlementFailure"
+    },
+    {
+     "name": "DecideOnVariance"
+    }
+   ]
+  },
+  "mcpClient": {
+   "component": "mcpClient",
+   "ops": [
+    {
+     "name": "listTools"
+    },
+    {
+     "name": "invokeTool"
+    },
+    {
+     "name": "readProjectState"
+    }
+   ]
+  },
+  "merchantGatewayAccess": {
+   "component": "merchantGatewayAccess",
+   "ops": [
+    {
+     "name": "ChargeCustomer"
+    },
+    {
+     "name": "ValidateStoredInstrument"
+    }
+   ]
+  },
+  "messageBus": {
+   "component": "messageBus",
+   "ops": [
+    {
+     "name": "DeliverSignal"
+    },
+    {
+     "name": "RegisterSchedule"
+    }
+   ]
+  },
+  "operatedRuntimeAccess": {
+   "component": "operatedRuntimeAccess",
+   "ops": [
+    {
+     "name": "GetApplicationHealth"
+    },
+    {
+     "name": "GetDeploymentResourceHealth"
+    },
+    {
+     "name": "GetSloStatus"
+    },
+    {
+     "name": "PublishDesiredState"
+    },
+    {
+     "name": "ReadComputeAttribution"
+    },
+    {
+     "name": "WirePaymentConfig"
+    },
+    {
+     "name": "Withdraw"
+    }
+   ]
+  },
+  "operatedSystemStateAccess": {
+   "component": "operatedSystemStateAccess",
+   "ops": [
+    {
+     "name": "RegisterOperatedSystem"
+    },
+    {
+     "name": "PublishDesiredState"
+    },
+    {
+     "name": "ReadInFlightOperatedApps"
+    },
+    {
+     "name": "ReadOperatedSystem"
+    },
+    {
+     "name": "RecordDelinquencyAction"
+    },
+    {
+     "name": "RecordRuntimeStatusChange"
+    },
+    {
+     "name": "WithdrawSystem"
+    }
+   ]
+  },
+  "operationEstimationEngine": {
+   "component": "operationEstimationEngine",
+   "ops": [
+    {
+     "name": "EstimateForOption"
+    },
+    {
+     "name": "ProjectForOperatedApp"
+    }
+   ]
+  },
+  "operationsManager": {
+   "component": "operationsManager",
+   "ops": [
+    {
+     "name": "ApplyDelinquencyPolicy"
+    },
+    {
+     "name": "DeployAfterConstruction"
+    },
+    {
+     "name": "QueryCostProjection"
+    },
+    {
+     "name": "QueryDeploymentHealth"
+    },
+    {
+     "name": "QueryOperatedSystemView"
+    },
+    {
+     "name": "ReconcileOperatedState"
+    },
+    {
+     "name": "RegisterOperatedApp"
+    },
+    {
+     "name": "WithdrawSystem"
+    }
+   ]
+  },
+  "projectStateAccess": {
+   "component": "projectStateAccess",
+   "ops": [
+    {
+     "name": "AcknowledgeStaleBasis"
+    },
+    {
+     "name": "AdvancePhase"
+    },
+    {
+     "name": "CommitArtifact"
+    },
+    {
+     "name": "CreateProject"
+    },
+    {
+     "name": "ListProjects"
+    },
+    {
+     "name": "ReadProject"
+    },
+    {
+     "name": "ReadProjectVersion"
+    },
+    {
+     "name": "SetOperatingModel"
+    },
+    {
+     "name": "SetResearchInput"
+    }
+   ]
+  },
+  "revenueLedgerAccess": {
+   "component": "revenueLedgerAccess",
+   "ops": [
+    {
+     "name": "RecordInboundRevenue"
+    },
+    {
+     "name": "RecordReversal"
+    },
+    {
+     "name": "ReadRange"
+    }
+   ]
+  },
+  "reviewEngine": {
+   "component": "reviewEngine",
+   "ops": [
+    {
+     "name": "ProposeReviews"
+    }
+   ]
+  },
+  "security": {
+   "component": "security",
+   "ops": [
+    {
+     "name": "resolvePrincipal"
+    },
+    {
+     "name": "authorize"
+    },
+    {
+     "name": "verifyWebhookSignature"
+    },
+    {
+     "name": "obtainServiceIdentity"
+    }
+   ]
+  },
+  "sourceControlAccess": {
+   "component": "sourceControlAccess",
+   "ops": [
+    {
+     "name": "AdoptProjectRepo"
+    },
+    {
+     "name": "CommitManagedFiles"
+    },
+    {
+     "name": "ConfigureBranchProtection"
+    },
+    {
+     "name": "GetInstallationToken"
+    },
+    {
+     "name": "GetPullRequestStatus"
+    },
+    {
+     "name": "InstallAuthorizeApp"
+    },
+    {
+     "name": "MergePullRequest"
+    },
+    {
+     "name": "OpenBranch"
+    },
+    {
+     "name": "OpenPullRequest"
+    },
+    {
+     "name": "PostReview"
+    },
+    {
+     "name": "SyncManagedScaffold"
+    }
+   ]
+  },
+  "usageAccess": {
+   "component": "usageAccess",
+   "ops": [
+    {
+     "name": "ReadRange"
+    },
+    {
+     "name": "RecordComputeUsage"
+    },
+    {
+     "name": "RecordFinalUsage"
+    }
+   ]
+  },
+  "webClient": {
+   "component": "webClient",
+   "ops": [
+    {
+     "name": "driveDesignPhase"
+    },
+    {
+     "name": "superviseConstruction"
+    },
+    {
+     "name": "operateDeliveredSystem"
+    },
+    {
+     "name": "managePaymentLifecycle"
+    },
+    {
+     "name": "readOperatedSystemView"
+    }
+   ]
+  }
+ }
+}

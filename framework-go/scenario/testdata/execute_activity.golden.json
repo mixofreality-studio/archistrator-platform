@@ -1,0 +1,2916 @@
+[
+  {
+    "id": "execute-a-project-activity-P1",
+    "useCase": "execute-a-project-activity",
+    "title": "Execute a Project Activity — dispatch · yes",
+    "path": [
+      "pump-fires",
+      "activity-eligible",
+      "activity-lifecycle-open",
+      "next-task",
+      "task-kind",
+      "dispatch-task",
+      "observe-validate",
+      "staged-artifact",
+      "attempt-episode",
+      "exit-met",
+      "merge-advance",
+      "record-exit",
+      "activity-exit-recorded",
+      "earned-value-recomputed",
+      "note-binary-exit",
+      "end"
+    ],
+    "guards": [
+      {
+        "at": "task-kind",
+        "guard": "dispatch"
+      },
+      {
+        "at": "exit-met",
+        "guard": "yes"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "pump-fires",
+        "input": {
+          "kind": "timeEvent",
+          "from": "scheduler-client",
+          "to": "deliverymanager",
+          "op": "ExecuteNextActivity",
+          "call": "execute-a-project-activity/pump-fires/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 2,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 3,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 4,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "QueryActivityView",
+          "call": "execute-a-project-activity/activity-eligible/2",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 5,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "ReadProject",
+          "call": "execute-a-project-activity/activity-eligible/4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-lifecycle-open",
+            "object": "ActivityExecution",
+            "inState": "[lifecycle open, revision 1]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 6,
+        "node": "next-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/next-task/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 7,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "GetInstallationToken",
+          "call": "execute-a-project-activity/dispatch-task/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 8,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "OpenBranch",
+          "call": "execute-a-project-activity/dispatch-task/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 9,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "SubmitAgenticJob",
+          "call": "execute-a-project-activity/dispatch-task/1"
+        },
+        "expectedOutputs": [
+          {
+            "node": "dispatch-task",
+            "kind": "inferred",
+            "to": "",
+            "label": "Dispatch the task's agentic job; stage its artifact on the activity branch"
+          }
+        ],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 10,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "ObserveAgenticJob",
+          "call": "execute-a-project-activity/observe-validate/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 11,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "StoreConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 12,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "RetrieveConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 13,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "episodeaccess",
+          "op": "AppendEpisode",
+          "call": "execute-a-project-activity/observe-validate/3"
+        },
+        "expectedOutputs": [
+          {
+            "node": "observe-validate",
+            "kind": "inferred",
+            "to": "",
+            "label": "Read the result back and validate it against the task's exit criterion"
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "staged-artifact",
+            "object": "Task artifact",
+            "inState": "[staged on activity branch]"
+          },
+          {
+            "node": "attempt-episode",
+            "object": "Agentic episode",
+            "inState": "[appended to episode ledger]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 14,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 15,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "estimationengine",
+          "op": "ComputeEarnedValue",
+          "call": "execute-a-project-activity/record-exit/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 16,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "operationestimationengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 17,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "billingengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-exit-recorded",
+            "object": "Activity",
+            "inState": "[exited: LifecyclePhase earned]"
+          },
+          {
+            "node": "earned-value-recomputed",
+            "object": "Earned-value projection",
+            "inState": "[recomputed]"
+          }
+        ],
+        "hints": [
+          "Exit is binary (done / not done); no percent-complete value is ever recorded. Earned value counts only exited activities against the committed network."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "execute-a-project-activity-P2",
+    "useCase": "execute-a-project-activity",
+    "title": "Execute a Project Activity — dispatch · no · no: exhausted · yes",
+    "path": [
+      "pump-fires",
+      "activity-eligible",
+      "activity-lifecycle-open",
+      "next-task",
+      "task-kind",
+      "dispatch-task",
+      "observe-validate",
+      "staged-artifact",
+      "attempt-episode",
+      "exit-met",
+      "retry-remain",
+      "escalate-operator",
+      "operator-note-recorded",
+      "operator-intervened",
+      "merge-advance",
+      "record-exit",
+      "activity-exit-recorded",
+      "earned-value-recomputed",
+      "note-binary-exit",
+      "end"
+    ],
+    "guards": [
+      {
+        "at": "task-kind",
+        "guard": "dispatch"
+      },
+      {
+        "at": "exit-met",
+        "guard": "no"
+      },
+      {
+        "at": "retry-remain",
+        "guard": "no: exhausted"
+      },
+      {
+        "at": "operator-intervened",
+        "guard": "yes"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "pump-fires",
+        "input": {
+          "kind": "timeEvent",
+          "from": "scheduler-client",
+          "to": "deliverymanager",
+          "op": "ExecuteNextActivity",
+          "call": "execute-a-project-activity/pump-fires/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 2,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 3,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 4,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "QueryActivityView",
+          "call": "execute-a-project-activity/activity-eligible/2",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 5,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "ReadProject",
+          "call": "execute-a-project-activity/activity-eligible/4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-lifecycle-open",
+            "object": "ActivityExecution",
+            "inState": "[lifecycle open, revision 1]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 6,
+        "node": "next-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/next-task/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 7,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "GetInstallationToken",
+          "call": "execute-a-project-activity/dispatch-task/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 8,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "OpenBranch",
+          "call": "execute-a-project-activity/dispatch-task/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 9,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "SubmitAgenticJob",
+          "call": "execute-a-project-activity/dispatch-task/1"
+        },
+        "expectedOutputs": [
+          {
+            "node": "dispatch-task",
+            "kind": "inferred",
+            "to": "",
+            "label": "Dispatch the task's agentic job; stage its artifact on the activity branch"
+          }
+        ],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 10,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "ObserveAgenticJob",
+          "call": "execute-a-project-activity/observe-validate/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 11,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "StoreConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 12,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "RetrieveConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 13,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "episodeaccess",
+          "op": "AppendEpisode",
+          "call": "execute-a-project-activity/observe-validate/3"
+        },
+        "expectedOutputs": [
+          {
+            "node": "observe-validate",
+            "kind": "inferred",
+            "to": "",
+            "label": "Read the result back and validate it against the task's exit criterion"
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "staged-artifact",
+            "object": "Task artifact",
+            "inState": "[staged on activity branch]"
+          },
+          {
+            "node": "attempt-episode",
+            "object": "Agentic episode",
+            "inState": "[appended to episode ledger]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 14,
+        "node": "retry-remain",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "interventionengine",
+          "op": "DecideOnVariance",
+          "call": "execute-a-project-activity/retry-remain/0",
+          "guard": "no: exhausted"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 15,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/escalate-operator/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 16,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "action",
+          "from": "operator",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/escalate-operator/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 17,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "action",
+          "from": "operator",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/escalate-operator/2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 18,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "OverrideActivity",
+          "call": "execute-a-project-activity/escalate-operator/3",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "operator-note-recorded",
+            "object": "Operator note",
+            "inState": "[recorded on activity]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 19,
+        "node": "operator-intervened",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "ReadProject",
+          "call": "execute-a-project-activity/operator-intervened/0",
+          "guard": "yes"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 20,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 21,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "estimationengine",
+          "op": "ComputeEarnedValue",
+          "call": "execute-a-project-activity/record-exit/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 22,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "operationestimationengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 23,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "billingengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-exit-recorded",
+            "object": "Activity",
+            "inState": "[exited: LifecyclePhase earned]"
+          },
+          {
+            "node": "earned-value-recomputed",
+            "object": "Earned-value projection",
+            "inState": "[recomputed]"
+          }
+        ],
+        "hints": [
+          "Exit is binary (done / not done); no percent-complete value is ever recorded. Earned value counts only exited activities against the committed network."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "execute-a-project-activity-P3",
+    "useCase": "execute-a-project-activity",
+    "title": "Execute a Project Activity — review · agents only · approve",
+    "path": [
+      "pump-fires",
+      "activity-eligible",
+      "activity-lifecycle-open",
+      "next-task",
+      "task-kind",
+      "propose-reviews",
+      "review-pr-open",
+      "requires-human",
+      "dispatch-reviewers",
+      "verdict",
+      "commit-artifact",
+      "artifact-committed",
+      "review-pr-merged",
+      "merge-advance",
+      "record-exit",
+      "activity-exit-recorded",
+      "earned-value-recomputed",
+      "note-binary-exit",
+      "end"
+    ],
+    "guards": [
+      {
+        "at": "task-kind",
+        "guard": "review"
+      },
+      {
+        "at": "requires-human",
+        "guard": "agents only"
+      },
+      {
+        "at": "verdict",
+        "guard": "approve"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "pump-fires",
+        "input": {
+          "kind": "timeEvent",
+          "from": "scheduler-client",
+          "to": "deliverymanager",
+          "op": "ExecuteNextActivity",
+          "call": "execute-a-project-activity/pump-fires/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 2,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 3,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 4,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "QueryActivityView",
+          "call": "execute-a-project-activity/activity-eligible/2",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 5,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "ReadProject",
+          "call": "execute-a-project-activity/activity-eligible/4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-lifecycle-open",
+            "object": "ActivityExecution",
+            "inState": "[lifecycle open, revision 1]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 6,
+        "node": "next-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/next-task/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 7,
+        "node": "propose-reviews",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "OpenPullRequest",
+          "call": "execute-a-project-activity/propose-reviews/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 8,
+        "node": "propose-reviews",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "reviewengine",
+          "op": "ProposeReviews",
+          "call": "execute-a-project-activity/propose-reviews/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "review-pr-open",
+            "object": "Pull request",
+            "inState": "[open: activity branch -> main]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 9,
+        "node": "requires-human",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "reviewengine",
+          "op": "",
+          "call": "execute-a-project-activity/requires-human/0",
+          "guard": "agents only"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 10,
+        "node": "dispatch-reviewers",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "SubmitAgenticJob",
+          "call": "execute-a-project-activity/dispatch-reviewers/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 11,
+        "node": "dispatch-reviewers",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "ObserveAgenticJob",
+          "call": "execute-a-project-activity/dispatch-reviewers/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [
+          "sendBack reopens the judged task as revision n+1 on the same activity branch; the revision counter is the bound value, the prior staged artifact is not committed."
+        ]
+      },
+      {
+        "seq": 12,
+        "node": "commit-artifact",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/commit-artifact/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 13,
+        "node": "commit-artifact",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "PostReview",
+          "call": "execute-a-project-activity/commit-artifact/1.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 14,
+        "node": "commit-artifact",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "MergePullRequest",
+          "call": "execute-a-project-activity/commit-artifact/1.1"
+        },
+        "expectedOutputs": [
+          {
+            "node": "commit-artifact",
+            "kind": "inferred",
+            "to": "",
+            "label": "Commit the staged artifact; the gate passes; the LifecyclePhase is earned"
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "artifact-committed",
+            "object": "Task artifact",
+            "inState": "[committed]"
+          },
+          {
+            "node": "review-pr-merged",
+            "object": "Pull request",
+            "inState": "[approved, merged]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 15,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 16,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "estimationengine",
+          "op": "ComputeEarnedValue",
+          "call": "execute-a-project-activity/record-exit/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 17,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "operationestimationengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 18,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "billingengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-exit-recorded",
+            "object": "Activity",
+            "inState": "[exited: LifecyclePhase earned]"
+          },
+          {
+            "node": "earned-value-recomputed",
+            "object": "Earned-value projection",
+            "inState": "[recomputed]"
+          }
+        ],
+        "hints": [
+          "Exit is binary (done / not done); no percent-complete value is ever recorded. Earned value counts only exited activities against the committed network."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "execute-a-project-activity-P4",
+    "useCase": "execute-a-project-activity",
+    "title": "Execute a Project Activity — review · human required · approve",
+    "path": [
+      "pump-fires",
+      "activity-eligible",
+      "activity-lifecycle-open",
+      "next-task",
+      "task-kind",
+      "propose-reviews",
+      "review-pr-open",
+      "requires-human",
+      "human-decision",
+      "verdict",
+      "commit-artifact",
+      "artifact-committed",
+      "review-pr-merged",
+      "merge-advance",
+      "record-exit",
+      "activity-exit-recorded",
+      "earned-value-recomputed",
+      "note-binary-exit",
+      "end"
+    ],
+    "guards": [
+      {
+        "at": "task-kind",
+        "guard": "review"
+      },
+      {
+        "at": "requires-human",
+        "guard": "human required"
+      },
+      {
+        "at": "verdict",
+        "guard": "approve"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "pump-fires",
+        "input": {
+          "kind": "timeEvent",
+          "from": "scheduler-client",
+          "to": "deliverymanager",
+          "op": "ExecuteNextActivity",
+          "call": "execute-a-project-activity/pump-fires/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 2,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 3,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 4,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "QueryActivityView",
+          "call": "execute-a-project-activity/activity-eligible/2",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 5,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "ReadProject",
+          "call": "execute-a-project-activity/activity-eligible/4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-lifecycle-open",
+            "object": "ActivityExecution",
+            "inState": "[lifecycle open, revision 1]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 6,
+        "node": "next-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/next-task/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 7,
+        "node": "propose-reviews",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "OpenPullRequest",
+          "call": "execute-a-project-activity/propose-reviews/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 8,
+        "node": "propose-reviews",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "reviewengine",
+          "op": "ProposeReviews",
+          "call": "execute-a-project-activity/propose-reviews/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "review-pr-open",
+            "object": "Pull request",
+            "inState": "[open: activity branch -> main]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 9,
+        "node": "requires-human",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "reviewengine",
+          "op": "",
+          "call": "execute-a-project-activity/requires-human/0",
+          "guard": "human required"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 10,
+        "node": "human-decision",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/human-decision/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 11,
+        "node": "human-decision",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/human-decision/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 12,
+        "node": "human-decision",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "SubmitReviewDecision",
+          "call": "execute-a-project-activity/human-decision/2",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [
+          "sendBack reopens the judged task as revision n+1 on the same activity branch; the revision counter is the bound value, the prior staged artifact is not committed."
+        ]
+      },
+      {
+        "seq": 13,
+        "node": "commit-artifact",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/commit-artifact/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 14,
+        "node": "commit-artifact",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "PostReview",
+          "call": "execute-a-project-activity/commit-artifact/1.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 15,
+        "node": "commit-artifact",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "MergePullRequest",
+          "call": "execute-a-project-activity/commit-artifact/1.1"
+        },
+        "expectedOutputs": [
+          {
+            "node": "commit-artifact",
+            "kind": "inferred",
+            "to": "",
+            "label": "Commit the staged artifact; the gate passes; the LifecyclePhase is earned"
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "artifact-committed",
+            "object": "Task artifact",
+            "inState": "[committed]"
+          },
+          {
+            "node": "review-pr-merged",
+            "object": "Pull request",
+            "inState": "[approved, merged]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 16,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 17,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "estimationengine",
+          "op": "ComputeEarnedValue",
+          "call": "execute-a-project-activity/record-exit/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 18,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "operationestimationengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 19,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "billingengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-exit-recorded",
+            "object": "Activity",
+            "inState": "[exited: LifecyclePhase earned]"
+          },
+          {
+            "node": "earned-value-recomputed",
+            "object": "Earned-value projection",
+            "inState": "[recomputed]"
+          }
+        ],
+        "hints": [
+          "Exit is binary (done / not done); no percent-complete value is ever recorded. Earned value counts only exited activities against the committed network."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "execute-a-project-activity-P5",
+    "useCase": "execute-a-project-activity",
+    "title": "Execute a Project Activity — dispatch · no · yes: retry · yes",
+    "path": [
+      "pump-fires",
+      "activity-eligible",
+      "activity-lifecycle-open",
+      "next-task",
+      "task-kind",
+      "dispatch-task",
+      "observe-validate",
+      "staged-artifact",
+      "attempt-episode",
+      "exit-met",
+      "retry-remain",
+      "dispatch-task",
+      "observe-validate",
+      "staged-artifact",
+      "attempt-episode",
+      "exit-met",
+      "merge-advance",
+      "record-exit",
+      "activity-exit-recorded",
+      "earned-value-recomputed",
+      "note-binary-exit",
+      "end"
+    ],
+    "guards": [
+      {
+        "at": "task-kind",
+        "guard": "dispatch"
+      },
+      {
+        "at": "exit-met",
+        "guard": "no"
+      },
+      {
+        "at": "retry-remain",
+        "guard": "yes: retry"
+      },
+      {
+        "at": "exit-met",
+        "guard": "yes"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "pump-fires",
+        "input": {
+          "kind": "timeEvent",
+          "from": "scheduler-client",
+          "to": "deliverymanager",
+          "op": "ExecuteNextActivity",
+          "call": "execute-a-project-activity/pump-fires/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 2,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 3,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 4,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "QueryActivityView",
+          "call": "execute-a-project-activity/activity-eligible/2",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 5,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "ReadProject",
+          "call": "execute-a-project-activity/activity-eligible/4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-lifecycle-open",
+            "object": "ActivityExecution",
+            "inState": "[lifecycle open, revision 1]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 6,
+        "node": "next-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/next-task/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 7,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "GetInstallationToken",
+          "call": "execute-a-project-activity/dispatch-task/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 8,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "OpenBranch",
+          "call": "execute-a-project-activity/dispatch-task/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 9,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "SubmitAgenticJob",
+          "call": "execute-a-project-activity/dispatch-task/1"
+        },
+        "expectedOutputs": [
+          {
+            "node": "dispatch-task",
+            "kind": "inferred",
+            "to": "",
+            "label": "Dispatch the task's agentic job; stage its artifact on the activity branch"
+          }
+        ],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 10,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "ObserveAgenticJob",
+          "call": "execute-a-project-activity/observe-validate/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 11,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "StoreConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 12,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "RetrieveConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 13,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "episodeaccess",
+          "op": "AppendEpisode",
+          "call": "execute-a-project-activity/observe-validate/3"
+        },
+        "expectedOutputs": [
+          {
+            "node": "observe-validate",
+            "kind": "inferred",
+            "to": "",
+            "label": "Read the result back and validate it against the task's exit criterion"
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "staged-artifact",
+            "object": "Task artifact",
+            "inState": "[staged on activity branch]"
+          },
+          {
+            "node": "attempt-episode",
+            "object": "Agentic episode",
+            "inState": "[appended to episode ledger]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 14,
+        "node": "retry-remain",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "interventionengine",
+          "op": "DecideOnVariance",
+          "call": "execute-a-project-activity/retry-remain/0",
+          "guard": "yes: retry"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 15,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "GetInstallationToken",
+          "call": "execute-a-project-activity/dispatch-task/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 16,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "OpenBranch",
+          "call": "execute-a-project-activity/dispatch-task/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 17,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "SubmitAgenticJob",
+          "call": "execute-a-project-activity/dispatch-task/1"
+        },
+        "expectedOutputs": [
+          {
+            "node": "dispatch-task",
+            "kind": "inferred",
+            "to": "",
+            "label": "Dispatch the task's agentic job; stage its artifact on the activity branch"
+          }
+        ],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 18,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "ObserveAgenticJob",
+          "call": "execute-a-project-activity/observe-validate/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 19,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "StoreConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 20,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "RetrieveConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 21,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "episodeaccess",
+          "op": "AppendEpisode",
+          "call": "execute-a-project-activity/observe-validate/3"
+        },
+        "expectedOutputs": [
+          {
+            "node": "observe-validate",
+            "kind": "inferred",
+            "to": "",
+            "label": "Read the result back and validate it against the task's exit criterion"
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "staged-artifact",
+            "object": "Task artifact",
+            "inState": "[staged on activity branch]"
+          },
+          {
+            "node": "attempt-episode",
+            "object": "Agentic episode",
+            "inState": "[appended to episode ledger]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 22,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 23,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "estimationengine",
+          "op": "ComputeEarnedValue",
+          "call": "execute-a-project-activity/record-exit/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 24,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "operationestimationengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 25,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "billingengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-exit-recorded",
+            "object": "Activity",
+            "inState": "[exited: LifecyclePhase earned]"
+          },
+          {
+            "node": "earned-value-recomputed",
+            "object": "Earned-value projection",
+            "inState": "[recomputed]"
+          }
+        ],
+        "hints": [
+          "Exit is binary (done / not done); no percent-complete value is ever recorded. Earned value counts only exited activities against the committed network."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "execute-a-project-activity-P6",
+    "useCase": "execute-a-project-activity",
+    "title": "Execute a Project Activity — dispatch · no · no: exhausted · no · yes",
+    "path": [
+      "pump-fires",
+      "activity-eligible",
+      "activity-lifecycle-open",
+      "next-task",
+      "task-kind",
+      "dispatch-task",
+      "observe-validate",
+      "staged-artifact",
+      "attempt-episode",
+      "exit-met",
+      "retry-remain",
+      "escalate-operator",
+      "operator-note-recorded",
+      "operator-intervened",
+      "escalate-operator",
+      "operator-note-recorded",
+      "operator-intervened",
+      "merge-advance",
+      "record-exit",
+      "activity-exit-recorded",
+      "earned-value-recomputed",
+      "note-binary-exit",
+      "end"
+    ],
+    "guards": [
+      {
+        "at": "task-kind",
+        "guard": "dispatch"
+      },
+      {
+        "at": "exit-met",
+        "guard": "no"
+      },
+      {
+        "at": "retry-remain",
+        "guard": "no: exhausted"
+      },
+      {
+        "at": "operator-intervened",
+        "guard": "no"
+      },
+      {
+        "at": "operator-intervened",
+        "guard": "yes"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "pump-fires",
+        "input": {
+          "kind": "timeEvent",
+          "from": "scheduler-client",
+          "to": "deliverymanager",
+          "op": "ExecuteNextActivity",
+          "call": "execute-a-project-activity/pump-fires/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 2,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 3,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 4,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "QueryActivityView",
+          "call": "execute-a-project-activity/activity-eligible/2",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 5,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "ReadProject",
+          "call": "execute-a-project-activity/activity-eligible/4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-lifecycle-open",
+            "object": "ActivityExecution",
+            "inState": "[lifecycle open, revision 1]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 6,
+        "node": "next-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/next-task/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 7,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "GetInstallationToken",
+          "call": "execute-a-project-activity/dispatch-task/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 8,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "OpenBranch",
+          "call": "execute-a-project-activity/dispatch-task/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 9,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "SubmitAgenticJob",
+          "call": "execute-a-project-activity/dispatch-task/1"
+        },
+        "expectedOutputs": [
+          {
+            "node": "dispatch-task",
+            "kind": "inferred",
+            "to": "",
+            "label": "Dispatch the task's agentic job; stage its artifact on the activity branch"
+          }
+        ],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 10,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "ObserveAgenticJob",
+          "call": "execute-a-project-activity/observe-validate/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 11,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "StoreConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 12,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "RetrieveConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 13,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "episodeaccess",
+          "op": "AppendEpisode",
+          "call": "execute-a-project-activity/observe-validate/3"
+        },
+        "expectedOutputs": [
+          {
+            "node": "observe-validate",
+            "kind": "inferred",
+            "to": "",
+            "label": "Read the result back and validate it against the task's exit criterion"
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "staged-artifact",
+            "object": "Task artifact",
+            "inState": "[staged on activity branch]"
+          },
+          {
+            "node": "attempt-episode",
+            "object": "Agentic episode",
+            "inState": "[appended to episode ledger]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 14,
+        "node": "retry-remain",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "interventionengine",
+          "op": "DecideOnVariance",
+          "call": "execute-a-project-activity/retry-remain/0",
+          "guard": "no: exhausted"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 15,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/escalate-operator/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 16,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "action",
+          "from": "operator",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/escalate-operator/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 17,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "action",
+          "from": "operator",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/escalate-operator/2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 18,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "OverrideActivity",
+          "call": "execute-a-project-activity/escalate-operator/3",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "operator-note-recorded",
+            "object": "Operator note",
+            "inState": "[recorded on activity]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 19,
+        "node": "operator-intervened",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "ReadProject",
+          "call": "execute-a-project-activity/operator-intervened/0",
+          "guard": "no"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 20,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/escalate-operator/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 21,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "action",
+          "from": "operator",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/escalate-operator/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 22,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "action",
+          "from": "operator",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/escalate-operator/2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 23,
+        "node": "escalate-operator",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "OverrideActivity",
+          "call": "execute-a-project-activity/escalate-operator/3",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "operator-note-recorded",
+            "object": "Operator note",
+            "inState": "[recorded on activity]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 24,
+        "node": "operator-intervened",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "ReadProject",
+          "call": "execute-a-project-activity/operator-intervened/0",
+          "guard": "yes"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 25,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 26,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "estimationengine",
+          "op": "ComputeEarnedValue",
+          "call": "execute-a-project-activity/record-exit/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 27,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "operationestimationengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 28,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "billingengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-exit-recorded",
+            "object": "Activity",
+            "inState": "[exited: LifecyclePhase earned]"
+          },
+          {
+            "node": "earned-value-recomputed",
+            "object": "Earned-value projection",
+            "inState": "[recomputed]"
+          }
+        ],
+        "hints": [
+          "Exit is binary (done / not done); no percent-complete value is ever recorded. Earned value counts only exited activities against the committed network."
+        ]
+      }
+    ]
+  },
+  {
+    "id": "execute-a-project-activity-P7",
+    "useCase": "execute-a-project-activity",
+    "title": "Execute a Project Activity — review · agents only · sendBack: reopens the judged task as revision n+1 · dispatch · yes",
+    "path": [
+      "pump-fires",
+      "activity-eligible",
+      "activity-lifecycle-open",
+      "next-task",
+      "task-kind",
+      "propose-reviews",
+      "review-pr-open",
+      "requires-human",
+      "dispatch-reviewers",
+      "verdict",
+      "next-task",
+      "task-kind",
+      "dispatch-task",
+      "observe-validate",
+      "staged-artifact",
+      "attempt-episode",
+      "exit-met",
+      "merge-advance",
+      "record-exit",
+      "activity-exit-recorded",
+      "earned-value-recomputed",
+      "note-binary-exit",
+      "end"
+    ],
+    "guards": [
+      {
+        "at": "task-kind",
+        "guard": "review"
+      },
+      {
+        "at": "requires-human",
+        "guard": "agents only"
+      },
+      {
+        "at": "verdict",
+        "guard": "sendBack: reopens the judged task as revision n+1"
+      },
+      {
+        "at": "task-kind",
+        "guard": "dispatch"
+      },
+      {
+        "at": "exit-met",
+        "guard": "yes"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "pump-fires",
+        "input": {
+          "kind": "timeEvent",
+          "from": "scheduler-client",
+          "to": "deliverymanager",
+          "op": "ExecuteNextActivity",
+          "call": "execute-a-project-activity/pump-fires/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 2,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "webclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 3,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "action",
+          "from": "architect-user",
+          "to": "mcpclient",
+          "op": "",
+          "call": "execute-a-project-activity/activity-eligible/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 4,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "deliverymanager",
+          "op": "QueryActivityView",
+          "call": "execute-a-project-activity/activity-eligible/2",
+          "via": [
+            "web-client",
+            "mcp-client"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 5,
+        "node": "activity-eligible",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "ReadProject",
+          "call": "execute-a-project-activity/activity-eligible/4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-lifecycle-open",
+            "object": "ActivityExecution",
+            "inState": "[lifecycle open, revision 1]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 6,
+        "node": "next-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/next-task/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 7,
+        "node": "propose-reviews",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "OpenPullRequest",
+          "call": "execute-a-project-activity/propose-reviews/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 8,
+        "node": "propose-reviews",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "reviewengine",
+          "op": "ProposeReviews",
+          "call": "execute-a-project-activity/propose-reviews/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "review-pr-open",
+            "object": "Pull request",
+            "inState": "[open: activity branch -> main]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 9,
+        "node": "requires-human",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "reviewengine",
+          "op": "",
+          "call": "execute-a-project-activity/requires-human/0",
+          "guard": "agents only"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 10,
+        "node": "dispatch-reviewers",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "SubmitAgenticJob",
+          "call": "execute-a-project-activity/dispatch-reviewers/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 11,
+        "node": "dispatch-reviewers",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "ObserveAgenticJob",
+          "call": "execute-a-project-activity/dispatch-reviewers/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [
+          "sendBack reopens the judged task as revision n+1 on the same activity branch; the revision counter is the bound value, the prior staged artifact is not committed."
+        ]
+      },
+      {
+        "seq": 12,
+        "node": "next-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/next-task/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 13,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "GetInstallationToken",
+          "call": "execute-a-project-activity/dispatch-task/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 14,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "sourcecontrolaccess",
+          "op": "OpenBranch",
+          "call": "execute-a-project-activity/dispatch-task/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 15,
+        "node": "dispatch-task",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "SubmitAgenticJob",
+          "call": "execute-a-project-activity/dispatch-task/1"
+        },
+        "expectedOutputs": [
+          {
+            "node": "dispatch-task",
+            "kind": "inferred",
+            "to": "",
+            "label": "Dispatch the task's agentic job; stage its artifact on the activity branch"
+          }
+        ],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 16,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "agenticjobaccess",
+          "op": "ObserveAgenticJob",
+          "call": "execute-a-project-activity/observe-validate/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 17,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "StoreConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 18,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "artifactaccess",
+          "op": "RetrieveConstructionOutput",
+          "call": "execute-a-project-activity/observe-validate/1.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 19,
+        "node": "observe-validate",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "episodeaccess",
+          "op": "AppendEpisode",
+          "call": "execute-a-project-activity/observe-validate/3"
+        },
+        "expectedOutputs": [
+          {
+            "node": "observe-validate",
+            "kind": "inferred",
+            "to": "",
+            "label": "Read the result back and validate it against the task's exit criterion"
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "staged-artifact",
+            "object": "Task artifact",
+            "inState": "[staged on activity branch]"
+          },
+          {
+            "node": "attempt-episode",
+            "object": "Agentic episode",
+            "inState": "[appended to episode ledger]"
+          }
+        ],
+        "hints": []
+      },
+      {
+        "seq": 20,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "projectstateaccess",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 21,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "estimationengine",
+          "op": "ComputeEarnedValue",
+          "call": "execute-a-project-activity/record-exit/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 22,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "operationestimationengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": []
+      },
+      {
+        "seq": 23,
+        "node": "record-exit",
+        "input": {
+          "kind": "call",
+          "from": "delivery-manager",
+          "to": "billingengine",
+          "op": "",
+          "call": "execute-a-project-activity/record-exit/3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [
+          {
+            "node": "activity-exit-recorded",
+            "object": "Activity",
+            "inState": "[exited: LifecyclePhase earned]"
+          },
+          {
+            "node": "earned-value-recomputed",
+            "object": "Earned-value projection",
+            "inState": "[recomputed]"
+          }
+        ],
+        "hints": [
+          "Exit is binary (done / not done); no percent-complete value is ever recorded. Earned value counts only exited activities against the committed network."
+        ]
+      }
+    ]
+  }
+]

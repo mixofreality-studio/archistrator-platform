@@ -62,11 +62,18 @@ func addUseCases(in *scenario.Input, cu CoreUseCases) {
 // DeriveScenarios is ScenarioInput followed by scenario.Derive: the canonical
 // scenario set of a project.
 func DeriveScenarios(p Project) ([]scenario.Scenario, error) {
+	r, err := deriveReport(p)
+	return r.Scenarios, err
+}
+
+// deriveReport is ScenarioInput followed by scenario.DeriveReport: the canonical
+// scenario set plus the start families the derivation dropped (Amendment A3).
+func deriveReport(p Project) (scenario.Report, error) {
 	in, err := ScenarioInput(p)
 	if err != nil {
-		return nil, err
+		return scenario.Report{}, err
 	}
-	return scenario.Derive(in)
+	return scenario.DeriveReport(in)
 }
 
 // diagramOf hands a use case's activity diagram through with its wire node kinds

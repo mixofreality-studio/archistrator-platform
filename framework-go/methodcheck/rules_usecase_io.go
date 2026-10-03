@@ -1,17 +1,24 @@
 package methodcheck
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
+)
 
 // rules_usecase_io.go is the use-case I/O family (deterministic-component-testing
 // design §2.2, §5.2): the three node kinds added so authors state I/O intent
 // directly must be well formed (UC-IO-KINDS), and a use case whose diagram yields
 // no external input stimulus can never have a scenario bound (UC-NO-IO — a Warning,
-// since it describes the design rather than a binding being written).
+// since it describes the design rather than a binding being written). UC-START-
+// REDUNDANT (Amendment A3) reports a start family the scenario derivation dropped
+// because the diagram's event entries already drive every stimulus it carries.
 
 // Rule ids of the use-case I/O family.
 const (
-	ruleUCIOKinds RuleID = "UC-IO-KINDS"
-	ruleUCNoIO    RuleID = "UC-NO-IO"
+	ruleUCIOKinds        RuleID = "UC-IO-KINDS"
+	ruleUCNoIO           RuleID = "UC-NO-IO"
+	ruleUCStartRedundant RuleID = "UC-START-REDUNDANT"
 )
 
 // useCaseIORules runs the family over every use case that carries an activity
@@ -89,4 +96,34 @@ func yieldsInput(n ActivityNode, actors map[string]bool) bool {
 		return n.DecidedBy != "" && actors[n.DecidedBy]
 	}
 	return false
+}
+
+// startRedundantFindings is UC-START-REDUNDANT: one Warning per use case whose
+// start-family paths scenario.DeriveReport dropped (Amendment A3). It reads the
+// same derivation TP-* and testgen read, so the paths it names as dropped are
+// exactly the scenarios no plan can bind. A Warning: it describes the design
+// (the start node duplicates an event entry), never a binding being written.
+func startRedundantFindings(p Project, dropped []scenario.StartRedundancy) ([]Finding, error) {
+	if len(dropped) == 0 {
+		return nil, nil
+	}
+	cu, _, err := p.coreUseCases()
+	if err != nil {
+		return nil, err
+	}
+	ordinal := make(map[string]int, len(cu.Decisions))
+	for i, d := range cu.Decisions {
+		ordinal[d.UseCase.ID] = i
+	}
+	out := make([]Finding, 0, len(dropped))
+	for _, sr := range dropped {
+		out = append(out, Finding{
+			RuleID:   ruleUCStartRedundant,
+			Severity: SeverityWarning,
+			Message: fmt.Sprintf("use case %s: %d path(s) from the start node carry no stimulus an event entry does not already drive; "+
+				"they are dropped from the scenario set (remove the start node, or give it a stimulus of its own)", sr.UseCase, sr.Dropped),
+			Location: loc(ordinal[sr.UseCase], "useCases["+sr.UseCase+"].activity"),
+		})
+	}
+	return out, nil
 }

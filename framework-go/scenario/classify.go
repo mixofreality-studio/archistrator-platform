@@ -1,5 +1,10 @@
 package scenario
 
+import (
+	"strings"
+	"unicode"
+)
+
 // class is the IOAD classification of one node (spec §2.2).
 type class int
 
@@ -91,37 +96,77 @@ func isComponent(in Input, id string) bool {
 	return ok
 }
 
-// firstCallInto returns the first call of view step nodeID whose To is a component,
-// with its index, for provenance. ok=false when none.
-func firstCallInto(in Input, view *View, nodeID string) (c Call, idx int, ok bool) {
-	if view == nil {
-		return Call{}, 0, false
-	}
-	for _, st := range view.Steps {
-		if st.NodeID != nodeID {
-			continue
-		}
-		for i, c := range st.Calls {
-			if isComponent(in, c.To) {
-				return c, i, true
-			}
-		}
-	}
-	return Call{}, 0, false
-}
-
-// resolveOp returns the contract op whose Normalize(name) == Normalize(label); "" when none.
-func resolveOp(in Input, component, label string) string {
+// resolveOps is Amendment A2: the label is split on " — ", "→", "/", "·" and
+// ";" (outside any bracketed argument list), each piece's leading identifier
+// (the text before "(" or whitespace) is compared under Normalize with the
+// callee contract's op names, and every piece that matches resolves, in label
+// order and without repeats. nil when the callee has no contract or no piece
+// names one of its ops.
+func resolveOps(in Input, component, label string) []string {
 	ct, ok := contractFor(in, component)
 	if !ok {
-		return ""
+		return nil
 	}
+	byKey := opsByKey(ct)
+	var out []string
+	seen := map[string]bool{}
+	for _, piece := range labelPieces(label) {
+		name, ok := byKey[Normalize(leadingIdent(piece))]
+		if !ok || seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out
+}
+
+// opsByKey indexes a contract's op names by Normalize; the first op wins a fold.
+func opsByKey(ct Contract) map[string]string {
+	byKey := make(map[string]string, len(ct.Ops))
 	for _, op := range ct.Ops {
-		if Normalize(op.Name) == Normalize(label) {
-			return op.Name
+		k := Normalize(op.Name)
+		if _, dup := byKey[k]; k != "" && !dup {
+			byKey[k] = op.Name
 		}
 	}
-	return ""
+	return byKey
+}
+
+// labelPieces splits a call label on the A2 separators at bracket depth zero,
+// so a separator inside an argument list never splits it.
+func labelPieces(label string) []string {
+	var pieces []string
+	var cur strings.Builder
+	depth := 0
+	for _, r := range label {
+		switch r {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		case '—', '→', '/', '·', ';':
+			if depth == 0 {
+				pieces = append(pieces, cur.String())
+				cur.Reset()
+				continue
+			}
+		}
+		cur.WriteRune(r)
+	}
+	return append(pieces, cur.String())
+}
+
+// leadingIdent is the piece's text before its first "(" or whitespace, after
+// leading whitespace is trimmed.
+func leadingIdent(piece string) string {
+	piece = strings.TrimSpace(piece)
+	if i := strings.IndexFunc(piece, func(r rune) bool { return r == '(' || unicode.IsSpace(r) }); i >= 0 {
+		return piece[:i]
+	}
+	return piece
 }
 
 // contractFor finds the contract keyed by component under Normalize. When

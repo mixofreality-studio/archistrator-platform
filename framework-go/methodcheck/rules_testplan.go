@@ -38,15 +38,12 @@ type opLookup func(name string) (ContractOperation, bool)
 
 // testPlanFindings runs the family. TP-OP-REACHED runs over the whole derived set
 // regardless of any committed plan; the binding rules run per committed component
-// plan, in key order so the findings are deterministic.
-func testPlanFindings(p Project) ([]Finding, error) {
-	all, err := DeriveScenarios(p)
-	if err != nil {
-		return nil, err
-	}
+// plan, in key order so the findings are deterministic. all is the project's
+// derived scenario set (DeriveScenarios).
+func testPlanFindings(p Project, all []scenario.Scenario) []Finding {
 	out := opReachedFindings(p, all)
 	if p.PhaseArtifacts == nil {
-		return out, nil
+		return out
 	}
 	comps := make([]string, 0, len(p.PhaseArtifacts.TestPlan))
 	for comp := range p.PhaseArtifacts.TestPlan {
@@ -57,7 +54,7 @@ func testPlanFindings(p Project) ([]Finding, error) {
 		rec := p.PhaseArtifacts.TestPlan[comp]
 		out = append(out, componentPlanFindings(p, comp, rec, scenario.ForComponent(all, comp))...)
 	}
-	return out, nil
+	return out
 }
 
 // componentPlanFindings is TP-BOUND over one component's plan (every projected
