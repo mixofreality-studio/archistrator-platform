@@ -10,22 +10,28 @@ import (
 
 // Pinned platform versions the scaffold seeds (spec §6).
 //
-// AppGeneratorVersion and ProjectModelVersion are currently unreferenced by
-// any rendered template: framework-go-app-generator and
-// framework-go-projectmodel ship no cmd/ main packages (library-only), so
-// go.mod.tmpl's require/tool blocks omit them (see its EARMARK comment). Kept
-// here so a future platform release that ships those CLI wrappers can wire
-// the require/tool lines back in against these same pins.
+// AppGeneratorVersion pins the `cmd/testgen` CLI the construct workflow,
+// go-checks and Makefile.scenarios.mk run as `go run
+// <AppGeneratorModulePath>/cmd/testgen@<AppGeneratorVersion>` (deterministic
+// component testing spec §4.1/§4.3): a `go run pkg@version` needs no go.mod
+// entry, so go.mod.tmpl still carries no app-generator require/tool line.
+// ProjectModelVersion is currently unreferenced by any rendered template:
+// framework-go-projectmodel ships no cmd/ main package (library-only). Kept
+// here so a future platform release that ships a CLI wrapper can wire the
+// require/tool line in against this same pin.
 const (
 	// GoVersion 1.26+ is required by the seated go-checks workflow's
 	// analyzer-based `go fix -diff` gate; runners resolve it via the go.mod
 	// toolchain directive / setup-go.
 	GoVersion            = "1.26.0"
-	FrameworkGoVersion   = "v0.5.2"
-	AppGeneratorVersion  = "v0.6.1"
-	HTTPGeneratorVersion = "v0.3.0"
-	MCPGeneratorVersion  = "v0.2.0"
-	ProjectModelVersion  = "v0.2.1"
+	FrameworkGoVersion   = "v0.12.0"
+	AppGeneratorVersion  = "v0.11.0"
+	HTTPGeneratorVersion = "v0.4.0"
+	MCPGeneratorVersion  = "v0.3.0"
+	ProjectModelVersion  = "v0.2.3"
+
+	// AppGeneratorModulePath is the published module that ships cmd/testgen.
+	AppGeneratorModulePath = "github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator"
 )
 
 // ScaffoldData is the template data rendered into a newly seeded project repo.
@@ -46,7 +52,7 @@ type ScaffoldData struct {
 // internal render payload: ScaffoldData + version consts.
 type renderData struct {
 	ScaffoldData
-	GoVersion, FrameworkGoVersion, AppGeneratorVersion,
+	GoVersion, FrameworkGoVersion, AppGeneratorVersion, AppGeneratorModulePath,
 	HTTPGeneratorVersion, MCPGeneratorVersion, ProjectModelVersion string
 }
 
@@ -56,6 +62,11 @@ var renderedPaths = map[string]string{ // dest path -> template asset
 	".github/workflows/go-checks.yml":        "assets/workflows/go-checks.yml.tmpl",
 	"go.mod":                                 "assets/scaffold/go.mod.tmpl",
 	"aiarch_method_test.go":                  "assets/scaffold/aiarch_method_test.go.tmpl",
+	// The scenario-test make targets (gen-tests / gen-tests-check /
+	// test-scenarios) the construction commands and the local venue call; the
+	// app Makefile includes it. Module-root-relative: the seated app module
+	// lives at the repo root (go.mod above), so there is no server/ prefix.
+	"Makefile.scenarios.mk": "assets/scaffold/Makefile.scenarios.mk.tmpl",
 	// The shared archistrator lint baseline (standard set + revive + gocritic +
 	// gocyclo + gochecksumtype/gosec) the go-checks workflow runs against.
 	".golangci.yml": "assets/scaffold/golangci.yml",
@@ -76,7 +87,8 @@ func ScaffoldFiles(data ScaffoldData) (map[string][]byte, error) {
 	}
 	rd := renderData{ScaffoldData: data, GoVersion: GoVersion,
 		FrameworkGoVersion: FrameworkGoVersion, AppGeneratorVersion: AppGeneratorVersion,
-		HTTPGeneratorVersion: HTTPGeneratorVersion, MCPGeneratorVersion: MCPGeneratorVersion,
+		AppGeneratorModulePath: AppGeneratorModulePath,
+		HTTPGeneratorVersion:   HTTPGeneratorVersion, MCPGeneratorVersion: MCPGeneratorVersion,
 		ProjectModelVersion: ProjectModelVersion}
 	for dest, asset := range renderedPaths {
 		b, err := renderAsset(assetsFS, asset, rd)

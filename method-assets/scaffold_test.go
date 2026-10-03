@@ -22,7 +22,7 @@ func TestScaffoldFiles(t *testing.T) {
 	for _, want := range []string{
 		".github/workflows/aiarch-design.yml", ".github/workflows/aiarch-construct.yml",
 		".github/workflows/go-checks.yml", ".golangci.yml",
-		"go.mod", "aiarch_method_test.go", "internal/.gitkeep",
+		"go.mod", "aiarch_method_test.go", "internal/.gitkeep", "Makefile.scenarios.mk",
 		".claude/agents/system-architect.md",
 	} {
 		if _, ok := files[want]; !ok {
@@ -63,6 +63,64 @@ func TestScaffoldFiles(t *testing.T) {
 	// tool directive against it breaks `go mod tidy` in generated apps.
 	if strings.Contains(gomod, "framework-go-app-generator") {
 		t.Errorf("go.mod must not reference framework-go-app-generator: it ships no cmd/ main package")
+	}
+}
+
+// TestConstructTemplateHasScenarioSteps pins the venue half of deterministic
+// component testing (spec §6.2): on the integration phase the construct
+// workflow runs the scenario tests, uploads test-results/** as a GitHub
+// artifact and records the run through the aiarch-state MCP binary; go-checks
+// runs the testgen drift check on every PR (spec §5.3).
+func TestConstructTemplateHasScenarioSteps(t *testing.T) {
+	out, err := ScaffoldFiles(testData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	y := string(out[".github/workflows/aiarch-construct.yml"])
+	for _, s := range []string{
+		"name: Run scenario tests", "name: Upload test results", "actions/upload-artifact@v4",
+		"name: Record test run", "record-test-run",
+		AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion,
+	} {
+		if !strings.Contains(y, s) {
+			t.Errorf("aiarch-construct.yml missing %q", s)
+		}
+	}
+	g := string(out[".github/workflows/go-checks.yml"])
+	if !strings.Contains(g, "testgen@") || !strings.Contains(g, "-check") {
+		t.Error("go-checks must run the testgen drift check")
+	}
+	if !strings.Contains(g, AppGeneratorModulePath+"/cmd/testgen@"+AppGeneratorVersion) {
+		t.Error("go-checks must pin testgen to the scaffold's app-generator version")
+	}
+}
+
+// TestScaffoldMakefileScenariosInclude pins the make targets the construction
+// commands and the local venue call (spec §4.3): gen-tests, gen-tests-check and
+// test-scenarios, each against the pinned testgen and module-root-relative
+// paths (the seated app module lives at the repo root; TestLayoutNeutral).
+func TestScaffoldMakefileScenariosInclude(t *testing.T) {
+	out, err := ScaffoldFiles(testData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mk, ok := out["Makefile.scenarios.mk"]
+	if !ok {
+		t.Fatal("missing Makefile.scenarios.mk")
+	}
+	m := string(mk)
+	for _, s := range []string{
+		"gen-tests:", "gen-tests-check:", "test-scenarios:",
+		AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion,
+		"-project .aiarch/state/project.json", "-root .",
+		"-run 'TestScenario_'", "test-results/go-test.jsonl",
+	} {
+		if !strings.Contains(m, s) {
+			t.Errorf("Makefile.scenarios.mk missing %q", s)
+		}
+	}
+	if strings.Contains(m, "../") || strings.Contains(m, "server/") {
+		t.Errorf("Makefile.scenarios.mk must be module-root-relative:\n%s", m)
 	}
 }
 

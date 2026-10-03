@@ -63,5 +63,17 @@ jobs:
         with:
           version: v2.12
 
+      # Deterministic component testing drift gate (spec §5.3): the generated
+      # scenario tests (*_scenarios_test.gen.go, *.spec.gen.ts) must match the
+      # committed test plan, and every hook the generated tests reference must
+      # exist in the hand-filled hooks file with no orphans. `go run pkg@version`
+      # needs no go.mod entry; the pin is the scaffold's app-generator version.
+      # Module-root-relative: the app module lives at the repo root.
+      - name: Scenario test drift
+        run: go run [[.AppGeneratorModulePath]]/cmd/testgen@[[.AppGeneratorVersion]] -project .aiarch/state/project.json -root . -check
+
+      # aiarch_method_test.go (scaffolded) runs methodcheck.Check, which calls
+      # arch.CheckFileLayout — so the scenario-tests-only arch gate runs on every
+      # app repo through this one `go test ./...` (spec §5.1).
       - name: Test
         run: go test ./...
