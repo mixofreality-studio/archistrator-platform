@@ -232,7 +232,7 @@ Per ch. 11 Table 11-2 / ch. 13 Table 13-4, build the roles-and-phases mapping:
 | Project Manager | X | X | X | X | X |
 | Product Manager | X | X | X | X | X |
 | Senior dev | X | X | X | X | |
-| Junior dev | | X (unit + STP tests) | X | X | |
+| Junior dev | | X (fills generated scenario-test hooks; writes no tests of their own) | X | X | |
 | Test engineer | | X (per-component scenario bindings) | X (per-component scenario bindings) | X (perf additive only) | X |
 | QA engineer | X (gates) | X (process audit) | X | X | X |
 | UX designer | X | X | | | |

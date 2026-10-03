@@ -77,8 +77,8 @@ When your phase produces an artifact that lives in state, record it through the 
 | artifact | tool | target |
 |---|---|---|
 | service contract (detailed-design) | `recordServiceContract` | `.serviceContracts["<ambient component>"]` |
-| UI-design concept / SRS / integration note / provisioning spec / deploy note / doc outline·note | `recordPhaseArtifact` (set exactly one payload field, pass the `mapKey`) | `.phaseArtifacts.<field>["<mapKey>"]` |
-| testing plan / results (system test plan, harness, quality gate, test run, defect, audit report) | `recordTestingState` (set exactly one payload field) | `.testingState.<field>` |
+| UI-design concept / SRS / component test plan / integration note / provisioning spec / deploy note / doc outline·note | `recordPhaseArtifact` (set exactly one payload field, pass the `mapKey`) | `.phaseArtifacts.<field>["<mapKey>"]` |
+| testing results (harness, quality gate, test run, defect, audit report — a component's test plan is a phase artifact, above) | `recordTestingState` (set exactly one payload field) | `.testingState.<field>` |
 | code | *(files, not state)* | files in the package the contract's `goPackage` names |
 
 The tool payload is the typed Go struct for that target (field names + shapes exactly — read the backing struct in `projectstate/` if unsure); the tool rejects invented/malformed fields before writing. `recordServiceContract` uses your ambient component; `recordPhaseArtifact`/`recordTestingState` use your ambient activity. A rejected write tells you exactly what to fix — correct it and call the tool again. When every artifact is recorded, call `publishDraft`.

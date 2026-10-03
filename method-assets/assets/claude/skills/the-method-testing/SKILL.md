@@ -38,7 +38,8 @@ the network), ch12 (quality multiplication), ch13 (TradeMe staffing), ch14
 > layer entirely. The load-bearing tests are **black-box integration tests**
 > generated from each component's bound scenarios (see §7): **Go** scenario
 > tests booting the real downstream stack through `scenariohost` (Temporal dev
-> server, Postgres testcontainer, Gitea for GitHub, …); **Playwright** flows for
+> server, Postgres testcontainer, the in-process `FakeGitHub` + `LocalGitRepo`
+> for GitHub, …); **Playwright** flows for
 > any SPA/UI surface (browser-driven, hence inherently out-of-process even
 > though TS). Hand-written and white-box tests in component packages are
 > removed before merge and the `scenario-tests-only` gate rejects them (§7 R1).
@@ -202,7 +203,8 @@ applies to archistrator itself and to **every system archistrator builds**.
 - **R3 — The test host is a separate module and the tests are integration
   tests.** For Go systems the real downstream stack is booted by
   `framework-go-scenariohost` (Temporal dev server, Postgres testcontainer,
-  Gitea for GitHub, …), a module outside the server package tree; the generated
+  the in-process `FakeGitHub` + `LocalGitRepo` for GitHub, …), a module outside
+  the server package tree; the generated
   tests live beside the component as an external test package and talk to it
   only through its contract. UI surfaces are driven by Playwright against the
   integrated system. Placement is CI-asserted (R6).
