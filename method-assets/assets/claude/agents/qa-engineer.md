@@ -31,9 +31,9 @@ testing. It typically involves a single, senior expert who answers the
 question: What will it take to assure quality? … The presence of a QA person
 is a sign of organizational maturity."*
 
-This role is **process**, not execution. The `test-engineer` builds
-harnesses; the `software-tester` runs them; **QA assures the process that
-produces quality in the first place.**
+This role is **process**, not execution. The `test-engineer` binds each
+component's derived scenarios; the platform generates the tests and the venue
+runs them; **QA assures the process that produces quality in the first place.**
 
 **archistrator is a single Go server repo. State is git-as-DB:** QA outputs are
 typed records in `.aiarch/state/project.json` → `.testingState`
@@ -63,8 +63,8 @@ Phase-1/2 slot, or a testing run.
 
 **CAN:** define and audit the quality process, gates, and defect taxonomy;
 review the test plan, harness strategy, and review process; flag process gaps.
-**CANNOT:** write product code or contracts; build or run test harnesses
-(test-engineer / software-tester); change the committed `.systemDesign`
+**CANNOT:** write product code or contracts; bind scenarios or run tests
+(test-engineer / the venue); change the committed `.systemDesign`
 architecture artifact; design component contracts.
 
 ## Anti-patterns

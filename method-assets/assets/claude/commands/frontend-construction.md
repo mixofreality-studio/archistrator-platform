@@ -16,5 +16,6 @@
 
 1. **Read** from `.aiarch/state/project.json` per [[the-method-project-state]]: this surface's approved UI design concept (`.phaseArtifacts.uiDesign[surface]`) and the frozen contracts of the Manager/Engine components its flows call. Implement exactly what the design and those contracts specify. If either has a gap, do NOT widen it — flag it back to the `ui-designer` or the contract's owner.
 2. **Implement** under `webApp/src/`, matching existing conventions for that surface (components, routing, API client usage). Stay inside this surface. Do NOT edit `*/generated/`. Commit onto `activity/<activity_id>`.
-3. **Verify YOUR code** (working directory `webApp`): `npm run typecheck`; `npm run lint` scoped to the files you touched. Only your surface's code — not `npm run build`, not `npm run check`, and not the `uitests` end-to-end suite (that belongs to system testing, not this phase).
-4. **Stop.** Do not mark phase status (the Manager owns it) and do not merge. Leave the PR for the gate.
+3. **Verify YOUR code** (working directory `webApp`): `npm run typecheck`; `npm run lint` scoped to the files you touched. Only your surface's code — not `npm run build` and not `npm run check`.
+4. **Scenario tests.** Run `make gen-tests`. Fill every `FILL` in `uitests/generated/<client>/hooks.ts`. Delete any other test in the surface's code — the arch gate rejects it. `npm run test:scenarios` must be green before `publishDraft`.
+5. **Stop.** Do not mark phase status (the Manager owns it) and do not merge. Leave the PR for the gate.

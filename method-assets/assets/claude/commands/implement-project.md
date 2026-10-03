@@ -135,7 +135,7 @@ On completion the senior (per the hand-off model) reviews the construction via [
 | `next.type` | Agent | Notes |
 |---|---|---|
 | `integration` | `system-architect` | Integration across components / layer boundaries; integration note → `.phaseArtifacts.integrationNote` |
-| `quality` / testing | `test-engineer` / `software-tester` | Outputs → `.testingState` (see [[the-method-testing]]) |
+| `quality` / testing | `test-engineer` / `qa-engineer` | Outputs → `.testingState` (see [[the-method-testing]]); a component's test plan is its own activity's `test_plan` phase, never a separate activity |
 | `noncoding` | `product-manager` or user | Research, requirements, deployment, training → `.phaseArtifacts` |
 
 The dispatched agent gets the activity context (id, name, type, component, duration, completed dependencies + their notes) and records its output in the appropriate `project.json` slot (`.phaseArtifacts` / `.testingState`) plus the activity record in `.activityConstruction[<next.id>]` — not a `designs/*.md` log.

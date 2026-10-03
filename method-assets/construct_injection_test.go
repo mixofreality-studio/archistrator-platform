@@ -410,7 +410,7 @@ func TestConstructWorkflow_ValidationRejectsHostileIds(t *testing.T) {
 	for _, ok := range []struct{ a, c, cmd string }{
 		{good["ACTIVITY_ID"], good["COMPONENT_ID"], good["COMMAND"]},
 		{"C-PE", "project-state-access", "service-construction"},
-		{"N-STP", "system-test-plan", "testing-plan-requirements"},
+		{"N-PERF", "perf-rig", "testing-perf-detailed-design"},
 		{"C-billing.v2:x/y", "a_b", "service-detailed-design"},
 	} {
 		if out, err := runStepScript(t, validate.run, work, envFor(ok.a, ok.c, ok.cmd)); err != nil {

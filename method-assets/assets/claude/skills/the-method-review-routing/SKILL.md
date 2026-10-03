@@ -38,7 +38,7 @@ State is git-as-DB: everything below is read from `.aiarch/state/project.json`.
 |---|---|---|---|
 | `code` | (a) the contract author of **each inbound/outbound neighbour** of `componentId` (from `.systemDesign` relationships), reviewing from that neighbour's **contract** perspective; **and** (b) `componentId`'s **own** contract author, reviewing **code ↔ contract alignment** | (a) each neighbour's `.serviceContracts` entry; (b) `componentId`'s `.serviceContracts` entry | (b) only — may update `componentId`'s contract entry |
 | `ui-design` | founder/architect-user (approval) + `ux-reviewer` + `product-manager` + `system-architect` | the UI-design brief / Method UI conventions | no |
-| `test-plan` | `system-architect` + `product-manager` + `qa-engineer` | the core use cases (`.coreUseCases`) + the System Test Plan (`.testingState.systemTestPlan`, `N-STP`) | no |
+| `test-plan` | `system-architect` + `product-manager` + `qa-engineer` | the core use cases (`.coreUseCases`) + the component's derived scenarios (`listComponentScenarios`) beside its bindings (`.phaseArtifacts.testPlan[component]`) | no |
 | `ui-code` | `ui-designer` / `ux-reviewer` | the approved UI design (`.phaseArtifacts.uiDesign`) | yes — may update the UI design |
 
 To find neighbours of `componentId`: read the `.systemDesign` relationships and collect every relationship where `componentId` is the source (outbound) or destination (inbound), excluding Utilities (logging/diagnostics/security) and Resource edges. The other endpoint is a neighbour whose owner must review.
