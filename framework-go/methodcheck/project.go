@@ -583,13 +583,18 @@ type Project struct {
 	LegacyActivityConstruction map[string]ActivityRow `json:"activityConstruction,omitempty"`
 }
 
-// ActivityRow is the minimal mirror of one activity's execution row. A current row
-// is integrated when it carries a CompletedAt and no FailureReason (the binary exit
-// landed); a legacy row says so through BuildStatus ("integrated"/"Integrated"/"Done").
+// ActivityRow is the minimal mirror of one activity's execution row: the three head
+// facts the server's CoarsePhaseFor reads in precedence (projectstateaccess.go). A
+// current row is integrated when it carries a CompletedAt, no FailureReason, and no
+// TailFailureDetail — the last is the row that completed its work and FAILED TO LAND
+// IT (CompletedNotLanded): the server derives it before Done and keeps the activity's
+// dependents blocked, so a skip waiting on it is legitimate. A legacy row says
+// integrated through BuildStatus ("integrated"/"Integrated"/"Done").
 type ActivityRow struct {
-	CompletedAt   json.RawMessage `json:"completedAt,omitempty"`
-	FailureReason int             `json:"failureReason,omitempty"`
-	BuildStatus   string          `json:"buildStatus,omitempty"`
+	CompletedAt       json.RawMessage `json:"completedAt,omitempty"`
+	FailureReason     int             `json:"failureReason,omitempty"`
+	TailFailureDetail string          `json:"tailFailureDetail,omitempty"`
+	BuildStatus       string          `json:"buildStatus,omitempty"`
 }
 
 // ---- service-contract corpus (mirror projectstate/servicecontract.go) ----

@@ -323,6 +323,15 @@ func TestTP_Skip_RequiresUnintegratedActivity(t *testing.T) {
 	b.Skip.Until = "C-shop-client" // completed WITH a failure: not integrated
 	wantRules(t, runTP(t, p), ruleTPSkip, 0)
 
+	// Completed its work and FAILED TO LAND IT: the server's CoarsePhaseFor reads
+	// tailFailureDetail BEFORE completedAt (CompletedNotLanded, dependents stay
+	// blocked), so a skip may legitimately wait on it. Decoded from the fixture so
+	// the json tag is pinned, not only the field.
+	b.Skip.Until = "C-ledger-engine"
+	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+	p.ActivityExecution["C-ledger-engine"] = ActivityRow{CompletedAt: json.RawMessage(`"2026-10-02T10:00:00Z"`), TailFailureDetail: "merge tail failed"}
+	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+
 	b.Skip.Until = "C-never-opened"
 	wantRules(t, runTP(t, p), ruleTPSkip, 0)
 }

@@ -724,6 +724,12 @@
       "completedAt": "2026-10-02T10:00:00Z",
       "failureReason": 1,
       "failureDetail": "pipeline failed"
+    },
+    "C-ledger-engine": {
+      "activityID": "C-ledger-engine",
+      "startedAt": "2026-10-01T10:00:00Z",
+      "completedAt": "2026-10-02T10:00:00Z",
+      "tailFailureDetail": "merge tail failed: push rejected"
     }
   }
 }

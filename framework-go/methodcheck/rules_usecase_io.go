@@ -51,6 +51,10 @@ func useCaseIOFindings(uc UseCase, actors map[string]bool, l *Location) []Findin
 
 // ioKindFindings is UC-IO-KINDS for one node: a sendSignal names a receiving actor,
 // an objectNode carries inState, an anchored note anchors a node of its own diagram.
+//
+// EARMARK (spec §2.2 drift): the spec also forbids an objectNode or note carrying a
+// control-flow out-edge other than to the next node. That constraint is not checked
+// here; it belongs to a follow-up over the diagram's edge list.
 func ioKindFindings(n ActivityNode, ids, actors map[string]bool, l *Location) []Finding {
 	var msg string
 	switch n.Kind {

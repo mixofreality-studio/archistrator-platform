@@ -149,6 +149,11 @@ func (sc tpScope) stepFindings(stim scenario.Stimulus, st StepBinding) []Finding
 
 // probeFindings is TP-PROBE: every probe names a designed operation and supplies its
 // params; the result is the set of scenario nodes the probes claim to prove.
+//
+// EARMARK (spec §5.2 drift): the spec says probes name real READ-ONLY ops. The mirror's
+// ContractOperation carries no read-only/mutating marker, so only existence is
+// checked here; the wave that adds that flag to the contract surface owns the other
+// half of the predicate.
 func (sc tpScope) probeFindings(section string, probes []Probe) (map[string]bool, []Finding) {
 	proved := map[string]bool{}
 	var out []Finding
@@ -242,8 +247,10 @@ func skipFindings(p Project, comp string, b ScenarioBinding, l *Location) []Find
 }
 
 // integrated reports whether activityID's execution row records a landed binary
-// exit: a current row with a CompletedAt and no FailureReason, or a legacy row whose
-// buildStatus says integrated/done. An activity with no row has not integrated.
+// exit: a current row with a CompletedAt, no FailureReason and no TailFailureDetail
+// (the server's CoarsePhaseFor precedence — a completion whose merge tail failed is
+// CompletedNotLanded, not Done, and its dependents stay blocked), or a legacy row
+// whose buildStatus says integrated/done. An activity with no row has not integrated.
 func integrated(p Project, activityID string) bool {
 	rows := p.ActivityExecution
 	if rows == nil {
@@ -257,7 +264,7 @@ func integrated(p Project, activityID string) bool {
 		return strings.EqualFold(row.BuildStatus, "integrated") || strings.EqualFold(row.BuildStatus, "done")
 	}
 	completed := len(row.CompletedAt) > 0 && string(row.CompletedAt) != "null"
-	return completed && row.FailureReason == 0
+	return completed && row.FailureReason == 0 && row.TailFailureDetail == ""
 }
 
 // findContract resolves comp's contract by scenario.Normalize key equality (the
