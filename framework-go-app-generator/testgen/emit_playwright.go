@@ -26,6 +26,12 @@ func emitPlaywright(out *Output, cfg Config, plan componentPlan) {
 
 // playwrightSpec is one scenario's spec: the hooks' before, then per step the
 // bound actions, the step hook when hooked, and the expected observables.
+//
+// Both arms carry the 'scenario' annotation, because reporter.gen.ts keys
+// results.json by it and would otherwise fall back to the display title: the
+// live test pushes it first thing in the body (so a failing step keeps it),
+// the skipped test declares it statically through test.skip's details
+// argument (Playwright ≥1.42 TestDetails), since a skipped body never runs.
 func playwrightSpec(plan componentPlan, bs boundScenario) string {
 	id := bs.Scenario.ID
 	var b strings.Builder
@@ -33,12 +39,13 @@ func playwrightSpec(plan componentPlan, bs boundScenario) string {
 	fmt.Fprintf(&b, "// Source: project.json .phaseArtifacts.testPlan.%s × scenario.ForComponent(%s)\n", plan.Key, tsStr(plan.Key))
 	b.WriteString("import { test, expect } from '@playwright/test';\nimport { hooks } from './hooks';\n\n")
 	title := tsStr(id + " — " + bs.Scenario.Title)
+	annotation := fmt.Sprintf("{ type: 'scenario', description: %s }", tsStr(id))
 	if sk := bs.Binding.Skip; sk != nil {
-		fmt.Fprintf(&b, "// skipped: %s (until %s)\ntest.skip(%s, async () => {});\n", sk.Reason, sk.Until, title)
+		fmt.Fprintf(&b, "// skipped: %s (until %s)\ntest.skip(%s, { annotation: %s }, async () => {});\n", sk.Reason, sk.Until, title, annotation)
 		return b.String()
 	}
 	fmt.Fprintf(&b, "test(%s, async ({ page }, testInfo) => {\n", title)
-	fmt.Fprintf(&b, "  testInfo.annotations.push({ type: 'scenario', description: %s });\n", tsStr(id))
+	fmt.Fprintf(&b, "  testInfo.annotations.push(%s);\n", annotation)
 	fmt.Fprintf(&b, "  await hooks.before(%s, page);\n", tsStr(id))
 	for _, st := range bs.Steps {
 		writePlaywrightStep(&b, id, st)

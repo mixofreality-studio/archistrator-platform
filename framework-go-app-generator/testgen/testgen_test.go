@@ -152,6 +152,50 @@ func TestGenerate_PlaywrightSpec(t *testing.T) {
 	}
 }
 
+// TestGenerate_PlaywrightSkipCarriesScenarioAnnotation pins the skipped UI
+// binding's contract: reporter.gen.ts keys results.json by the 'scenario'
+// annotation and falls back to test.title ('<id> — <title>') without one, so a
+// skipped spec must carry the annotation through test.skip's details argument
+// (Playwright ≥1.42 TestDetails) — the Go path records the id regardless of
+// t.Skip, and the TestRun rows (§4.2/§6.1) are keyed by scenario id either way.
+func TestGenerate_PlaywrightSkipCarriesScenarioAnnotation(t *testing.T) {
+	raw, err := os.ReadFile("testdata/project_tp.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	plans := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)
+	plans["shopClient"] = map[string]any{"component": "shopClient", "bindings": []any{
+		map[string]any{"scenario": "browse-orders-P1", "steps": []any{}, "skip": map[string]any{"reason": "orders page not built", "until": "C-shop-client"}},
+	}}
+	skipped, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := Generate(skipped, Config{ModulePath: "example.com/app/server"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec, ok := out.Generated[shopSpec]
+	if !ok {
+		t.Fatalf("missing playwright spec; have %v", keys(out.Generated))
+	}
+	for _, want := range []string{
+		"// skipped: orders page not built (until C-shop-client)",
+		"test.skip('browse-orders-P1 — Browse orders', { annotation: { type: 'scenario', description: 'browse-orders-P1' } }, async () => {});",
+	} {
+		if !strings.Contains(string(spec), want) {
+			t.Errorf("missing %q in\n%s", want, spec)
+		}
+	}
+	if strings.Contains(string(spec), "hooks.before") || strings.Contains(string(spec), "page.") {
+		t.Errorf("skipped spec must carry no steps:\n%s", spec)
+	}
+}
+
 // TestGenerate_PlaywrightResultsDepthIgnoresUITestsDir pins the plan's
 // literal: the config lives at <uitests module>/generated/<comp>/ and its
 // results tree is <uitests module>/test-results/<comp>, so the up-path is
