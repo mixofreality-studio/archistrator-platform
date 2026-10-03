@@ -16,6 +16,12 @@ package testinfra
 // create TWO runs (exactly GitHub's behaviour, which is why the RA must converge
 // them). The fake is concurrency-safe so two goroutines can race a dispatch.
 //
+// It also models the run-ARTIFACT surface (list a run's artifacts, download one as
+// a zip) with GitHub's load-bearing wire fact: the zip route does NOT serve bytes,
+// it answers 302 to blob storage on a DIFFERENT host. The fake therefore runs a
+// second httptest server (the "blob host") that records what reached it, so the
+// client's never-forward-the-installation-token redirect rule is testable.
+//
 // TEST-ONLY: nothing here is imported by production code.
 
 import (
@@ -35,17 +41,23 @@ import (
 // BaseURL as the AppClient's apiBaseURL.
 type FakeActions struct {
 	server *httptest.Server
+	// blob is the SECOND host — the stand-in for GitHub's artifact blob storage.
+	// The artifact zip route answers 302 to it, exactly as GitHub does, so the
+	// client's token-safe redirect handling is exercised against a different host.
+	blob *httptest.Server
 
-	mu       sync.Mutex
-	nextID   int64
-	runs     []fakeRun
-	requests []RecordedRequest
+	mu           sync.Mutex
+	nextID       int64
+	runs         []fakeRun
+	artifacts    []fakeArtifact
+	requests     []RecordedRequest
+	blobRequests []RecordedRequest
 
 	// forceStatus, when >0, makes the NEXT matching call return that status with a
 	// scripted error body (drives the error-kind mapping cases). It is consumed
 	// (reset to 0) on use. Scope it by op via forceOp.
 	forceStatus int
-	forceOp     string // "dispatch" | "list" | "get" | "cancel" | "" (any)
+	forceOp     string // "dispatch" | "list" | "get" | "cancel" | "listArtifacts" | "downloadArtifact" | "" (any)
 }
 
 type fakeRun struct {
@@ -55,26 +67,55 @@ type fakeRun struct {
 	Conclusion string
 }
 
-// StartActions spins up the stateful Actions fake.
+type fakeArtifact struct {
+	ID   int64
+	Name string
+	Zip  []byte
+}
+
+// StartActions spins up the stateful Actions fake (API host + blob host).
 func StartActions() *FakeActions {
 	f := &FakeActions{nextID: 1}
 	f.server = httptest.NewServer(http.HandlerFunc(f.handle))
+	f.blob = httptest.NewServer(http.HandlerFunc(f.handleBlob))
 	return f
 }
 
 // BaseURL is the fake's REST root.
 func (f *FakeActions) BaseURL() string { return f.server.URL }
 
-// Close stops the fake.
-func (f *FakeActions) Close() { f.server.Close() }
+// Close stops the fake (both hosts).
+func (f *FakeActions) Close() {
+	f.server.Close()
+	f.blob.Close()
+}
 
-// Requests returns a copy of every request received (for wire-level assertions).
+// Requests returns a copy of every request the API host received (for wire-level
+// assertions).
 func (f *FakeActions) Requests() []RecordedRequest {
 	f.mu.Lock()
 	defer f.mu.Unlock()
 	out := make([]RecordedRequest, len(f.requests))
 	copy(out, f.requests)
 	return out
+}
+
+// BlobRequests returns a copy of every request the BLOB host received — the
+// assertion surface for "the installation token never crossed to the blob host".
+func (f *FakeActions) BlobRequests() []RecordedRequest {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := make([]RecordedRequest, len(f.blobRequests))
+	copy(out, f.blobRequests)
+	return out
+}
+
+// AddArtifact registers an artifact (listed under EVERY run id — the fake does not
+// model run↔artifact ownership) whose zip bytes the blob host serves.
+func (f *FakeActions) AddArtifact(id int64, name string, zip []byte) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	f.artifacts = append(f.artifacts, fakeArtifact{ID: id, Name: name, Zip: zip})
 }
 
 // DispatchCount returns how many workflow_dispatch POSTs the fake received — the
@@ -137,6 +178,10 @@ var (
 	reListRuns = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/workflows/([^/]+)/runs$`)
 	reGetRun   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/runs/(\d+)$`)
 	reCancel   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/runs/(\d+)/cancel$`)
+
+	reListArtifacts = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/runs/(\d+)/artifacts$`)
+	reArtifactZip   = regexp.MustCompile(`^/repos/([^/]+)/([^/]+)/actions/artifacts/(\d+)/zip$`)
+	reBlob          = regexp.MustCompile(`^/blob/(\d+)$`)
 )
 
 func (f *FakeActions) handle(w http.ResponseWriter, r *http.Request) {
@@ -157,9 +202,85 @@ func (f *FakeActions) handle(w http.ResponseWriter, r *http.Request) {
 		f.handleGet(w, reGetRun.FindStringSubmatch(r.URL.Path)[3])
 	case r.Method == http.MethodPost && reCancel.MatchString(r.URL.Path):
 		f.handleCancel(w, reCancel.FindStringSubmatch(r.URL.Path)[3])
+	case r.Method == http.MethodGet && reListArtifacts.MatchString(r.URL.Path):
+		f.handleListArtifacts(w)
+	case r.Method == http.MethodGet && reArtifactZip.MatchString(r.URL.Path):
+		f.handleArtifactZip(w, r, reArtifactZip.FindStringSubmatch(r.URL.Path)[3])
 	default:
 		writeJSON(w, http.StatusNotFound, `{"message":"fake-actions: no route"}`)
 	}
+}
+
+// handleBlob is the blob host: it records every request (so a test can assert no
+// credential crossed hosts) and serves the registered zip bytes.
+func (f *FakeActions) handleBlob(w http.ResponseWriter, r *http.Request) {
+	body, _ := io.ReadAll(r.Body)
+	f.mu.Lock()
+	f.blobRequests = append(f.blobRequests, RecordedRequest{
+		Method: r.Method, Path: r.URL.Path, Query: r.URL.RawQuery,
+		Auth: r.Header.Get("Authorization"), Body: string(body),
+	})
+	f.mu.Unlock()
+
+	m := reBlob.FindStringSubmatch(r.URL.Path)
+	if r.Method != http.MethodGet || m == nil {
+		writeJSON(w, http.StatusNotFound, `{"message":"fake-blob: no route"}`)
+		return
+	}
+	id, _ := strconv.ParseInt(m[1], 10, 64)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	for _, a := range f.artifacts {
+		if a.ID == id {
+			w.Header().Set("Content-Type", "application/zip")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write(a.Zip)
+			return
+		}
+	}
+	writeJSON(w, http.StatusNotFound, `{"message":"no blob"}`)
+}
+
+func (f *FakeActions) handleListArtifacts(w http.ResponseWriter) {
+	if s, forced := f.takeForce("listArtifacts"); forced {
+		writeJSON(w, s, `{"message":"forced"}`)
+		return
+	}
+	f.mu.Lock()
+	arts := make([]map[string]any, 0, len(f.artifacts))
+	for _, a := range f.artifacts {
+		arts = append(arts, map[string]any{
+			"id": a.ID, "name": a.Name, "size_in_bytes": len(a.Zip),
+			"expired": false, "created_at": "2026-10-02T00:00:00Z",
+		})
+	}
+	f.mu.Unlock()
+	out, _ := json.Marshal(map[string]any{"total_count": len(arts), "artifacts": arts})
+	writeJSON(w, http.StatusOK, string(out))
+}
+
+// handleArtifactZip answers exactly as GitHub does: 302 to blob storage (a
+// DIFFERENT host) — never the bytes themselves.
+func (f *FakeActions) handleArtifactZip(w http.ResponseWriter, r *http.Request, idStr string) {
+	if s, forced := f.takeForce("downloadArtifact"); forced {
+		writeJSON(w, s, `{"message":"forced"}`)
+		return
+	}
+	id, _ := strconv.ParseInt(idStr, 10, 64)
+	f.mu.Lock()
+	found := false
+	for _, a := range f.artifacts {
+		if a.ID == id {
+			found = true
+			break
+		}
+	}
+	f.mu.Unlock()
+	if !found {
+		writeJSON(w, http.StatusNotFound, `{"message":"no artifact"}`)
+		return
+	}
+	http.Redirect(w, r, fmt.Sprintf("%s/blob/%d", f.blob.URL, id), http.StatusFound)
 }
 
 // takeForce consumes a scripted forced status if it applies to op; returns (status,

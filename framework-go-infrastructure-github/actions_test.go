@@ -7,6 +7,7 @@ package github_test
 
 import (
 	"context"
+	"io"
 	"sync"
 	"testing"
 
@@ -166,5 +167,80 @@ func TestDispatchRace(t *testing.T) {
 	runs, _ := c.ListRunsByName(ctx, "acme", "proj", "construct.yml", fwgithub.RunNamePrefix+"race", "t")
 	if len(runs) != 5 {
 		t.Fatalf("got %d runs, want 5", len(runs))
+	}
+}
+
+// TestListArtifacts lists a run's artifacts via the Actions artifacts route and
+// maps the wire DTO onto the satellite's Artifact value.
+func TestListArtifacts(t *testing.T) {
+	fake := gh.StartActions()
+	defer fake.Close()
+	fake.AddArtifact(42, "test-results-C-BG-3", []byte("zipbytes"))
+	c := actionsClient(t, fake.BaseURL())
+	ctx := context.Background()
+
+	arts, err := c.ListArtifacts(ctx, "o", "r", 7, "tok")
+	if err != nil || len(arts) != 1 || arts[0].Name != "test-results-C-BG-3" {
+		t.Fatalf("ListArtifacts = %v %+v, want one artifact named test-results-C-BG-3", err, arts)
+	}
+	if arts[0].ID != 42 || arts[0].SizeBytes != int64(len("zipbytes")) || arts[0].Expired {
+		t.Fatalf("artifact = %+v, want id 42, size 8, not expired", arts[0])
+	}
+	req := fake.Requests()[0]
+	if req.Auth != "token tok" {
+		t.Fatalf("list auth = %q, want installation token", req.Auth)
+	}
+}
+
+// TestDownloadArtifactFollowsRedirectWithoutToken pins Review Focus 5: the zip
+// endpoint answers 302 to a DIFFERENT host (blob storage) and the client must follow
+// it while NOT forwarding the installation token to that host.
+func TestDownloadArtifactFollowsRedirectWithoutToken(t *testing.T) {
+	fake := gh.StartActions()
+	defer fake.Close()
+	fake.AddArtifact(42, "a", []byte("zipbytes"))
+	c := actionsClient(t, fake.BaseURL())
+	ctx := context.Background()
+
+	rc, err := c.DownloadArtifact(ctx, "o", "r", 42, "tok")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = rc.Close() }()
+	b, err := io.ReadAll(rc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(b) != "zipbytes" {
+		t.Fatalf("body = %q, want zipbytes", b)
+	}
+	// the API host saw the token …
+	if got := fake.Requests()[0].Auth; got != "token tok" {
+		t.Fatalf("api auth = %q, want installation token", got)
+	}
+	// … and the blob host did NOT.
+	blob := fake.BlobRequests()
+	if len(blob) != 1 {
+		t.Fatalf("blob requests = %d, want 1", len(blob))
+	}
+	if blob[0].Auth != "" {
+		t.Fatalf("token leaked to blob host: Authorization=%q", blob[0].Auth)
+	}
+}
+
+// TestDownloadArtifactMissingIsNotFound maps the zip endpoint's 404 onto
+// fwra.NotFound via ClassifyStatus (an expired/absent artifact).
+func TestDownloadArtifactMissingIsNotFound(t *testing.T) {
+	fake := gh.StartActions()
+	defer fake.Close()
+	c := actionsClient(t, fake.BaseURL())
+	ctx := context.Background()
+
+	rc, err := c.DownloadArtifact(ctx, "o", "r", 99, "tok")
+	if rc != nil {
+		_ = rc.Close()
+	}
+	if kindOf(err) != fwra.NotFound {
+		t.Fatalf("download of missing artifact kind = %v (%v), want NotFound", kindOf(err), err)
 	}
 }
