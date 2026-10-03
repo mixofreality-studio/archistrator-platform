@@ -91,6 +91,19 @@ const (
 	kindAcceptEvent = "acceptEvent"
 )
 
+// IOAD node kinds the scenario derivation (framework-go/scenario, §2.2 of the
+// deterministic-component-testing design) classifies beyond the control-flow set
+// above: a sendSignal is an expected OUTPUT, an objectNode (with InState) an expected
+// STATE, an anchored note a HINT, and a swimLane the structural carrier of a node's
+// RoleName/LinkedActorID. methodcheck only mirrors them; scenario_adapter.go hands
+// the wire kinds through verbatim.
+const (
+	kindSendSignal = "sendSignal"
+	kindObjectNode = "objectNode"
+	kindNote       = "note"
+	kindSwimLane   = "swimLane"
+)
+
 // Classification wire names.
 const classCore = "core"
 
@@ -256,6 +269,13 @@ type ActivityNode struct {
 	// zero-value mirroring as LinkedActorID above. CC-DECIDED-BY (rules_callchain.go)
 	// checks both halves; nothing here enforces them.
 	DecidedBy string `json:"decidedBy"`
+
+	// InState is the object state an objectNode carries ("[requested]"); the scenario
+	// derivation turns it into an expected state. Anchor is the node id an anchored
+	// note points at; the derivation turns the note's label into a hint on that node's
+	// stimulus. Both are "" on every other kind (same zero-value mirroring as above).
+	InState string `json:"inState"`
+	Anchor  string `json:"anchor"`
 }
 
 // ActivityEdge is a directed edge in an activity diagram.
@@ -357,7 +377,7 @@ type TraceCall struct {
 }
 
 // relationship projects a trace call onto the plain directed edge the WHOLE-VIEW
-// suites reason about (DV-*, App-C, STP-*). Those rules ask "which endpoints, which
+// suites reason about (DV-*, App-C, TP-*). Those rules ask "which endpoints, which
 // mode" — per edge, and in aggregate per view — and neither question reads the
 // alternative-group tag: an alternative is checked exactly like any other call, which
 // is what makes an alt group subject to the per-view cardinality rules (see
@@ -539,13 +559,18 @@ type Project struct {
 
 	// ServiceContracts mirrors the top-level `.serviceContracts` map (component key →
 	// contract document) the projectstate RA owns. Nil until the first contract is
-	// seeded. Decoded leniently — the STP rule family reads it to resolve each test
-	// step's {component, operation} against the designed contract surface.
+	// seeded. Decoded leniently — the TP rule family reads it to resolve each step
+	// binding's operation against the designed contract surface, and the scenario
+	// adapter projects it into scenario.Input.Contracts.
 	ServiceContracts map[string]ServiceContract `json:"serviceContracts,omitempty"`
 
-	// TestingState mirrors the top-level `.testingState` record. Nil until the first
-	// testing activity produces output; the STP rule family reads
-	// TestingState.SystemTestPlan.
+	// PhaseArtifacts mirrors the top-level `.phaseArtifacts` record. Only the
+	// per-component test plans are carried — the TP rule family's input. Nil until
+	// the first test-plan activity commits.
+	PhaseArtifacts *PhaseArtifacts `json:"phaseArtifacts,omitempty"`
+
+	// TestingState mirrors the top-level `.testingState` record: the test runs the
+	// venues upload. Nil until the first run is recorded.
 	TestingState *TestingState `json:"testingState,omitempty"`
 }
 
@@ -553,7 +578,7 @@ type Project struct {
 
 // ServiceContract is the LIGHTWEIGHT structural mirror of one component's contract
 // document stored in `.serviceContracts[component]`. It carries only the fields the
-// STP rules read (identity, layer, the `$defs` schema map, and the interface's
+// TP rules read (identity, layer, the `$defs` schema map, and the interface's
 // operation surface); the app-side owner also carries codegen metadata (goPackage,
 // deps, infra, stub) the rules do not consult. Decoded omit-empty-tolerant.
 type ServiceContract struct {
@@ -574,7 +599,8 @@ type ContractInterface struct {
 }
 
 // ContractOperation is one method on the interface. A nil Params slice encodes as
-// `null` — the never-detailed-designed STUB marker STP-STALE-CONTRACT keys on.
+// `null` — the never-detailed-designed STUB marker (a contract seeded but not yet
+// detailed-designed).
 type ContractOperation struct {
 	Name   string          `json:"name"`
 	Params []ContractParam `json:"params"`
@@ -591,51 +617,57 @@ type ContractParam struct {
 	Schema  json.RawMessage `json:"schema"`
 }
 
-// ---- system-test-plan (mirror projectstate/phaseartifacts.go TestingState) ----
+// ---- per-component test plans (mirror projectstate/phaseartifacts.go) ----
 
-// TestingState mirrors the top-level `.testingState` record. Only the SystemTestPlan
-// is carried — the STP rule family's sole input.
-type TestingState struct {
-	SystemTestPlan *SystemTestPlan `json:"systemTestPlan,omitempty"`
+// PhaseArtifacts mirrors the top-level `.phaseArtifacts` record. Only the test plans
+// are carried: the component-granular bindings the TP-* rule family validates and
+// the testgen emitter consumes (deterministic-component-testing design §3).
+type PhaseArtifacts struct {
+	TestPlan map[string]TestPlanRecord `json:"testPlan"`
 }
 
-// SystemTestPlan mirrors `.testingState.systemTestPlan` — the N-STP output the STP
-// rule family validates against the committed contracts + architecture.
-type SystemTestPlan struct {
-	UseCaseIndex []string       `json:"useCaseIndex,omitempty"`
-	Entries      []string       `json:"entries,omitempty"`
-	Scenarios    []TestScenario `json:"scenarios,omitempty"`
-	Status       string         `json:"status,omitempty"`
+// TestPlanRecord is one component's test plan: a binding per derived scenario
+// (scenario ids come from framework-go/scenario — see DeriveScenarios).
+type TestPlanRecord struct {
+	Component string            `json:"component"`
+	Bindings  []ScenarioBinding `json:"bindings"`
 }
 
-// TestScenario is one black-box scenario tracing to a core use case.
-type TestScenario struct {
-	ID          string     `json:"id"`
-	UseCase     string     `json:"useCase"`
-	Title       string     `json:"title"`
-	Description string     `json:"description,omitempty"`
-	Cases       []TestCase `json:"cases,omitempty"`
+// ScenarioBinding binds one derived scenario to concrete steps, or skips it until a
+// named activity lands.
+type ScenarioBinding struct {
+	Scenario string        `json:"scenario"`
+	Steps    []StepBinding `json:"steps"`
+	Skip     *SkipReason   `json:"skip"`
 }
 
-// TestCase is one falsification attempt: happy | negative | boundary.
-type TestCase struct {
-	ID              string     `json:"id"`
-	Kind            string     `json:"kind"`
-	Title           string     `json:"title"`
-	Proves          string     `json:"proves,omitempty"`
-	ExpectedOutcome string     `json:"expectedOutcome,omitempty"`
-	Steps           []TestStep `json:"steps,omitempty"`
+// SkipReason is why a scenario is not yet bound and which activity unblocks it.
+type SkipReason struct {
+	Reason string `json:"reason"`
+	Until  string `json:"until"` // activity id
 }
 
-// TestStep is one manager-operation call with its inputs and expected outcome.
-type TestStep struct {
-	Seq       int        `json:"seq"`
+// StepBinding is one bound stimulus: the operation it drives, its concrete inputs
+// and expected outcome, the probes that observe downstream effects, the outputs the
+// agent declares unobservable, and whether the step runs through a hand-written hook.
+type StepBinding struct {
+	Seq          int        `json:"seq"`
+	Operation    string     `json:"operation"`
+	Inputs       []TestArg  `json:"inputs"`
+	Expect       TestExpect `json:"expect"`
+	Probes       []Probe    `json:"probes"`
+	Unobservable []string   `json:"unobservable"`
+	Hook         bool       `json:"hook"`
+}
+
+// Probe observes one expected output/state (For = the scenario node id) by calling
+// a component operation after the step.
+type Probe struct {
+	For       string     `json:"for"`
 	Component string     `json:"component"`
 	Operation string     `json:"operation"`
-	Status    string     `json:"status,omitempty"`
-	Inputs    []TestArg  `json:"inputs,omitempty"`
+	Inputs    []TestArg  `json:"inputs"`
 	Expect    TestExpect `json:"expect"`
-	Assertion string     `json:"assertion,omitempty"`
 }
 
 // TestArg is one concrete input argument to a step's operation call.
@@ -652,12 +684,30 @@ type TestExpect struct {
 	ErrorCode     string `json:"errorCode,omitempty"`
 }
 
-// systemTestPlan returns the committed System Test Plan, or nil when absent.
-func (p Project) systemTestPlan() *SystemTestPlan {
-	if p.TestingState == nil {
-		return nil
-	}
-	return p.TestingState.SystemTestPlan
+// ---- test runs (mirror projectstate/phaseartifacts.go TestingState) ----
+
+// TestingState mirrors the top-level `.testingState` record: the runs the venues
+// record after executing a component's scenario tests.
+type TestingState struct {
+	TestRuns []TestRun `json:"testRuns"`
+}
+
+// TestRun is one execution of a component's scenario tests at a revision; Artifact
+// is the venue's results handle (a GitHub Actions artifact id, say).
+type TestRun struct {
+	ID        string           `json:"id"`
+	Activity  string           `json:"activity"`
+	Component string           `json:"component"`
+	Revision  string           `json:"revision"`
+	Artifact  string           `json:"artifact"`
+	Scenarios []ScenarioResult `json:"scenarios"`
+}
+
+// ScenarioResult is one scenario's verdict within a run.
+type ScenarioResult struct {
+	Scenario   string `json:"scenario"`
+	Status     string `json:"status"` // pass|fail|skip
+	DurationMs int    `json:"durationMs"`
 }
 
 // slotByKind returns the committed slot for a kind ordinal, or false when the slot
