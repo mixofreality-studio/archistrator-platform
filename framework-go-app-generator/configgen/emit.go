@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"slices"
 	"sort"
 	"strings"
 
@@ -277,12 +278,7 @@ func loaderFor(kind string) string {
 // RequiredForProfile reports whether the field's owning decl is provisioned for
 // profile p (its Profiles list contains p).
 func (f infraField) RequiredForProfile(p string) bool {
-	for _, x := range f.Profiles {
-		if x == p {
-			return true
-		}
-	}
-	return false
+	return slices.Contains(f.Profiles, p)
 }
 
 // anyKind reports whether any setting has the given kind.

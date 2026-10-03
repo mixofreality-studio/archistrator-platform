@@ -143,7 +143,7 @@ func TestEmitTypesGeneratePrefix(t *testing.T) {
 // `tag“, tolerating gofmt's column-alignment padding (extra spaces) between
 // the three tokens.
 func hasField(src, name, typ, tag string) bool {
-	for _, line := range strings.Split(src, "\n") {
+	for line := range strings.SplitSeq(src, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 3 {
 			continue

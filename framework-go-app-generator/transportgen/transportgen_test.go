@@ -215,8 +215,8 @@ func TestConfigErrors(t *testing.T) {
 // first path segment carries no dot (only external module paths are domains).
 func isStdlib(path string) bool {
 	seg := path
-	if i := strings.IndexByte(path, '/'); i >= 0 {
-		seg = path[:i]
+	if before, _, ok := strings.Cut(path, "/"); ok {
+		seg = before
 	}
 	return !strings.Contains(seg, ".")
 }

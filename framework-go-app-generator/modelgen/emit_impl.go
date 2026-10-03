@@ -3,6 +3,7 @@ package modelgen
 import (
 	"bytes"
 	"fmt"
+	"maps"
 	"path/filepath"
 	"strings"
 )
@@ -82,9 +83,7 @@ func emitRAImpl(buf *bytes.Buffer, iface Interface, infra []string) error {
 			return fmt.Errorf("unapproved/unknown infra %q (no framework binding)", name)
 		}
 		for _, f := range binding.params {
-			for path, alias := range f.imports {
-				pendingImports[path] = alias
-			}
+			maps.Copy(pendingImports, f.imports)
 		}
 		if binding.delegated {
 			emitDelegatingConstructor(buf, iface, name, binding)

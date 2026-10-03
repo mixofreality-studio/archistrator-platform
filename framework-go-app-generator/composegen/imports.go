@@ -97,8 +97,8 @@ func sortSpecs(specs []importSpec) {
 // first path segment carries no dot, i.e. no domain).
 func isStdlib(p string) bool {
 	seg := p
-	if i := strings.Index(p, "/"); i >= 0 {
-		seg = p[:i]
+	if before, _, ok := strings.Cut(p, "/"); ok {
+		seg = before
 	}
 	return !strings.Contains(seg, ".")
 }
