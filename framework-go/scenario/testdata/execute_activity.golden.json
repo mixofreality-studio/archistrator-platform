@@ -2317,7 +2317,7 @@
           "to": "projectstateaccess",
           "op": "ReadProject",
           "call": "execute-a-project-activity/operator-intervened/0",
-          "guard": "yes"
+          "guard": "no"
         },
         "expectedOutputs": [],
         "expectedStates": [],

@@ -334,11 +334,92 @@ func TestDerive_ExecuteActivityGolden(t *testing.T) {
 			t.Errorf("start-family scenario survived: %s", s.ID)
 		}
 	}
-	if len(r.StartRedundant) != 1 || r.StartRedundant[0].UseCase != "execute-a-project-activity" {
-		t.Errorf("want one start redundancy on execute-a-project-activity, got %+v", r.StartRedundant)
+	// The whole old P1–P7 start family (7 paths) is dropped, not part of it.
+	if len(r.StartRedundant) != 1 || r.StartRedundant[0].UseCase != "execute-a-project-activity" || r.StartRedundant[0].Dropped != 7 {
+		t.Errorf("want one start redundancy on execute-a-project-activity dropping 7 paths, got %+v", r.StartRedundant)
+	}
+
+	// A1 per visit: P6 takes operator-intervened twice — "no" (looping back to
+	// escalate-operator), then "yes". Each visit's stimulus carries its own guard.
+	p6 := scenarioByID(t, all, "execute-a-project-activity-P6")
+	var oi []string
+	for _, st := range p6.Stimuli {
+		if st.Node == "operator-intervened" {
+			oi = append(oi, st.Input.Guard)
+		}
+	}
+	if !equalStrings(oi, []string{"no", "yes"}) {
+		t.Errorf("P6 operator-intervened guards per visit = %q, want [no yes]", oi)
 	}
 	if want := "execute-a-project-activity-P1"; all[0].ID != want {
 		t.Errorf("ids renumber over kept paths: first is %s, want %s", all[0].ID, want)
+	}
+}
+
+func scenarioByID(t *testing.T, all []Scenario, id string) Scenario {
+	t.Helper()
+	for _, s := range all {
+		if s.ID == id {
+			return s
+		}
+	}
+	t.Fatalf("no scenario %s", id)
+	return Scenario{}
+}
+
+// A1: on every scenario of every fixture, each stimulus of a decision/switch
+// node carries the guard taken at THAT visit — the i-th Guard{At: node} in
+// s.Guards for the node's i-th visit on s.Path. A node's stimuli depend on the
+// node alone, so every visit of it opens the same number of them.
+func TestDerive_GuardIsPerVisit(t *testing.T) {
+	for _, fx := range []string{"ordering", "two_entries", "execute_activity"} {
+		in := load(t, fx)
+		kind := map[string]string{}
+		for _, d := range in.Diagrams {
+			for _, n := range d.Nodes {
+				kind[d.UseCaseID+"\x00"+n.ID] = n.Kind
+			}
+		}
+		for _, s := range must(Derive(in)) {
+			assertGuardsPerVisit(t, s, func(id string) bool {
+				k := kind[s.UseCase+"\x00"+id]
+				return k == "decision" || k == "switch"
+			})
+		}
+	}
+}
+
+func assertGuardsPerVisit(t *testing.T, s Scenario, isBranchNode func(string) bool) {
+	t.Helper()
+	visits, taken, stims := map[string]int{}, map[string][]string{}, map[string][]string{}
+	for _, id := range s.Path {
+		visits[id]++
+	}
+	for _, g := range s.Guards {
+		taken[g.At] = append(taken[g.At], g.Guard)
+	}
+	for _, st := range s.Stimuli {
+		if isBranchNode(st.Node) {
+			stims[st.Node] = append(stims[st.Node], st.Input.Guard)
+		}
+	}
+	for node, gs := range stims {
+		v := visits[node]
+		if v == 0 || len(gs)%v != 0 {
+			t.Errorf("%s: %d stimuli at %s over %d visits", s.ID, len(gs), node, v)
+			continue
+		}
+		per := len(gs) / v
+		for i, g := range gs {
+			visit := i / per
+			want := ""
+			if visit < len(taken[node]) {
+				want = taken[node][visit]
+			}
+			if g != want {
+				t.Errorf("%s: %s visit %d stimulus guard = %q, want %q (guards taken there: %q)", s.ID, node, visit+1, g, want, taken[node])
+			}
+		}
 	}
 }
 

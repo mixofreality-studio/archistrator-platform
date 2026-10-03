@@ -125,17 +125,18 @@ func title(base string, guards []Guard) string {
 // call into a component (A1, callStimuli) — or, for an input-classified node
 // with no such call, the single §2.2 input stimulus — then attaches the node's
 // outputs/states/hints to the last stimulus open (preconditions before the first).
+// A node visited more than once (a loop unrolled) takes, at each visit, the
+// guard taken at that visit.
 func stimuli(in Input, g graph, d Diagram, view *View, rp rawPath) (Outcome, []Stimulus) {
-	w := stimulusWalk{hints: hintsByAnchor(d), guardAt: map[string]string{}}
-	for _, gd := range rp.guards {
-		w.guardAt[gd.At] = gd.Guard
-	}
+	w := stimulusWalk{hints: hintsByAnchor(d)}
+	guards := visitGuards(rp)
 	for _, id := range rp.nodes {
 		n := g.nodes[id]
 		cls := classify(n, in, view)
-		evs := callStimuli(in, d, view, n, w.guardAt[id])
+		guard := guards.next(id)
+		evs := callStimuli(in, d, view, n, guard)
 		if len(evs) == 0 && cls == classInput {
-			evs = []InputEv{inputEvent(in, n, w.guardAt[id])}
+			evs = []InputEv{inputEvent(in, n, guard)}
 		}
 		for _, ev := range evs {
 			w.out = append(w.out, Stimulus{Seq: len(w.out) + 1, Node: id, Input: ev})
@@ -145,12 +146,33 @@ func stimuli(in Input, g graph, d Diagram, view *View, rp rawPath) (Outcome, []S
 	return w.pre, w.out
 }
 
+// guardCursor hands out, per node, the guards taken there in path order: the
+// i-th call of next(node) is the guard of the node's i-th visit ("" once the
+// node's guards run out, e.g. a path that ends on it).
+type guardCursor map[string][]string
+
+func visitGuards(rp rawPath) guardCursor {
+	c := guardCursor{}
+	for _, gd := range rp.guards {
+		c[gd.At] = append(c[gd.At], gd.Guard)
+	}
+	return c
+}
+
+func (c guardCursor) next(node string) string {
+	gs := c[node]
+	if len(gs) == 0 {
+		return ""
+	}
+	c[node] = gs[1:]
+	return gs[0]
+}
+
 // stimulusWalk is the state of one stimuli walk.
 type stimulusWalk struct {
-	hints   map[string][]string
-	guardAt map[string]string
-	pre     Outcome
-	out     []Stimulus
+	hints map[string][]string
+	pre   Outcome
+	out   []Stimulus
 }
 
 // cur is the outcome observations attach to: the last stimulus, or preconditions.
