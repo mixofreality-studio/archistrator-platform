@@ -57,6 +57,8 @@ From the architecture and operational concepts:
 
 Do not invent operations to anticipate features. Each operation must trace to a current operational-concepts entry. New operations to support new use cases are added later, when those use cases are designed; the contract evolves with the system.
 
+**Every API has a use case.** Every operation you add must be called by a use case's dynamic view; add the call (or a use case) or don't add the op. methodcheck `TP-OP-REACHED` is an Error: it fails the repo's method check and the `recordServiceContract` write that leaves an op uncalled.
+
 ### Step 2 — Group operations into contract(s)
 
 Per App B §3.2: a contract is a *facet* of the service. A service may support one or two contracts (App B §5.4 / App C §6.4). Most services have one.
