@@ -15,9 +15,12 @@ import (
 // per scenario the derivation projects onto that component (DeriveScenarios +
 // scenario.ForComponent). Every rule here is a check of a binding against the
 // projected scenario and the committed contract surface, except TP-OP-REACHED, which
-// is a check of the DESIGN (a contract op no scenario ever drives) and therefore a
-// Warning: it must not block recordPhaseArtifact; design-health renders it and the
-// workflow reports it for a founder ruling.
+// is a check of the DESIGN: a contract op no use case's dynamic view ever calls. It is
+// an Error (ruling A5, every API has a use case): Check fails the app repo on it, and
+// every aiarch-state write that validates with methodcheck rejects a write that leaves
+// an op unreached. It speaks only once slot 4 (core use cases) and slot 5 (system) are
+// both committed — before that there are no scenarios, and a contract designed ahead
+// of the architecture is not a defect.
 
 // Rule ids of the TP family.
 const (
@@ -37,7 +40,7 @@ const (
 type opLookup func(name string) (ContractOperation, bool)
 
 // testPlanFindings runs the family. TP-OP-REACHED runs over the whole derived set
-// regardless of any committed plan; the binding rules run per committed component
+// regardless of any committed plan (once the architecture is committed); the binding rules run per committed component
 // plan, in key order so the findings are deterministic. all is the project's
 // derived scenario set (DeriveScenarios).
 func testPlanFindings(p Project, all []scenario.Scenario) []Finding {
@@ -192,9 +195,14 @@ func (sc tpScope) stateFindings(section string, stim scenario.Stimulus, st StepB
 	return out
 }
 
-// opReachedFindings is TP-OP-REACHED (Warning): every operation of every contract is
-// the input of at least one derived scenario. Contracts are visited in key order.
+// opReachedFindings is TP-OP-REACHED (Error): every operation of every contract is
+// the input of at least one derived scenario, i.e. some use case's dynamic view calls
+// it. Silent until both slot 4 and slot 5 are committed (architectureCommitted).
+// Contracts are visited in key order.
 func opReachedFindings(p Project, all []scenario.Scenario) []Finding {
+	if !architectureCommitted(p) {
+		return nil
+	}
 	reached := reachedOps(all)
 	keys := make([]string, 0, len(p.ServiceContracts))
 	for key := range p.ServiceContracts {
@@ -207,15 +215,20 @@ func opReachedFindings(p Project, all []scenario.Scenario) []Finding {
 			if reached[scenario.Normalize(key)+"."+op.Name] {
 				continue
 			}
-			out = append(out, Finding{
-				RuleID:   ruleTPOpReached,
-				Severity: SeverityWarning,
-				Message:  fmt.Sprintf("%s.%s is reached by no scenario: dead operation or missing use case", key, op.Name),
-				Location: loc(0, "serviceContracts."+key),
-			})
+			out = append(out, tpFinding(ruleTPOpReached, loc(0, "serviceContracts."+key),
+				"%s.%s is called by no use case's dynamic view (every API has a use case): add the op's call to a use case's dynamic view, or delete the op", key, op.Name))
 		}
 	}
 	return out
+}
+
+// architectureCommitted reports whether slot 4 (core use cases) and slot 5 (system)
+// are both committed: the point from which the derived scenario set is the design's
+// whole call surface, so an op it does not reach is genuinely unreached.
+func architectureCommitted(p Project) bool {
+	_, ucs := p.slotByKind(kindCoreUseCases)
+	_, sys := p.slotByKind(kindSystem)
+	return ucs && sys
 }
 
 // reachedOps is the set of "<normalized component>.<op>" some stimulus drives.

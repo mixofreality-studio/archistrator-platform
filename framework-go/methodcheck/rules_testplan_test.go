@@ -279,22 +279,53 @@ func TestTP_State_OutputNeedsProbeOrUnobservable(t *testing.T) {
 	wantRules(t, runTP(t, p), ruleTPState, 0)
 }
 
-func TestTP_OpReached_DeadOp(t *testing.T) {
+// withOp appends a parameterless operation to one committed contract of p.
+func withOp(p Project, contract, op string) {
+	sc := p.ServiceContracts[contract]
+	sc.Interface.Operations = append(sc.Interface.Operations, ContractOperation{Name: op, Params: []ContractParam{}})
+	p.ServiceContracts[contract] = sc
+}
+
+// TP-OP-REACHED is the A5 ruling (every API has a use case) and is an Error: an op no
+// dynamic view calls blocks the project. The message names the contract, the op and
+// the fix.
+func TestTP_OpReached_DeadOpIsError(t *testing.T) {
 	p := loadProject(t, "tp_clean.json")
-	sc := p.ServiceContracts["billingManager"]
-	sc.Interface.Operations = append(sc.Interface.Operations, ContractOperation{Name: "Unreached", Params: []ContractParam{}})
-	p.ServiceContracts["billingManager"] = sc
+	withOp(p, "billingManager", "Unreached")
 	fs := runTP(t, p)
 	wantRules(t, fs, ruleTPOpReached, 1)
 	f := fs[0]
-	if f.Severity != SeverityWarning {
-		t.Fatalf("TP-OP-REACHED describes the design, not the binding: must be a Warning, got %s", severityLabel(f.Severity))
+	if f.Severity != SeverityError {
+		t.Fatalf("TP-OP-REACHED must be an Error (every API has a use case), got %s", severityLabel(f.Severity))
 	}
-	if !strings.Contains(f.Message, "billingManager.Unreached") || !strings.Contains(f.Message, "dead operation or missing use case") {
-		t.Fatalf("TP-OP-REACHED message: %s", f.Message)
+	for _, want := range []string{"billingManager", "Unreached", "add the op's call to a use case's dynamic view, or delete the op"} {
+		if !strings.Contains(f.Message, want) {
+			t.Fatalf("TP-OP-REACHED message must contain %q: %s", want, f.Message)
+		}
 	}
 	if f.Location == nil || f.Location.Section != "serviceContracts.billingManager" {
 		t.Fatalf("TP-OP-REACHED must locate the contract: %+v", f.Location)
+	}
+}
+
+// The same op, once a use case's dynamic view calls it, is reached: no finding.
+func TestTP_OpReached_CalledFromDynamicViewIsClean(t *testing.T) {
+	p := loadProject(t, "tp_clean.json")
+	p.PhaseArtifacts = nil // the plan is not under test; only the design is
+	withOp(p, "orderManager", "CancelOrder")
+	wantRules(t, runTP(t, p), ruleTPOpReached, 1)
+
+	setSlotModel(t, p, kindSystem, func(m map[string]any) {
+		views := m["dynamicViews"].([]any)
+		uc2 := views[1].(map[string]any)
+		steps := uc2["steps"].([]any)
+		ask := steps[0].(map[string]any)
+		ask["calls"] = append(ask["calls"].([]any), map[string]any{
+			"from": "customer", "to": "order-manager", "mode": "sync", "label": "CancelOrder", "alt": nil,
+		})
+	})
+	if fs := runTP(t, p); hasRuleFindings(fs, ruleTPOpReached) {
+		t.Fatalf("an op a dynamic view calls must be reached:\n%s", dumpFindings(fs))
 	}
 }
 
@@ -302,10 +333,60 @@ func TestTP_OpReached_DeadOp(t *testing.T) {
 func TestTP_OpReached_WithoutPlan(t *testing.T) {
 	p := loadProject(t, "tp_clean.json")
 	p.PhaseArtifacts = nil
-	sc := p.ServiceContracts["orderManager"]
-	sc.Interface.Operations = append(sc.Interface.Operations, ContractOperation{Name: "CancelOrder", Params: []ContractParam{}})
-	p.ServiceContracts["orderManager"] = sc
+	withOp(p, "orderManager", "CancelOrder")
 	wantRules(t, runTP(t, p), ruleTPOpReached, 1)
+}
+
+// Ordering edge: before slot 4 (core use cases) AND slot 5 (system) are both
+// committed there are no scenarios at all, so every contract would read as unreached.
+// A contract written before the architecture exists is not a defect: the rule is
+// silent until both slots are committed.
+func TestTP_OpReached_SilentBeforeArchitecture(t *testing.T) {
+	for _, kind := range []int{kindCoreUseCases, kindSystem} {
+		p := loadProject(t, "tp_clean.json")
+		p.PhaseArtifacts = nil
+		withOp(p, "orderManager", "CancelOrder")
+		uncommit(t, p, kind)
+		if fs := runTP(t, p); hasRuleFindings(fs, ruleTPOpReached) {
+			t.Fatalf("slot %d uncommitted: TP-OP-REACHED must not fire before the architecture exists:\n%s", kind, dumpFindings(fs))
+		}
+	}
+}
+
+// uncommit drops the committed slot of kind from p.
+func uncommit(t *testing.T, p Project, kind int) {
+	t.Helper()
+	for k, s := range p.Slots {
+		if s.Kind == kind {
+			s.Status = reviewCommitted - 1 // awaiting review
+			p.Slots[k] = s
+			return
+		}
+	}
+	t.Fatalf("fixture has no slot of kind %d", kind)
+}
+
+// setSlotModel rewrites the committed model of kind through a generic JSON edit.
+func setSlotModel(t *testing.T, p Project, kind int, edit func(map[string]any)) {
+	t.Helper()
+	for k, s := range p.Slots {
+		if s.Kind != kind {
+			continue
+		}
+		var m map[string]any
+		if err := json.Unmarshal(s.Model, &m); err != nil {
+			t.Fatalf("decode slot %d: %v", kind, err)
+		}
+		edit(m)
+		raw, err := json.Marshal(m)
+		if err != nil {
+			t.Fatalf("encode slot %d: %v", kind, err)
+		}
+		s.Model = raw
+		p.Slots[k] = s
+		return
+	}
+	t.Fatalf("fixture has no slot of kind %d", kind)
 }
 
 func TestTP_Skip_RequiresUnintegratedActivity(t *testing.T) {
