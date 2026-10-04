@@ -21,8 +21,14 @@ const (
 
 // TestMain runs the package through Main so the shared stack is flushed and
 // torn down once per process, exactly as a generated scenario test package
-// does.
-func TestMain(m *testing.M) { Main(m, probeComponent, probeFacet) }
+// does. Under registerHelperEnv it is instead a manager package's TestMain
+// whose replayWorkflows hook was never filled (replay_test.go).
+func TestMain(m *testing.M) {
+	if os.Getenv(registerHelperEnv) != "" {
+		MainWithWorkflows(m, Workflows{Register: func(Worker) { panic("FILL replayWorkflows") }}, probeComponent)
+	}
+	Main(m, probeComponent, probeFacet)
+}
 
 func TestStartIsSharedAndOutlivesItsFirstCaller(t *testing.T) {
 	var first *Host

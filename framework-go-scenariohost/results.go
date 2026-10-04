@@ -1,7 +1,9 @@
 package scenariohost
 
 import (
+	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -16,6 +18,10 @@ import (
 // under ResultsDir(component). Its shape is the TestRun contract: the renderer
 // on the testing task reads nothing else.
 const resultsFile = "results.json"
+
+// replayTimeout bounds one flush's replay pass (listing, fetching and
+// replaying every new history).
+const replayTimeout = 2 * time.Minute
 
 // Status values a ScenarioResult may carry.
 const (
@@ -50,6 +56,11 @@ type Results struct {
 	mu       sync.Mutex
 	entries  map[resultKey]ScenarioResult
 	declared map[string]bool // components that get an index even with no verdict
+	windows  map[resultKey]window
+	// replayFailed holds the replay gate's failures per scenario (replay.go):
+	// they override the recorded verdict at every flush, so a re-run that
+	// passes cannot wash a non-deterministic history out.
+	replayFailed map[resultKey][]string
 }
 
 // Record stores r under (component, r.Scenario), replacing an earlier verdict
@@ -61,6 +72,40 @@ func (h *Host) Record(component string, r ScenarioResult) {
 		h.entries = map[resultKey]ScenarioResult{}
 	}
 	h.entries[resultKey{component, r.Scenario}] = r
+}
+
+// ran records the wall-clock window (component, scenario) last ran in; the
+// replay gate attributes a workflow execution to the scenario whose window
+// holds its start.
+func (h *Host) ran(component, scenario string, w window) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.windows == nil {
+		h.windows = map[resultKey]window{}
+	}
+	h.windows[resultKey{component, scenario}] = w
+}
+
+// scenarioAt is the scenario whose run window holds t.
+func (h *Host) scenarioAt(t time.Time) (resultKey, bool) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	for k, w := range h.windows {
+		if !t.Before(w.start) && !t.After(w.end) {
+			return k, true
+		}
+	}
+	return resultKey{}, false
+}
+
+// failReplay marks (component, scenario) failed by the replay gate with msg.
+func (h *Host) failReplay(k resultKey, msg string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.replayFailed == nil {
+		h.replayFailed = map[resultKey][]string{}
+	}
+	h.replayFailed[k] = append(h.replayFailed[k], msg)
 }
 
 // declare names components whose index Flush writes even when none of their
@@ -84,26 +129,25 @@ func (h *Host) ResultsDir(component string) string {
 	return filepath.Join(h.ResultsRoot, component)
 }
 
-// Flush writes ResultsDir(c)/results.json for every declared or recorded
-// component c: that component's verdicts, sorted by scenario id, as an
-// indented JSON array ("[]" for a declared component that recorded nothing).
-// A verdict recorded without a component fails the flush before anything is
-// written: it belongs to no index.
+// Flush first runs the replay gate (replay.go) when the host has one, then
+// writes ResultsDir(c)/results.json for every declared or recorded component
+// c: that component's verdicts, sorted by scenario id, as an indented JSON
+// array ("[]" for a declared component that recorded nothing). A scenario the
+// replay gate failed is written as a fail whose Stderr names each history
+// that did not replay. A verdict recorded without a component fails the flush
+// before anything is written: it belongs to no index. The error joins the
+// replay failures this flush found (each is reported by one flush only) with
+// any write failure.
 func (h *Host) Flush() error {
-	h.mu.Lock()
-	byComponent := map[string][]ScenarioResult{}
-	for c := range h.declared {
-		byComponent[c] = []ScenarioResult{}
-	}
-	var orphan []string
-	for k, r := range h.entries {
-		if k.component == "" {
-			orphan = append(orphan, k.scenario)
-			continue
-		}
-		byComponent[k.component] = append(byComponent[k.component], r)
-	}
-	h.mu.Unlock()
+	ctx, cancel := context.WithTimeout(context.Background(), replayTimeout)
+	defer cancel()
+	replayErr := h.replayHistories(ctx)
+	return errors.Join(replayErr, h.writeIndexes())
+}
+
+// writeIndexes writes every component's results.json (Flush).
+func (h *Host) writeIndexes() error {
+	byComponent, orphan := h.verdictsByComponent()
 	if len(orphan) > 0 {
 		sort.Strings(orphan)
 		return fmt.Errorf("scenariohost: verdicts recorded with no component: %s", strings.Join(orphan, ", "))
@@ -120,6 +164,37 @@ func (h *Host) Flush() error {
 		}
 	}
 	return nil
+}
+
+// verdictsByComponent groups the verdicts by component — every declared
+// component present, a replay-failed scenario turned into a fail carrying
+// the replay findings — and names the scenarios recorded with no component.
+func (h *Host) verdictsByComponent() (byComponent map[string][]ScenarioResult, orphan []string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	byComponent = map[string][]ScenarioResult{}
+	for c := range h.declared {
+		byComponent[c] = []ScenarioResult{}
+	}
+	for k, r := range h.entries {
+		if k.component == "" {
+			orphan = append(orphan, k.scenario)
+			continue
+		}
+		if msgs := h.replayFailed[k]; len(msgs) > 0 {
+			r.Status = StatusFail
+			r.Stderr = strings.Join(append(nonEmpty(r.Stderr), msgs...), "\n")
+		}
+		byComponent[k.component] = append(byComponent[k.component], r)
+	}
+	return byComponent, orphan
+}
+
+func nonEmpty(s string) []string {
+	if s == "" {
+		return nil
+	}
+	return []string{s}
 }
 
 // writeIndex writes one component's verdicts, sorted by scenario id.
@@ -146,12 +221,15 @@ func (h *Host) writeIndex(component string, out []ScenarioResult) error {
 // component fails the next Flush):
 // pass, fail or skip (a skip after a failure stays a fail, as in `go test`),
 // plus the wall-clock duration. A panic inside fn is recorded as a fail and
-// re-raised so the testing package reports it as usual.
+// re-raised so the testing package reports it as usual. The run's window is
+// kept too: the replay gate attributes every workflow execution started in it
+// to this scenario.
 //
 // The sub-test's own log (t.Log, the failure message) is NOT captured here:
 // the testing package offers no in-process hook on a test's log stream, so
-// Stdout / Stderr stay empty and the venue's raw `go test -json` stream, which
-// is uploaded next to results.json, carries that text.
+// Stdout / Stderr stay empty (but for the replay gate's findings) and the
+// venue's raw `go test -json` stream, which is uploaded next to results.json,
+// carries that text.
 func (h *Host) RunScenario(t *testing.T, component, id string, fn func(t *testing.T)) {
 	t.Helper()
 	t.Run(id, func(t *testing.T) {
@@ -168,6 +246,7 @@ func (h *Host) RunScenario(t *testing.T, component, id string, fn func(t *testin
 				r.Status = StatusPass
 			}
 			h.Record(component, r)
+			h.ran(component, id, window{start: start, end: time.Now()})
 			if panicked != nil {
 				panic(panicked)
 			}

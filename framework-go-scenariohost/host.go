@@ -5,7 +5,10 @@
 // into test-results/<component>/results.json, the TestRun contract the testing
 // task renders. Verdicts are keyed by (component, scenario): several
 // components (facets) may share one Go package and so one test process, and
-// each still gets its own index.
+// each still gets its own index. A manager package's scenarios are also
+// gated by workflow replay (MainWithWorkflows, replay.go): every workflow
+// history a scenario started is replayed against the package's current
+// workflow code, and a non-determinism error fails the scenario.
 //
 // It is its own module, not a framework-go package, because every infra module
 // it boots imports framework-go. TEST-ONLY: nothing here is imported by
@@ -33,6 +36,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/storer"
 	"github.com/testcontainers/testcontainers-go"
 	"github.com/testcontainers/testcontainers-go/modules/postgres"
+	"go.temporal.io/sdk/client"
 
 	ghtestinfra "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github/testinfra"
 	fwpg "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres"
@@ -61,6 +65,15 @@ type Host struct {
 
 	Results
 
+	// temporal is the dev server's client (namespace TemporalNamespace);
+	// booted is when the dev server came up — the replay gate lists only
+	// executions started since, the persistent dev-server DB holding every
+	// earlier run's too. replay is the manager package's replay gate
+	// (MainWithWorkflows), nil for every other package.
+	temporal client.Client
+	booted   time.Time
+	replay   *replayGate
+
 	// stops tears the doubles down, in boot order; Main runs them reversed.
 	stops []func()
 }
@@ -69,6 +82,9 @@ var (
 	once     sync.Once
 	shared   *Host
 	startErr error
+	// packageGate is the replay gate MainWithWorkflows built before m.Run;
+	// boot hands it to the shared host.
+	packageGate *replayGate
 )
 
 // Start boots every downstream double once per package (sync.Once) and
@@ -96,10 +112,37 @@ func Start(t *testing.T) *Host {
 // exits with m.Run's code. components lists every contract whose generated
 // scenarios live in the package — one, or several facets sharing it.
 func Main(m *testing.M, components ...string) {
+	requireComponents(components)
+	os.Exit(run(m, components))
+}
+
+// MainWithWorkflows is the body of a generated manager package's TestMain:
+// Main, gated by workflow replay (replay.go). wf registers the workflows the
+// package's workers run; every Flush replays each history a scenario started
+// against them, and a replay error fails that scenario. A registration that
+// panics or registers nothing exits 2 before any test runs.
+func MainWithWorkflows(m *testing.M, wf Workflows, components ...string) {
+	requireComponents(components)
+	gate, err := newReplayGate(wf)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "%v\n", err)
+		os.Exit(2)
+	}
+	packageGate = gate
+	os.Exit(run(m, components))
+}
+
+// requireComponents exits 2 unless components is non-empty and names no "".
+func requireComponents(components []string) {
 	if len(components) == 0 || slices.Contains(components, "") {
 		fmt.Fprintf(os.Stderr, "scenariohost: Main needs the package's non-empty component names, got %q\n", components)
 		os.Exit(2)
 	}
+}
+
+// run runs the tests, flushes every component's index and tears the stack
+// down, returning the process exit code.
+func run(m *testing.M, components []string) int {
 	code := m.Run()
 	h := shared
 	if h == nil {
@@ -115,7 +158,7 @@ func Main(m *testing.M, components ...string) {
 	for i := len(h.stops) - 1; i >= 0; i-- {
 		h.stops[i]()
 	}
-	os.Exit(code)
+	return code
 }
 
 // Context returns the context a scenario step calls the component with: the
@@ -149,6 +192,9 @@ func boot(ctx context.Context) (*Host, error) {
 	}
 	h.stops = append(h.stops, func() { _ = dev.Stop() })
 	h.TemporalHostPort = dev.FrontendHostPort()
+	h.temporal = dev.Client()
+	h.booted = time.Now()
+	h.replay = packageGate
 
 	if !testing.Short() {
 		url, stop, pgErr := startPostgres(ctx)
