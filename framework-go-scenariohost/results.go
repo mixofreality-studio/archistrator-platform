@@ -6,14 +6,15 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 	"sync"
 	"testing"
 	"time"
 )
 
 // resultsFile is the index every scenario run leaves behind, one per component
-// under ResultsDir. Its shape is the TestRun contract: the renderer on the
-// testing task reads nothing else.
+// under ResultsDir(component). Its shape is the TestRun contract: the renderer
+// on the testing task reads nothing else.
 const resultsFile = "results.json"
 
 // Status values a ScenarioResult may carry.
@@ -37,52 +38,112 @@ type ScenarioResult struct {
 	TraceRef   string `json:"traceRef,omitempty"`
 }
 
-// Results collects per-scenario verdicts and writes results.json on flush. It
-// is embedded in Host so a Host records and flushes directly; a zero value is
-// ready to use.
+// resultKey is what a verdict is stored under. Several components (facets)
+// can share one Go package — one test process — and bind the SAME scenario id,
+// so the scenario id alone would let one facet's verdict overwrite another's.
+type resultKey struct{ component, scenario string }
+
+// Results collects per-(component, scenario) verdicts and writes one
+// results.json per component on flush. It is embedded in Host so a Host
+// records and flushes directly; a zero value is ready to use.
 type Results struct {
-	mu      sync.Mutex
-	entries map[string]ScenarioResult
+	mu       sync.Mutex
+	entries  map[resultKey]ScenarioResult
+	declared map[string]bool // components that get an index even with no verdict
 }
 
-// Record stores r under its scenario id, replacing an earlier verdict for the
-// same scenario (a re-run supersedes, it does not duplicate).
-func (h *Host) Record(r ScenarioResult) {
+// Record stores r under (component, r.Scenario), replacing an earlier verdict
+// for the same pair (a re-run supersedes, it does not duplicate).
+func (h *Host) Record(component string, r ScenarioResult) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	if h.entries == nil {
-		h.entries = map[string]ScenarioResult{}
+		h.entries = map[resultKey]ScenarioResult{}
 	}
-	h.entries[r.Scenario] = r
+	h.entries[resultKey{component, r.Scenario}] = r
 }
 
-// Flush writes ResultsDir/results.json: every recorded verdict, sorted by
-// scenario id, as an indented JSON array ("[]" when nothing was recorded, so a
-// package with zero bound scenarios still leaves an index behind).
+// declare names components whose index Flush writes even when none of their
+// scenarios recorded a verdict, so a component with zero bound scenarios still
+// leaves an index behind.
+func (h *Host) declare(components ...string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	if h.declared == nil {
+		h.declared = map[string]bool{}
+	}
+	for _, c := range components {
+		h.declared[c] = true
+	}
+}
+
+// ResultsDir is component's results directory, ResultsRoot/<component>/: the
+// one tree its results.json (and, for a UI client, its videos and traces)
+// lands in.
+func (h *Host) ResultsDir(component string) string {
+	return filepath.Join(h.ResultsRoot, component)
+}
+
+// Flush writes ResultsDir(c)/results.json for every declared or recorded
+// component c: that component's verdicts, sorted by scenario id, as an
+// indented JSON array ("[]" for a declared component that recorded nothing).
+// A verdict recorded without a component fails the flush before anything is
+// written: it belongs to no index.
 func (h *Host) Flush() error {
 	h.mu.Lock()
-	out := make([]ScenarioResult, 0, len(h.entries))
-	for _, r := range h.entries {
-		out = append(out, r)
+	byComponent := map[string][]ScenarioResult{}
+	for c := range h.declared {
+		byComponent[c] = []ScenarioResult{}
+	}
+	var orphan []string
+	for k, r := range h.entries {
+		if k.component == "" {
+			orphan = append(orphan, k.scenario)
+			continue
+		}
+		byComponent[k.component] = append(byComponent[k.component], r)
 	}
 	h.mu.Unlock()
-	sort.Slice(out, func(i, j int) bool { return out[i].Scenario < out[j].Scenario })
+	if len(orphan) > 0 {
+		sort.Strings(orphan)
+		return fmt.Errorf("scenariohost: verdicts recorded with no component: %s", strings.Join(orphan, ", "))
+	}
 
+	components := make([]string, 0, len(byComponent))
+	for c := range byComponent {
+		components = append(components, c)
+	}
+	sort.Strings(components)
+	for _, c := range components {
+		if err := h.writeIndex(c, byComponent[c]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// writeIndex writes one component's verdicts, sorted by scenario id.
+func (h *Host) writeIndex(component string, out []ScenarioResult) error {
+	sort.Slice(out, func(i, j int) bool { return out[i].Scenario < out[j].Scenario })
 	raw, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
-		return fmt.Errorf("scenariohost: encode results: %w", err)
+		return fmt.Errorf("scenariohost: encode %s results: %w", component, err)
 	}
-	if err := os.MkdirAll(h.ResultsDir, 0o750); err != nil {
-		return fmt.Errorf("scenariohost: mkdir %s: %w", h.ResultsDir, err)
+	dir := h.ResultsDir(component)
+	if err := os.MkdirAll(dir, 0o750); err != nil {
+		return fmt.Errorf("scenariohost: mkdir %s: %w", dir, err)
 	}
-	path := filepath.Join(h.ResultsDir, resultsFile)
+	path := filepath.Join(dir, resultsFile)
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		return fmt.Errorf("scenariohost: write %s: %w", path, err)
 	}
 	return nil
 }
 
-// RunScenario runs fn as the sub-test named id and records its verdict:
+// RunScenario runs fn as the sub-test named id and records its verdict under
+// (component, id) — component is the contract the scenario was projected for,
+// one of the package's facets when several share it (a verdict with no
+// component fails the next Flush):
 // pass, fail or skip (a skip after a failure stays a fail, as in `go test`),
 // plus the wall-clock duration. A panic inside fn is recorded as a fail and
 // re-raised so the testing package reports it as usual.
@@ -91,7 +152,7 @@ func (h *Host) Flush() error {
 // the testing package offers no in-process hook on a test's log stream, so
 // Stdout / Stderr stay empty and the venue's raw `go test -json` stream, which
 // is uploaded next to results.json, carries that text.
-func (h *Host) RunScenario(t *testing.T, id string, fn func(t *testing.T)) {
+func (h *Host) RunScenario(t *testing.T, component, id string, fn func(t *testing.T)) {
 	t.Helper()
 	t.Run(id, func(t *testing.T) {
 		start := time.Now()
@@ -106,7 +167,7 @@ func (h *Host) RunScenario(t *testing.T, id string, fn func(t *testing.T)) {
 			default:
 				r.Status = StatusPass
 			}
-			h.Record(r)
+			h.Record(component, r)
 			if panicked != nil {
 				panic(panicked)
 			}

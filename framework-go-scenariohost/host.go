@@ -3,7 +3,9 @@
 // testcontainer (outside -short), the GitHub REST and Actions fakes and a real
 // bare git repo — ONCE per test process, and collects every scenario's verdict
 // into test-results/<component>/results.json, the TestRun contract the testing
-// task renders.
+// task renders. Verdicts are keyed by (component, scenario): several
+// components (facets) may share one Go package and so one test process, and
+// each still gets its own index.
 //
 // It is its own module, not a framework-go package, because every infra module
 // it boots imports framework-go. TEST-ONLY: nothing here is imported by
@@ -20,6 +22,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"sync"
 	"testing"
 	"time"
@@ -46,7 +49,7 @@ const postgresImage = "postgres:16-alpine"
 const resultsRoot = "test-results"
 
 // Host is the shared downstream stack a package of scenario tests runs
-// against, plus the results collector for that package's component.
+// against, plus the results collector for every component the package tests.
 type Host struct {
 	TemporalHostPort  string
 	TemporalNamespace string
@@ -54,7 +57,7 @@ type Host struct {
 	GitHub            *ghtestinfra.FakeGitHub
 	Actions           *ghtestinfra.FakeActions
 	Repo              ghtestinfra.LocalGitRepo
-	ResultsDir        string // test-results/<component>/
+	ResultsRoot       string // <module root>/test-results; ResultsDir(c) is ResultsRoot/<c>
 
 	Results
 
@@ -70,11 +73,12 @@ var (
 
 // Start boots every downstream double once per package (sync.Once) and
 // registers t.Cleanup so the verdicts recorded so far are flushed when t ends.
-// Every test in the package receives the same *Host; a boot failure fails
-// every caller, not just the first.
-func Start(t *testing.T, component string) *Host {
+// Every test in the package receives the same *Host — whichever component it
+// tests; the component travels with each verdict (RunScenario). A boot
+// failure fails every caller, not just the first.
+func Start(t *testing.T) *Host {
 	t.Helper()
-	once.Do(func() { shared, startErr = boot(context.Background(), component) })
+	once.Do(func() { shared, startErr = boot(context.Background()) })
 	if startErr != nil {
 		t.Fatalf("scenariohost: %v", startErr)
 	}
@@ -87,14 +91,21 @@ func Start(t *testing.T, component string) *Host {
 }
 
 // Main is the body of a generated TestMain: it runs the package's tests, writes
-// results.json for component (an empty index when no scenario called Start)
-// and tears the shared stack down, then exits with m.Run's code.
-func Main(m *testing.M, component string) {
+// one results.json per component the package tests (an empty index for a
+// component none of whose scenarios ran) and tears the shared stack down, then
+// exits with m.Run's code. components lists every contract whose generated
+// scenarios live in the package — one, or several facets sharing it.
+func Main(m *testing.M, components ...string) {
+	if len(components) == 0 || slices.Contains(components, "") {
+		fmt.Fprintf(os.Stderr, "scenariohost: Main needs the package's non-empty component names, got %q\n", components)
+		os.Exit(2)
+	}
 	code := m.Run()
 	h := shared
 	if h == nil {
-		h = newHost(component)
+		h = newHost()
 	}
+	h.declare(components...)
 	if err := h.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "scenariohost: %v\n", err)
 		if code == 0 {
@@ -114,18 +125,17 @@ func (h *Host) Context(t *testing.T) context.Context {
 	return t.Context()
 }
 
-func newHost(component string) *Host {
+func newHost() *Host {
 	return &Host{
-		ResultsDir:        filepath.Join(moduleRoot(), resultsRoot, component),
+		ResultsRoot:       filepath.Join(moduleRoot(), resultsRoot),
 		TemporalNamespace: temporalinfra.TemporalNamespace,
-		Results:           Results{entries: map[string]ScenarioResult{}},
 	}
 }
 
 // boot starts the doubles in dependency-free order; on any failure the ones
 // already up are stopped and the error names the one that did not come up.
-func boot(ctx context.Context, component string) (*Host, error) {
-	h := newHost(component)
+func boot(ctx context.Context) (*Host, error) {
+	h := newHost()
 	fail := func(err error) (*Host, error) {
 		for i := len(h.stops) - 1; i >= 0; i-- {
 			h.stops[i]()
@@ -161,8 +171,8 @@ func boot(ctx context.Context, component string) (*Host, error) {
 	h.stops = append(h.stops, stop)
 	h.Repo = repo
 
-	if mkErr := os.MkdirAll(h.ResultsDir, 0o750); mkErr != nil {
-		return fail(fmt.Errorf("mkdir %s: %w", h.ResultsDir, mkErr))
+	if mkErr := os.MkdirAll(h.ResultsRoot, 0o750); mkErr != nil {
+		return fail(fmt.Errorf("mkdir %s: %w", h.ResultsRoot, mkErr))
 	}
 	return h, nil
 }

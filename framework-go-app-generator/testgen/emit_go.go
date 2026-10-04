@@ -252,8 +252,10 @@ func (g *goEmit) emitScenario(plan componentPlan, bs boundScenario) {
 	name := g.testName(plan, bs.Scenario.ID)
 	fmt.Fprintf(&g.body, "// %s — %s (use case %s; path %s).\n", name, bs.Scenario.Title, bs.Scenario.UseCase, strings.Join(bs.Scenario.Path, " → "))
 	fmt.Fprintf(&g.body, "func %s(t *testing.T) {\n", name)
-	fmt.Fprintf(&g.body, "\th := scenariohost.Start(t, %q)\n", plan.Key)
-	fmt.Fprintf(&g.body, "\th.RunScenario(t, %q, func(t *testing.T) {\n", bs.Scenario.ID)
+	g.body.WriteString("\th := scenariohost.Start(t)\n")
+	// The verdict is keyed by (component, scenario): facets sharing this
+	// package can bind the same scenario id, each into its own results.json.
+	fmt.Fprintf(&g.body, "\th.RunScenario(t, %q, %q, func(t *testing.T) {\n", plan.Key, bs.Scenario.ID)
 	switch {
 	case bs.Binding.Skip != nil:
 		fmt.Fprintf(&g.body, "\t\tt.Skip(%q)\n", bs.Binding.Skip.Reason+" (until "+bs.Binding.Skip.Until+")")
@@ -429,7 +431,13 @@ func (g *goEmit) generatedFile(plans []componentPlan) ([]byte, error) {
 	}
 	fmt.Fprintf(&b, "\npackage %s_test\n\n", g.pkg)
 	g.writeImports(&b, g.generatedImports())
-	fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %q) }\n\n", plans[0].Key)
+	// Main names every component whose scenarios live here, so each gets its
+	// own results.json (an empty one when none of its scenarios ran).
+	comps := make([]string, 0, len(plans))
+	for _, plan := range plans {
+		comps = append(comps, strconv.Quote(plan.Key))
+	}
+	fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %s) }\n\n", strings.Join(comps, ", "))
 	b.Write(g.body.Bytes())
 	if g.subject {
 		g.writeHelpers(&b)

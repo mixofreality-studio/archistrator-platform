@@ -53,10 +53,10 @@ func TestGenerate_GoScenarioFileShape(t *testing.T) {
 		"package billing_test",
 		"func TestMain(m *testing.M)",
 		"scenariohost.Main(m, \"billingManager\")",
-		"scenariohost.Start(",
+		"h := scenariohost.Start(t)\n",
 		"func TestScenario_process_order_P2(",
 		"func TestScenario_track_order_P1(",
-		"h.RunScenario(t, \"process-order-P2\"",
+		"h.RunScenario(t, \"billingManager\", \"process-order-P2\"",
 		"stepProcessOrderP2S1(t, h, subject, in1)",                    // hook call for Hook:true steps
 		"subject.GetInvoice(callContext(t, h, \"1\"), in1.InvoiceId)", // direct call for Hook:false steps
 		"\"example.com/app/server/internal/manager/billing\"",

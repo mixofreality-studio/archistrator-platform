@@ -12,23 +12,28 @@ import (
 	fwpg "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres"
 )
 
-const probeComponent = "scenariohost-probe"
+// probeComponent and probeFacet are two components sharing this one test
+// package, as facets of one Go package do in a generated scenario test file.
+const (
+	probeComponent = "scenariohost-probe"
+	probeFacet     = "scenariohost-probe-facet"
+)
 
 // TestMain runs the package through Main so the shared stack is flushed and
 // torn down once per process, exactly as a generated scenario test package
 // does.
-func TestMain(m *testing.M) { Main(m, probeComponent) }
+func TestMain(m *testing.M) { Main(m, probeComponent, probeFacet) }
 
 func TestStartIsSharedAndOutlivesItsFirstCaller(t *testing.T) {
 	var first *Host
 	t.Run("first-caller", func(t *testing.T) {
-		first = Start(t, probeComponent)
+		first = Start(t)
 		if first == nil {
 			t.Fatal("Start returned nil")
 		}
 	})
 	// The first caller's cleanups have run; the stack must still be up.
-	second := Start(t, probeComponent)
+	second := Start(t)
 	if second != first {
 		t.Fatalf("Start must hand back ONE shared host per package: %p vs %p", first, second)
 	}
@@ -52,9 +57,11 @@ func TestStartIsSharedAndOutlivesItsFirstCaller(t *testing.T) {
 		t.Errorf("the bare repo died with its first caller: %v", err)
 	}
 	assertRealGitRepoWithTip(t, first.Repo.URL, "main")
-	wantDir := filepath.Join("test-results", probeComponent)
-	if !strings.HasSuffix(first.ResultsDir, wantDir) || !filepath.IsAbs(first.ResultsDir) {
-		t.Errorf("ResultsDir = %q, want an absolute path ending in %q", first.ResultsDir, wantDir)
+	if filepath.Base(first.ResultsRoot) != "test-results" || !filepath.IsAbs(first.ResultsRoot) {
+		t.Errorf("ResultsRoot = %q, want an absolute path ending in test-results", first.ResultsRoot)
+	}
+	if got, want := first.ResultsDir(probeComponent), filepath.Join(first.ResultsRoot, probeComponent); got != want {
+		t.Errorf("ResultsDir(%q) = %q, want %q", probeComponent, got, want)
 	}
 	if testing.Short() {
 		if first.PostgresURL != "" {
@@ -101,15 +108,19 @@ func assertRealGitRepoWithTip(t *testing.T, url, branch string) {
 
 func TestStartFlushesResultsOnCleanup(t *testing.T) {
 	t.Run("scenario-holder", func(t *testing.T) {
-		h := Start(t, probeComponent)
-		h.RunScenario(t, "probe-P1", func(t *testing.T) {})
+		h := Start(t)
+		h.RunScenario(t, probeComponent, "probe-P1", func(t *testing.T) {})
+		h.RunScenario(t, probeFacet, "probe-P1", func(t *testing.T) {})
 	})
-	// The holder's t.Cleanup has flushed: results.json carries the verdict.
-	raw, err := os.ReadFile(filepath.Join(shared.ResultsDir, resultsFile))
-	if err != nil {
-		t.Fatal(err)
-	}
-	if !strings.Contains(string(raw), `"scenario": "probe-P1"`) || !strings.Contains(string(raw), `"status": "pass"`) {
-		t.Fatalf("%s", raw)
+	// The holder's t.Cleanup has flushed: each component's results.json
+	// carries its own verdict for the scenario id both share.
+	for _, component := range []string{probeComponent, probeFacet} {
+		raw, err := os.ReadFile(filepath.Join(shared.ResultsDir(component), resultsFile))
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !strings.Contains(string(raw), `"scenario": "probe-P1"`) || !strings.Contains(string(raw), `"status": "pass"`) {
+			t.Fatalf("%s: %s", component, raw)
+		}
 	}
 }

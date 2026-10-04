@@ -155,6 +155,24 @@ func TestGenerate_SharedPackageInfixesTheInterface(t *testing.T) {
 	}
 }
 
+// TestGenerate_SharedPackageKeysResultsByComponent: facets sharing one Go
+// package run in one test process, so the generated file declares every one
+// of them to scenariohost.Main and records each verdict under its own
+// component — the same scenario id bound by two contracts lands in two
+// results.json files instead of one overwriting the other.
+func TestGenerate_SharedPackageKeysResultsByComponent(t *testing.T) {
+	src := string(generateShared(t).Generated[billingGen])
+	for _, want := range []string{
+		"func TestMain(m *testing.M) { scenariohost.Main(m, \"billingManager\", \"orderManager\") }",
+		"h.RunScenario(t, \"billingManager\", \"process-order-P2\", func(t *testing.T) {",
+		"h.RunScenario(t, \"orderManager\", \"process-order-P2\", func(t *testing.T) {",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("shared generated file lacks %q:\n%s", want, src)
+		}
+	}
+}
+
 // TestDrift_AgentHelperIsNotAHook: a helper the agent adds to its hooks file
 // is not spelled like a hook, so the drift check leaves it alone.
 func TestDrift_AgentHelperIsNotAHook(t *testing.T) {
