@@ -41,7 +41,14 @@ the network), ch12 (quality multiplication), ch13 (TradeMe staffing), ch14
 > server, Postgres testcontainer, the in-process `FakeGitHub` + `LocalGitRepo`
 > for GitHub, …); **Playwright** flows for
 > any SPA/UI surface (browser-driven, hence inherently out-of-process even
-> though TS). Hand-written and white-box tests in component packages are
+> though TS). A Client is a contract with ops, and its ops say how it is
+> driven: a **web** client has one op per user action, each taking the one
+> param `action` = `{kind, target data-testid, value?}` (Playwright); an
+> **MCP** client has one op per generated MCP tool (op = the tool's Go method
+> name, tool = its lower-camel form, params = the tool's input properties), and
+> its Go scenario test calls those tools on an in-process MCP server, served by
+> the generated tools handlers the hooks bind to real managers. Hand-written
+> and white-box tests in component packages are
 > removed before merge and the `scenario-tests-only` gate rejects them (§7 R1).
 
 ## 2. When tests are written — test-PLAN-first, NOT TDD

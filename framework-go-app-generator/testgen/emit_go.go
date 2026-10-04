@@ -56,11 +56,7 @@ type goEmit struct {
 
 // emitGo emits one Go package's generated scenarios file and, when any
 // binding is runnable, its once-emitted hooks file.
-func emitGo(out *Output, cfg Config, goPkg string, plans []componentPlan) error {
-	stereotype, err := sharedStereotype(goPkg, plans)
-	if err != nil {
-		return err
-	}
+func emitGo(out *Output, cfg Config, goPkg, stereotype string, plans []componentPlan) error {
 	layer, ok := layerPkgs[layerKey(plans[0].Contract)]
 	if !ok {
 		return fmt.Errorf("testgen: %s: layer %q has no framework call context", goPkg, plans[0].Contract.Layer)
@@ -527,13 +523,16 @@ func (g *goEmit) writeHelpers(b *bytes.Buffer) {
 	if g.layer.idempotent {
 		key = ", IdempotencyKey: " + a + ".IdempotencyKey(t.Name() + \"/\" + step)"
 	}
-	fmt.Fprintf(b, goHelpers, a, key, "`")
+	fmt.Fprintf(b, callContextHelper, a, key)
+	fmt.Fprintf(b, expectHelpers, "`")
+	fmt.Fprintf(b, layerErrorHasCode, a)
+	b.WriteString(matchHelpers)
 }
 
-// goHelpers is the helper block's template: %[1]s is the layer package alias,
-// %[2]s the extra Context fields an idempotent layer's call context carries,
-// %[3]s a backtick (the struct tags; a raw literal cannot hold one).
-const goHelpers = `// callContext is the %[1]s call context a generated step calls the subject with:
+// callContextHelper is the layer call context template: %[1]s is the layer
+// package alias, %[2]s the extra Context fields an idempotent layer's call
+// context carries.
+const callContextHelper = `// callContext is the %[1]s call context a generated step calls the subject with:
 // the test's own context, a zero principal and, on an idempotent layer, a key
 // unique to the step. A step that needs an identity is a Hook:true step.
 func callContext(t *testing.T, h *scenariohost.Host, step string) %[1]s.Context {
@@ -542,7 +541,12 @@ func callContext(t *testing.T, h *scenariohost.Host, step string) %[1]s.Context 
 	return %[1]s.Context{Context: h.Context(t)%[2]s}
 }
 
-func mustUnmarshal(t *testing.T, raw string, into any) {
+`
+
+// expectHelpers is the decode-and-assert block every generated Go file
+// carries, whatever its subject: %[1]s is a backtick (the struct tags; a raw
+// literal cannot hold one). It calls errorHasCode, which each dialect spells.
+const expectHelpers = `func mustUnmarshal(t *testing.T, raw string, into any) {
 	t.Helper()
 	if err := json.Unmarshal([]byte(raw), into); err != nil {
 		t.Fatalf("testgen: decode %%s: %%v", raw, err)
@@ -556,9 +560,9 @@ func mustUnmarshal(t *testing.T, raw string, into any) {
 func expect(t *testing.T, scenario string, seq int, out any, err error, expectJSON string) {
 	t.Helper()
 	var want struct {
-		Result        string %[3]sjson:"result"%[3]s
-		ErrorExpected bool   %[3]sjson:"errorExpected"%[3]s
-		ErrorCode     string %[3]sjson:"errorCode"%[3]s
+		Result        string %[1]sjson:"result"%[1]s
+		ErrorExpected bool   %[1]sjson:"errorExpected"%[1]s
+		ErrorCode     string %[1]sjson:"errorCode"%[1]s
 	}
 	mustUnmarshal(t, expectJSON, &want)
 	if want.ErrorExpected {
@@ -579,7 +583,11 @@ func expect(t *testing.T, scenario string, seq int, out any, err error, expectJS
 	}
 }
 
-// errorHasCode matches the layer error's kind name, or the code as a substring
+`
+
+// layerErrorHasCode is a layer component's code match: %[1]s is the layer
+// package alias whose typed Error carries the kind.
+const layerErrorHasCode = `// errorHasCode matches the layer error's kind name, or the code as a substring
 // of the error text for a component-specific code.
 func errorHasCode(err error, code string) bool {
 	var le *%[1]s.Error
@@ -589,7 +597,10 @@ func errorHasCode(err error, code string) bool {
 	return strings.Contains(err.Error(), code)
 }
 
-// resultMatches decodes the expectation (a JSON document, or a bare string)
+`
+
+// matchHelpers is the JSON-subset comparison expect uses; no format verbs.
+const matchHelpers = `// resultMatches decodes the expectation (a JSON document, or a bare string)
 // and the marshalled outcome, and compares them as a subset.
 func resultMatches(wantRaw string, got any) bool {
 	var want any

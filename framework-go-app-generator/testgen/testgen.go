@@ -15,10 +15,14 @@
 // step, one probe hook per probe on another component, and — in a manager
 // package — replayWorkflows, which the generated TestMain hands the scenario
 // host (scenariohost.MainWithWorkflows) so every workflow history a scenario
-// starts is replayed against the current workflow code (§12 B4). A client contract (layer
-// "client") gets, per component, one Playwright spec per binding under
-// <UITestsDir>/<component>/, the generated Playwright config + results
-// reporter, and a once-emitted hooks.ts.
+// starts is replayed against the current workflow code (§12 B4). A client
+// contract (layer "client") is driven in its dialect (§12 B1, emit_mcp.go): a
+// WEB client — ops taking the one `action` param — gets, per component, one
+// Playwright spec per binding under <UITestsDir>/<component>/, the generated
+// Playwright config + results reporter, and a once-emitted hooks.ts; an MCP
+// client — one op per generated MCP tool — gets the Go pair in its goPackage,
+// whose scenarios call the tools on an in-process MCP server over an
+// in-memory transport.
 //
 // Grouping is by goPackage, not by contract: several contracts can share one
 // Go package, and one generated file unions every contract's bindings. A
@@ -123,16 +127,17 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 		return out, err
 	}
 	for _, goPkg := range sortedKeys(byPackage) {
-		if err := emitGo(&out, cfg, goPkg, byPackage[goPkg]); err != nil {
+		if err := emitPackage(&out, cfg, goPkg, byPackage[goPkg]); err != nil {
 			return out, err
 		}
 	}
 	return out, nil
 }
 
-// routePlans builds every component's plan and routes it: clients are emitted
-// as Playwright on the spot, Go contracts are grouped by goPackage for emitGo,
-// and a non-client contract without a goPackage is warned about.
+// routePlans builds every component's plan and routes it by surface (§12 B1):
+// a web client is emitted as Playwright on the spot; an MCP client and every
+// layer contract are grouped by goPackage for emitPackage; a Go-hosted
+// contract without a goPackage is warned about.
 func routePlans(out *Output, cfg Config, p methodcheck.Project, all []scenario.Scenario) (map[string][]componentPlan, error) {
 	byPackage := map[string][]componentPlan{}
 	for _, comp := range sortedKeys(p.PhaseArtifacts.TestPlan) {
@@ -144,16 +149,51 @@ func routePlans(out *Output, cfg Config, p methodcheck.Project, all []scenario.S
 		if err != nil {
 			return nil, err
 		}
-		switch {
-		case isClient(sc):
-			emitPlaywright(out, cfg, plan)
-		case sc.GoPackage == "":
-			out.Warnings = append(out.Warnings, fmt.Sprintf("testgen: %s has no goPackage; no tests generated", comp))
-		default:
-			byPackage[sc.GoPackage] = append(byPackage[sc.GoPackage], plan)
+		pkg, err := routePlan(out, cfg, plan)
+		if err != nil {
+			return nil, err
+		}
+		if pkg != "" {
+			byPackage[pkg] = append(byPackage[pkg], plan)
 		}
 	}
 	return byPackage, nil
+}
+
+// routePlan routes one plan: a web client is emitted as Playwright here; an
+// MCP client or a layer contract returns the goPackage it is grouped under,
+// or "" with a warning when it names none.
+func routePlan(out *Output, cfg Config, plan componentPlan) (string, error) {
+	what := plan.Key + " has"
+	if isClient(plan.Contract) {
+		d, err := clientDialect(plan.Key, plan.Contract)
+		if err != nil {
+			return "", err
+		}
+		if d == dialectWeb {
+			emitPlaywright(out, cfg, plan)
+			return "", nil
+		}
+		what = plan.Key + " is an MCP client with"
+	}
+	if plan.Contract.GoPackage == "" {
+		out.Warnings = append(out.Warnings, fmt.Sprintf("testgen: %s no goPackage; no tests generated", what))
+	}
+	return plan.Contract.GoPackage, nil
+}
+
+// emitPackage emits one Go package's scenario tests: every contract in it is
+// of one layer, and a client package is the MCP dialect's in-process tools
+// test (emit_mcp.go), every other layer a direct-call test (emit_go.go).
+func emitPackage(out *Output, cfg Config, goPkg string, plans []componentPlan) error {
+	stereotype, err := sharedStereotype(goPkg, plans)
+	if err != nil {
+		return err
+	}
+	if isClient(plans[0].Contract) {
+		return emitMCP(out, cfg, goPkg, stereotype, plans)
+	}
+	return emitGo(out, cfg, goPkg, stereotype, plans)
 }
 
 // contractFor finds comp's service contract under the serviceContracts key,

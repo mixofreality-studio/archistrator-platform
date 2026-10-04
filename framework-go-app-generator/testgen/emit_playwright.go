@@ -83,7 +83,7 @@ type uiAction struct {
 // an input that is not a recognised action stays visible as a comment.
 func playwrightAction(in methodcheck.TestArg) string {
 	var a uiAction
-	if in.Name != "action" || json.Unmarshal([]byte(in.Value), &a) != nil {
+	if in.Name != webActionParam || json.Unmarshal([]byte(in.Value), &a) != nil {
 		return fmt.Sprintf("  // input %s: %s\n", in.Name, in.Value)
 	}
 	switch a.Kind {
