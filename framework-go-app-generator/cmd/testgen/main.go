@@ -110,7 +110,7 @@ func modulePath(goMod string) (string, error) {
 // write run would prune (spec §5.3: any diff in generated files fails), and
 // the hooks files whose generated sibling the plan no longer produces — a
 // write run leaves those alone (agent-owned), but a Go one still references
-// the Input_ types its pruned sibling declared, so the package no longer
+// the input types its pruned sibling declared, so the package no longer
 // compiles and the break must be attributable.
 func check(o options, gen testgen.Output, out io.Writer) error {
 	msgs, err := testgen.Drift(o.root, gen)

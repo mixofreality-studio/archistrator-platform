@@ -48,8 +48,9 @@ type goEmit struct {
 	layer   layerPkg
 	multi   bool // several contracts share the package: names carry the interface infix
 	body    bytes.Buffer
-	imports map[string]bool // extra import paths (x-go-import bindings)
-	subject bool            // ≥1 contract has a runnable binding
+	imports map[string]bool   // extra import paths (x-go-import bindings)
+	subject bool              // ≥1 contract has a runnable binding
+	owners  map[string]string // declared Go name → the binding that declares it (claim)
 }
 
 // emitGo emits one Go package's generated scenarios file and, when any
@@ -63,8 +64,11 @@ func emitGo(out *Output, cfg Config, goPkg string, plans []componentPlan) error 
 	if !ok {
 		return fmt.Errorf("testgen: %s: layer %q has no framework call context", goPkg, plans[0].Contract.Layer)
 	}
-	g := &goEmit{cfg: cfg, goPkg: goPkg, pkg: path.Base(goPkg), layer: layer, multi: len(plans) > 1, imports: map[string]bool{}}
+	g := &goEmit{cfg: cfg, goPkg: goPkg, pkg: path.Base(goPkg), layer: layer, multi: len(plans) > 1, imports: map[string]bool{}, owners: map[string]string{}}
 	for _, plan := range plans {
+		if err := g.claimPlan(plan); err != nil {
+			return err
+		}
 		g.emitPlan(plan)
 	}
 	src, err := g.generatedFile(plans)
@@ -96,11 +100,13 @@ func sharedStereotype(goPkg string, plans []componentPlan) (string, error) {
 
 // ---- naming ----
 
+// tag is the infix every per-binding name carries in a package several
+// contracts share (two contracts there can bind the SAME scenario id).
 func (g *goEmit) tag(plan componentPlan) string {
 	if !g.multi {
 		return ""
 	}
-	return "_" + ident(ifaceName(plan))
+	return ifaceName(plan)
 }
 
 // ifaceName is the contract's Go interface name, falling back to the
@@ -120,18 +126,66 @@ func exportName(s string) string {
 }
 
 func (g *goEmit) subjectType(plan componentPlan) string { return g.pkg + "." + ifaceName(plan) }
-func (g *goEmit) subjectName(plan componentPlan) string { return "newSubject" + g.tag(plan) }
+func (g *goEmit) subjectName(plan componentPlan) string {
+	return hookName(subjectPrefix, g.tag(plan), "", 0, 0)
+}
+
+// testName keeps the spec's TestScenario_<id> spelling: revive exempts Test*
+// funcs in test files, and `make test-scenarios` and the construct workflow
+// select the tests with -run 'TestScenario_'.
 func (g *goEmit) testName(plan componentPlan, id string) string {
-	return "TestScenario" + g.tag(plan) + "_" + ident(id)
+	tag := ""
+	if g.multi {
+		tag = "_" + ident(ifaceName(plan))
+	}
+	return "TestScenario" + tag + "_" + ident(id)
 }
 func (g *goEmit) inputName(plan componentPlan, id string, seq int) string {
-	return fmt.Sprintf("Input%s_%s_%d", g.tag(plan), ident(id), seq)
+	return hookName(inputPrefix, g.tag(plan), id, seq, 0)
 }
 func (g *goEmit) stepName(plan componentPlan, id string, seq int) string {
-	return fmt.Sprintf("Step%s_%s_%d", g.tag(plan), ident(id), seq)
+	return hookName(stepPrefix, g.tag(plan), id, seq, 0)
 }
 func (g *goEmit) probeName(plan componentPlan, id string, seq, n int) string {
-	return fmt.Sprintf("Probe%s_%s_%d_%d", g.tag(plan), ident(id), seq, n)
+	return hookName(probePrefix, g.tag(plan), id, seq, n)
+}
+
+// claimPlan claims every name one contract's bindings declare in the package:
+// the subject constructor, each scenario test, each step's input type, each
+// hooked step and each hooked probe.
+func (g *goEmit) claimPlan(plan componentPlan) error {
+	if err := g.claim(g.subjectName(plan), plan.Key); err != nil {
+		return err
+	}
+	for _, bs := range plan.Scenarios {
+		id := bs.Scenario.ID
+		owner := plan.Key + " " + id
+		if err := g.claim(g.testName(plan, id), owner); err != nil {
+			return err
+		}
+		for _, st := range bs.Steps {
+			if err := g.claimStep(plan, bs, st, fmt.Sprintf("%s step %d", owner, st.Bind.Seq)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (g *goEmit) claimStep(plan componentPlan, bs boundScenario, st boundStep, owner string) error {
+	id, seq := bs.Scenario.ID, st.Bind.Seq
+	names := []string{g.inputName(plan, id, seq), g.stepName(plan, id, seq)}
+	for i, pr := range st.Bind.Probes {
+		if _, inline := g.inlineProbe(plan, pr); !inline {
+			names = append(names, g.probeName(plan, id, seq, i+1))
+		}
+	}
+	for _, n := range names {
+		if err := g.claim(n, owner); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ---- generated file ----
@@ -238,7 +292,7 @@ func (g *goEmit) emitStep(plan componentPlan, bs boundScenario, st boundStep) {
 }
 
 // emitProbe emits one probe: inline when it reads the subject's own contract,
-// a Probe_* hook when it reads another component.
+// a probe hook when it reads another component.
 func (g *goEmit) emitProbe(plan componentPlan, bs boundScenario, st boundStep, n int, pr methodcheck.Probe) {
 	id, seq := bs.Scenario.ID, st.Bind.Seq
 	v := fmt.Sprintf("%d_%d", seq, n)

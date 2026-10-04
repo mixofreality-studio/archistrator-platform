@@ -11,19 +11,20 @@
 // (`package <pkg>_test`; one TestScenario_* per binding, a TestMain that runs
 // through the scenario host) and one hooks file
 // <goPackage>/<stereotype>_hooks_test.go emitted ONCE and then owned by the
-// construction agent: the subject constructor, one Step_* per Hook:true step,
-// one Probe_* per probe on another component. A client contract (layer
+// construction agent: the subject constructor, one step hook per Hook:true
+// step, one probe hook per probe on another component. A client contract (layer
 // "client") gets, per component, one Playwright spec per binding under
 // <UITestsDir>/<component>/, the generated Playwright config + results
 // reporter, and a once-emitted hooks.ts.
 //
 // Grouping is by goPackage, not by contract: several contracts can share one
 // Go package, and one generated file unions every contract's bindings. A
-// package hosting ONE contract uses the plain names the spec gives
-// (newSubject, Step_<id>_<seq>, Probe_<id>_<seq>_<n>, TestScenario_<id>); a
-// package hosting several infixes the contract's interface name
-// (newSubject_<Iface>, Step_<Iface>_<id>_<seq>, …) because two contracts in one
-// package can bind the SAME scenario id. A package whose bindings are all
+// package hosting ONE contract uses the plain names (newSubject,
+// step<ID>S<seq>, probe<ID>S<seq>N<n>, TestScenario_<id>); a package hosting
+// several infixes the contract's interface name (newSubject<Iface>,
+// step<Iface><ID>S<seq>, …) because two contracts in one package can bind the
+// SAME scenario id. Hook names are lint-clean by construction (names.go, §12
+// B3). A package whose bindings are all
 // absent still gets its generated file (TestMain only) so the arch gate's
 // closed file set holds and the gap stays visible.
 //
@@ -305,11 +306,6 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// hookPrefixes are the hook symbol families a generated Go file references
-// in its hooks file: the subject constructor(s), the hooked steps and the
-// cross-component probes.
-var hookPrefixes = []string{"newSubject", "Step_", "Probe_"}
-
 // Drift compares Generated against disk and verifies every hook symbol
 // referenced by a generated Go file exists in the on-disk hooks file next to
 // it, and that no hook there is orphaned. For a TypeScript hooks file it
@@ -425,13 +421,4 @@ func referencedHooks(out Output, dir string) (map[string]bool, error) {
 		})
 	}
 	return names, nil
-}
-
-func isHookName(name string) bool {
-	for _, pre := range hookPrefixes {
-		if strings.HasPrefix(name, pre) {
-			return true
-		}
-	}
-	return false
 }

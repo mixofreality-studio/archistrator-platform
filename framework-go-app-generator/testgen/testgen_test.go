@@ -57,7 +57,7 @@ func TestGenerate_GoScenarioFileShape(t *testing.T) {
 		"func TestScenario_process_order_P2(",
 		"func TestScenario_track_order_P1(",
 		"h.RunScenario(t, \"process-order-P2\"",
-		"Step_process_order_P2_1(t, h, subject, in1)",                 // hook call for Hook:true steps
+		"stepProcessOrderP2S1(t, h, subject, in1)",                    // hook call for Hook:true steps
 		"subject.GetInvoice(callContext(t, h, \"1\"), in1.InvoiceId)", // direct call for Hook:false steps
 		"\"example.com/app/server/internal/manager/billing\"",
 		"fwm \"github.com/mixofreality-studio/archistrator-platform/framework-go/manager\"",
@@ -68,7 +68,7 @@ func TestGenerate_GoScenarioFileShape(t *testing.T) {
 			t.Errorf("missing %q in\n%s", want, src)
 		}
 	}
-	if strings.Contains(string(src), "Probe_") {
+	if strings.Contains(string(src), "probeProcessOrder") {
 		t.Errorf("same-component probe must be inlined, not hooked:\n%s", src)
 	}
 	if !strings.Contains(string(src), "subject.GetInvoice(callContext(t, h, \"1.1\"), probe1_1.InvoiceId)") {
@@ -82,14 +82,14 @@ func TestGenerate_GoScenarioFileShape(t *testing.T) {
 		"// Hooks for billingManager scenario tests. Generated ONCE by testgen; owned by the construction agent.",
 		"package billing_test",
 		"func newSubject(t *testing.T, h *scenariohost.Host) billing.BillingManager",
-		"func Step_process_order_P2_1(t *testing.T, h *scenariohost.Host, subject billing.BillingManager, in Input_process_order_P2_1) (any, error)",
+		"func stepProcessOrderP2S1(t *testing.T, h *scenariohost.Host, subject billing.BillingManager, in inputProcessOrderP2S1) (any, error)",
 	} {
 		if !strings.Contains(string(hooks), want) {
 			t.Errorf("hooks stub missing %q in\n%s", want, hooks)
 		}
 	}
 	for _, want := range []string{
-		"type Input_process_order_P2_1 struct {",
+		"type inputProcessOrderP2S1 struct {",
 		"InvoiceId string `json:\"invoiceId\"`",
 		"Amount    int64  `json:\"amount\"`",
 	} {
@@ -105,11 +105,11 @@ func TestGenerate_GoScenarioFileShape(t *testing.T) {
 func TestGenerate_CrossComponentProbeIsHooked(t *testing.T) {
 	out := generate(t)
 	src := string(out.Generated[orderGen])
-	if !strings.Contains(src, "Probe_process_order_P2_1_1(t, h, subject)") {
+	if !strings.Contains(src, "probeProcessOrderP2S1N1(t, h, subject)") {
 		t.Errorf("probe on billingManager from orderManager must be a hook call:\n%s", src)
 	}
 	hooks := string(out.HooksOnce["internal/manager/order/manager_hooks_test.go"])
-	if !strings.Contains(hooks, "func Probe_process_order_P2_1_1(t *testing.T, h *scenariohost.Host, subject order.OrderManager) (any, error)") {
+	if !strings.Contains(hooks, "func probeProcessOrderP2S1N1(t *testing.T, h *scenariohost.Host, subject order.OrderManager) (any, error)") {
 		t.Errorf("probe hook stub missing:\n%s", hooks)
 	}
 	// A $ref param is spelled through the contract package.
@@ -286,13 +286,13 @@ func TestDrift_OrphanHook(t *testing.T) {
 	root := t.TempDir()
 	writeAll(t, root, out.Generated)
 	writeAll(t, root, out.HooksOnce)
-	hooks := string(out.HooksOnce[billingHooks]) + "\nfunc Step_zzz(t *testing.T) {}\n"
+	hooks := string(out.HooksOnce[billingHooks]) + "\nfunc stepZzzS1(t *testing.T) {}\n"
 	writeAll(t, root, map[string][]byte{billingHooks: []byte(hooks)})
 	msgs, err := Drift(root, out)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !slices.Contains(msgs, "orphan hook Step_zzz in "+billingHooks) {
+	if !slices.Contains(msgs, "orphan hook stepZzzS1 in "+billingHooks) {
 		t.Fatalf("orphan not reported: %v", msgs)
 	}
 }
@@ -302,7 +302,7 @@ func TestDrift_MissingHookAndStaleFile(t *testing.T) {
 	root := t.TempDir()
 	writeAll(t, root, out.Generated)
 	writeAll(t, root, out.HooksOnce)
-	hooks := strings.Replace(string(out.HooksOnce[billingHooks]), "func Step_process_order_P2_1(", "func Step_renamed(", 1)
+	hooks := strings.Replace(string(out.HooksOnce[billingHooks]), "func stepProcessOrderP2S1(", "func stepRenamedS1(", 1)
 	writeAll(t, root, map[string][]byte{
 		billingHooks: []byte(hooks),
 		orderGen:     []byte("// edited by hand\n"),
@@ -315,8 +315,8 @@ func TestDrift_MissingHookAndStaleFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"missing hook Step_process_order_P2_1 in " + billingHooks,
-		"orphan hook Step_renamed in " + billingHooks,
+		"missing hook stepProcessOrderP2S1 in " + billingHooks,
+		"orphan hook stepRenamedS1 in " + billingHooks,
 		"stale: " + orderGen,
 		"missing hooks file " + shopHooks,
 	} {

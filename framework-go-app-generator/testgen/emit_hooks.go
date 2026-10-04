@@ -12,8 +12,8 @@ import (
 
 // hooksFile emits the once-generated, agent-owned hooks file of one Go
 // package: a subject constructor per contract that has a runnable binding, a
-// Step_* stub per Hook:true step and a Probe_* stub per probe on another
-// component — every hook symbol the generated file references and nothing
+// step stub per Hook:true step and a probe stub per probe on another
+// component (names: names.go) — every hook symbol the generated file references and nothing
 // else, so a fresh hooks file is drift-clean by construction.
 func (g *goEmit) hooksFile(plans []componentPlan) ([]byte, error) {
 	var b bytes.Buffer
@@ -74,7 +74,7 @@ func hasRunnable(plan componentPlan) bool {
 	return false
 }
 
-// writeStepHooks writes the Step_* stub of a hooked step and the Probe_* stub
+// writeStepHooks writes the step stub of a hooked step and the probe stub
 // of each of its cross-component probes.
 func (g *goEmit) writeStepHooks(b *bytes.Buffer, plan componentPlan, bs boundScenario, st boundStep) {
 	id, seq := bs.Scenario.ID, st.Bind.Seq
