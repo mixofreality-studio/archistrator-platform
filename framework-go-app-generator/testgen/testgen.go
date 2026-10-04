@@ -12,7 +12,10 @@
 // through the scenario host) and one hooks file
 // <goPackage>/<stereotype>_hooks_test.go emitted ONCE and then owned by the
 // construction agent: the subject constructor, one step hook per Hook:true
-// step, one probe hook per probe on another component. A client contract (layer
+// step, one probe hook per probe on another component, and — in a manager
+// package — replayWorkflows, which the generated TestMain hands the scenario
+// host (scenariohost.MainWithWorkflows) so every workflow history a scenario
+// starts is replayed against the current workflow code (§12 B4). A client contract (layer
 // "client") gets, per component, one Playwright spec per binding under
 // <UITestsDir>/<component>/, the generated Playwright config + results
 // reporter, and a once-emitted hooks.ts.

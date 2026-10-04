@@ -21,6 +21,9 @@ func (g *goEmit) hooksFile(plans []componentPlan) ([]byte, error) {
 	b.WriteString("//\n// Every func here is a hook the generated scenarios file calls; the drift check\n// (testgen -check) requires exactly this symbol set, so add or remove hooks by\n// changing the test plan, not this file. Fill the bodies.\n\n")
 	fmt.Fprintf(&b, "package %s_test\n\n", g.pkg)
 	g.writeImports(&b, map[string]string{"testing": "", scenarioHostImport: "", g.cfg.ModulePath + "/" + g.goPkg: ""})
+	if g.replays() {
+		writeReplayHook(&b)
+	}
 	for _, plan := range plans {
 		g.writeHooksFor(&b, plan)
 	}
@@ -29,6 +32,24 @@ func (g *goEmit) hooksFile(plans []componentPlan) ([]byte, error) {
 		return nil, fmt.Errorf("testgen: %s: hooks file does not format: %w\n%s", g.goPkg, err, b.String())
 	}
 	return src, nil
+}
+
+// writeReplayHook writes a manager package's replay hook stub: once per
+// package, since one worker registry serves every contract in it.
+func writeReplayHook(b *bytes.Buffer) {
+	fmt.Fprintf(b, `// %[1]s tells the scenario host which workflows this package's workers
+// run: at every flush the host replays each workflow history a scenario
+// started against them, and a non-determinism error fails that scenario.
+// FILL: register the workflows exactly as the composition root does on a
+// live worker, and set Options to the replayer options matching those workers
+// (DataConverter, ContextPropagators, Interceptors).
+func %[1]s() scenariohost.Workflows {
+	return scenariohost.Workflows{Register: func(scenariohost.Worker) {
+		panic("FILL %[1]s")
+	}}
+}
+
+`, replayHook)
 }
 
 // hooksSubject names the hooks file's components in its header line.

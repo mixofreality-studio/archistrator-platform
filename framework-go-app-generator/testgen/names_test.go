@@ -52,6 +52,7 @@ func TestIsHookName(t *testing.T) {
 		"newSubject", "newSubjectBillingManager",
 		"stepUC3P2S1", "stepBillingManagerProcessOrderP2S12", "stepV1_2P1S1",
 		"probeUC3P2S1N2", "probeOrderManagerProcessOrderP2S1N10",
+		"replayWorkflows",
 	} {
 		if !isHookName(name) {
 			t.Errorf("isHookName(%q) = false, want true", name)
@@ -59,7 +60,7 @@ func TestIsHookName(t *testing.T) {
 	}
 	for _, name := range []string{
 		"probe1_1", "pout1_1", "inputUC3P2S1", "stepHelper", "stepper", "probeUC3P2S1",
-		"arrange", "TestScenario_UC3_P2", "callContext",
+		"arrange", "TestScenario_UC3_P2", "callContext", "replayWorkflowsBilling",
 	} {
 		if isHookName(name) {
 			t.Errorf("isHookName(%q) = true, want false", name)
@@ -163,13 +164,18 @@ func TestGenerate_SharedPackageInfixesTheInterface(t *testing.T) {
 func TestGenerate_SharedPackageKeysResultsByComponent(t *testing.T) {
 	src := string(generateShared(t).Generated[billingGen])
 	for _, want := range []string{
-		"func TestMain(m *testing.M) { scenariohost.Main(m, \"billingManager\", \"orderManager\") }",
+		"func TestMain(m *testing.M) {\n\tscenariohost.MainWithWorkflows(m, replayWorkflows(), \"billingManager\", \"orderManager\")\n}\n",
 		"h.RunScenario(t, \"billingManager\", \"process-order-P2\", func(t *testing.T) {",
 		"h.RunScenario(t, \"orderManager\", \"process-order-P2\", func(t *testing.T) {",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("shared generated file lacks %q:\n%s", want, src)
 		}
+	}
+	// One package, one worker registry: the shared hooks file declares the
+	// replay hook once, not once per contract.
+	if n := strings.Count(string(generateShared(t).HooksOnce[billingHooks]), "func replayWorkflows("); n != 1 {
+		t.Errorf("shared hooks file declares replayWorkflows %d times, want 1", n)
 	}
 }
 

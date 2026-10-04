@@ -47,6 +47,7 @@ type goEmit struct {
 	pkg     string // package name == import alias (modelgen names the package after goPkg's last segment)
 	layer   layerPkg
 	multi   bool // several contracts share the package: names carry the interface infix
+	manager bool // a manager package: its TestMain hands the host workflows to replay
 	body    bytes.Buffer
 	imports map[string]bool   // extra import paths (x-go-import bindings)
 	subject bool              // ≥1 contract has a runnable binding
@@ -64,7 +65,11 @@ func emitGo(out *Output, cfg Config, goPkg string, plans []componentPlan) error 
 	if !ok {
 		return fmt.Errorf("testgen: %s: layer %q has no framework call context", goPkg, plans[0].Contract.Layer)
 	}
-	g := &goEmit{cfg: cfg, goPkg: goPkg, pkg: path.Base(goPkg), layer: layer, multi: len(plans) > 1, imports: map[string]bool{}, owners: map[string]string{}}
+	g := &goEmit{
+		cfg: cfg, goPkg: goPkg, pkg: path.Base(goPkg), layer: layer,
+		multi: len(plans) > 1, manager: layerKey(plans[0].Contract) == "manager",
+		imports: map[string]bool{}, owners: map[string]string{},
+	}
 	for _, plan := range plans {
 		if err := g.claimPlan(plan); err != nil {
 			return err
@@ -437,7 +442,13 @@ func (g *goEmit) generatedFile(plans []componentPlan) ([]byte, error) {
 	for _, plan := range plans {
 		comps = append(comps, strconv.Quote(plan.Key))
 	}
-	fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %s) }\n\n", strings.Join(comps, ", "))
+	if g.replays() {
+		// A manager's workflows are replayed at every flush (DCT §12 B4): the
+		// hooks file's replayWorkflows registers them with the host.
+		fmt.Fprintf(&b, "func TestMain(m *testing.M) {\n\tscenariohost.MainWithWorkflows(m, %s(), %s)\n}\n\n", replayHook, strings.Join(comps, ", "))
+	} else {
+		fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %s) }\n\n", strings.Join(comps, ", "))
+	}
 	b.Write(g.body.Bytes())
 	if g.subject {
 		g.writeHelpers(&b)
@@ -448,6 +459,11 @@ func (g *goEmit) generatedFile(plans []componentPlan) ([]byte, error) {
 	}
 	return src, nil
 }
+
+// replays reports whether the package's scenarios are replay-gated: a
+// manager package with a runnable binding (one that has a hooks file to
+// declare replayWorkflows; with none, no scenario runs a workflow).
+func (g *goEmit) replays() bool { return g.manager && g.subject }
 
 // generatedImports is the import set of the generated file: the test
 // essentials always; the helpers', the layer's and the contract package's when

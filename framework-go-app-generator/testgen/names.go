@@ -17,6 +17,7 @@ import (
 //	newSubject[<Iface>]
 //	step[<Iface>]<ScenarioID>S<seq>
 //	probe[<Iface>]<ScenarioID>S<seq>N<n>
+//	replayWorkflows (a manager package only; one per package — §12 B4)
 //
 // e.g. stepUC3P2S1 / probeUC3P2S1N2. The step's input type the hook takes is
 // input[<Iface>]<ScenarioID>S<seq> (declared in the generated file; not a
@@ -31,6 +32,11 @@ const (
 	probePrefix   = "probe"
 	inputPrefix   = "input"
 )
+
+// replayHook is the one hook a manager package declares once, whatever its
+// contracts: what its workers register, handed to the scenario host's replay
+// gate by the generated TestMain (scenariohost.MainWithWorkflows).
+const replayHook = "replayWorkflows"
 
 // hookName is the one spelling of every hook symbol: prefix, the contract's
 // interface when several contracts share the package, the scenario id, and
@@ -62,6 +68,7 @@ var hookPattern = regexp.MustCompile(`^(?:` +
 	subjectPrefix + `(?:[A-Z0-9][A-Za-z0-9_]*)?` +
 	`|` + stepPrefix + `[A-Z0-9][A-Za-z0-9_]*S[0-9]+` +
 	`|` + probePrefix + `[A-Z0-9][A-Za-z0-9_]*S[0-9]+N[0-9]+` +
+	`|` + replayHook +
 	`)$`)
 
 // isHookName reports whether name is spelled like a hook symbol. The drift
