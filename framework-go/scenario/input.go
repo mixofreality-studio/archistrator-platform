@@ -53,8 +53,17 @@ type Step struct {
 type Call struct{ From, To, Mode, Label, Alt string }
 
 // Contract is a component's service contract as derivation sees it.
+//
+// FacetOf names the component this contract is a facet of: several contracts may
+// publish one component's operations (the facet doctrine — facets are contracts,
+// not components), and the dynamic views address that component, not the facet.
+// A call into the component resolves its label against the whole family — the
+// contract keyed by the component first, then every facet in key order — and each
+// resolved op's stimulus lands on the contract that declares it. "" for a
+// component's own contract.
 type Contract struct {
 	Component string
+	FacetOf   string
 	Ops       []Op
 }
 

@@ -189,3 +189,41 @@ func TestScenarioInput_NoUseCases(t *testing.T) {
 		t.Fatalf("unexpected: %+v", in)
 	}
 }
+
+// A contract whose `component` names another component is a facet of it: the
+// adapter carries that as scenario.Contract.FacetOf, so a call into the component
+// lands on the facet that declares the op — for the canonical set, ForComponent
+// (testgen) and TP-OP-REACHED alike.
+func TestScenarioInput_CarriesFacetFamilies(t *testing.T) {
+	p := loadProject(t, "scenario_project.json")
+	own := p.ServiceContracts["orderManager"]
+	facet := ServiceContract{Component: "order-manager", Layer: "ResourceAccess", Interface: own.Interface}
+	own.Interface.Operations = nil
+	p.ServiceContracts["orderManager"] = own
+	p.ServiceContracts["orderIntakeAccess"] = facet
+
+	in, err := ScenarioInput(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := in.Contracts["orderIntakeAccess"].FacetOf; got != "order-manager" {
+		t.Fatalf("orderIntakeAccess.FacetOf = %q, want order-manager", got)
+	}
+	if got := in.Contracts["orderManager"].FacetOf; got != "" {
+		t.Fatalf("a component's own contract is no facet: FacetOf = %q", got)
+	}
+
+	all, err := DeriveScenarios(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	proj := scenario.ForComponent(all, "orderIntakeAccess")
+	if len(proj) == 0 || proj[0].Stimuli[0].Input.Op != "PlaceOrder" {
+		t.Fatalf("the facet's op is not routed to it: %+v", proj)
+	}
+	for _, f := range opReachedFindings(p, all) {
+		if f.Location != nil && f.Location.Section == "serviceContracts.orderIntakeAccess" {
+			t.Errorf("TP-OP-REACHED reports a routed facet op: %s", f.Message)
+		}
+	}
+}

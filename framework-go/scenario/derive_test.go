@@ -195,7 +195,10 @@ func TestResolveOps_LabelShapes(t *testing.T) {
 		// a separator inside an argument list does not split the label
 		{"delivery-manager", "overrideActivity(projectId, activityId / taskId, override) — retry | skip | takeover", []string{"OverrideActivity"}},
 	} {
-		got := resolveOps(in, tc.component, tc.label)
+		var got []string
+		for _, ot := range resolveOps(in, tc.component, tc.label) {
+			got = append(got, ot.op)
+		}
 		if !equalStrings(got, tc.want) {
 			t.Errorf("resolveOps(%s, %q) = %v, want %v", tc.component, tc.label, got, tc.want)
 		}
@@ -439,4 +442,129 @@ func must2(r Report, err error) Report {
 		panic(err)
 	}
 	return r
+}
+
+// facetFixture is execute_activity with its projectStateAccess facets declared as
+// facets (the real project's `component` field): activityExecutionAccess,
+// designSessionAccess, gitActivityStatusAccess and constructionTransitionAccess
+// publish operations of project-state-access, which every view call addresses.
+func facetFixture(t *testing.T) Input {
+	t.Helper()
+	in := load(t, "execute_activity")
+	for _, k := range []string{"activityExecutionAccess", "designSessionAccess", "gitActivityStatusAccess", "constructionTransitionAccess"} {
+		c, ok := in.Contracts[k]
+		if !ok {
+			t.Fatalf("fixture precondition: no contract %s", k)
+		}
+		c.FacetOf = "projectStateAccess"
+		in.Contracts[k] = c
+	}
+	return in
+}
+
+// A call into a component whose operations several contracts publish resolves its
+// label against the whole family — the component's own contract first, then each
+// facet in key order — and each resolved op lands on the contract that declares it.
+func TestResolveOps_FacetFamily(t *testing.T) {
+	in := facetFixture(t)
+	for _, tc := range []struct {
+		label string
+		want  []string
+	}{
+		// the component's own op stays on it
+		{"readProject → the next ready tasks", []string{"projectstateaccess.ReadProject"}},
+		// a facet's op lands on the facet
+		{"readActivityExecution → the ready frontier", []string{"activityexecutionaccess.ReadActivityExecution"}},
+		// one label naming ops of two facets yields one target per facet
+		{"commitArtifactWithProvenance / commitActivityArtifacts — committed", []string{"designsessionaccess.CommitArtifactWithProvenance", "activityexecutionaccess.CommitActivityArtifacts"}},
+		// an op two facets declare lands on the first facet by key
+		{"recordOperatorNote(activityId, note) — recorded", []string{"activityexecutionaccess.RecordOperatorNote"}},
+		// an op both the component and a facet declare stays on the component
+		{"acknowledgeStaleBasis(projectId) — acknowledged", []string{"projectstateaccess.AcknowledgeStaleBasis"}},
+		// prose resolves nothing
+		{"the staged artifact becomes committed state", nil},
+	} {
+		var got []string
+		for _, ot := range resolveOps(in, "project-state-access", tc.label) {
+			got = append(got, ot.to+"."+ot.op)
+		}
+		if !equalStrings(got, tc.want) {
+			t.Errorf("resolveOps(project-state-access, %q) = %v, want %v", tc.label, got, tc.want)
+		}
+	}
+}
+
+// Derivation files each facet op's stimulus under the facet, so every facet
+// projects its own scenarios; an unresolved call stays on the component.
+func TestDerive_RoutesFacetCallsByOpName(t *testing.T) {
+	in := facetFixture(t)
+	all := must(Derive(in))
+	ownOps := func(key string) map[string]bool {
+		out := map[string]bool{}
+		for _, op := range in.Contracts[key].Ops {
+			out[op.Name] = true
+		}
+		return out
+	}
+	reached := map[string]bool{}
+	for _, key := range []string{"projectStateAccess", "activityExecutionAccess", "designSessionAccess"} {
+		own := ownOps(key)
+		proj := ForComponent(all, key)
+		if len(proj) == 0 {
+			t.Fatalf("%s projects no scenario", key)
+		}
+		for _, s := range proj {
+			for _, st := range s.Stimuli {
+				if st.Input.Op != "" && !own[st.Input.Op] {
+					t.Errorf("%s: %s stimulus %d drives %q, which %s does not declare", key, s.ID, st.Seq, st.Input.Op, key)
+				}
+				reached[key+"."+st.Input.Op] = true
+			}
+		}
+	}
+	for _, want := range []string{
+		"projectStateAccess.ReadProject",
+		"activityExecutionAccess.ReadActivityExecution",
+		"activityExecutionAccess.RecordOperatorNote",
+		"activityExecutionAccess.CommitActivityArtifacts",
+		"activityExecutionAccess.RecordActivityOutcome",
+		"designSessionAccess.CommitArtifactWithProvenance",
+	} {
+		if !reached[want] {
+			t.Errorf("%s is drawn in the view but no stimulus drives it", want)
+		}
+	}
+	// Routing moves stimuli between contracts; it never adds or drops a scenario.
+	if base := must(Derive(load(t, "execute_activity"))); len(base) != len(all) {
+		t.Errorf("facet routing changed the scenario count: %d → %d", len(base), len(all))
+	}
+}
+
+// A component published only by facets (no contract keyed by the component
+// itself) is still a component: its calls resolve against the facets, and an
+// unresolved call lands on the component id.
+func TestDerive_FacetOnlyFamily(t *testing.T) {
+	in := Input{
+		Actors: map[string]bool{"user": true},
+		Contracts: map[string]Contract{
+			"ledgerAccess": {Component: "ledgerAccess", FacetOf: "storeAccess", Ops: []Op{{Name: "Append"}}},
+		},
+		Diagrams: []Diagram{{UseCaseID: "uc", Title: "UC", Nodes: []Node{
+			{ID: "start", Kind: "start"}, {ID: "act", Kind: "action", LinkedActorID: "user"}, {ID: "end", Kind: "end"},
+		}, Edges: []Edge{{From: "start", To: "act"}, {From: "act", To: "end"}}}},
+		Views: []View{{UseCaseID: "uc", Steps: []Step{{NodeID: "act", Calls: []Call{
+			{From: "user", To: "store-access", Label: "append(entry) — the entry is recorded"},
+			{From: "user", To: "store-access", Label: "whatever the store does"},
+		}}}}},
+	}
+	all := must(Derive(in))
+	if len(all) != 1 || len(all[0].Stimuli) != 2 {
+		t.Fatalf("want one scenario with two stimuli, got %+v", all)
+	}
+	if got := target(all[0].Stimuli[0]); got != "ledgeraccess.Append" {
+		t.Errorf("resolved facet call = %s, want ledgeraccess.Append", got)
+	}
+	if got := target(all[0].Stimuli[1]); got != "storeaccess." {
+		t.Errorf("unresolved call = %s, want storeaccess.", got)
+	}
 }

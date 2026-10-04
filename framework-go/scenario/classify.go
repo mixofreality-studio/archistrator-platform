@@ -1,6 +1,7 @@
 package scenario
 
 import (
+	"sort"
 	"strings"
 	"unicode"
 )
@@ -90,44 +91,77 @@ func stepCalls(view *View, nodeID string) []Call {
 	return calls
 }
 
-// isComponent reports whether id names a contracted component under Normalize.
+// isComponent reports whether id names a contracted component under Normalize:
+// a contract is keyed by it, or some contract is a facet of it.
 func isComponent(in Input, id string) bool {
-	_, ok := contractFor(in, id)
-	return ok
+	return len(family(in, id)) > 0
 }
+
+// opTarget is one op a call label resolves and the contract it lands on: the
+// normalized key of the contract that declares it.
+type opTarget struct{ to, op string }
 
 // resolveOps is Amendment A2: the label is split on " — ", "→", "/", "·" and
 // ";" (outside any bracketed argument list), each piece's leading identifier
-// (the text before "(" or whitespace) is compared under Normalize with the
-// callee contract's op names, and every piece that matches resolves, in label
-// order and without repeats. nil when the callee has no contract or no piece
-// names one of its ops.
-func resolveOps(in Input, component, label string) []string {
-	ct, ok := contractFor(in, component)
-	if !ok {
-		return nil
-	}
-	byKey := opsByKey(ct)
-	var out []string
-	seen := map[string]bool{}
+// (the text before "(" or whitespace) is compared under Normalize with the op
+// names of the callee's contract family (family), and every piece that matches
+// resolves, in label order and without repeats, onto the first family contract
+// that declares it. nil when the callee has no contract or no piece names one of
+// its family's ops.
+func resolveOps(in Input, component, label string) []opTarget {
+	byKey := opsByKey(family(in, component))
+	var out []opTarget
+	seen := map[opTarget]bool{}
 	for _, piece := range labelPieces(label) {
-		name, ok := byKey[Normalize(leadingIdent(piece))]
-		if !ok || seen[name] {
+		ot, ok := byKey[Normalize(leadingIdent(piece))]
+		if !ok || seen[ot] {
 			continue
 		}
-		seen[name] = true
-		out = append(out, name)
+		seen[ot] = true
+		out = append(out, ot)
 	}
 	return out
 }
 
-// opsByKey indexes a contract's op names by Normalize; the first op wins a fold.
-func opsByKey(ct Contract) map[string]string {
-	byKey := make(map[string]string, len(ct.Ops))
-	for _, op := range ct.Ops {
-		k := Normalize(op.Name)
-		if _, dup := byKey[k]; k != "" && !dup {
-			byKey[k] = op.Name
+// keyedContract is a contract with the Contracts key it is filed under.
+type keyedContract struct {
+	key      string
+	contract Contract
+}
+
+// family is the contracts a call into component resolves against: the contract
+// keyed by component (contractKey) first, then every other contract that is a
+// facet of it (FacetOf), in key order. Empty when component is not a component.
+func family(in Input, component string) []keyedContract {
+	want := Normalize(component)
+	var fam []keyedContract
+	if key, ok := contractKey(in, component); ok {
+		fam = append(fam, keyedContract{key: key, contract: in.Contracts[key]})
+	}
+	var facets []string
+	for k, c := range in.Contracts {
+		if c.FacetOf != "" && Normalize(c.FacetOf) == want && Normalize(k) != want {
+			facets = append(facets, k)
+		}
+	}
+	sort.Strings(facets)
+	for _, k := range facets {
+		fam = append(fam, keyedContract{key: k, contract: in.Contracts[k]})
+	}
+	return fam
+}
+
+// opsByKey indexes a contract family's op names by Normalize, each with the
+// contract it lands on; the first contract in family order wins a fold, and
+// within one contract the first op does.
+func opsByKey(fam []keyedContract) map[string]opTarget {
+	byKey := map[string]opTarget{}
+	for _, kc := range fam {
+		for _, op := range kc.contract.Ops {
+			k := Normalize(op.Name)
+			if _, dup := byKey[k]; k != "" && !dup {
+				byKey[k] = opTarget{to: Normalize(kc.key), op: op.Name}
+			}
 		}
 	}
 	return byKey
@@ -169,10 +203,10 @@ func leadingIdent(piece string) string {
 	return piece
 }
 
-// contractFor finds the contract keyed by component under Normalize. When
-// several keys fold to the same component the lowest key wins, so the result
-// never depends on map iteration order.
-func contractFor(in Input, component string) (Contract, bool) {
+// contractKey finds the key of the contract keyed by component under Normalize.
+// When several keys fold to the same component the lowest key wins, so the
+// result never depends on map iteration order.
+func contractKey(in Input, component string) (string, bool) {
 	want := Normalize(component)
 	best, found := "", false
 	for k := range in.Contracts {
@@ -180,8 +214,5 @@ func contractFor(in Input, component string) (Contract, bool) {
 			best, found = k, true
 		}
 	}
-	if !found {
-		return Contract{}, false
-	}
-	return in.Contracts[best], true
+	return best, found
 }
