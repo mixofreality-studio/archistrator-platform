@@ -4,9 +4,9 @@ go 1.25.0
 
 require (
 	github.com/google/jsonschema-go v0.4.3
-	github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0
-	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator v0.3.0
-	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.1.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.16.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator v0.4.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.2.3
 	go.temporal.io/sdk v1.44.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -38,20 +38,19 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 )
 
-// framework-go-projectmodel is a sibling module in this repo. The replace
-// makes the standalone module build (GOWORK=off) resolve it from the local
-// checkout rather than a published version.
-replace github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel => ../framework-go-projectmodel
-
-// framework-go-http-generator is a sibling module in this repo. transportgen
-// consumes its exported route planner (httpgen.PlanOps) as the single source of
-// route/verb/param truth. The require pins the NOT-YET-PUBLISHED v0.3.0 that
-// step-5's P4 release will tag (PlanOps landed after v0.2.0); the unversioned
-// replace resolves it from the local checkout under GOWORK=off until that tag
-// exists, mirroring the pre-tag projectmodel handling above.
-replace github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator => ../framework-go-http-generator
-
-// framework-go is a sibling module in this repo. The compile-proof sample
-// (internal/sample/order) imports its real manager/resourceaccess packages;
-// the replace resolves it from the local checkout under GOWORK=off.
-replace github.com/mixofreality-studio/archistrator-platform/framework-go v0.1.0 => ../framework-go
+// Sibling modules in this repo. Each require pins the published release whose
+// API this module's code uses, so a consumer that resolves this module as a
+// dependency (where these replaces are ignored) gets a compatible minimum
+// version; the unversioned replaces make the standalone module build
+// (GOWORK=off, as CI runs it) resolve the local checkout instead.
+//   - framework-go: the compile-proof sample (internal/sample/order) imports its
+//     real manager/resourceaccess packages; testgen reads the committed test
+//     plans through its scenario and methodcheck packages.
+//   - framework-go-http-generator: transportgen consumes its exported route
+//     planner (httpgen.PlanOps) as the single source of route/verb/param truth.
+//   - framework-go-projectmodel: the typed project.json model every emitter reads.
+replace (
+	github.com/mixofreality-studio/archistrator-platform/framework-go => ../framework-go
+	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator => ../framework-go-http-generator
+	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel => ../framework-go-projectmodel
+)
