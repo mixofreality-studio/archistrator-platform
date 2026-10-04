@@ -52,11 +52,11 @@
         {"id": "srsReview", "kind": "review", "title": "SRS Review", "phase": "requirements", "dependsOn": ["srs"], "reviews": "srs"},
         {"id": "detailedDesign", "kind": "dispatch", "title": "Detailed Design", "phase": "detailed_design", "dependsOn": ["srsReview"], "command": "service-detailed-design", "workerClass": "senior-developer", "artifactKind": "DetailedDesign"},
         {"id": "designReview", "kind": "review", "title": "Design Review", "phase": "detailed_design", "dependsOn": ["detailedDesign"], "reviews": "detailedDesign"},
-        {"id": "stp", "kind": "dispatch", "title": "Test Plan", "phase": "test_plan", "dependsOn": ["designReview"], "command": "service-test-plan", "workerClass": "test-engineer", "artifactKind": "STP"},
-        {"id": "stpReview", "kind": "review", "title": "Test Plan Review", "phase": "test_plan", "dependsOn": ["stp"], "reviews": "stp"},
-        {"id": "construction", "kind": "dispatch", "title": "Construction", "phase": "construction", "dependsOn": ["stpReview"], "command": "service-construction", "workerClass": "junior-developer", "artifactKind": "Construction"},
+        {"id": "construction", "kind": "dispatch", "title": "Construction", "phase": "construction", "dependsOn": ["designReview"], "command": "service-construction", "workerClass": "junior-developer", "artifactKind": "Construction"},
         {"id": "codeReview", "kind": "review", "title": "Code Review", "phase": "construction", "dependsOn": ["construction"], "reviews": "construction"},
         {"id": "integration", "kind": "dispatch", "title": "Integration", "phase": "integration", "dependsOn": ["codeReview"], "command": "service-integration", "workerClass": "system-architect", "artifactKind": "Integration"},
+        {"id": "stp", "kind": "dispatch", "title": "Test Plan", "phase": "test_plan", "dependsOn": ["designReview"], "command": "service-test-plan", "workerClass": "test-engineer", "artifactKind": "STP"},
+        {"id": "stpReview", "kind": "review", "title": "Test Plan Review", "phase": "test_plan", "dependsOn": ["stp"], "reviews": "stp"},
         {"id": "testing", "kind": "review", "title": "Testing", "phase": "integration", "dependsOn": ["integration", "stpReview"], "reviews": "integration"}
       ]
     },
@@ -74,11 +74,11 @@
         {"id": "srsReview", "kind": "review", "title": "UX Requirements Review", "phase": "requirements", "dependsOn": ["srs"], "reviews": "srs"},
         {"id": "detailedDesign", "kind": "dispatch", "title": "Design", "phase": "detailed_design", "dependsOn": ["srsReview"], "command": "frontend-detailed-design", "workerClass": "ui-designer", "artifactKind": "DetailedDesign"},
         {"id": "designReview", "kind": "review", "title": "Design Review", "phase": "detailed_design", "dependsOn": ["detailedDesign"], "reviews": "detailedDesign"},
-        {"id": "stp", "kind": "dispatch", "title": "Flows", "phase": "test_plan", "dependsOn": ["designReview"], "command": "frontend-test-plan", "workerClass": "test-engineer", "artifactKind": "STP"},
-        {"id": "stpReview", "kind": "review", "title": "Flow Review", "phase": "test_plan", "dependsOn": ["stp"], "reviews": "stp"},
-        {"id": "construction", "kind": "dispatch", "title": "Construction", "phase": "construction", "dependsOn": ["stpReview"], "command": "frontend-construction", "workerClass": "junior-developer", "artifactKind": "Construction"},
+        {"id": "construction", "kind": "dispatch", "title": "Construction", "phase": "construction", "dependsOn": ["designReview"], "command": "frontend-construction", "workerClass": "junior-developer", "artifactKind": "Construction"},
         {"id": "codeReview", "kind": "review", "title": "Code Review", "phase": "construction", "dependsOn": ["construction"], "reviews": "construction"},
         {"id": "integration", "kind": "dispatch", "title": "Integration", "phase": "integration", "dependsOn": ["codeReview"], "command": "frontend-integration", "workerClass": "system-architect", "artifactKind": "Integration"},
+        {"id": "stp", "kind": "dispatch", "title": "Flows", "phase": "test_plan", "dependsOn": ["designReview"], "command": "frontend-test-plan", "workerClass": "test-engineer", "artifactKind": "STP"},
+        {"id": "stpReview", "kind": "review", "title": "Flow Review", "phase": "test_plan", "dependsOn": ["stp"], "reviews": "stp"},
         {"id": "testing", "kind": "review", "title": "Flow Testing", "phase": "integration", "dependsOn": ["integration", "stpReview"], "reviews": "integration"}
       ]
     },

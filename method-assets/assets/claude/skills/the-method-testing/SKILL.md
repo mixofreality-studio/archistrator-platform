@@ -41,29 +41,38 @@ the network), ch12 (quality multiplication), ch13 (TradeMe staffing), ch14
 > server, Postgres testcontainer, the in-process `FakeGitHub` + `LocalGitRepo`
 > for GitHub, …); **Playwright** flows for
 > any SPA/UI surface (browser-driven, hence inherently out-of-process even
-> though TS). Hand-written and white-box tests in component packages are
+> though TS). A Client is a contract with ops, and its ops say how it is
+> driven: a **web** client has one op per user action, each taking the one
+> param `action` = `{kind, target data-testid, value?}` (Playwright); an
+> **MCP** client has one op per generated MCP tool (op = the tool's Go method
+> name, tool = its lower-camel form, params = the tool's input properties), and
+> its Go scenario test calls those tools on an in-process MCP server, served by
+> the generated tools handlers the hooks bind to real managers. Hand-written
+> and white-box tests in component packages are
 > removed before merge and the `scenario-tests-only` gate rejects them (§7 R1).
 
 ## 2. When tests are written — test-PLAN-first, NOT TDD
 
 Löwy is *test-plan-first*, not test-first. There is no red-green-refactor.
 
-Per-service life cycle (App A, Table A-1):
-`Requirements → Detailed Design → Test Plan → Construction → Integration`.
+Per-service life cycle (App A, Figure A-1): `Requirements → Detailed Design`,
+then two parallel branches — `Construction → Integration` and `Test Plan` —
+that join at the integration phase's `testing` gate.
 
-- The test-engineer binds the component's **derived scenarios** *before*
-  coding — Löwy's *"list of all the ways the developer will later demonstrate
-  the service does not work,"* here fixed by the use cases rather than invented.
-  The test plan follows the design review (bindings need the frozen contract)
-  and precedes construction.
-- The generated scenario tests exist before construction; construction fills
-  their hooks **in tandem with** the code.
-- The venue runs the scenario tests against the real downstream stack on the
-  activity's testing task; then regression is the union of every component's
-  run.
+- The test-engineer binds the component's **derived scenarios** — Löwy's
+  *"list of all the ways the developer will later demonstrate the service does
+  not work,"* here fixed by the use cases rather than invented. The test plan
+  follows the design review (bindings need the frozen contract) and runs in
+  parallel with construction: construction does not wait for it.
+- Construction builds the component only — no tests.
+- The integration task generates the black-box scenario tests from the
+  reviewed plan, fills their hooks with real collaborators, runs them against
+  the integrated component on the real downstream stack and records the run;
+  the `testing` task — the join — reviews that run. Regression is the union of
+  every component's run.
 
-The discipline: **plan the tests, then build code and tests together, then
-integrate and regression-test.**
+The discipline: **plan the tests beside the code, then integrate and run the
+plan's tests against the integrated component.**
 
 ## 3. The three quality roles (do NOT collapse them)
 
@@ -75,10 +84,9 @@ Löwy (ch09) prescribes three *distinct* roles. QA ≠ testing.
 | **QA engineer** | A *single senior* expert on the *process*: "what will it take to assure quality?" *Not* test execution. *"A sign of organizational maturity."* | Quality gates, process audit, defect taxonomy — a phase-spanning **role**, booked as indirect cost, not an activity | `qa-engineer` |
 
 Löwy's third role, the **software tester** who *runs* system testing and
-regression and files defects (ch09), has no agent here: the construction venue
-runs the generated scenario tests and records the run on the activity's
-testing task, so nobody is dispatched to run tests. Plus: **developers** fill
-the hooks of the generated tests during construction. In Löwy's projects the
+regression and files defects (ch09), has no agent here: the activity's own
+integration task generates the scenario tests, fills their hooks, runs them and
+records the run, so nobody is dispatched just to run tests. In Löwy's projects the
 Regression Test Harness is developer-owned and the System Test Harness
 test-engineer-owned (ch13); on this platform **the platform generates the
 scenario tests from the bindings**, so neither harness is an activity.
@@ -88,22 +96,23 @@ scenario tests from the bindings**, so neither harness is an activity.
 State is git-as-DB: these testing outputs are typed records in
 `.aiarch/state/project.json`, NOT `designs/*.md` files. The per-component test
 plan the test-engineer binds is `.phaseArtifacts.testPlan[<component>]`; the
-venue's runs land in `.testingState.testRuns[]`; the perf rig, quality gates and
+integration task's runs land in `.testingState.testRuns[]`; the perf rig, quality gates and
 defects stay under `.testingState`. Per-activity status lives in
 `.activityConstruction`.
 
 Testing contributes **no activity of its own** to the network. Table 11-1's #4
 (Test Plan) and #21 (System Testing) are carried by every coding activity's own
 lifecycle (App A): the `test_plan` phase binds the component's scenarios after
-the design review and before construction, and the `testing` review task inside
-the `integration` phase gates on the venue's run of those scenarios at the
-current revision. The network's sink is the project-end milestone, with every
+the design review, in parallel with construction, and the `testing` review task
+inside the `integration` phase joins the two branches: it gates on the
+integration task's run of those scenarios at the current revision. The network's sink is the project-end milestone, with every
 terminal activity feeding it directly.
 
 | Lifecycle task | Position | Owner | project.json target |
 |---|---|---|---|
-| `stp` — bind the component's derived scenarios | after `designReview`, before `construction` | test-engineer | `.phaseArtifacts.testPlan[<component>]` |
-| `testing` — the venue's scenario run at the current revision | gate of the `integration` phase | the venue writes the run; reviewers read it | `.testingState.testRuns[]` |
+| `stp` — bind the component's derived scenarios | after `designReview`, parallel to `construction` | test-engineer | `.phaseArtifacts.testPlan[<component>]` |
+| `integration` — generate the tests from the plan, fill hooks, run, record | after `codeReview` | the integration agent writes the run | `.testingState.testRuns[]` |
+| `testing` — review the run at the current revision | gate of the `integration` phase; joins `integration` and `stpReview` | reviewers read the run | — |
 
 **Not activities:**
 - **Scenario tests** (Table 11-1 #5's harness) — generated by the platform from
@@ -186,8 +195,8 @@ applies to archistrator itself and to **every system archistrator builds**.
 - **R1 — Every test is black-box against a published contract.** The only
   tests permitted in archistrator-built component code (managers, engines,
   resource access, clients, the UI app) are the generated scenario tests and
-  their hooks file; any white-box or hand-written test made during construction
-  is removed before merge, and the `scenario-tests-only` gate enforces it.
+  their hooks file; any white-box or hand-written test is removed by the
+  integration task before merge, and the `scenario-tests-only` gate enforces it.
   White-box, in-package, internals-reaching tests are an anti-pattern *in
   Löwy's own terms* (App A's per-service testing is "black-box against the test
   plan"), not a tier we keep.
@@ -222,8 +231,8 @@ applies to archistrator itself and to **every system archistrator builds**.
   results and probes — written by `test-engineer` on the component's test-plan
   task, and that authoring is **blind to the implementation**: it sees only the
   use cases + the component's contract, never the component source. The
-  construction agent fills only the hooks the generator left; the venue runs the
-  tests and records the run. **This separation IS the anti-cheat guarantee** —
+  construction agent writes no tests; the integration agent fills only the
+  hooks the generator left, runs the tests and records the run. **This separation IS the anti-cheat guarantee** —
   one agent must never author both a component and the plan that judges it;
   black-box surface alone is not enough without it.
 - **R6 — Enforcement is mechanical.** The arch checker / CI asserts: (a) the

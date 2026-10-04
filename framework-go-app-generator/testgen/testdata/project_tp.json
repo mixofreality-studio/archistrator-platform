@@ -644,7 +644,28 @@
         "operations": [
           {
             "name": "OpenOrders",
-            "params": [],
+            "params": [
+              {
+                "name": "action",
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "type": "string"
+                    },
+                    "target": {
+                      "type": "string"
+                    },
+                    "value": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "kind"
+                  ]
+                }
+              }
+            ],
             "error": false
           }
         ]

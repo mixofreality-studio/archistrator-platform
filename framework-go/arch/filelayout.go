@@ -25,8 +25,10 @@ import (
 // declare package <leaf>_test (rule test-package-not-external) — and the hooks
 // file may import only the component's own package, the standard library, a
 // platform test double package (…/testinfra), the scenario host
-// (…scenariohost) and the consuming module's Spec.HooksImportAllowlist
-// prefixes (rule hooks-import-not-allowed). Any other _test.go file in a
+// (…scenariohost), the module's own component packages through their public
+// API — real collaborators, never a component's internal/ sub-package, a
+// _test helper or a generated fake (DCT §12 B2) — and the consuming module's
+// Spec.HooksImportAllowlist prefixes (rule hooks-import-not-allowed). Any other _test.go file in a
 // component package — a hand-written unit test, a white-box test, the old
 // <stereotype>_test.go — is a scenario-tests-only violation: the component's
 // tests are DERIVED from its use cases and test plan, never hand-authored.
@@ -266,10 +268,13 @@ func allowedTestFileViolations(p *packages.Package, spec Spec, fpath string, isH
 // always; a platform test double package (path ending in "/testinfra") and
 // the scenario host (any path SEGMENT ending in "scenariohost" — the module
 // is framework-go-scenariohost, so a "/scenariohost" substring would never
-// match its real import path) always; and any Spec.HooksImportAllowlist
-// prefix — the consuming module's generated contract packages, typically.
+// match its real import path) always; the module's own component packages
+// (isComponentPackage — DCT §12 B2: a hooks file builds REAL collaborators
+// through their public constructors); and any Spec.HooksImportAllowlist
+// prefix — the consuming module's generated contract packages or a generated
+// fake, typically.
 func hooksImportAllowed(importPath, own string, spec Spec) bool {
-	if importPath == own || isStdlibImport(importPath) {
+	if importPath == own || isStdlibImport(importPath) || isComponentPackage(importPath, spec) {
 		return true
 	}
 	if strings.HasSuffix(importPath, "/testinfra") {
@@ -286,6 +291,50 @@ func hooksImportAllowed(importPath, own string, spec Spec) bool {
 		}
 	}
 	return false
+}
+
+// isComponentPackage reports whether importPath is one of the module's own
+// component packages, imported through its PUBLIC API (DCT §12 B2): it lies
+// under spec.ModulePrefix strictly beneath a declared layer's DirPrefix (a
+// layer root such as "engine" is not a component, and an unclassified module
+// package never is), and no path segment below ModulePrefix is "internal" (a
+// component's internal/ sub-package — Go hides another component's, this
+// rule also hides the hooks file's own), "testdata", a "_test"-suffixed
+// helper, or a generated "fake" double (a fake is test support, not a
+// collaborator; a module that wants one names it in
+// Spec.HooksImportAllowlist). The decision is path-only, like the rest of
+// the hooks rule, so it needs no load of the imported package: a path that
+// names no real package fails the build long before this gate matters.
+func isComponentPackage(importPath string, spec Spec) bool {
+	rel, ok := strings.CutPrefix(importPath, spec.ModulePrefix)
+	if !ok || spec.ModulePrefix == "" || !beneathLayerDir(rel, spec) {
+		return false
+	}
+	segs := strings.Split(rel, "/")
+	for _, seg := range segs {
+		if !publicComponentSegment(seg) {
+			return false
+		}
+	}
+	return segs[len(segs)-1] != "fake"
+}
+
+// beneathLayerDir reports whether rel (a ModulePrefix-relative path) lies
+// strictly beneath one of spec's layer directories.
+func beneathLayerDir(rel string, spec Spec) bool {
+	for _, l := range spec.Layers {
+		if strings.HasPrefix(rel, l.DirPrefix+"/") {
+			return true
+		}
+	}
+	return false
+}
+
+// publicComponentSegment reports whether one path segment of a component
+// import path keeps it on the public API: not empty, not "internal" or
+// "testdata", and not a "_test"-suffixed helper.
+func publicComponentSegment(seg string) bool {
+	return seg != "" && seg != "internal" && seg != "testdata" && !strings.HasSuffix(seg, "_test")
 }
 
 // workflowFuncs returns the name of every top-level func in f whose parameter

@@ -125,7 +125,7 @@ Nothing plays System Testing's Table 11-1 role as an activity (Step 2b below): e
 
 **No testing activity is emitted or authored.** Table 11-1's #4 (Test Plan) and #21 (System Testing) are carried by every coding activity's own lifecycle (App A: Requirements → Detailed Design → **Test Plan** → Construction → Integration, whose gate is the activity's **testing** task). The network has no system test plan and no terminal system-testing gate; its sink is the project-end milestone, which every terminal activity feeds directly.
 
-Per Löwy's testing doctrine ([[the-method-testing]], § Deterministic component scenarios) — unit testing alone is "borderline useless"; the load-bearing verification is the integrated system — each component's test plan is the `test-engineer`'s **binding of the scenarios derived from the committed use cases** (one per elementary path, one stimulus per path), written after the component's design review and before its construction, and its testing gate is the venue's run of those scenarios at the current revision. The union of passing component runs is the proof that the system works. **Not** BDD/Gherkin specs, and never one activity per test plan: the test plan lives inside the coding activity. Its review (`system-architect` + `product-manager` + `qa-engineer`) is computed at construction time by `[[the-method-review-routing]]` (`artifactKind: test-plan`).
+Per Löwy's testing doctrine ([[the-method-testing]], § Deterministic component scenarios) — unit testing alone is "borderline useless"; the load-bearing verification is the integrated system — each component's test plan is the `test-engineer`'s **binding of the scenarios derived from the committed use cases** (one per elementary path, one stimulus per path), written after the component's design review in parallel with its construction, and its testing gate — where the two branches join — is the integration task's run of those scenarios against the integrated component at the current revision. The union of passing component runs is the proof that the system works. **Not** BDD/Gherkin specs, and never one activity per test plan: the test plan lives inside the coding activity. Its review (`system-architect` + `product-manager` + `qa-engineer`) is computed at construction time by `[[the-method-review-routing]]` (`artifactKind: test-plan`).
 
 **No UI-design activity.** A frontend activity's own lifecycle already carries its UX-requirements and design phases (dispatched to `ui-designer`; review computed at construction time by `[[the-method-review-routing]]`), so the base plan has no separate UI-design or scaffold activity and no per-manager SPA activities. Pulling client design out into an activity of its own is only ever a **compression move** ([[the-method-compressed-solution]]), never part of the base plan.
 
@@ -232,14 +232,14 @@ Per ch. 11 Table 11-2 / ch. 13 Table 13-4, build the roles-and-phases mapping:
 | Project Manager | X | X | X | X | X |
 | Product Manager | X | X | X | X | X |
 | Senior dev | X | X | X | X | |
-| Junior dev | | X (fills generated scenario-test hooks; writes no tests of their own) | X | X | |
+| Junior dev | | X (builds the component only; writes no tests) | X | X | |
 | Test engineer | | X (per-component scenario bindings) | X (per-component scenario bindings) | X (perf additive only) | X |
 | QA engineer | X (gates) | X (process audit) | X | X | X |
 | UX designer | X | X | | | |
 | DevOps | X | X | X | X | X |
 ```
 
-Per Löwy ch. 9: the **test engineer** (binds each component's scenarios — the code to break the system is generated from them), the **software tester** (runs system testing in the book; on this platform the construction venue runs the generated tests, so the row is gone), and the **QA engineer** (senior, process — "what will it take to assure quality?") are three *distinct* roles. Do not collapse them.
+Per Löwy ch. 9: the **test engineer** (binds each component's scenarios — the code to break the system is generated from them), the **software tester** (runs system testing in the book; on this platform each activity's integration task runs the generated tests, so the row is gone), and the **QA engineer** (senior, process — "what will it take to assure quality?") are three *distinct* roles. Do not collapse them.
 
 This table is staffing, not activities. The QA engineer spans the phases and, like every phase-spanning role, is booked as indirect cost — there is no QA activity.
 

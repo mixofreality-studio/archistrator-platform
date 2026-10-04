@@ -47,24 +47,29 @@ type goEmit struct {
 	pkg     string // package name == import alias (modelgen names the package after goPkg's last segment)
 	layer   layerPkg
 	multi   bool // several contracts share the package: names carry the interface infix
+	manager bool // a manager package: its TestMain hands the host workflows to replay
 	body    bytes.Buffer
-	imports map[string]bool // extra import paths (x-go-import bindings)
-	subject bool            // ≥1 contract has a runnable binding
+	imports map[string]bool   // extra import paths (x-go-import bindings)
+	subject bool              // ≥1 contract has a runnable binding
+	owners  map[string]string // declared Go name → the binding that declares it (claim)
 }
 
 // emitGo emits one Go package's generated scenarios file and, when any
 // binding is runnable, its once-emitted hooks file.
-func emitGo(out *Output, cfg Config, goPkg string, plans []componentPlan) error {
-	stereotype, err := sharedStereotype(goPkg, plans)
-	if err != nil {
-		return err
-	}
+func emitGo(out *Output, cfg Config, goPkg, stereotype string, plans []componentPlan) error {
 	layer, ok := layerPkgs[layerKey(plans[0].Contract)]
 	if !ok {
 		return fmt.Errorf("testgen: %s: layer %q has no framework call context", goPkg, plans[0].Contract.Layer)
 	}
-	g := &goEmit{cfg: cfg, goPkg: goPkg, pkg: path.Base(goPkg), layer: layer, multi: len(plans) > 1, imports: map[string]bool{}}
+	g := &goEmit{
+		cfg: cfg, goPkg: goPkg, pkg: path.Base(goPkg), layer: layer,
+		multi: len(plans) > 1, manager: layerKey(plans[0].Contract) == "manager",
+		imports: map[string]bool{}, owners: map[string]string{},
+	}
 	for _, plan := range plans {
+		if err := g.claimPlan(plan); err != nil {
+			return err
+		}
 		g.emitPlan(plan)
 	}
 	src, err := g.generatedFile(plans)
@@ -96,11 +101,13 @@ func sharedStereotype(goPkg string, plans []componentPlan) (string, error) {
 
 // ---- naming ----
 
+// tag is the infix every per-binding name carries in a package several
+// contracts share (two contracts there can bind the SAME scenario id).
 func (g *goEmit) tag(plan componentPlan) string {
 	if !g.multi {
 		return ""
 	}
-	return "_" + ident(ifaceName(plan))
+	return ifaceName(plan)
 }
 
 // ifaceName is the contract's Go interface name, falling back to the
@@ -120,18 +127,66 @@ func exportName(s string) string {
 }
 
 func (g *goEmit) subjectType(plan componentPlan) string { return g.pkg + "." + ifaceName(plan) }
-func (g *goEmit) subjectName(plan componentPlan) string { return "newSubject" + g.tag(plan) }
+func (g *goEmit) subjectName(plan componentPlan) string {
+	return hookName(subjectPrefix, g.tag(plan), "", 0, 0)
+}
+
+// testName keeps the spec's TestScenario_<id> spelling: revive exempts Test*
+// funcs in test files, and `make test-scenarios` and the construct workflow
+// select the tests with -run 'TestScenario_'.
 func (g *goEmit) testName(plan componentPlan, id string) string {
-	return "TestScenario" + g.tag(plan) + "_" + ident(id)
+	tag := ""
+	if g.multi {
+		tag = "_" + ident(ifaceName(plan))
+	}
+	return "TestScenario" + tag + "_" + ident(id)
 }
 func (g *goEmit) inputName(plan componentPlan, id string, seq int) string {
-	return fmt.Sprintf("Input%s_%s_%d", g.tag(plan), ident(id), seq)
+	return hookName(inputPrefix, g.tag(plan), id, seq, 0)
 }
 func (g *goEmit) stepName(plan componentPlan, id string, seq int) string {
-	return fmt.Sprintf("Step%s_%s_%d", g.tag(plan), ident(id), seq)
+	return hookName(stepPrefix, g.tag(plan), id, seq, 0)
 }
 func (g *goEmit) probeName(plan componentPlan, id string, seq, n int) string {
-	return fmt.Sprintf("Probe%s_%s_%d_%d", g.tag(plan), ident(id), seq, n)
+	return hookName(probePrefix, g.tag(plan), id, seq, n)
+}
+
+// claimPlan claims every name one contract's bindings declare in the package:
+// the subject constructor, each scenario test, each step's input type, each
+// hooked step and each hooked probe.
+func (g *goEmit) claimPlan(plan componentPlan) error {
+	if err := g.claim(g.subjectName(plan), plan.Key); err != nil {
+		return err
+	}
+	for _, bs := range plan.Scenarios {
+		id := bs.Scenario.ID
+		owner := plan.Key + " " + id
+		if err := g.claim(g.testName(plan, id), owner); err != nil {
+			return err
+		}
+		for _, st := range bs.Steps {
+			if err := g.claimStep(plan, bs, st, fmt.Sprintf("%s step %d", owner, st.Bind.Seq)); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func (g *goEmit) claimStep(plan componentPlan, bs boundScenario, st boundStep, owner string) error {
+	id, seq := bs.Scenario.ID, st.Bind.Seq
+	names := []string{g.inputName(plan, id, seq), g.stepName(plan, id, seq)}
+	for i, pr := range st.Bind.Probes {
+		if _, inline := g.inlineProbe(plan, pr); !inline {
+			names = append(names, g.probeName(plan, id, seq, i+1))
+		}
+	}
+	for _, n := range names {
+		if err := g.claim(n, owner); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // ---- generated file ----
@@ -198,8 +253,10 @@ func (g *goEmit) emitScenario(plan componentPlan, bs boundScenario) {
 	name := g.testName(plan, bs.Scenario.ID)
 	fmt.Fprintf(&g.body, "// %s — %s (use case %s; path %s).\n", name, bs.Scenario.Title, bs.Scenario.UseCase, strings.Join(bs.Scenario.Path, " → "))
 	fmt.Fprintf(&g.body, "func %s(t *testing.T) {\n", name)
-	fmt.Fprintf(&g.body, "\th := scenariohost.Start(t, %q)\n", plan.Key)
-	fmt.Fprintf(&g.body, "\th.RunScenario(t, %q, func(t *testing.T) {\n", bs.Scenario.ID)
+	g.body.WriteString("\th := scenariohost.Start(t)\n")
+	// The verdict is keyed by (component, scenario): facets sharing this
+	// package can bind the same scenario id, each into its own results.json.
+	fmt.Fprintf(&g.body, "\th.RunScenario(t, %q, %q, func(t *testing.T) {\n", plan.Key, bs.Scenario.ID)
 	switch {
 	case bs.Binding.Skip != nil:
 		fmt.Fprintf(&g.body, "\t\tt.Skip(%q)\n", bs.Binding.Skip.Reason+" (until "+bs.Binding.Skip.Until+")")
@@ -238,7 +295,7 @@ func (g *goEmit) emitStep(plan componentPlan, bs boundScenario, st boundStep) {
 }
 
 // emitProbe emits one probe: inline when it reads the subject's own contract,
-// a Probe_* hook when it reads another component.
+// a probe hook when it reads another component.
 func (g *goEmit) emitProbe(plan componentPlan, bs boundScenario, st boundStep, n int, pr methodcheck.Probe) {
 	id, seq := bs.Scenario.ID, st.Bind.Seq
 	v := fmt.Sprintf("%d_%d", seq, n)
@@ -375,7 +432,19 @@ func (g *goEmit) generatedFile(plans []componentPlan) ([]byte, error) {
 	}
 	fmt.Fprintf(&b, "\npackage %s_test\n\n", g.pkg)
 	g.writeImports(&b, g.generatedImports())
-	fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %q) }\n\n", plans[0].Key)
+	// Main names every component whose scenarios live here, so each gets its
+	// own results.json (an empty one when none of its scenarios ran).
+	comps := make([]string, 0, len(plans))
+	for _, plan := range plans {
+		comps = append(comps, strconv.Quote(plan.Key))
+	}
+	if g.replays() {
+		// A manager's workflows are replayed at every flush (DCT §12 B4): the
+		// hooks file's replayWorkflows registers them with the host.
+		fmt.Fprintf(&b, "func TestMain(m *testing.M) {\n\tscenariohost.MainWithWorkflows(m, %s(), %s)\n}\n\n", replayHook, strings.Join(comps, ", "))
+	} else {
+		fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %s) }\n\n", strings.Join(comps, ", "))
+	}
 	b.Write(g.body.Bytes())
 	if g.subject {
 		g.writeHelpers(&b)
@@ -386,6 +455,11 @@ func (g *goEmit) generatedFile(plans []componentPlan) ([]byte, error) {
 	}
 	return src, nil
 }
+
+// replays reports whether the package's scenarios are replay-gated: a
+// manager package with a runnable binding (one that has a hooks file to
+// declare replayWorkflows; with none, no scenario runs a workflow).
+func (g *goEmit) replays() bool { return g.manager && g.subject }
 
 // generatedImports is the import set of the generated file: the test
 // essentials always; the helpers', the layer's and the contract package's when
@@ -449,13 +523,16 @@ func (g *goEmit) writeHelpers(b *bytes.Buffer) {
 	if g.layer.idempotent {
 		key = ", IdempotencyKey: " + a + ".IdempotencyKey(t.Name() + \"/\" + step)"
 	}
-	fmt.Fprintf(b, goHelpers, a, key, "`")
+	fmt.Fprintf(b, callContextHelper, a, key)
+	fmt.Fprintf(b, expectHelpers, "`")
+	fmt.Fprintf(b, layerErrorHasCode, a)
+	b.WriteString(matchHelpers)
 }
 
-// goHelpers is the helper block's template: %[1]s is the layer package alias,
-// %[2]s the extra Context fields an idempotent layer's call context carries,
-// %[3]s a backtick (the struct tags; a raw literal cannot hold one).
-const goHelpers = `// callContext is the %[1]s call context a generated step calls the subject with:
+// callContextHelper is the layer call context template: %[1]s is the layer
+// package alias, %[2]s the extra Context fields an idempotent layer's call
+// context carries.
+const callContextHelper = `// callContext is the %[1]s call context a generated step calls the subject with:
 // the test's own context, a zero principal and, on an idempotent layer, a key
 // unique to the step. A step that needs an identity is a Hook:true step.
 func callContext(t *testing.T, h *scenariohost.Host, step string) %[1]s.Context {
@@ -464,7 +541,12 @@ func callContext(t *testing.T, h *scenariohost.Host, step string) %[1]s.Context 
 	return %[1]s.Context{Context: h.Context(t)%[2]s}
 }
 
-func mustUnmarshal(t *testing.T, raw string, into any) {
+`
+
+// expectHelpers is the decode-and-assert block every generated Go file
+// carries, whatever its subject: %[1]s is a backtick (the struct tags; a raw
+// literal cannot hold one). It calls errorHasCode, which each dialect spells.
+const expectHelpers = `func mustUnmarshal(t *testing.T, raw string, into any) {
 	t.Helper()
 	if err := json.Unmarshal([]byte(raw), into); err != nil {
 		t.Fatalf("testgen: decode %%s: %%v", raw, err)
@@ -478,9 +560,9 @@ func mustUnmarshal(t *testing.T, raw string, into any) {
 func expect(t *testing.T, scenario string, seq int, out any, err error, expectJSON string) {
 	t.Helper()
 	var want struct {
-		Result        string %[3]sjson:"result"%[3]s
-		ErrorExpected bool   %[3]sjson:"errorExpected"%[3]s
-		ErrorCode     string %[3]sjson:"errorCode"%[3]s
+		Result        string %[1]sjson:"result"%[1]s
+		ErrorExpected bool   %[1]sjson:"errorExpected"%[1]s
+		ErrorCode     string %[1]sjson:"errorCode"%[1]s
 	}
 	mustUnmarshal(t, expectJSON, &want)
 	if want.ErrorExpected {
@@ -501,7 +583,11 @@ func expect(t *testing.T, scenario string, seq int, out any, err error, expectJS
 	}
 }
 
-// errorHasCode matches the layer error's kind name, or the code as a substring
+`
+
+// layerErrorHasCode is a layer component's code match: %[1]s is the layer
+// package alias whose typed Error carries the kind.
+const layerErrorHasCode = `// errorHasCode matches the layer error's kind name, or the code as a substring
 // of the error text for a component-specific code.
 func errorHasCode(err error, code string) bool {
 	var le *%[1]s.Error
@@ -511,7 +597,10 @@ func errorHasCode(err error, code string) bool {
 	return strings.Contains(err.Error(), code)
 }
 
-// resultMatches decodes the expectation (a JSON document, or a bare string)
+`
+
+// matchHelpers is the JSON-subset comparison expect uses; no format verbs.
+const matchHelpers = `// resultMatches decodes the expectation (a JSON document, or a bare string)
 // and the marshalled outcome, and compares them as a subset.
 func resultMatches(wantRaw string, got any) bool {
 	var want any

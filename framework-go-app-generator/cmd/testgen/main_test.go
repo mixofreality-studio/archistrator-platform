@@ -49,7 +49,7 @@ func TestRun_WriteThenCheck(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	edited = append(edited, []byte("\nfunc Step_extra(t *testing.T) {}\n")...)
+	edited = append(edited, []byte("\nfunc stepExtraS1(t *testing.T) {}\n")...)
 	if err := os.WriteFile(hooks, edited, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -61,7 +61,7 @@ func TestRun_WriteThenCheck(t *testing.T) {
 		t.Fatal(err)
 	}
 	// The pruned package's agent-owned hooks file stays behind (it references
-	// Input_ types the generated sibling no longer declares, so the package
+	// input types the generated sibling no longer declares, so the package
 	// would not compile); -check names it so the break is attributable.
 	staleHooks := filepath.Join(root, "internal", "manager", "gone", "manager_hooks_test.go")
 	if err := os.WriteFile(staleHooks, []byte("package gone_test\n"), 0o600); err != nil {
@@ -82,7 +82,7 @@ func TestRun_WriteThenCheck(t *testing.T) {
 	}
 	for _, want := range []string{
 		"stale: internal/manager/billing/manager_scenarios.gen_test.go",
-		"orphan hook Step_extra in internal/manager/billing/manager_hooks_test.go",
+		"orphan hook stepExtraS1 in internal/manager/billing/manager_hooks_test.go",
 		"orphan generated file internal/manager/gone/manager_scenarios.gen_test.go", // no plan produces it any more; a write run would prune it
 		"orphan hooks file internal/manager/gone/manager_hooks_test.go",             // its generated sibling left the plan; agent-owned, so reported, never pruned
 		"orphan hooks file uitests/generated/goneClient/hooks.ts",

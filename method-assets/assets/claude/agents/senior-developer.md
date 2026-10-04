@@ -82,7 +82,7 @@ When dispatched on a `detailed-design` activity for component `<X>`:
 
 When dispatched on a `construction` activity (in small teams without juniors):
 
-- Implement the contract you previously designed, in the package its `goPackage` names, per the junior-developer Workflow (Go build/vet/test from that package's module root, `GOWORK=off`; notes in the PR).
+- Implement the contract you previously designed, in the package its `goPackage` names, per the junior-developer Workflow (Go format/build/vet, no tests, from that package's module root, `GOWORK=off`; notes in the PR).
 - Code review by another senior or by the architect.
 
 ## Boundaries

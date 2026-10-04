@@ -105,12 +105,15 @@ type Spec struct {
 	// filelayout.go). The hooks file is the ONE hand-written test file a
 	// component may carry, and it may import only what a black-box scenario
 	// test needs: the component's own package, the standard library, a
-	// platform test double package (import path ending in "/testinfra") and
-	// the scenario host (a path segment ending in "scenariohost") are always
-	// allowed; this list adds the consuming module's own extras — typically
-	// the prefix of its generated contract packages — matched as string
-	// prefixes. Leave nil/empty (the default) and only the built-in set is
-	// allowed.
+	// platform test double package (import path ending in "/testinfra"), the
+	// scenario host (a path segment ending in "scenariohost") and the
+	// module's own component packages through their public API (real
+	// collaborators — DCT §12 B2; never a component's internal/ sub-package,
+	// a _test helper or a generated fake) are always allowed; this list adds
+	// the consuming module's own extras — typically the prefix of its
+	// generated contract packages, or a generated fake it arranges against —
+	// matched as string prefixes. Leave nil/empty (the default) and only the
+	// built-in set is allowed.
 	HooksImportAllowlist []string
 }
 
