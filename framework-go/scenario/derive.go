@@ -209,7 +209,9 @@ type callGroup struct {
 }
 
 // callStimuli is Amendment A1/A2/A4 for node n. Every call into a component
-// yields a stimulus into it, in call order. Calls sharing an Alt tag into the
+// yields a stimulus into it, in call order — into the facet that declares the
+// resolved op when the component's operations are published by several
+// contracts (Contract.FacetOf). Calls sharing an Alt tag into the
 // same component are alternatives and collapse to one stimulus whose Via lists
 // the alternative callers; alternatives into different components (e.g. the
 // web and MCP clients) each keep their own. Each op the call's label names (A2)
@@ -243,7 +245,8 @@ func callStimuli(in Input, d Diagram, view *View, n Node, guard string) []InputE
 	return out
 }
 
-// groupStimuli expands one call group into one stimulus per resolved op.
+// groupStimuli expands one call group into one stimulus per resolved op, each
+// on the contract that declares it (a facet of the callee, or the callee).
 func groupStimuli(in Input, d Diagram, n Node, guard string, g *callGroup) []InputEv {
 	first := g.calls[0]
 	base := InputEv{Kind: n.Kind, From: first.From, To: Normalize(first.To)}
@@ -265,10 +268,11 @@ func groupStimuli(in Input, d Diagram, n Node, guard string, g *callGroup) []Inp
 		return []InputEv{base}
 	}
 	out := make([]InputEv, 0, len(ops))
-	for k, op := range ops {
+	for k, ot := range ops {
 		ev := base
 		ev.Via = append([]string(nil), base.Via...)
-		ev.Op = op
+		ev.To = ot.to
+		ev.Op = ot.op
 		ev.Call = call
 		if len(ops) > 1 {
 			ev.Call = fmt.Sprintf("%s.%d", call, k)
@@ -279,15 +283,15 @@ func groupStimuli(in Input, d Diagram, n Node, guard string, g *callGroup) []Inp
 }
 
 // groupOps is the union, in call then label order and without repeats, of the
-// ops every call of a group resolves (A2).
-func groupOps(in Input, calls []Call) []string {
-	var ops []string
-	seen := map[string]bool{}
+// ops every call of a group resolves (A2), each with the contract it lands on.
+func groupOps(in Input, calls []Call) []opTarget {
+	var ops []opTarget
+	seen := map[opTarget]bool{}
 	for _, c := range calls {
-		for _, op := range resolveOps(in, c.To, c.Label) {
-			if !seen[op] {
-				seen[op] = true
-				ops = append(ops, op)
+		for _, ot := range resolveOps(in, c.To, c.Label) {
+			if !seen[ot] {
+				seen[ot] = true
+				ops = append(ops, ot)
 			}
 		}
 	}

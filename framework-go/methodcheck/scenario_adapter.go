@@ -108,9 +108,15 @@ func viewOf(v DynamicView) scenario.View {
 }
 
 // contractOf keeps a contract's operation surface (op names + param names) under its
-// serviceContracts key, which is what the derivation resolves call labels against.
+// serviceContracts key, which is what the derivation resolves call labels against. A
+// contract whose `component` names a different component is a facet of it (FacetOf):
+// the dynamic views address the component, and the derivation lands each call on the
+// facet that declares its op.
 func contractOf(key string, sc ServiceContract) scenario.Contract {
 	ct := scenario.Contract{Component: key}
+	if sc.Component != "" && scenario.Normalize(sc.Component) != scenario.Normalize(key) {
+		ct.FacetOf = sc.Component
+	}
 	for _, op := range sc.Interface.Operations {
 		o := scenario.Op{Name: op.Name}
 		for _, prm := range op.Params {
