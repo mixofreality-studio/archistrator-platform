@@ -1,6 +1,7 @@
 package methodcheck
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -198,4 +199,53 @@ func TestCheck_AlignmentSurfacesMissingPackage(t *testing.T) {
 	if !hasRuleFindings(findings, ruleAlignMissingPkg) {
 		t.Fatalf("expected ALIGN-MISSING-PKG when the manager package is excluded, got %+v", findings)
 	}
+}
+
+const opReachedSubprocessEnv = "METHODCHECK_OPREACHED_SUBPROCESS"
+
+// TestCheck_UnreachedOpFailsCheck proves the A5 ruling is enforced in every app repo:
+// Check (the scaffolded aiarch_method_test.go entry point) FAILS a project carrying a
+// contract operation no use case's dynamic view calls. The child drives Check over
+// tp_clean.json plus one unreached op; the parent asserts the child failed on
+// TP-OP-REACHED as an ERROR naming the op.
+func TestCheck_UnreachedOpFailsCheck(t *testing.T) {
+	if os.Getenv(opReachedSubprocessEnv) == "1" {
+		Check(t, ProjectSpec{RepoRoot: writeUnreachedOpState(t)})
+		return
+	}
+	cmd := exec.Command(os.Args[0], "-test.run=^TestCheck_UnreachedOpFailsCheck$", "-test.v")
+	cmd.Env = append(os.Environ(), opReachedSubprocessEnv+"=1")
+	out, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("expected Check to FAIL on an unreached op; subprocess passed:\n%s", out)
+	}
+	if !strings.Contains(string(out), "ERROR  [TP-OP-REACHED]  billingManager.Unreached") {
+		t.Fatalf("subprocess failed, but not with TP-OP-REACHED as an ERROR naming billingManager.Unreached:\n%s", out)
+	}
+}
+
+// writeUnreachedOpState materializes repoRoot/.aiarch/state/project.json from
+// tp_clean.json with one extra billingManager op no dynamic view calls, and returns
+// repoRoot.
+func writeUnreachedOpState(t *testing.T) string {
+	t.Helper()
+	var doc map[string]any
+	if err := json.Unmarshal(readFixture(t, "tp_clean.json"), &doc); err != nil {
+		t.Fatalf("decode fixture: %v", err)
+	}
+	iface := doc["serviceContracts"].(map[string]any)["billingManager"].(map[string]any)["interface"].(map[string]any)
+	iface["operations"] = append(iface["operations"].([]any), map[string]any{"name": "Unreached", "params": []any{}})
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatalf("encode fixture: %v", err)
+	}
+	repoRoot := t.TempDir()
+	dir := filepath.Join(repoRoot, ".aiarch", "state")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatalf("mkdir: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "project.json"), raw, 0o644); err != nil {
+		t.Fatalf("write state: %v", err)
+	}
+	return repoRoot
 }
