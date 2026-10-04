@@ -88,20 +88,23 @@ func TestLifecycles_Acyclic(t *testing.T) {
 	}
 }
 
-// Figure A-1's Test Plan branch is now serial: the scenario bindings need the
-// frozen contract (after designReview), and construction fills the hooks of the
-// tests generated from those bindings (after stpReview).
-func TestLifecycles_ServiceAndFrontendFollowFigureA1(t *testing.T) {
+// Figure A-1's fork (spec §12 B12, which supersedes §8's serialization): after
+// the design review the Test Plan branch and the Construction trunk run in
+// parallel — bindings need only the frozen contract, construction needs no test
+// plan — and they join at the integration phase's `testing` gate, which judges
+// the run the integration task made of the reviewed plan's black-box tests
+// against the integrated component.
+func TestLifecycles_ServiceAndFrontendForkPerFigureA1(t *testing.T) {
 	want := map[string][]string{
 		"srs":            {},
 		"srsReview":      {"srs"},
 		"detailedDesign": {"srsReview"},
 		"designReview":   {"detailedDesign"},
-		"stp":            {"designReview"},
-		"stpReview":      {"stp"},
-		"construction":   {"stpReview"},
+		"construction":   {"designReview"},
 		"codeReview":     {"construction"},
 		"integration":    {"codeReview"},
+		"stp":            {"designReview"},
+		"stpReview":      {"stp"},
 		"testing":        {"integration", "stpReview"},
 	}
 	for _, key := range []string{"service", "frontend"} {
@@ -119,16 +122,52 @@ func TestLifecycles_ServiceAndFrontendFollowFigureA1(t *testing.T) {
 				t.Errorf("%s: %s dependsOn = %v, want %v", key, task.ID, task.DependsOn, deps)
 			}
 		}
-		// Authored in lifecycle order: a task may only depend on an earlier one,
-		// so the test plan must be written down before the construction it gates.
-		if l.Tasks[4].ID != "stp" || l.Tasks[5].ID != "stpReview" || l.Tasks[6].ID != "construction" {
-			t.Errorf("%s: the Test Plan tasks must be authored between Design Review and Construction", key)
+		// The trunk is authored first: the layout keeps the first-authored chain
+		// on lane 0, so Detailed Design → Construction → Integration is the trunk
+		// and the Test Plan branch is authored after it, ahead of the join.
+		if l.Tasks[2].ID != "detailedDesign" || l.Tasks[4].ID != "construction" || l.Tasks[7].ID != "stp" || l.Tasks[9].ID != "testing" {
+			t.Errorf("%s: the Construction trunk must be authored before the Test Plan branch, and the testing join last", key)
+		}
+	}
+}
+
+// Neither branch of the fork waits for the other: construction never depends,
+// even transitively, on the test plan, and the test plan never on construction.
+// Only the `testing` join has both upstream.
+func TestLifecycles_TestPlanAndConstructionAreParallel(t *testing.T) {
+	for _, key := range []string{"service", "frontend"} {
+		l, _ := LifecycleFor(key)
+		deps := map[string][]string{}
+		for _, task := range l.Tasks {
+			deps[task.ID] = task.DependsOn
+		}
+		var upstream func(id string, seen map[string]bool) map[string]bool
+		upstream = func(id string, seen map[string]bool) map[string]bool {
+			for _, d := range deps[id] {
+				if !seen[d] {
+					seen[d] = true
+					upstream(d, seen)
+				}
+			}
+			return seen
+		}
+		for _, branch := range []struct{ task, mustNotWaitFor string }{
+			{"construction", "stp"}, {"codeReview", "stp"}, {"integration", "stpReview"},
+			{"stp", "construction"}, {"stpReview", "codeReview"},
+		} {
+			if upstream(branch.task, map[string]bool{})[branch.mustNotWaitFor] {
+				t.Errorf("%s: %s waits for %s, but the test plan and construction run in parallel", key, branch.task, branch.mustNotWaitFor)
+			}
+		}
+		join := upstream("testing", map[string]bool{})
+		if !join["integration"] || !join["stpReview"] {
+			t.Errorf("%s: testing must join the integration and the reviewed test plan, upstream = %v", key, join)
 		}
 	}
 }
 
 // Bindings need the frozen contract's types, so the test plan follows the
-// design review; construction then fills the hooks of tests that already exist.
+// design review — and nothing later.
 func TestServiceAndFrontendTestPlanDependsOnDesignReview(t *testing.T) {
 	for _, typ := range []string{"service", "frontend"} {
 		lc, ok := LifecycleFor(typ)
