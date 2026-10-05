@@ -237,6 +237,11 @@ func (h *Host) RunScenario(t *testing.T, component, id string, fn func(t *testin
 		defer func() {
 			r := ScenarioResult{Scenario: id, DurationMs: int(time.Since(start) / time.Millisecond)}
 			panicked := recover()
+			// Nothing the scenario started outlives it (temporal.go); ending it
+			// before the verdict lets a failure to end it fail the scenario.
+			if err := h.endScenarioWorkflows(start); err != nil {
+				t.Error(err)
+			}
 			switch {
 			case panicked != nil, t.Failed():
 				r.Status = StatusFail

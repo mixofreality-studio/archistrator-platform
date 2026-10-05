@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	enumspb "go.temporal.io/api/enums/v1"
 	"go.temporal.io/sdk/activity"
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
@@ -197,42 +198,72 @@ func TestReplayGatePassesAWorkflowThatReplays(t *testing.T) {
 	}
 }
 
-// TestReplayGateReplaysARunningWorkflowsPartialHistory: a workflow still
-// running at Flush replays up to its last event — clean when the code is
-// unchanged, a fail when it drifted — and a clean one is replayed again at
-// the next flush (it is not settled).
-func TestReplayGateReplaysARunningWorkflowsPartialHistory(t *testing.T) {
+// TestReplayGateReplaysAWorkflowTheScenarioLeftRunning: a workflow a
+// scenario left running is terminated when the scenario ends (nothing a
+// scenario started outlives it, temporal.go), and its partial history — up to
+// the termination — still replays: clean when the code is unchanged, a fail
+// when it drifted.
+func TestReplayGateReplaysAWorkflowTheScenarioLeftRunning(t *testing.T) {
 	shared := Start(t)
 	const wfType = "scenariohostProbeRunning"
 	tq := liveWorker(t, shared, wfType, probeBlockingWorkflow)
 	h := gatedHost(t, shared, wfType, probeBlockingWorkflow)
 	id := uniqueID("running")
-	// Terminated when the TEST ends, not the scenario: it must still be
-	// running at Flush.
-	t.Cleanup(func() { _ = shared.temporal.TerminateWorkflow(context.Background(), id, "", "probe done") })
 	h.RunScenario(t, "probe", "running-P1", func(t *testing.T) {
 		runProbe(t, shared.temporal, tq, wfType, id)
 		waitForActivityCompleted(t, shared.temporal, id)
 	})
+	desc, err := shared.temporal.DescribeWorkflowExecution(t.Context(), id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st := desc.GetWorkflowExecutionInfo().GetStatus(); st != enumspb.WORKFLOW_EXECUTION_STATUS_TERMINATED {
+		t.Fatalf("a workflow the scenario left running must be terminated when it ends, got %v", st)
+	}
 	if err := h.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	if n := len(h.replay.done); n != 0 {
-		t.Fatalf("a running execution must not be settled, got %d settled", n)
+	if n := len(h.replay.done); n != 1 {
+		t.Fatalf("the terminated execution must be replayed and settled, got %d settled", n)
 	}
 	if got := readIndex(t, h.ResultsRoot, "probe"); len(got) != 1 || got[0].Status != StatusPass {
 		t.Fatalf("%+v", got)
 	}
 
-	// The same partial history against drifted code is a fail: a running
-	// execution is compared, not passed over.
+	// The same partial history against drifted code is a fail.
 	drifted := gatedHost(t, shared, wfType, probeWorkflowV2)
 	drifted.booted = h.booted
 	drifted.windows = h.windows
 	drifted.entries = h.entries
 	if err := drifted.Flush(); err == nil || !strings.Contains(err.Error(), id) || !strings.Contains(err.Error(), "TMPRL1100") {
-		t.Fatalf("a drifted running workflow must fail the flush, naming it: %v", err)
+		t.Fatalf("a drifted terminated workflow must fail the flush, naming it: %v", err)
 	}
+}
+
+// TestStartWorkerServesTheHostsClient: a hooks file's subject is served by a
+// worker the host starts on its own dev server, through the client the host
+// hands out — no SDK import, no dial in the hooks file.
+func TestStartWorkerServesTheHostsClient(t *testing.T) {
+	h := Start(t)
+	if h.TemporalClient() == nil {
+		t.Fatal("TemporalClient is nil")
+	}
+	const wfType = "scenariohostProbeHostWorker"
+	tq := "scenariohost-" + wfType
+	h.RunScenario(t, "probe-worker", "worker-P1", func(t *testing.T) {
+		h.StartWorker(t, tq, func(w Worker) {
+			w.RegisterWorkflowWithOptions(probeWorkflowV1, workflow.RegisterOptions{Name: wfType})
+			w.RegisterActivityWithOptions(probeActivity, activity.RegisterOptions{Name: probeActivityName})
+		})
+		run, err := h.TemporalClient().ExecuteWorkflow(t.Context(), client.StartWorkflowOptions{ID: uniqueID("worker"), TaskQueue: tq}, wfType)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out string
+		if err := run.Get(t.Context(), &out); err != nil || out != "ok" {
+			t.Fatalf("got %q, %v", out, err)
+		}
+	})
 }
 
 // waitForActivityCompleted polls id's history until its activity completed,
