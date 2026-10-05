@@ -51,7 +51,7 @@ func TestIntegrationCommandsRunAndRecordTheScenarios(t *testing.T) {
 		run  []string // the run step's commands, in order
 	}{
 		{"service-integration", []string{"make test-scenarios"}},
-		{"frontend-integration", []string{"npx playwright test", `cp -R "uitests/test-results/<component_id>" test-results/`, "make test-scenarios"}},
+		{"frontend-integration", []string{"npx playwright test", `cp -R "uitests/test-results/${c}" test-results/`, "make test-scenarios"}},
 	} {
 		body := commandBody(t, files, c.slug)
 		if strings.Contains(body, "you do not run them here") {
@@ -59,13 +59,16 @@ func TestIntegrationCommandsRunAndRecordTheScenarios(t *testing.T) {
 		}
 		for _, s := range []string{
 			"[[the-method-testing]]",
-			".phaseArtifacts.testPlan[\"<component_id>\"]",
+			// The plans and results are keyed by CONTRACT name; the activity names its
+			// component kebab (DCT plan 5 r2), so the commands address contracts.
+			".phaseArtifacts.testPlan[\"<contract>\"]",
 			"`make gen-tests`", "`FILL`", "public constructor", "`make gen-tests-check` must be clean",
-			"test-results/<component_id>/results.json",
+			"test-results/<contract>/results.json",
 			`run="${AIARCH_TEST_RUN_ID:-local-`, `artifact="${AIARCH_TEST_ARTIFACT:-.aiarch/test-results/${run}}"`,
 			"aiarch-state-mcp record-test-run --activity <activity_id> --component <component_id>",
 			`--run-id "${run}" --artifact "${artifact}" --results test-results`,
-			`--revision "${AIARCH_REVISION:-$(git rev-parse HEAD)}"`,
+			// The revision is the attempt the dispatch stamps, never a commit SHA.
+			`--revision "${AIARCH_REVISION}"`,
 		} {
 			if !strings.Contains(body, s) {
 				t.Errorf("%s missing %q", c.slug, s)

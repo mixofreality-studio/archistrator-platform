@@ -12,27 +12,31 @@
 
 > **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
-1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, this surface's approved UI design concept, its Client/SPA entry (relationships in/out) in the committed system design, the frozen contracts of the specific Manager/Engine neighbors its flows cross, and the surface's reviewed flows (`.phaseArtifacts.testPlan["<component_id>"]`). The flows are a parallel branch of this activity: if they are not committed yet, do steps 2–3, commit the wiring onto `activity/<activity_id>`, say so in the integration note, `publishDraft` and stop — generate no tests and record no run. The `testing` task joins this step and the reviewed flows, so it holds until a run of the flows exists.
+1. **Read what you need** from `.aiarch/state/project.json` per [[the-method-project-state]]: the activity, this surface's approved UI design concept, its Client/SPA entry (relationships in/out) in the committed system design, the frozen contracts of the specific Manager/Engine neighbors its flows cross, and the surface's reviewed flows — one test plan per contract of the surface, keyed by the contract name (`.phaseArtifacts.testPlan["<contract>"]`: the surface's own contract, e.g. `webClient` for `web-client`, and every facet whose `.serviceContracts` entry names it as `component`, e.g. `webClientBilling`). The flows are a parallel branch of this activity: if they are not committed yet, do steps 2–3, commit the wiring onto `activity/<activity_id>`, say so in the integration note, `publishDraft` and stop — generate no tests and record no run. The `testing` task joins this step and the reviewed flows, so it holds until a run of the flows exists.
 2. **Wire** this surface to its integration-scope neighbors, verified against the relevant flows/dynamic view(s), and record an integration note into `.phaseArtifacts.integrationNote` via `recordPhaseArtifact` per [[the-method-project-state]].
 3. **Verify** the code (fast checks, working directory `webApp`): `npm run typecheck`; `npm run lint` scoped to the files you touched for this surface and, only if the wiring directly touched them, the specific neighbor client code — not `npm run build` and not `npm run check`.
-4. **Generate the tests** from the reviewed flows: `make gen-tests` (repo root). A web surface gets Playwright specs, config and reporter under `uitests/generated/<component_id>/` and a seeded `hooks.ts` beside them; an MCP client gets `<stereotype>_scenarios.gen_test.go` and a seeded `<stereotype>_hooks_test.go` in its Go package. Never edit a generated file and never change the flows.
-5. **Fill the hooks.** Replace every `FILL` in the surface's hooks file (`uitests/generated/<component_id>/hooks.ts`, or the MCP client's `<stereotype>_hooks_test.go`). The hooks arrange the real stack: in Go, build each collaborator through its package's public constructor (the app's own component packages, wired as production wires them); never import a package's `internal/` sub-packages, unexported identifiers or another package's test helpers, and never stand a mock or fake in for a component.
+4. **Generate the tests** from the reviewed flows: `make gen-tests` (repo root). A web surface gets, per contract, Playwright specs, config and reporter under `uitests/generated/<contract>/` and a seeded `hooks.ts` beside them; an MCP client gets `<stereotype>_scenarios.gen_test.go` and a seeded `<stereotype>_hooks_test.go` in its Go package. Never edit a generated file and never change the flows.
+5. **Fill the hooks.** Replace every `FILL` in the surface's hooks files (`uitests/generated/<contract>/hooks.ts` for each contract, or the MCP client's `<stereotype>_hooks_test.go`). The hooks arrange the real stack: in Go, build each collaborator through its package's public constructor (the app's own component packages, wired as production wires them); never import a package's `internal/` sub-packages, unexported identifiers or another package's test helpers, and never stand a mock or fake in for a component.
 6. **Purge.** Delete every test of this surface that the generator did not write: any `*.test.ts`/`*.test.tsx` in the surface's code under `webApp/src/`, any hand-written spec for it under `uitests/` outside `uitests/generated/`, and, for an MCP client, any `_test.go` in its package other than the generated file and the hooks file. The arch gate rejects them. Then `make gen-tests-check` must be clean.
 7. **Run the flows** against the integrated surface, from the repo root. Docker must be up.
 
    ```sh
-   if [ -d "uitests/generated/<component_id>" ]; then   # a web surface: Playwright
+   # <contracts>: the surface's contract names from step 1 (e.g. "webClient webClientBilling").
+   if [ -d "uitests/generated/<first contract>" ]; then  # a web surface: Playwright, one config per contract
      mkdir -p test-results
-     (cd uitests && npx playwright install --with-deps chromium && npx playwright test -c "generated/<component_id>/playwright.config.gen.ts")
-     cp -R "uitests/test-results/<component_id>" test-results/
+     (cd uitests && npx playwright install --with-deps chromium)
+     for c in <contracts>; do
+       (cd uitests && npx playwright test -c "generated/${c}/playwright.config.gen.ts")
+       cp -R "uitests/test-results/${c}" test-results/
+     done
    else                                                  # an MCP client: Go scenarios
      make test-scenarios
    fi
    ```
 
-   For a web surface the Playwright reporter writes `uitests/test-results/<component_id>/`; the copy puts it at `test-results/<component_id>/` (its `videoRef`/`traceRef` are relative to that directory). Copy it whether the run was red or green. Read the verdicts from `test-results/<component_id>/results.json`: every scenario must be `pass`. Fix a red flow in the wiring, in the surface code (to its approved design and the frozen contracts) or in the hooks, and re-run. Never fix it by editing a generated test, the flows or a contract. A binding you believe is wrong goes into the integration note for the test-engineer.
+   For a web surface the Playwright reporter writes `uitests/test-results/<contract>/`; the copy puts it at `test-results/<contract>/` (its `videoRef`/`traceRef` are relative to that directory). Copy it whether the run was red or green. Read the verdicts from `test-results/<contract>/results.json` for each contract: every scenario must be `pass`. Fix a red flow in the wiring, in the surface code (to its approved design and the frozen contracts) or in the hooks, and re-run. Never fix it by editing a generated test, the flows or a contract. A binding you believe is wrong goes into the integration note for the test-engineer.
 8. **Commit** the wiring, the generated tests and the hooks file onto `activity/<activity_id>`. Never commit `test-results/` or `uitests/test-results/`.
-9. **Record the run** with the `aiarch-state-mcp` binary's `record-test-run` subcommand (on `PATH` in the construction venue), after the commit, so the revision is the code the flows ran against. Record the last run you made, red or green: the record is the evidence the `testing` task judges.
+9. **Record the run** with the `aiarch-state-mcp` binary's `record-test-run` subcommand (on `PATH` in the construction venue), after the commit. `--component` takes the activity's component id as you received it: the binary resolves it to every contract of the component and records one run per contract from `test-results/<contract>/results.json`. The revision is `AIARCH_REVISION`, the attempt this job runs under, which the dispatch stamps; the `testing` task matches it against the attempt it judges, so never substitute a commit SHA — if it is unset the record fails, and that failure goes into the integration note. Record the last run you made, red or green: the record is the evidence the `testing` task judges.
 
    ```sh
    run="${AIARCH_TEST_RUN_ID:-local-$(date -u +%Y%m%dT%H%M%SZ)}"
@@ -40,7 +44,7 @@
    if [ -z "${AIARCH_TEST_ARTIFACT:-}" ]; then mkdir -p "${artifact}" && cp -R test-results/. "${artifact}/"; fi
    aiarch-state-mcp record-test-run --activity <activity_id> --component <component_id> \
      --run-id "${run}" --artifact "${artifact}" --results test-results \
-     --revision "${AIARCH_REVISION:-$(git rev-parse HEAD)}"
+     --revision "${AIARCH_REVISION}"
    ```
 
    In the cloud venue `AIARCH_TEST_RUN_ID` / `AIARCH_TEST_ARTIFACT` name the GitHub run and the artifact the job uploads `test-results/**` into; on the local venue the run is copied under `.aiarch/test-results/<run>/`.

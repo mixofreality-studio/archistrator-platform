@@ -147,10 +147,20 @@ func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 	for _, s := range []string{
 		`dirname "${MCP_BIN}" >> "$GITHUB_PATH"`,
 		`AIARCH_TEST_RUN_ID=%s\n' "${AIARCH_RUN_ID}" >> "$GITHUB_ENV"`,
+		// The run's revision is the attempt the dispatch names (DCT plan 5 r2).
+		`AIARCH_REVISION: ${{ inputs.revision }}`,
+		`AIARCH_REVISION=%s\n' "${AIARCH_REVISION}" >> "$GITHUB_ENV"`,
 		`AIARCH_TEST_ARTIFACT=test-results-%s-%s\n' "${AIARCH_ACTIVITY_ID}" "${AIARCH_RUN_ID}" >> "$GITHUB_ENV"`,
 	} {
 		if !strings.Contains(expose, s) {
 			t.Errorf("the expose step must write %q:\n%s", s, expose)
+		}
+	}
+	// The revision input is an id: validated by the first step before it reaches $GITHUB_ENV.
+	validate := step("Validate dispatch inputs")
+	for _, s := range []string{`REVISION: ${{ inputs.revision }}`, `valid "${REVISION}" "${id_re}"`} {
+		if !strings.Contains(validate, s) {
+			t.Errorf("the validate step must check the revision input (%q):\n%s", s, validate)
 		}
 	}
 	// The recorded run and the uploaded tree must agree on one artifact name.
