@@ -379,12 +379,23 @@ func argNamed(inputs []methodcheck.TestArg, name string) (methodcheck.TestArg, b
 	return methodcheck.TestArg{}, false
 }
 
+// jsonValue is one binding value as the JSON the generated step unmarshals. A
+// value that is valid JSON is embedded as-is — for a string-typed parameter only
+// when it is already a JSON string literal ("\"abc\""), which is how methodcheck's
+// TP-ARG-TYPE reads it (the single source of truth for a binding value's type);
+// any other value of a string-typed parameter is the string's raw text and is
+// quoted.
 func jsonValue(value string, stringTyped bool) string {
-	if !stringTyped && json.Valid([]byte(value)) {
+	if json.Valid([]byte(value)) && (!stringTyped || isJSONStringLiteral(value)) {
 		return value
 	}
 	quoted, _ := json.Marshal(value)
 	return string(quoted)
+}
+
+// isJSONStringLiteral reports whether a valid JSON text is a string literal.
+func isJSONStringLiteral(value string) bool {
+	return strings.HasPrefix(strings.TrimSpace(value), `"`)
 }
 
 // isStringSchema reports whether a parameter schema is string-typed, following

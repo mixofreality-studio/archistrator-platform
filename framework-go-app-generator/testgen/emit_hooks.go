@@ -125,7 +125,7 @@ func (g *goEmit) writeProbeHook(b *bytes.Buffer, plan componentPlan, bs boundSce
 	name := g.probeName(plan, bs.Scenario.ID, st.Bind.Seq, n)
 	fmt.Fprintf(b, `// %s — %s, step %d, probe %d: %s.%s proves %s.
 // Probe (JSON): %s
-// FILL: call %s.%s with the probe's inputs on the host's stack and return its result.
+// FILL: build %s through its public constructor on the host's stack and call %s with the probe's inputs and the host's layer call context (h.ResourceAccessContext / h.EngineContext / h.ManagerContext); return its result.
 func %s(t *testing.T, h *scenariohost.Host, subject %s) (any, error) {
 	t.Helper()
 	t.Fatal("FILL %s")

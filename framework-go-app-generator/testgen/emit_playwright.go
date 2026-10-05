@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path"
+	"regexp"
 	"strings"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
@@ -138,10 +139,24 @@ func playwrightAssertion(o uiObservable, raw string) string {
 	case o.Text != "" && o.Target != "":
 		return fmt.Sprintf("  await expect(page.getByTestId(%s)).toHaveText(%s);\n", tsStr(o.Target), tsStr(o.Text))
 	case o.URL != "":
-		return fmt.Sprintf("  await expect(page).toHaveURL(%s);\n", tsStr(o.URL))
+		return fmt.Sprintf("  await expect(page).toHaveURL(%s);\n", urlMatcher(o.URL))
 	default:
 		return fmt.Sprintf("  // expected result: %s\n", raw)
 	}
+}
+
+// urlMatcher is the toHaveURL argument for a `url` observable. The observable
+// names a ROUTE: a root-relative path ("/project/p/activity/a") is matched
+// against the page URL's path exactly, whatever origin served it and whatever
+// query or fragment the SPA keeps its selection state in (?task=&rev=) — state
+// the use case does not name. An observable that itself carries a query or
+// fragment, or names an absolute URL, names exactly that and is matched as the
+// whole URL.
+func urlMatcher(url string) string {
+	if !strings.HasPrefix(url, "/") || strings.ContainsAny(url, "?#") {
+		return tsStr(url)
+	}
+	return "new RegExp(" + tsStr("^[a-z][a-z0-9+.-]*://[^/]+"+regexp.QuoteMeta(url)+"(?:[?#].*)?$") + ")"
 }
 
 // componentDirDepth is how many levels a component's Playwright directory
