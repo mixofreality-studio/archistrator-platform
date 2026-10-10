@@ -46,9 +46,9 @@ func (h *Host) StartWorker(t *testing.T, taskQueue string, register func(w Worke
 	t.Cleanup(w.Stop)
 }
 
-// terminateTries and terminateTimeout bound endScenarioWorkflows: the
-// visibility store trails the history store, so a listing is retried until it
-// names no running execution.
+// terminateTries and terminateTimeout bound terminateRunning: the visibility
+// store trails the history store, so a listing is retried until it names no
+// running execution.
 const (
 	terminateTries   = 10
 	terminateTimeout = 30 * time.Second
@@ -60,12 +60,29 @@ const (
 // next scenario's start (or block it), so nothing a scenario started outlives
 // it. Terminated histories still replay (B4): termination records no command.
 func (h *Host) endScenarioWorkflows(since time.Time) error {
+	query := fmt.Sprintf("ExecutionStatus = 'Running' AND StartTime >= %q", since.UTC().Format(time.RFC3339Nano))
+	return h.terminateRunning(query, "scenario ended", "executions started by the scenario")
+}
+
+// endLeftoverWorkflows terminates every execution still running when the host
+// boots. The dev server's SQLite file persists across runs (so the UI can
+// browse it afterwards), and a run that was killed — or a machine that slept
+// through its deadline — leaves its executions running in it: this run's
+// workers, polling the same task queues, would pick them up and answer or
+// block its scenarios' starts with a stale run's state. Packages run one at a
+// time against the file, so nothing running at boot belongs to this run.
+func (h *Host) endLeftoverWorkflows() error {
+	return h.terminateRunning("ExecutionStatus = 'Running'", "left running by an earlier test run", "executions left running by an earlier run")
+}
+
+// terminateRunning terminates every execution query lists, listing again until
+// none is left; what names them in the error when they outlast the passes.
+func (h *Host) terminateRunning(query, reason, what string) error {
 	if h == nil || h.temporal == nil {
 		return nil
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), terminateTimeout)
 	defer cancel()
-	query := fmt.Sprintf("ExecutionStatus = 'Running' AND StartTime >= %q", since.UTC().Format(time.RFC3339Nano))
 	for range terminateTries {
 		resp, err := h.temporal.ListWorkflow(ctx, &workflowservice.ListWorkflowExecutionsRequest{Query: query})
 		if err != nil {
@@ -77,9 +94,9 @@ func (h *Host) endScenarioWorkflows(since time.Time) error {
 		for _, e := range resp.GetExecutions() {
 			ex := e.GetExecution()
 			// A terminate racing the execution's own completion is not a failure.
-			_ = h.temporal.TerminateWorkflow(ctx, ex.GetWorkflowId(), ex.GetRunId(), "scenario ended")
+			_ = h.temporal.TerminateWorkflow(ctx, ex.GetWorkflowId(), ex.GetRunId(), reason)
 		}
 		time.Sleep(settleGap)
 	}
-	return fmt.Errorf("scenariohost: executions started by the scenario are still running after %d terminate passes", terminateTries)
+	return fmt.Errorf("scenariohost: %s are still running after %d terminate passes", what, terminateTries)
 }

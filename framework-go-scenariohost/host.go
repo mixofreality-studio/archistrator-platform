@@ -200,6 +200,9 @@ func boot(ctx context.Context) (*Host, error) {
 	h.stops = append(h.stops, func() { _ = dev.Stop() })
 	h.TemporalHostPort = dev.FrontendHostPort()
 	h.temporal = dev.Client()
+	if err := h.endLeftoverWorkflows(); err != nil {
+		return fail(fmt.Errorf("temporal: %w", err))
+	}
 	h.booted = time.Now()
 	h.replay = packageGate
 	h.declare(packageComponents...)

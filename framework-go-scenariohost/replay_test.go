@@ -381,3 +381,27 @@ func TestMainWithWorkflowsExitsOnABrokenRegistration(t *testing.T) {
 		t.Fatalf("the exit must name the broken registration:\n%s", out)
 	}
 }
+
+// TestBootEndsWorkflowsAnEarlierRunLeftRunning: the dev server's file outlives
+// a run, so an execution a killed run left running is still running when the
+// next host boots; boot terminates it before any scenario starts, so no worker
+// of the new run picks it up.
+func TestBootEndsWorkflowsAnEarlierRunLeftRunning(t *testing.T) {
+	shared := Start(t)
+	const wfType = "scenariohostProbeLeftover"
+	tq := liveWorker(t, shared, wfType, probeBlockingWorkflow)
+	id := uniqueID("leftover")
+	runProbe(t, shared.temporal, tq, wfType, id)
+	waitForActivityCompleted(t, shared.temporal, id)
+
+	if err := shared.endLeftoverWorkflows(); err != nil {
+		t.Fatal(err)
+	}
+	desc, err := shared.temporal.DescribeWorkflowExecution(t.Context(), id, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st := desc.GetWorkflowExecutionInfo().GetStatus(); st != enumspb.WORKFLOW_EXECUTION_STATUS_TERMINATED {
+		t.Fatalf("an execution running at boot must be terminated, got %v", st)
+	}
+}
