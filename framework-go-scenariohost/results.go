@@ -55,7 +55,7 @@ type resultKey struct{ component, scenario string }
 type Results struct {
 	mu       sync.Mutex
 	entries  map[resultKey]ScenarioResult
-	declared map[string]bool // components that get an index even with no verdict
+	declared map[string]bool // the package's components (Main); a verdict for another fails the flush
 	windows  map[resultKey]window
 	// replayFailed holds the replay gate's failures per scenario (replay.go):
 	// they override the recorded verdict at every flush, so a re-run that
@@ -108,9 +108,10 @@ func (h *Host) failReplay(k resultKey, msg string) {
 	h.replayFailed[k] = append(h.replayFailed[k], msg)
 }
 
-// declare names components whose index Flush writes even when none of their
-// scenarios recorded a verdict, so a component with zero bound scenarios still
-// leaves an index behind.
+// declare names the components whose generated scenarios live in the package
+// (Main's arguments). Once any is declared, a verdict recorded under a component
+// the package did not declare fails the flush, as a verdict with no component
+// does: it belongs to no index this package writes.
 func (h *Host) declare(components ...string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
@@ -130,14 +131,19 @@ func (h *Host) ResultsDir(component string) string {
 }
 
 // Flush first runs the replay gate (replay.go) when the host has one, then
-// writes ResultsDir(c)/results.json for every declared or recorded component
-// c: that component's verdicts, sorted by scenario id, as an indented JSON
-// array ("[]" for a declared component that recorded nothing). A scenario the
-// replay gate failed is written as a fail whose Stderr names each history
-// that did not replay. A verdict recorded without a component fails the flush
-// before anything is written: it belongs to no index. The error joins the
-// replay failures this flush found (each is reported by one flush only) with
-// any write failure.
+// writes ResultsDir(c)/results.json for every component c that recorded a
+// verdict in this process: that component's verdicts, sorted by scenario id,
+// as an indented JSON array. A component none of whose scenarios ran — a
+// `go test -run` that selects no TestScenario_ (make method-check), or a
+// component that projects no scenario at all — gets NO index: its last
+// recorded index stays as it was, and a component with no index at all is
+// what record-test-run refuses (a component that projects zero scenarios is
+// a model defect TP-OP-REACHED reports, never "nothing to test"). A scenario
+// the replay gate failed is written as a fail whose Stderr names each history
+// that did not replay. A verdict recorded without a component, or under a
+// component the package did not declare, fails the flush before anything is
+// written: it belongs to no index. The error joins the replay failures this
+// flush found (each is reported by one flush only) with any write failure.
 func (h *Host) Flush() error {
 	ctx, cancel := context.WithTimeout(context.Background(), replayTimeout)
 	defer cancel()
@@ -147,10 +153,14 @@ func (h *Host) Flush() error {
 
 // writeIndexes writes every component's results.json (Flush).
 func (h *Host) writeIndexes() error {
-	byComponent, orphan := h.verdictsByComponent()
+	byComponent, orphan, undeclared := h.verdictsByComponent()
 	if len(orphan) > 0 {
 		sort.Strings(orphan)
 		return fmt.Errorf("scenariohost: verdicts recorded with no component: %s", strings.Join(orphan, ", "))
+	}
+	if len(undeclared) > 0 {
+		sort.Strings(undeclared)
+		return fmt.Errorf("scenariohost: verdicts recorded under a component the package does not test: %s", strings.Join(undeclared, ", "))
 	}
 
 	components := make([]string, 0, len(byComponent))
@@ -166,19 +176,21 @@ func (h *Host) writeIndexes() error {
 	return nil
 }
 
-// verdictsByComponent groups the verdicts by component — every declared
-// component present, a replay-failed scenario turned into a fail carrying
-// the replay findings — and names the scenarios recorded with no component.
-func (h *Host) verdictsByComponent() (byComponent map[string][]ScenarioResult, orphan []string) {
+// verdictsByComponent groups the verdicts by component — a replay-failed
+// scenario turned into a fail carrying the replay findings — and names the
+// scenarios recorded with no component and those recorded under a component
+// the package did not declare (component/scenario).
+func (h *Host) verdictsByComponent() (byComponent map[string][]ScenarioResult, orphan, undeclared []string) {
 	h.mu.Lock()
 	defer h.mu.Unlock()
 	byComponent = map[string][]ScenarioResult{}
-	for c := range h.declared {
-		byComponent[c] = []ScenarioResult{}
-	}
 	for k, r := range h.entries {
 		if k.component == "" {
 			orphan = append(orphan, k.scenario)
+			continue
+		}
+		if len(h.declared) > 0 && !h.declared[k.component] {
+			undeclared = append(undeclared, k.component+"/"+k.scenario)
 			continue
 		}
 		if msgs := h.replayFailed[k]; len(msgs) > 0 {
@@ -187,7 +199,7 @@ func (h *Host) verdictsByComponent() (byComponent map[string][]ScenarioResult, o
 		}
 		byComponent[k.component] = append(byComponent[k.component], r)
 	}
-	return byComponent, orphan
+	return byComponent, orphan, undeclared
 }
 
 func nonEmpty(s string) []string {

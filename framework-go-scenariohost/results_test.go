@@ -61,22 +61,57 @@ func TestFacetsInOnePackageDoNotOverwriteEachOther(t *testing.T) {
 	}
 }
 
-func TestResultsJSONIsAnEmptyArrayForADeclaredComponentThatRanNothing(t *testing.T) {
-	h := &Host{ResultsRoot: filepath.Join(t.TempDir(), "nested", "dir")}
-	h.declare("designSessionAccess")
+func TestFlushLeavesTheIndexOfADeclaredComponentThatRanNothing(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "nested", "dir")
+	prior := filepath.Join(root, "designSessionAccess", resultsFile)
+	if err := os.MkdirAll(filepath.Dir(prior), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	const recorded = `[{"scenario":"uc3-P1","status":"pass","durationMs":1}]`
+	if err := os.WriteFile(prior, []byte(recorded), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	h := &Host{ResultsRoot: root}
+	h.declare("designSessionAccess", "activityExecutionAccess")
 	h.Record("activityExecutionAccess", ScenarioResult{Scenario: "uc3-P1", Status: StatusPass})
 	if err := h.Flush(); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := os.ReadFile(filepath.Join(h.ResultsRoot, "designSessionAccess", resultsFile))
+	raw, err := os.ReadFile(prior)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(raw) != "[]" {
-		t.Fatalf("want an empty JSON array, got %q", raw)
+	if string(raw) != recorded {
+		t.Fatalf("a run that ran none of a component's scenarios must leave its index as recorded, got %q", raw)
 	}
-	if got := readIndex(t, h.ResultsRoot, "activityExecutionAccess"); len(got) != 1 {
-		t.Fatalf("a declared component must not hide a recorded one: %+v", got)
+	if got := readIndex(t, root, "activityExecutionAccess"); len(got) != 1 {
+		t.Fatalf("a recorded component is written: %+v", got)
+	}
+}
+
+func TestFlushWritesNoIndexForADeclaredComponentThatNeverRan(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "results")
+	h := &Host{ResultsRoot: root}
+	h.declare("designSessionAccess")
+	if err := h.Flush(); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "designSessionAccess", resultsFile)); !os.IsNotExist(err) {
+		t.Fatalf("no verdict, no index: stat = %v", err)
+	}
+}
+
+func TestFlushRefusesAVerdictForAComponentThePackageDoesNotTest(t *testing.T) {
+	root := filepath.Join(t.TempDir(), "results")
+	h := &Host{ResultsRoot: root}
+	h.declare("designSessionAccess")
+	h.Record("projectStateAccess", ScenarioResult{Scenario: "uc3-P1", Status: StatusPass})
+	err := h.Flush()
+	if err == nil || !strings.Contains(err.Error(), "projectStateAccess/uc3-P1") {
+		t.Fatalf("want the undeclared verdict named, got %v", err)
+	}
+	if _, serr := os.Stat(root); !os.IsNotExist(serr) {
+		t.Fatalf("nothing is written when a verdict belongs to no index: stat = %v", serr)
 	}
 }
 

@@ -85,6 +85,10 @@ var (
 	// packageGate is the replay gate MainWithWorkflows built before m.Run;
 	// boot hands it to the shared host.
 	packageGate *replayGate
+	// packageComponents are the components Main was given before m.Run; boot
+	// declares them on the shared host so every flush, the per-test ones
+	// included, refuses a verdict recorded under any other component.
+	packageComponents []string
 )
 
 // Start boots every downstream double once per package (sync.Once) and
@@ -107,13 +111,15 @@ func Start(t *testing.T) *Host {
 }
 
 // Main is the body of a generated TestMain: it runs the package's tests, writes
-// one results.json per component the package tests (an empty index for a
-// component none of whose scenarios ran) and tears the shared stack down, then
-// exits with m.Run's code. components lists every contract whose generated
-// scenarios live in the package — one, or several facets sharing it.
+// one results.json per component whose scenarios ran (Flush: a component none
+// of whose scenarios ran keeps its last index) and tears the shared stack down,
+// then exits with m.Run's code. components lists every contract whose
+// generated scenarios live in the package — one, or several facets sharing it;
+// a verdict recorded under any other component fails the flush.
 func Main(m *testing.M, components ...string) {
 	requireComponents(components)
-	os.Exit(run(m, components))
+	packageComponents = components
+	os.Exit(run(m))
 }
 
 // MainWithWorkflows is the body of a generated manager package's TestMain:
@@ -129,7 +135,8 @@ func MainWithWorkflows(m *testing.M, wf Workflows, components ...string) {
 		os.Exit(2)
 	}
 	packageGate = gate
-	os.Exit(run(m, components))
+	packageComponents = components
+	os.Exit(run(m))
 }
 
 // requireComponents exits 2 unless components is non-empty and names no "".
@@ -142,13 +149,13 @@ func requireComponents(components []string) {
 
 // run runs the tests, flushes every component's index and tears the stack
 // down, returning the process exit code.
-func run(m *testing.M, components []string) int {
+func run(m *testing.M) int {
 	code := m.Run()
 	h := shared
 	if h == nil {
 		h = newHost()
+		h.declare(packageComponents...)
 	}
-	h.declare(components...)
 	if err := h.Flush(); err != nil {
 		fmt.Fprintf(os.Stderr, "scenariohost: %v\n", err)
 		if code == 0 {
@@ -195,6 +202,7 @@ func boot(ctx context.Context) (*Host, error) {
 	h.temporal = dev.Client()
 	h.booted = time.Now()
 	h.replay = packageGate
+	h.declare(packageComponents...)
 
 	if !testing.Short() {
 		url, stop, pgErr := startPostgres(ctx)

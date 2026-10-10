@@ -250,7 +250,7 @@ func TestStartWorkerServesTheHostsClient(t *testing.T) {
 	}
 	const wfType = "scenariohostProbeHostWorker"
 	tq := "scenariohost-" + wfType
-	h.RunScenario(t, "probe-worker", "worker-P1", func(t *testing.T) {
+	h.RunScenario(t, probeComponent, "worker-P1", func(t *testing.T) {
 		h.StartWorker(t, tq, func(w Worker) {
 			w.RegisterWorkflowWithOptions(probeWorkflowV1, workflow.RegisterOptions{Name: wfType})
 			w.RegisterActivityWithOptions(probeActivity, activity.RegisterOptions{Name: probeActivityName})
