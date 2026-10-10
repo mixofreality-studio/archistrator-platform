@@ -174,7 +174,12 @@ func playwrightResultsDir(component string) string {
 }
 
 // playwrightConfig is the generated config: video and trace always on, the
-// JSON report and results.json under test-results/<component>.
+// JSON report and results.json under test-results/<component>, and ONE worker.
+// Every scenario of a client runs against the one real stack its venue boots —
+// one server, one state repository, one workflow namespace — and its hooks
+// arrange that shared state before each scenario, so two scenarios running at
+// once would arrange over each other: the scenarios of a component run one at a
+// time, in file order, exactly as a Go package's TestScenario_* functions do.
 func playwrightConfig(results string) string {
 	return genHeader + `
 import { defineConfig } from '@playwright/test';
@@ -182,6 +187,8 @@ import { defineConfig } from '@playwright/test';
 export default defineConfig({
   testDir: '.',
   testMatch: /\.spec\.gen\.ts$/,
+  workers: 1,
+  fullyParallel: false,
   outputDir: ` + tsStr(results) + `,
   use: { video: 'on', trace: 'on' },
   reporter: [

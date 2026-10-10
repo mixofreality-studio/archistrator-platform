@@ -219,7 +219,7 @@ func TestGenerate_PlaywrightResultsDepthIgnoresUITestsDir(t *testing.T) {
 		if !ok {
 			t.Fatalf("UITestsDir=%q: missing config; have %v", dir, keys(out.Generated))
 		}
-		for _, want := range []string{"outputDir: '../../test-results/shopClient'", "outputFile: '../../test-results/shopClient/playwright.json'"} {
+		for _, want := range []string{"outputDir: '../../test-results/shopClient'", "outputFile: '../../test-results/shopClient/playwright.json'", "workers: 1,", "fullyParallel: false,"} {
 			if !strings.Contains(string(cfg), want) {
 				t.Errorf("UITestsDir=%q: missing %q in config\n%s", dir, want, cfg)
 			}
