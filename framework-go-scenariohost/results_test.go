@@ -237,7 +237,7 @@ func TestWriteIndexMergesWithThePriorIndex(t *testing.T) {
 
 func TestScenarioTimeoutDefaultAndEnv(t *testing.T) {
 	t.Setenv("AIARCH_SCENARIO_TIMEOUT", "")
-	if ScenarioTimeout() != 5*time.Minute {
+	if ScenarioTimeout() != 15*time.Minute {
 		t.Fatal("default")
 	}
 	t.Setenv("AIARCH_SCENARIO_TIMEOUT", "2s")

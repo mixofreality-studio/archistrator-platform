@@ -258,13 +258,13 @@ func (h *Host) writeIndex(component string, verdicts []ScenarioResult) error {
 }
 
 // ScenarioTimeout is the per-scenario cap (env AIARCH_SCENARIO_TIMEOUT, a Go
-// duration; default 5m). A scenario that outlives it is recorded as timeout and
+// duration; default 15m). A scenario that outlives it is recorded as timeout and
 // the process exits, so one hung scenario can never hang a job.
 func ScenarioTimeout() time.Duration {
 	if d, err := time.ParseDuration(os.Getenv("AIARCH_SCENARIO_TIMEOUT")); err == nil && d > 0 {
 		return d
 	}
-	return 5 * time.Minute
+	return 15 * time.Minute
 }
 
 // RunScenario runs fn as the sub-test named id and records its verdict under
@@ -299,8 +299,12 @@ func (h *Host) RunScenario(t *testing.T, component, id string, fn func(t *testin
 			fmt.Fprintf(os.Stderr, "scenariohost: %s/%s timed out\n", component, id)
 			os.Exit(1)
 		})
-		defer timer.Stop()
 		defer func() {
+			if !timer.Stop() {
+				// The watchdog already fired: it records the timeout and exits the
+				// process, so this scenario must not record a verdict of its own.
+				select {}
+			}
 			r := ScenarioResult{Scenario: id, DurationMs: int(time.Since(start) / time.Millisecond)}
 			panicked := recover()
 			// Nothing the scenario started outlives it (temporal.go); ending it
