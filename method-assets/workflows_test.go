@@ -136,6 +136,9 @@ func TestWorkflowTemplatesRunTheSpec(t *testing.T) {
 		if at := strings.Index(body, `echo "main_sha=${main_sha}"`); at < 0 || at > agent {
 			t.Errorf("%s: main must be pinned before the agent step can move any ref", name)
 		}
+		if at := strings.Index(body, "name: Keep check output out of commits"); at < 0 || at > agent {
+			t.Errorf("%s: check output must be excluded from commits before the agent step (R28)", name)
+		}
 		at := agent
 		for _, step := range []string{
 			"name: Gate the edit scope", "name: Run the checks", "name: Upload check results",

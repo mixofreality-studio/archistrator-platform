@@ -303,6 +303,22 @@ jobs:
                 + (if $note == "" then {} else {AIARCH_OPERATOR_NOTE: $note} end))}}}' \
             > "${RUNNER_TEMP}/aiarch-mcp.json"
 
+      # The check output (test-results/ from the agent's run_checks, check-results/
+      # from the gate) never belongs in a commit. Ruling R28: ignore it in this
+      # runner's clone only (.git/info/exclude), not in a seated .gitignore, so an
+      # agent's `git add -A` cannot stage it. Idempotent: each line once.
+      - name: Keep check output out of commits
+        run: |
+          exclude="$(git rev-parse --git-path info/exclude)"
+          mkdir -p "$(dirname "${exclude}")"
+          touch "${exclude}"
+          if [ -s "${exclude}" ] && [ -n "$(tail -c 1 "${exclude}")" ]; then
+            echo >> "${exclude}"
+          fi
+          for line in /test-results/ /check-results/; do
+            grep -qxF -- "${line}" "${exclude}" || printf '%s\n' "${line}" >> "${exclude}"
+          done
+
       # THE TASK SPEC (spec 2026-10-11 §5.2 step 1). The job recomputes the agent
       # task spec from the SAME code the server ran (the binary is pinned to the
       # dispatching server's generation) over this checkout's state, and refuses

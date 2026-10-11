@@ -462,3 +462,47 @@ func TestRecordStep_RetriesOnceOnAMovedBranch(t *testing.T) {
 		})
 	}
 }
+
+// TestExcludeStep_IgnoresCheckOutputIdempotently (ruling R28): before the agent,
+// both workflows add /test-results/ and /check-results/ to .git/info/exclude,
+// each exactly once however often the step runs, without disturbing what the
+// file already held (even with no trailing newline).
+func TestExcludeStep_IgnoresCheckOutputIdempotently(t *testing.T) {
+	for name, wf := range gateWorkflows(t) {
+		t.Run(name, func(t *testing.T) {
+			t.Parallel()
+			step := stepNamed(t, wf.steps, "Keep check output out of commits")
+			work := t.TempDir()
+			git(t, work, "init", "-q")
+			exclude := filepath.Join(work, ".git", "info", "exclude")
+			if err := os.MkdirAll(filepath.Dir(exclude), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(exclude, []byte("# existing\n/keep-me"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			for range 2 {
+				if log, err := runStepScript(t, step.run, work, map[string]string{}); err != nil {
+					t.Fatalf("exclude step: %v\n%s", err, log)
+				}
+			}
+			raw, _ := os.ReadFile(exclude)
+			if want := "# existing\n/keep-me\n/test-results/\n/check-results/\n"; string(raw) != want {
+				t.Errorf("exclude = %q, want %q", raw, want)
+			}
+			for _, p := range []string{"test-results/c/results.json", "check-results/results.json"} {
+				full := filepath.Join(work, p)
+				if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+					t.Fatal(err)
+				}
+				if err := os.WriteFile(full, []byte("{}"), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			git(t, work, "add", "-A")
+			if staged := git(t, work, "diff", "--cached", "--name-only"); staged != "" {
+				t.Errorf("git add -A staged check output: %s", staged)
+			}
+		})
+	}
+}
