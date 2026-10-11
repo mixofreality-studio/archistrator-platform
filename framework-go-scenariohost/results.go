@@ -141,7 +141,7 @@ func (h *Host) ResultsDir(component string) string {
 // `go test -run` that selects no TestScenario_ (make method-check), or a
 // component that projects no scenario at all — gets NO index: its last
 // recorded index stays as it was, and a component with no index at all is
-// what record-test-run refuses (a component that projects zero scenarios is
+// what record-check-run refuses (a component that projects zero scenarios is
 // a model defect TP-OP-REACHED reports, never "nothing to test"). A scenario
 // the replay gate failed is written as a fail whose Stderr names each history
 // that did not replay. A verdict recorded without a component, or under a

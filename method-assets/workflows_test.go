@@ -100,6 +100,15 @@ func TestWorkflowTemplatesRunTheSpec(t *testing.T) {
 			`git diff --cached --quiet || git -c`,
 			// A missing spec field fails rather than reading as "null".
 			`jq -er .model.id`, `jq -er '.tools.builtin | join(",")'`,
+			// The edit-scope CLI takes commit SHAs only: main is pinned before the
+			// agent, from full history, and passed through env; --no-main when absent.
+			"fetch-depth: 0",
+			`git fetch --no-tags --unshallow origin`,
+			`main_sha="$(git rev-parse --verify "refs/remotes/origin/main^{commit}")"`,
+			`echo "main_sha=${main_sha}" >> "$GITHUB_OUTPUT"`,
+			"AIARCH_MAIN_SHA: ${{ steps.spec.outputs.main_sha }}",
+			`--base "${AIARCH_BASE}" --head "$(git rev-parse FETCH_HEAD)" --main "${AIARCH_MAIN_SHA}"`,
+			`--base "${AIARCH_BASE}" --head "$(git rev-parse FETCH_HEAD)" --no-main`,
 			// Ruling R12: runs on one branch queue, never cancel; bounded.
 			"cancel-in-progress: false", "timeout-minutes: 90", "timeout-minutes: 25", "timeout-minutes: 45",
 		} {
@@ -123,6 +132,9 @@ func TestWorkflowTemplatesRunTheSpec(t *testing.T) {
 		agent := strings.Index(body, "uses: anthropics/claude-code-action@v1")
 		if at := strings.Index(body, "name: Resolve the task spec"); at < 0 || at > agent {
 			t.Errorf("%s: the task spec must be resolved before the agent step", name)
+		}
+		if at := strings.Index(body, `echo "main_sha=${main_sha}"`); at < 0 || at > agent {
+			t.Errorf("%s: main must be pinned before the agent step can move any ref", name)
 		}
 		at := agent
 		for _, step := range []string{

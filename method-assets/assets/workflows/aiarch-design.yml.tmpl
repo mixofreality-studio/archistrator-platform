@@ -503,7 +503,7 @@ jobs:
       # not the refresh merge itself). See "Verify claude pushed a commit".
       - name: Record base SHA
         id: base
-        run: echo "sha=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+        run: echo "sha=$(git rev-parse --verify "HEAD^{commit}")" >> "$GITHUB_OUTPUT"
 
       # THE TASK SPEC (spec 2026-10-11 §5.2 step 1) — the construct workflow's step,
       # over the refreshed session branch. The job recomputes the agent task spec
@@ -540,6 +540,26 @@ jobs:
           fi
           echo "model=${model}" >> "$GITHUB_OUTPUT"
           echo "builtin=${builtin}" >> "$GITHUB_OUTPUT"
+          # The edit-scope gate takes commit SHAs only (a ref name is refused), so
+          # main is pinned here, before the agent can move any ref. A shallow
+          # checkout cannot compute merge-base(main, head): deepen it to full
+          # history first (checkout's fetch-depth: 0 normally makes this a no-op),
+          # so every later fetch into this repo is complete too. main_sha is
+          # absent only when origin has no main (ls-remote exits 2); the gate then
+          # judges the whole base..head diff (--no-main).
+          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+            git fetch --no-tags --unshallow origin
+          fi
+          rc=0; git ls-remote --exit-code --heads origin refs/heads/main > /dev/null || rc=$?
+          if [ "${rc}" = 0 ]; then
+            git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+            main_sha="$(git rev-parse --verify "refs/remotes/origin/main^{commit}")"
+          elif [ "${rc}" = 2 ]; then
+            main_sha=""
+          else
+            echo "::error::could not read origin's main (git ls-remote exit ${rc})"; exit 1
+          fi
+          echo "main_sha=${main_sha}" >> "$GITHUB_OUTPUT"
 
       # The MCP config claude-code-action passes to the Claude CLI (--mcp-config). The
       # ambient session context and the task-spec envelope (activity, task, spec hash,
@@ -693,9 +713,15 @@ jobs:
           MCP_BIN: ${{ steps.statemcp.outputs.bin }}
           TARGET_BRANCH: ${{ inputs.target_branch }}
           AIARCH_BASE: ${{ steps.base.outputs.sha }}
+          AIARCH_MAIN_SHA: ${{ steps.spec.outputs.main_sha }}
         run: |
-          git fetch origin "${TARGET_BRANCH}"
-          "${MCP_BIN}" edit-scope --spec "${RUNNER_TEMP}/spec.json" --base "${AIARCH_BASE}" --head "$(git rev-parse FETCH_HEAD)"
+          git fetch --no-tags origin "${TARGET_BRANCH}"
+          if [ -n "${AIARCH_MAIN_SHA}" ]; then
+            "${MCP_BIN}" edit-scope --spec "${RUNNER_TEMP}/spec.json" --base "${AIARCH_BASE}" --head "$(git rev-parse FETCH_HEAD)" --main "${AIARCH_MAIN_SHA}"
+          else
+            echo "::notice::origin has no main: the edit scope judges the whole base..head diff"
+            "${MCP_BIN}" edit-scope --spec "${RUNNER_TEMP}/spec.json" --base "${AIARCH_BASE}" --head "$(git rev-parse FETCH_HEAD)" --no-main
+          fi
 
       # The check gate: the spec's FULL check set (the artifact kind's rule checks)
       # over exactly what the agent pushed — a forced checkout plus a clean.

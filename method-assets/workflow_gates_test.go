@@ -10,6 +10,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -74,27 +75,11 @@ func TestTaskSpecStep_RefusesDriftAndUnplainValues(t *testing.T) {
 		spec := stepNamed(t, wf.steps, "Resolve the task spec")
 		run := func(t *testing.T, specJSON, printedHash, task string) (map[string]string, string, error) {
 			t.Helper()
-			work, tmp := t.TempDir(), t.TempDir()
-			git(t, work, "init", "-q")
-			git(t, work, "commit", "-q", "--allow-empty", "-m", "base")
-			fixture := filepath.Join(tmp, "fixture.json")
-			if err := os.WriteFile(fixture, []byte(specJSON), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			bin := filepath.Join(tmp, "aiarch-state-mcp")
-			writeExecutable(t, bin, `while [ $# -gt 0 ]; do [ "$1" = --out ] && out="$2"; shift; done
-cp "$SPEC_FIXTURE" "$out"
-printf '%s\n' "$PRINTED_HASH"
-`)
-			outFile := filepath.Join(tmp, "output")
-			env := map[string]string{
-				"MCP_BIN": bin, "RUNNER_TEMP": tmp, "GITHUB_OUTPUT": outFile, "SPEC_FIXTURE": fixture,
-				"PRINTED_HASH": printedHash, "AIARCH_ACTIVITY_ID": "C-orders", "AIARCH_TASK_ID": task,
-				"AIARCH_SPEC_HASH": gateHash,
-			}
-			out, err := runStepScript(t, spec.run, work, env)
+			_, work := bareWithBranch(t, "main")
+			tmp := t.TempDir()
+			outs, out, err := runSpecStep(t, spec, work, tmp, specJSON, printedHash, task)
 			assertNothingExecuted(t, work, tmp)
-			return readOutputs(t, outFile), out, err
+			return outs, out, err
 		}
 		t.Run(name+"/plain spec passes", func(t *testing.T) {
 			t.Parallel()
@@ -104,6 +89,12 @@ printf '%s\n' "$PRINTED_HASH"
 			}
 			if outs["model"] != "opus" || outs["builtin"] != "Bash,Read,Skill" {
 				t.Errorf("outputs = %v", outs)
+			}
+			if !fullSHA.MatchString(outs["main_sha"]) {
+				t.Errorf("the spec step must pin origin's main as a full SHA before the agent: %v", outs)
+			}
+			if name == "construct" && outs["base"] != outs["main_sha"] {
+				t.Errorf("with no activity branch the base is the checked-out main, as a full SHA: %v", outs)
 			}
 			if name == "construct" && (outs["integration"] != "true" || outs["base"] == "") {
 				t.Errorf("the construct spec step must output the base and the integration flag: %v", outs)
@@ -146,6 +137,216 @@ printf '%s\n' "$PRINTED_HASH"
 				}
 			})
 		}
+	}
+}
+
+var fullSHA = regexp.MustCompile(`^[0-9a-f]{40}$`)
+
+// fakeStateMCP is a stand-in aiarch-state-mcp. task-spec writes $SPEC_FIXTURE
+// and prints $PRINTED_HASH. edit-scope holds the caller to the CLI's contract
+// (full SHAs for --base, --head and --main; exactly one of --main and --no-main;
+// anything else exits 2, as the real binary does), proves merge-base(main, head)
+// resolves in this repository, and records its argv in $RUNNER_TEMP/edit-scope.args.
+const fakeStateMCP = `sha() { [[ "$1" =~ ^[0-9a-f]{40}$ ]]; }
+cmd="$1"; shift
+case "${cmd}" in
+task-spec)
+  while [ $# -gt 0 ]; do [ "$1" = --out ] && out="$2"; shift; done
+  cp "$SPEC_FIXTURE" "$out"
+  printf '%s\n' "$PRINTED_HASH"
+  ;;
+edit-scope)
+  printf '%s\n' "$*" > "$RUNNER_TEMP/edit-scope.args"
+  base="" head="" main="" nomain=0
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --spec) shift ;;
+      --base) base="$2"; shift ;;
+      --head) head="$2"; shift ;;
+      --main) main="$2"; shift ;;
+      --no-main) nomain=1 ;;
+      *) echo "edit-scope: unknown argument $1"; exit 2 ;;
+    esac
+    shift
+  done
+  sha "${base}" || { echo "edit-scope: --base ${base} is not a commit SHA"; exit 2; }
+  sha "${head}" || { echo "edit-scope: --head ${head} is not a commit SHA"; exit 2; }
+  git cat-file -e "${base}^{commit}" || { echo "edit-scope: no base commit"; exit 2; }
+  if [ -n "${main}" ]; then
+    [ "${nomain}" = 0 ] || { echo "edit-scope: --main and --no-main"; exit 2; }
+    sha "${main}" || { echo "edit-scope: --main ${main} is not a commit SHA"; exit 2; }
+    git merge-base "${main}" "${head}" > "$RUNNER_TEMP/merge-base" || { echo "edit-scope: merge-base(main, head) does not resolve"; exit 2; }
+  elif [ "${nomain}" = 0 ]; then
+    echo "edit-scope: one of --main and --no-main is required"; exit 2
+  fi
+  ;;
+esac
+`
+
+// runSpecStep runs the "Resolve the task spec" step in work, with the fake
+// binary serving specJSON and printing printedHash.
+func runSpecStep(t *testing.T, spec workflowStep, work, tmp, specJSON, printedHash, task string) (map[string]string, string, error) {
+	t.Helper()
+	fixture := filepath.Join(tmp, "fixture.json")
+	if err := os.WriteFile(fixture, []byte(specJSON), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bin := filepath.Join(tmp, "aiarch-state-mcp")
+	writeExecutable(t, bin, fakeStateMCP)
+	outFile := filepath.Join(tmp, "output")
+	env := map[string]string{
+		"MCP_BIN": bin, "RUNNER_TEMP": tmp, "GITHUB_OUTPUT": outFile, "SPEC_FIXTURE": fixture,
+		"PRINTED_HASH": printedHash, "AIARCH_ACTIVITY_ID": "C-orders", "AIARCH_TASK_ID": task,
+		"AIARCH_SPEC_HASH": gateHash,
+	}
+	out, err := runStepScript(t, spec.run, work, env)
+	return readOutputs(t, outFile), out, err
+}
+
+const plainSpec = `{"model":{"id":"opus"},"tools":{"builtin":["Read"]}}`
+
+// commitOn commits one file on branch in a fresh clone of remote and pushes it.
+func commitOn(t *testing.T, remote, branch, from, file string) string {
+	t.Helper()
+	dir := filepath.Join(t.TempDir(), "c")
+	git(t, filepath.Dir(dir), "clone", "-q", remote, dir)
+	git(t, dir, "checkout", "-q", "-B", branch, "origin/"+from)
+	if err := os.WriteFile(filepath.Join(dir, file), []byte(file+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", ".")
+	git(t, dir, "commit", "-q", "-m", file)
+	git(t, dir, "push", "-q", "origin", "HEAD:refs/heads/"+branch)
+	return git(t, dir, "rev-parse", "HEAD")
+}
+
+// TestTaskSpecStep_PinsMainBeforeTheAgent: the spec step writes origin's main
+// as a full SHA (and the construct base as a full SHA), deepening a shallow
+// checkout so the gate's merge-base resolves; it writes main_sha empty when
+// origin has no main, and fails when origin cannot be read at all.
+func TestTaskSpecStep_PinsMainBeforeTheAgent(t *testing.T) {
+	requireJQ(t)
+	for name, wf := range gateWorkflows(t) {
+		spec := stepNamed(t, wf.steps, "Resolve the task spec")
+		t.Run(name+"/no main on origin", func(t *testing.T) {
+			t.Parallel()
+			_, work := bareWithBranch(t, "trunk")
+			outs, log, err := runSpecStep(t, spec, work, t.TempDir(), plainSpec, gateHash, "construction")
+			if err != nil {
+				t.Fatalf("a repo without main must still resolve the spec: %v\n%s", err, log)
+			}
+			if m, ok := outs["main_sha"]; !ok || m != "" {
+				t.Errorf("main_sha = %q (present %v), want present and empty", m, ok)
+			}
+			if name == "construct" && outs["base"] != git(t, work, "rev-parse", "HEAD") {
+				t.Errorf("base = %q, want the checked-out HEAD as a full SHA", outs["base"])
+			}
+		})
+		t.Run(name+"/unreadable origin", func(t *testing.T) {
+			t.Parallel()
+			_, work := bareWithBranch(t, "main")
+			git(t, work, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
+			outs, log, err := runSpecStep(t, spec, work, t.TempDir(), plainSpec, gateHash, "construction")
+			if err == nil {
+				t.Fatalf("an unreadable origin must fail the step, not read as 'no main':\n%s", log)
+			}
+			if _, ok := outs["main_sha"]; ok {
+				t.Errorf("a failed read must write no main_sha: %v", outs)
+			}
+		})
+		t.Run(name+"/shallow checkout is deepened", func(t *testing.T) {
+			t.Parallel()
+			remote, _ := bareWithBranch(t, "main")
+			commitOn(t, remote, "main", "main", "m2.txt")
+			work := filepath.Join(t.TempDir(), "work")
+			git(t, filepath.Dir(work), "clone", "-q", "--depth", "1", "file://"+remote, work)
+			outs, log, err := runSpecStep(t, spec, work, t.TempDir(), plainSpec, gateHash, "construction")
+			if err != nil {
+				t.Fatalf("spec step on a shallow checkout: %v\n%s", err, log)
+			}
+			if got := git(t, work, "rev-parse", "--is-shallow-repository"); got != "false" {
+				t.Errorf("the spec step must leave full history behind it (is-shallow = %s)", got)
+			}
+			if want := git(t, remote, "rev-parse", "main"); outs["main_sha"] != want {
+				t.Errorf("main_sha = %q, want origin's main %s", outs["main_sha"], want)
+			}
+		})
+	}
+}
+
+// TestEditScopeGate_PassesShasAndMain runs the spec step and then the gate on a
+// shallow checkout, with the agent's commit pushed in between and main advanced
+// past the branch point: the gate passes --base, --head and --main as full SHAs
+// and merge-base(main, head) resolves. With no main on origin it passes --no-main.
+func TestEditScopeGate_PassesShasAndMain(t *testing.T) {
+	requireJQ(t)
+	for name, wf := range gateWorkflows(t) {
+		spec := stepNamed(t, wf.steps, "Resolve the task spec")
+		gate := stepNamed(t, wf.steps, "Gate the edit scope")
+		gateEnv := func(tmp, base, mainSHA string) map[string]string {
+			e := map[string]string{
+				"MCP_BIN": filepath.Join(tmp, "aiarch-state-mcp"), "RUNNER_TEMP": tmp, "AIARCH_ACTIVITY_ID": "C-orders",
+				"AIARCH_BASE": base, "AIARCH_MAIN_SHA": mainSHA,
+			}
+			for k, v := range wf.env {
+				e[k] = v
+			}
+			return e
+		}
+		t.Run(name+"/main", func(t *testing.T) {
+			t.Parallel()
+			remote, _ := bareWithBranch(t, "main")
+			forked := commitOn(t, remote, wf.branch, "main", "branch1.txt")
+			mainTip := commitOn(t, remote, "main", "main", "m2.txt")
+			work := filepath.Join(t.TempDir(), "work")
+			git(t, filepath.Dir(work), "clone", "-q", "--depth", "1", "file://"+remote, work)
+			tmp := t.TempDir()
+			outs, log, err := runSpecStep(t, spec, work, tmp, plainSpec, gateHash, "construction")
+			if err != nil {
+				t.Fatalf("spec step: %v\n%s", err, log)
+			}
+			if outs["main_sha"] != mainTip {
+				t.Fatalf("main_sha = %q, want %s", outs["main_sha"], mainTip)
+			}
+			base := outs["base"]
+			if name == "construct" && base != forked {
+				t.Errorf("construct base = %q, want the activity branch tip %s", base, forked)
+			}
+			if name == "design" {
+				base = git(t, work, "rev-parse", "HEAD")
+			}
+			head := commitOn(t, remote, wf.branch, wf.branch, "agent.txt") // the agent publishes
+			if log, err := runStepScript(t, gate.run, work, gateEnv(tmp, base, outs["main_sha"])); err != nil {
+				t.Fatalf("the gate broke the edit-scope contract: %v\n%s", err, log)
+			}
+			args, _ := os.ReadFile(filepath.Join(tmp, "edit-scope.args"))
+			for _, want := range []string{"--base " + base, "--head " + head, "--main " + mainTip} {
+				if !strings.Contains(string(args), want) {
+					t.Errorf("edit-scope argv lacks %q: %s", want, args)
+				}
+			}
+			if strings.Contains(string(args), "--no-main") {
+				t.Errorf("with a main the gate must not pass --no-main: %s", args)
+			}
+			if mb, _ := os.ReadFile(filepath.Join(tmp, "merge-base")); strings.TrimSpace(string(mb)) == "" {
+				t.Error("merge-base(main, head) did not resolve in the gate's checkout")
+			}
+		})
+		t.Run(name+"/no main", func(t *testing.T) {
+			t.Parallel()
+			remote, work := bareWithBranch(t, "trunk")
+			base := git(t, work, "rev-parse", "HEAD")
+			commitOn(t, remote, wf.branch, "trunk", "agent.txt")
+			tmp := t.TempDir()
+			writeExecutable(t, filepath.Join(tmp, "aiarch-state-mcp"), fakeStateMCP)
+			if log, err := runStepScript(t, gate.run, work, gateEnv(tmp, base, "")); err != nil {
+				t.Fatalf("the gate broke the edit-scope contract without a main: %v\n%s", err, log)
+			}
+			args, _ := os.ReadFile(filepath.Join(tmp, "edit-scope.args"))
+			if !strings.Contains(string(args), "--no-main") || strings.Contains(string(args), "--main ") {
+				t.Errorf("with no main the gate must pass --no-main and no --main: %s", args)
+			}
+		})
 	}
 }
 

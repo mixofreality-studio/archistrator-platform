@@ -342,12 +342,33 @@ jobs:
           fi
           echo "model=${model}" >> "$GITHUB_OUTPUT"
           echo "builtin=${builtin}" >> "$GITHUB_OUTPUT"
-          if git fetch origin "activity/${AIARCH_ACTIVITY_ID}" 2>/dev/null; then
-            base="$(git rev-parse FETCH_HEAD)"
+          # The edit-scope gate takes commit SHAs only (a ref name is refused), so
+          # base and main are pinned here, before the agent can move any ref.
+          # A shallow checkout cannot compute merge-base(main, head): deepen it
+          # to full history first (checkout's fetch-depth: 0 normally makes this
+          # a no-op), so every later fetch into this repo is complete too.
+          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+            git fetch --no-tags --unshallow origin
+          fi
+          if git fetch --no-tags origin "activity/${AIARCH_ACTIVITY_ID}" 2>/dev/null; then
+            base="$(git rev-parse --verify "FETCH_HEAD^{commit}")"
           else
-            base="$(git rev-parse HEAD)"
+            base="$(git rev-parse --verify "HEAD^{commit}")"
           fi
           echo "base=${base}" >> "$GITHUB_OUTPUT"
+          # main_sha: the gate ignores what main's merges brought in. Absent only
+          # when origin has no main (ls-remote exits 2); the gate then judges the
+          # whole base..head diff (--no-main). Any other failure fails the step.
+          rc=0; git ls-remote --exit-code --heads origin refs/heads/main > /dev/null || rc=$?
+          if [ "${rc}" = 0 ]; then
+            git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+            main_sha="$(git rev-parse --verify "refs/remotes/origin/main^{commit}")"
+          elif [ "${rc}" = 2 ]; then
+            main_sha=""
+          else
+            echo "::error::could not read origin's main (git ls-remote exit ${rc})"; exit 1
+          fi
+          echo "main_sha=${main_sha}" >> "$GITHUB_OUTPUT"
           # The integration TASK (not the optional phase input) seeds the scenario tests.
           if [ "${AIARCH_TASK_ID}" = integration ]; then
             echo "integration=true" >> "$GITHUB_OUTPUT"
@@ -421,16 +442,24 @@ jobs:
           git remote set-url origin "https://x-access-token:${GH_TOKEN}@${GITHUB_SERVER_URL#https://}/${GITHUB_REPOSITORY}.git"
 
       # Edit scope: every path the agent's commits changed (base..the published
-      # activity branch) must fall inside the spec's editScope globs or the
-      # permitted generated paths. The binary prints the offending paths.
+      # activity branch, less what merges from main brought in) must fall inside
+      # the spec's editScope globs or the permitted generated paths. The binary
+      # prints the offending paths. --no-main (origin has no main) judges the
+      # whole base..head diff: stricter, never looser.
       - name: Gate the edit scope
         if: ${{ always() && steps.spec.outcome == 'success' }}
         env:
           MCP_BIN: ${{ steps.statemcp.outputs.bin }}
           AIARCH_BASE: ${{ steps.spec.outputs.base }}
+          AIARCH_MAIN_SHA: ${{ steps.spec.outputs.main_sha }}
         run: |
-          git fetch origin "activity/${AIARCH_ACTIVITY_ID}"
-          "${MCP_BIN}" edit-scope --spec "${RUNNER_TEMP}/spec.json" --base "${AIARCH_BASE}" --head "$(git rev-parse FETCH_HEAD)"
+          git fetch --no-tags origin "activity/${AIARCH_ACTIVITY_ID}"
+          if [ -n "${AIARCH_MAIN_SHA}" ]; then
+            "${MCP_BIN}" edit-scope --spec "${RUNNER_TEMP}/spec.json" --base "${AIARCH_BASE}" --head "$(git rev-parse FETCH_HEAD)" --main "${AIARCH_MAIN_SHA}"
+          else
+            echo "::notice::origin has no main: the edit scope judges the whole base..head diff"
+            "${MCP_BIN}" edit-scope --spec "${RUNNER_TEMP}/spec.json" --base "${AIARCH_BASE}" --head "$(git rev-parse FETCH_HEAD)" --no-main
+          fi
 
       # The check gate: the spec's FULL check set, by the same runner the agent's
       # run_checks tool uses, over exactly what the agent published (a forced

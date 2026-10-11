@@ -96,7 +96,8 @@ scenario tests from the bindings**, so neither harness is an activity.
 State is git-as-DB: these testing outputs are typed records in
 `.aiarch/state/project.json`, NOT `designs/*.md` files. The per-component test
 plan the test-engineer binds is `.phaseArtifacts.testPlan[<component>]`; the
-integration task's runs land in `.testingState.testRuns[]`; the perf rig, quality gates and
+job's check runs land in `.testingState.checkRuns[]`, recorded only by the workflow (never by an
+agent); the perf rig, quality gates and
 defects stay under `.testingState`. Per-activity status lives in
 `.activityConstruction`.
 
@@ -105,13 +106,13 @@ Testing contributes **no activity of its own** to the network. Table 11-1's #4
 lifecycle (App A): the `test_plan` phase binds the component's scenarios after
 the design review, in parallel with construction, and the `testing` review task
 inside the `integration` phase joins the two branches: it gates on the
-integration task's run of those scenarios at the current revision. The network's sink is the project-end milestone, with every
+CheckRun the integration job recorded for those scenarios at the current revision. The network's sink is the project-end milestone, with every
 terminal activity feeding it directly.
 
 | Lifecycle task | Position | Owner | project.json target |
 |---|---|---|---|
 | `stp` — bind the component's derived scenarios | after `designReview`, parallel to `construction` | test-engineer | `.phaseArtifacts.testPlan[<component>]` |
-| `integration` — generate the tests from the plan, fill hooks, run, record | after `codeReview` | the integration agent writes the run | `.testingState.testRuns[]` |
+| `integration` — the job generates the tests from the plan; the agent fills hooks and runs them; the job runs the checks and records the run | after `codeReview` | the workflow records the CheckRun (never the agent) | `.testingState.checkRuns[]` |
 | `testing` — review the run at the current revision | gate of the `integration` phase; joins `integration` and `stpReview` | reviewers read the run | — |
 
 **Not activities:**
