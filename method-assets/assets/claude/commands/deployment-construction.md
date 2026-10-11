@@ -8,6 +8,8 @@
 
 **Goal / intention.** Per ch. 14's hand-off doctrine, once a senior role has designed and had reviewed the detailed shape of a piece of work, a junior developer builds exactly that and nothing more — junior developers are "not yet capable of doing detailed design correctly," so their job is disciplined construction, one piece at a time; any design refinement, however trivial, goes back to whoever produced the design rather than being decided unilaterally during construction. Löwy does not write a chapter on infrastructure-as-code specifically, but ch. 7's cost model names "Build and DevOps" as its own resourced line item in the project — provisioning work is real, planned effort, not an afterthought folded into service coding — and Appendix C's guideline to design by layers to reduce complexity applies here too: this step touches only the infra/manifests this one deployment activity owns, not the whole environment. So the grounding is the hand-off principle (ch. 14) applied to a non-code deliverable, plus the explicit budgeted-resource status of devops (ch. 7); it is not a book-documented "provisioning construction" step. "Done" means the manifests/config satisfy the frozen provisioning spec and this activity's own fast checks pass — binary phase exit, not "mostly configured."
 
+**Checks.** Call `run_checks()` until it reports every check passing, and finish with one full `run_checks()` call. Do not run the checks yourself.
+
 ## Steps
 
 > **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.

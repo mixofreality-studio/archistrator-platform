@@ -6,6 +6,8 @@
 
 **Agent + skills.** **Adopt the `product-manager` role**: read `.claude/agents/product-manager.md` and act per that charter yourself, in this session. Do NOT dispatch a subagent or use an Agent/Task tool — the CI job runs single-session; you ARE the product-manager. Judge against **[[the-method-requirements-analysis]]** and [[the-method-project-state]] for the tool flow.
 
+**Checks.** Call `run_checks()` until it reports every check passing, and finish with one full `run_checks()` call. Do not run the checks yourself.
+
 ## Steps
 
 1. **Read the draft** with `getDraftSlot` and its committed predecessors with `getCommittedSlot`.

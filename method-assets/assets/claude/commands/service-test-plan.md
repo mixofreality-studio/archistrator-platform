@@ -8,6 +8,8 @@
 
 **Goal / intention.** Per ch. 9, a test engineer is "not a tester, but a full-fledged software engineer" whose code exists to break the system; per App A the Service Test Plan is its own branch of the activity, written beside construction and joined with it at testing. On this platform the plan's *scenarios* are not yours to invent: they are derived deterministically from the committed use-case activity diagrams (the I/O-explicit activity-diagram technique — one stimulus per path, every elementary path, each loop unrolled once), and this component's plan is every scenario in which some stimulus is an input to it. Your job is the *binding*: the concrete values, expected results and probes that turn each derived scenario into a black-box integration test the integration task runs against the real downstream stack. "Done" means every projected scenario is bound and the TP-* rules pass. This step must NOT write test code, must NOT add or drop scenarios, and must NOT bind against the implementation (you see the contract and the use cases, never the component source).
 
+**Checks.** Call `run_checks()` until it reports every check passing, and finish with one full `run_checks()` call. Do not run the checks yourself.
+
 ## Steps
 
 > **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.

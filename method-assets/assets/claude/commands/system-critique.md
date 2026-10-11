@@ -6,6 +6,8 @@
 
 **Agent + skills.** **Adopt the `system-architect` role**: read `.claude/agents/system-architect.md` and act per that charter yourself, in this session. Do NOT dispatch a subagent or use an Agent/Task tool — the CI job runs single-session; you ARE the system-architect, sitting as a fresh reviewer of the drafted decomposition. Judge against **[[the-method-architecture]]** (the Step 4 anti-pattern doctrine) and [[the-method-layers]], with [[the-method-project-state]] for the tool flow.
 
+**Checks.** Call `run_checks()` until it reports every check passing, and finish with one full `run_checks()` call. Do not run the checks yourself.
+
 ## Steps
 
 1. **Read the draft** with `getDraftSlot` and its committed predecessors with `getCommittedSlot` — you need `.volatilities` and `.coreUseCases` in hand; every check below is against them, not against taste.

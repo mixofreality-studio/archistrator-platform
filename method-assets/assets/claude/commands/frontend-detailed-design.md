@@ -8,6 +8,8 @@
 
 **Goal / intention.** Per ch. 14's scope-versus-effort model, Löwy places "the services detailed design or Clients user interface" in the same tier of the design hierarchy: narrower in scope than architecture but far more time-consuming, running to weeks of work even for a handful of interacting parts. The book has no Appendix-B-style rulebook for UI-design method the way it does for service contracts, so the nearest real anchor is the chapter's own hand-off doctrine: a designer with authority over one piece of work produces a concrete design before anyone builds against it, and that design is never handed straight to construction — it goes to review, and only a reviewed, approved design is safe to construct against. This step is that discipline applied to one UI surface: produce the design concept — the layouts, component choices, flows, and states — that covers every core use case and persona journey captured in Requirements, and stop short of writing code. "Done" means a design concept exists that traces to Requirements and is ready for [[the-method-review-routing]] to gate; it does not mean the concept has been approved, and it certainly does not mean any surface has been built. This step must NOT write production UI code, must NOT change the committed system design, and must NOT let the concept proceed to construction unreviewed.
 
+**Checks.** Call `run_checks()` until it reports every check passing, and finish with one full `run_checks()` call. Do not run the checks yourself.
+
 ## Steps
 
 > **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.

@@ -8,6 +8,8 @@
 
 **Goal / intention.** Per ch. 4, a system's countless use cases reduce to a small set — rarely more than a handful — of core use cases that represent the essence of the business and change far more slowly than everything built around them; per ch. 7, identifying that core-use-case set is squarely the architect's up-front work, done before any component or interface is designed. Löwy's Method has no chapter devoted to UX requirements gathering as such — the book is architecture/backend-focused, and the one place it touches UI scoping at all is ch. 7's reminder that "activities such as UI development" need the same explicit, examined scope as any service, not a guess based on coding effort alone. This step grounds a UI surface's scope the same disciplined way core use cases ground the rest of the system: read the committed core use cases and the personas they name, and work out — before any screen, layout, or component choice is proposed — which of those core use cases and persona journeys this surface is obligated to support. "Done" means every captured requirement traces to a real core use case or persona, giving Detailed Design a target instead of an invitation to invent scope. This step must NOT propose screens, layouts, flows, or component choices — that is Detailed Design's job — and must NOT write UI code.
 
+**Checks.** Call `run_checks()` until it reports every check passing, and finish with one full `run_checks()` call. Do not run the checks yourself.
+
 ## Steps
 
 > **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.

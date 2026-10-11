@@ -8,6 +8,8 @@
 
 **Goal / intention.** Per ch. 9, a test engineer is "not a tester, but a full-fledged software engineer" whose code exists to break the system; per ch. 11 a Client's test plan is scheduled early, exactly like a service's. On this platform the *scenarios* are not yours to invent: they are derived deterministically from the committed use-case activity diagrams, and this surface's plan is every scenario in which some stimulus is a user action on it. Your job is the *binding*: for each stimulus the concrete user actions on the approved design's screens (`{"kind":"click|fill|navigate","target":"<ui-design element id>","value":...}`) and the observable that proves the expected outcome (`{"visible":...}` / `{"text":...}` / `{"url":...}`), turned into a Playwright flow the integration task runs against the integrated system. "Done" means every projected scenario is bound and the TP-* rules pass. This step must NOT write test code, must NOT add or drop scenarios, and must NOT judge the design concept's aesthetics (you see the approved design and the use cases, never the surface's source).
 
+**Checks.** Call `run_checks()` until it reports every check passing, and finish with one full `run_checks()` call. Do not run the checks yourself.
+
 ## Steps
 
 > **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
