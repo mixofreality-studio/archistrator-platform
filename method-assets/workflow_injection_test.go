@@ -211,8 +211,8 @@ func TestDesignWorkflow_VerifyNeverRunsOnUnvalidatedInputs(t *testing.T) {
 	if m == nil {
 		t.Fatal("the verify step must declare its if: directly under its name")
 	}
-	if !strings.Contains(m[1], "steps.inputs.outcome == 'success'") {
-		t.Errorf("the verify step runs on always(); it must also require steps.inputs.outcome == 'success', got %q", m[1])
+	if !strings.Contains(m[1], "steps.inputs.outcome == 'success'") || !strings.Contains(m[1], "steps.spec.outcome == 'success'") {
+		t.Errorf("the verify step runs on always(); it must also require the inputs and the spec to have passed, got %q", m[1])
 	}
 	if !regexp.MustCompile(`(?m)^      - name: Validate dispatch inputs\n        id: inputs$`).MatchString(doc) {
 		t.Error("the validation step must carry id: inputs, which the verify step's guard reads")
@@ -308,8 +308,9 @@ func TestDesignWorkflow_ValidationRejectsHostileInputs(t *testing.T) {
 		"spec_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}
 	ghEnv := filepath.Join(t.TempDir(), "github_env")
+	ghOut := filepath.Join(t.TempDir(), "github_output")
 	envFor := func(vals map[string]string) map[string]string {
-		env := map[string]string{"GITHUB_ENV": ghEnv}
+		env := map[string]string{"GITHUB_ENV": ghEnv, "GITHUB_OUTPUT": ghOut}
 		for k, v := range validate.env {
 			for _, in := range designInputs {
 				if v == "${{ inputs."+in+" }}" {
@@ -365,8 +366,12 @@ func TestDesignWorkflow_ValidationRejectsHostileInputs(t *testing.T) {
 	}
 	for in, vals := range hostile {
 		for _, h := range vals {
+			_ = os.Remove(ghOut)
 			if out, err := runStepScript(t, validate.run, work, envFor(with(in, h))); err == nil {
 				t.Errorf("a hostile %s %q passed validation\n%s", in, h, out)
+			}
+			if raw, _ := os.ReadFile(ghOut); strings.Contains(string(raw), "ok=true") {
+				t.Errorf("a hostile %s %q set inputs_ok: the validate job would run on it", in, h)
 			}
 		}
 	}
@@ -387,5 +392,21 @@ func TestDesignWorkflow_ValidationRejectsHostileInputs(t *testing.T) {
 		if !strings.Contains("\n"+string(exported), "\n"+line+"\n") {
 			t.Errorf("$GITHUB_ENV is missing %q:\n%s", line, exported)
 		}
+	}
+	if raw, _ := os.ReadFile(ghOut); !strings.Contains(string(raw), "ok=true") {
+		t.Errorf("valid inputs must set the step's ok output (the draft job's inputs_ok):\n%s", raw)
+	}
+}
+
+// TestDesignWorkflow_ValidateRunsWhenDraftFails pins the required check against
+// the skip-means-pass trap: draft fails exactly when its rule checks are red, so
+// validate must run whenever draft's inputs validated, not only when draft passed.
+func TestDesignWorkflow_ValidateRunsWhenDraftFails(t *testing.T) {
+	doc := renderedDesignWorkflow(t)
+	if !regexp.MustCompile(`(?m)^  validate:\n    runs-on: ubuntu-latest\n    needs: draft\n    if: \$\{\{ !cancelled\(\) && needs\.draft\.outputs\.inputs_ok == 'true' \}\}$`).MatchString(doc) {
+		t.Error("the validate job must run on `!cancelled() && needs.draft.outputs.inputs_ok == 'true'`")
+	}
+	if !strings.Contains(doc, "    outputs:\n      inputs_ok: ${{ steps.inputs.outputs.ok }}\n") {
+		t.Error("the draft job must expose inputs_ok from the validation step's ok output")
 	}
 }

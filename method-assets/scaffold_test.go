@@ -117,9 +117,9 @@ func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 	}
 
 	gen := step("Generate the scenario tests")
-	if !strings.Contains(gen, "inputs.phase == 'integration'") || !strings.Contains(gen, "make gen-tests") ||
+	if !strings.Contains(gen, "steps.spec.outputs.integration == 'true'") || !strings.Contains(gen, "make gen-tests") ||
 		!strings.Contains(gen, `GOWORK: "off"`) {
-		t.Errorf("the integration phase must generate the scenario tests (make gen-tests, GOWORK off):\n%s", gen)
+		t.Errorf("the integration task (from the spec step, not the optional phase input) must generate the scenario tests (make gen-tests, GOWORK off):\n%s", gen)
 	}
 	if strings.Index(y, "name: Generate the scenario tests") > agent {
 		t.Error("the scenario tests must be generated BEFORE the agent step, which fills their hooks")
@@ -148,7 +148,7 @@ func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 	}
 	upload := step("Upload check results")
 	for _, s := range []string{
-		"actions/upload-artifact@v4", "name: check-results-${{ inputs.activity_id }}-${{ github.run_id }}",
+		"actions/upload-artifact@v4", "name: check-results-${{ inputs.activity_id }}-${{ github.run_id }}-${{ github.run_attempt }}",
 		"check-results/**", "test-results/**", "always()",
 	} {
 		if !strings.Contains(upload, s) {
@@ -157,7 +157,7 @@ func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 	}
 	// The recorded run and the uploaded tree must agree on one artifact name.
 	record := step("Record the check run")
-	if !strings.Contains(record, `--artifact "check-results-${AIARCH_ACTIVITY_ID}-${GITHUB_RUN_ID}"`) ||
+	if !strings.Contains(record, `--artifact "check-results-${AIARCH_ACTIVITY_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"`) ||
 		!strings.Contains(record, `--revision "${AIARCH_REVISION}"`) {
 		t.Errorf("the record must name the uploaded artifact and the dispatched attempt:\n%s", record)
 	}

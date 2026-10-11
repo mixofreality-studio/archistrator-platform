@@ -93,7 +93,15 @@ func TestWorkflowTemplatesRunTheSpec(t *testing.T) {
 			`edit-scope --spec`,
 			`run-checks --gate --spec`,
 			`record-check-run --spec`,
-			`name: check-results-${{ inputs.activity_id }}-${{ github.run_id }}`,
+			`name: check-results-${{ inputs.activity_id }}-${{ github.run_id }}-${{ github.run_attempt }}`,
+			// One run id and artifact per attempt; no empty commit on a re-record.
+			`run_id="gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"`,
+			`--artifact "check-results-${AIARCH_ACTIVITY_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"`,
+			`git diff --cached --quiet || git -c`,
+			// A missing spec field fails rather than reading as "null".
+			`jq -er .model.id`, `jq -er '.tools.builtin | join(",")'`,
+			// Ruling R12: runs on one branch queue, never cancel; bounded.
+			"cancel-in-progress: false", "timeout-minutes: 90", "timeout-minutes: 25", "timeout-minutes: 45",
 		} {
 			if !strings.Contains(body, want) {
 				t.Errorf("%s: missing %q", name, want)
@@ -103,6 +111,13 @@ func TestWorkflowTemplatesRunTheSpec(t *testing.T) {
 			if strings.Contains(body, gone) {
 				t.Errorf("%s: still has %q", name, gone)
 			}
+		}
+		if !strings.Contains(body, "group: aiarch-construct-${{ inputs.activity_id }}") &&
+			!strings.Contains(body, "group: aiarch-design-${{ inputs.target_branch }}") {
+			t.Errorf("%s: the concurrency group must be keyed on the branch the runs push to", name)
+		}
+		if strings.Contains(body, "group: aiarch-cp-") {
+			t.Errorf("%s: the concurrency group must not be keyed on the per-run dedup token", name)
 		}
 		// Order: the spec is resolved before the agent; every gate follows it.
 		agent := strings.Index(body, "uses: anthropics/claude-code-action@v1")

@@ -214,10 +214,13 @@ permissions:
   pull-requests: write
   id-token: write
 
-# One in-flight design run per dedup token — belt-and-braces alongside the RA's
-# own run-name convergence (identical to construction).
+# One in-flight design run per SESSION BRANCH (ruling R12): every run of a
+# design session pushes to the same target branch (the refresh, the agent's
+# publish and the CheckRun record), so its runs queue rather than race. Never
+# cancel in progress. The RA's run-name convergence (above) remains the dedup
+# anchor.
 concurrency:
-  group: aiarch-cp-${{ inputs.idempotency_token }}
+  group: aiarch-design-${{ inputs.target_branch }}
   cancel-in-progress: false
 
 jobs:
@@ -229,6 +232,14 @@ jobs:
   # ---------------------------------------------------------------------------
   draft:
     runs-on: ubuntu-latest
+    # Bound the whole job (ruling R12): the agent step is bounded at 25 minutes
+    # and the check gate at 45, so a hung step is killed and recorded red rather
+    # than grinding.
+    timeout-minutes: 90
+    # The validate job reads this: it runs whenever the inputs were valid, also
+    # when this job failed red (a skipped required check would count as passing).
+    outputs:
+      inputs_ok: ${{ steps.inputs.outputs.ok }}
     steps:
       # FIRST: prove every dispatch input is the shape the server sends before anything
       # uses it (archistrator B1 fix round, I3; pinned by workflow_injection_test.go).
@@ -322,6 +333,7 @@ jobs:
             printf 'AIARCH_SPEC_HASH=%s\n' "${SPEC_HASH}"
             printf 'AIARCH_REVISION=%s\n' "${REVISION}"
           } >> "$GITHUB_ENV"
+          echo "ok=true" >> "$GITHUB_OUTPUT"
 
       - name: Checkout prior committed state
         uses: actions/checkout@v4
@@ -508,12 +520,22 @@ jobs:
           if [ "${got}" != "${AIARCH_SPEC_HASH}" ]; then
             echo "::error::task spec drifted: dispatched ${AIARCH_SPEC_HASH}, job resolved ${got}"; exit 1
           fi
-          model="$(jq -r .model.id "${RUNNER_TEMP}/spec.json")"
-          builtin="$(jq -r '.tools.builtin | join(",")' "${RUNNER_TEMP}/spec.json")"
-          if ! printf '%s' "${model}" | grep -Ex -- '[A-Za-z0-9][]A-Za-z0-9._:[-]{0,127}' > /dev/null; then
+          # jq -e: a missing field fails here instead of becoming the string "null".
+          model="$(jq -er .model.id "${RUNNER_TEMP}/spec.json")" || { echo "::error::the task spec has no model.id"; exit 1; }
+          builtin="$(jq -er '.tools.builtin | join(",")' "${RUNNER_TEMP}/spec.json")" || { echo "::error::the task spec has no tools.builtin list"; exit 1; }
+          # A whole-value match of at most $3 characters: no newline (grep matches
+          # per line), never "null". The bound is a length test, not an ERE
+          # interval: BSD grep caps intervals at 255.
+          plain() {
+            case "$1" in *$'\n'*|null) return 1 ;; esac
+            [ "${#1}" -le "$3" ] || return 1
+            printf '%s' "$1" | grep -Ex -- "$2" > /dev/null
+          }
+          if ! plain "${model}" '[A-Za-z0-9][]A-Za-z0-9._:[-]*' 128; then
             echo "::error::the task spec's model is not a model id"; exit 1
           fi
-          if ! printf '%s' "${builtin}" | grep -Ex -- '[A-Za-z0-9_,():*.-]{0,2048}' > /dev/null; then
+          # An empty allowlist is valid: --tools '' means no built-ins.
+          if [ -n "${builtin}" ] && ! plain "${builtin}" '[A-Za-z0-9_,():*.-]*' 4096; then
             echo "::error::the task spec's built-in tools are not a tool list"; exit 1
           fi
           echo "model=${model}" >> "$GITHUB_OUTPUT"
@@ -567,6 +589,7 @@ jobs:
             > "${RUNNER_TEMP}/aiarch-mcp.json"
 
       - name: Draft the typed Method artifact (claude-code-action)
+        timeout-minutes: 25
         uses: anthropics/claude-code-action@v1
         with:
           # The user's OAuth token, provisioned as a repo Actions secret by the
@@ -629,7 +652,7 @@ jobs:
       # failed: target_branch becomes part of an API path here, and an unvalidated
       # value must not reach it.
       - name: Verify claude pushed a commit to the target branch
-        if: always() && steps.inputs.outcome == 'success'
+        if: always() && steps.inputs.outcome == 'success' && steps.spec.outcome == 'success'
         env:
           TARGET_BRANCH: ${{ inputs.target_branch }}
           BASE_SHA: ${{ steps.base.outputs.sha }}
@@ -681,11 +704,18 @@ jobs:
       - name: Run the checks
         id: checks
         if: ${{ always() && steps.spec.outcome == 'success' }}
+        timeout-minutes: 45
         env:
           MCP_BIN: ${{ steps.statemcp.outputs.bin }}
           TARGET_BRANCH: ${{ inputs.target_branch }}
         run: |
-          git fetch origin "${TARGET_BRANCH}"
+          # A branch the agent never pushed has nothing to check. The CheckRun
+          # recorder needs a results file, so this is red without a record.
+          if ! git fetch origin "${TARGET_BRANCH}"; then
+            echo "rc=1" >> "$GITHUB_OUTPUT"
+            echo "::error::${TARGET_BRANCH} was never pushed: the agent published nothing, so no check ran and no CheckRun is recorded"
+            exit 1
+          fi
           git checkout -f -B "${TARGET_BRANCH}" FETCH_HEAD
           git clean -fd
           rm -rf test-results check-results
@@ -697,7 +727,7 @@ jobs:
         if: ${{ always() && steps.checks.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: check-results-${{ inputs.activity_id }}-${{ github.run_id }}
+          name: check-results-${{ inputs.activity_id }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             check-results/**
             test-results/**
@@ -711,11 +741,24 @@ jobs:
           MCP_BIN: ${{ steps.statemcp.outputs.bin }}
           TARGET_BRANCH: ${{ inputs.target_branch }}
         run: |
-          "${MCP_BIN}" record-check-run --spec "${RUNNER_TEMP}/spec.json" --results check-results/results.json \
-            --run-id "gh-${GITHUB_RUN_ID}" --artifact "check-results-${AIARCH_ACTIVITY_ID}-${GITHUB_RUN_ID}" --revision "${AIARCH_REVISION}"
-          git add .aiarch/state/project.json
-          git -c user.name="aiarch-checks" -c user.email="checks@aiarch.invalid" commit -m "checks: record run gh-${GITHUB_RUN_ID}"
-          git push origin "HEAD:${TARGET_BRANCH}"
+          branch="${TARGET_BRANCH}"
+          run_id="gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          record() {
+            "${MCP_BIN}" record-check-run --spec "${RUNNER_TEMP}/spec.json" --results check-results/results.json \
+              --run-id "${run_id}" --artifact "check-results-${AIARCH_ACTIVITY_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --revision "${AIARCH_REVISION}"
+            git add .aiarch/state/project.json
+            git diff --cached --quiet || git -c user.name="aiarch-checks" -c user.email="checks@aiarch.invalid" commit -m "checks: record run ${run_id}"
+          }
+          record
+          # Runs on one branch serialize (the concurrency group), but the branch can
+          # still move under this job: record once more on its new tip, then push.
+          if ! git push origin "HEAD:${branch}"; then
+            echo "::warning::the record push was rejected; recording once more on the branch's new tip"
+            git fetch origin "${branch}"
+            git reset --hard FETCH_HEAD
+            record
+            git push origin "HEAD:${branch}"
+          fi
 
       - name: Fail on a red check
         if: ${{ always() && steps.checks.outputs.rc != '0' }}
@@ -742,9 +785,14 @@ jobs:
   # repo's own CI (arch layer rules + design↔code alignment over product Go code,
   # which an installed binary cannot run).
   # ---------------------------------------------------------------------------
+  #
+  # It runs whenever draft's inputs validated, ALSO when draft failed (a red rule
+  # check fails draft): a required check whose job is SKIPPED counts as passing,
+  # so `needs:` alone would open the merge gate exactly when it must hold.
   validate:
     runs-on: ubuntu-latest
     needs: draft
+    if: ${{ !cancelled() && needs.draft.outputs.inputs_ok == 'true' }}
     steps:
       - name: Checkout drafted state
         uses: actions/checkout@v4

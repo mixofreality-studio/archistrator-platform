@@ -102,20 +102,23 @@ permissions:
   # action fails with "Could not fetch an OIDC token".
   id-token: write
 
-# One in-flight construction run per dedup token — belt-and-braces alongside the
-# RA's own run-name convergence.
+# One in-flight construction run per ACTIVITY (ruling R12): every run of an
+# activity pushes to the same activity/<id> branch (the agent's publish and the
+# CheckRun record), so its runs queue rather than race. Never cancel in
+# progress: a cancelled run would leave a half-published branch. The RA's
+# run-name convergence (above) remains the dedup anchor.
 concurrency:
-  group: aiarch-cp-${{ inputs.idempotency_token }}
+  group: aiarch-construct-${{ inputs.activity_id }}
   cancel-in-progress: false
 
 jobs:
   construct:
     runs-on: ubuntu-latest
-    # Bound the whole job. The agent's own 25-minute bound lives on its step; the
-    # rest is runway for the check gate after it (a scenario's own cap is 15
-    # minutes), so a slow or hung check is recorded red instead of the job being
+    # Bound the whole job (ruling R12). The agent's own 25-minute bound and the
+    # check gate's 45-minute bound live on their steps; the rest is setup and the
+    # record, so a slow or hung check is recorded red instead of the job being
     # killed before it records.
-    timeout-minutes: 60
+    timeout-minutes: 90
 
     steps:
       # FIRST: prove the ids are ids before anything uses them. activity_id,
@@ -319,12 +322,22 @@ jobs:
           if [ "${got}" != "${AIARCH_SPEC_HASH}" ]; then
             echo "::error::task spec drifted: dispatched ${AIARCH_SPEC_HASH}, job resolved ${got}"; exit 1
           fi
-          model="$(jq -r .model.id "${RUNNER_TEMP}/spec.json")"
-          builtin="$(jq -r '.tools.builtin | join(",")' "${RUNNER_TEMP}/spec.json")"
-          if ! printf '%s' "${model}" | grep -Ex -- '[A-Za-z0-9][]A-Za-z0-9._:[-]{0,127}' > /dev/null; then
+          # jq -e: a missing field fails here instead of becoming the string "null".
+          model="$(jq -er .model.id "${RUNNER_TEMP}/spec.json")" || { echo "::error::the task spec has no model.id"; exit 1; }
+          builtin="$(jq -er '.tools.builtin | join(",")' "${RUNNER_TEMP}/spec.json")" || { echo "::error::the task spec has no tools.builtin list"; exit 1; }
+          # A whole-value match of at most $3 characters: no newline (grep matches
+          # per line), never "null". The bound is a length test, not an ERE
+          # interval: BSD grep caps intervals at 255.
+          plain() {
+            case "$1" in *$'\n'*|null) return 1 ;; esac
+            [ "${#1}" -le "$3" ] || return 1
+            printf '%s' "$1" | grep -Ex -- "$2" > /dev/null
+          }
+          if ! plain "${model}" '[A-Za-z0-9][]A-Za-z0-9._:[-]*' 128; then
             echo "::error::the task spec's model is not a model id"; exit 1
           fi
-          if ! printf '%s' "${builtin}" | grep -Ex -- '[A-Za-z0-9_,():*.-]{0,2048}' > /dev/null; then
+          # An empty allowlist is valid: --tools '' means no built-ins.
+          if [ -n "${builtin}" ] && ! plain "${builtin}" '[A-Za-z0-9_,():*.-]*' 4096; then
             echo "::error::the task spec's built-in tools are not a tool list"; exit 1
           fi
           echo "model=${model}" >> "$GITHUB_OUTPUT"
@@ -335,6 +348,12 @@ jobs:
             base="$(git rev-parse HEAD)"
           fi
           echo "base=${base}" >> "$GITHUB_OUTPUT"
+          # The integration TASK (not the optional phase input) seeds the scenario tests.
+          if [ "${AIARCH_TASK_ID}" = integration ]; then
+            echo "integration=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "integration=false" >> "$GITHUB_OUTPUT"
+          fi
 
       # DETERMINISTIC COMPONENT TESTING — the integration step (spec §12 B12, R2).
       # The deterministic half of integration is the JOB's: it generates the
@@ -342,7 +361,7 @@ jobs:
       # the hooks file), the agent wires the component, fills the hooks and commits
       # the generated tests with its wiring, and the check gate after it runs them.
       - name: Generate the scenario tests
-        if: ${{ inputs.phase == 'integration' }}
+        if: ${{ steps.spec.outputs.integration == 'true' }}
         env:
           GOWORK: "off"
         run: make gen-tests
@@ -423,10 +442,17 @@ jobs:
       - name: Run the checks
         id: checks
         if: ${{ always() && steps.spec.outcome == 'success' }}
+        timeout-minutes: 45
         env:
           MCP_BIN: ${{ steps.statemcp.outputs.bin }}
         run: |
-          git fetch origin "activity/${AIARCH_ACTIVITY_ID}"
+          # A branch the agent never pushed has nothing to check. The CheckRun
+          # recorder needs a results file, so this is red without a record.
+          if ! git fetch origin "activity/${AIARCH_ACTIVITY_ID}"; then
+            echo "rc=1" >> "$GITHUB_OUTPUT"
+            echo "::error::activity/${AIARCH_ACTIVITY_ID} was never pushed: the agent published nothing, so no check ran and no CheckRun is recorded"
+            exit 1
+          fi
           git checkout -f -B "activity/${AIARCH_ACTIVITY_ID}" FETCH_HEAD
           git clean -fd
           rm -rf test-results check-results
@@ -442,7 +468,7 @@ jobs:
         if: ${{ always() && steps.checks.outcome == 'success' }}
         uses: actions/upload-artifact@v4
         with:
-          name: check-results-${{ inputs.activity_id }}-${{ github.run_id }}
+          name: check-results-${{ inputs.activity_id }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             check-results/**
             test-results/**
@@ -455,11 +481,24 @@ jobs:
         env:
           MCP_BIN: ${{ steps.statemcp.outputs.bin }}
         run: |
-          "${MCP_BIN}" record-check-run --spec "${RUNNER_TEMP}/spec.json" --results check-results/results.json \
-            --run-id "gh-${GITHUB_RUN_ID}" --artifact "check-results-${AIARCH_ACTIVITY_ID}-${GITHUB_RUN_ID}" --revision "${AIARCH_REVISION}"
-          git add .aiarch/state/project.json
-          git -c user.name="aiarch-checks" -c user.email="checks@aiarch.invalid" commit -m "checks: record run gh-${GITHUB_RUN_ID}"
-          git push origin "HEAD:activity/${AIARCH_ACTIVITY_ID}"
+          branch="activity/${AIARCH_ACTIVITY_ID}"
+          run_id="gh-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          record() {
+            "${MCP_BIN}" record-check-run --spec "${RUNNER_TEMP}/spec.json" --results check-results/results.json \
+              --run-id "${run_id}" --artifact "check-results-${AIARCH_ACTIVITY_ID}-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" --revision "${AIARCH_REVISION}"
+            git add .aiarch/state/project.json
+            git diff --cached --quiet || git -c user.name="aiarch-checks" -c user.email="checks@aiarch.invalid" commit -m "checks: record run ${run_id}"
+          }
+          record
+          # Runs on one branch serialize (the concurrency group), but the branch can
+          # still move under this job: record once more on its new tip, then push.
+          if ! git push origin "HEAD:${branch}"; then
+            echo "::warning::the record push was rejected; recording once more on the branch's new tip"
+            git fetch origin "${branch}"
+            git reset --hard FETCH_HEAD
+            record
+            git push origin "HEAD:${branch}"
+          fi
 
       - name: Fail on a red check
         if: ${{ always() && steps.checks.outputs.rc != '0' }}
