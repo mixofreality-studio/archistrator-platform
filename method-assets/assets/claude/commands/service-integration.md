@@ -20,6 +20,6 @@
 4. **Generated tests.** The tests are already generated: the job generated them before you started. It wrote the package's `<stereotype>_scenarios.gen_test.go` and seeded `<stereotype>_hooks_test.go` if it was missing. Never edit a generated file and never change the plan.
 5. **Fill the hooks.** Replace every `FILL` in `<stereotype>_hooks_test.go`. The hooks arrange the real stack: build each collaborator through its package's public constructor (the app's own component packages, wired as production wires them). Never import a package's `internal/` sub-packages, unexported identifiers or another package's test helpers, and never stand a mock or fake in for a component.
 6. **Purge.** Delete every other `_test.go` in the component's package — anything that is not `<stereotype>_scenarios.gen_test.go` or the hooks file. The arch gate rejects it. The generated-tests check in `run_checks()` must be clean.
-7. **Commit** the wiring and the hooks file onto `activity/<activity_id>`. Never commit `test-results/`.
+7. **Commit** the wiring, the generated tests and the hooks file onto `activity/<activity_id>`. Never commit `test-results/`.
 8. **Publish.** `publishDraft` carries the integration note to the activity branch.
 9. **Stop.** Do not mark phase status (the Manager owns that) and do not merge. Leave the PR open for the gate.

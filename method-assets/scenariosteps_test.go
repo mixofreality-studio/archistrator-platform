@@ -61,6 +61,11 @@ func TestIntegrationCommandsLeaveRunAndRecordToTheJob(t *testing.T) {
 				t.Errorf("%s missing %q", slug, s)
 			}
 		}
+		// The job generates the tests in the working tree but never commits them:
+		// the agent's commit is the only path that puts them on the branch.
+		if !strings.Contains(body, "**Commit** the wiring, the generated tests and the hooks file onto `activity/<activity_id>`.") {
+			t.Errorf("%s: the commit step must include the generated tests", slug)
+		}
 		// Ordered: generated → fill → purge → commit → publish. The job runs the
 		// scenarios and records the run.
 		at := -1
