@@ -324,3 +324,40 @@ func TestMaterializeStepNarrows(t *testing.T) {
 func contains(hay []string, needle string) bool {
 	return slices.Contains(hay, needle)
 }
+
+func TestStepManifestCarriesTheCharterModel(t *testing.T) {
+	files, err := ClaudeFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for slug, m := range Manifests() {
+		body := string(files[".claude/agents/"+m.Agent+".md"])
+		want := charterModel(t, body)
+		if m.Model != want {
+			t.Errorf("%s: Model = %q, charter %s says %q", slug, m.Model, m.Agent, want)
+		}
+		if m.Model == "" {
+			t.Errorf("%s: charter %s has no model: line", slug, m.Agent)
+		}
+	}
+	if got, ok := ModelForAgent("junior-developer"); !ok || got != "sonnet" {
+		t.Errorf("ModelForAgent(junior-developer) = %q,%v; want sonnet,true", got, ok)
+	}
+	if _, ok := ModelForAgent("no-such-agent"); ok {
+		t.Error("ModelForAgent(no-such-agent) reported ok")
+	}
+}
+
+func charterModel(t *testing.T, body string) string {
+	t.Helper()
+	fm, _, ok := strings.Cut(strings.TrimPrefix(body, "---\n"), "\n---")
+	if !ok {
+		t.Fatalf("charter has no frontmatter")
+	}
+	for l := range strings.SplitSeq(fm, "\n") {
+		if v, ok := strings.CutPrefix(l, "model:"); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
+}

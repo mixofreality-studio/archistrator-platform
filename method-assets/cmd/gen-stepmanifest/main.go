@@ -217,7 +217,7 @@ func commandSlug(path string) (string, bool) {
 }
 
 // manifestFor builds one step's manifest from its command body.
-func manifestFor(slug, body string, skillLinks map[string][]string, charters map[string][]string) (methodassets.StepManifest, error) {
+func manifestFor(slug, body string, skillLinks map[string][]string, charters map[string]charter) (methodassets.StepManifest, error) {
 	line := agentSkillsLine(body)
 	if line == "" {
 		return methodassets.StepManifest{}, fmt.Errorf("command %q has no %q line (add one, or list it in orchestrationCommands)", slug, "**Agent + skills.**")
@@ -237,13 +237,16 @@ func manifestFor(slug, body string, skillLinks map[string][]string, charters map
 	}
 	skills := closeOver(seeds, skillLinks)
 
-	charter, ok := charters[agent]
+	c, ok := charters[agent]
 	if !ok {
 		return methodassets.StepManifest{}, fmt.Errorf("command %q names agent %q, which has no charter", slug, agent)
 	}
+	if c.model == "" {
+		return methodassets.StepManifest{}, fmt.Errorf("charter %s has no model: line", agent)
+	}
 
 	mode := modeFor(slug)
-	tools := withModeImplicit(allowedTools(charter, mode, projectDesignCommands[slug]), mode)
+	tools := withModeImplicit(allowedTools(c.tools, mode, projectDesignCommands[slug]), mode)
 
 	return methodassets.StepManifest{
 		Command: slug,
@@ -251,6 +254,7 @@ func manifestFor(slug, body string, skillLinks map[string][]string, charters map
 		Skills:  skills,
 		Tools:   tools,
 		Mode:    mode,
+		Model:   c.model,
 	}, nil
 }
 
@@ -369,17 +373,37 @@ func closeOver(seeds []string, graph map[string][]string) []string {
 	return out
 }
 
-// parseCharters maps each agent stem to its `tools:` frontmatter list.
-func parseCharters(files map[string][]byte) map[string][]string {
-	out := map[string][]string{}
+// charter is what the generator reads from one agent charter's frontmatter.
+type charter struct {
+	tools []string
+	model string
+}
+
+// parseCharters maps each agent stem to its `tools:` list and `model:` line.
+func parseCharters(files map[string][]byte) map[string]charter {
+	out := map[string]charter{}
 	for p, body := range files {
 		rest, ok := strings.CutPrefix(p, ".claude/agents/")
 		if !ok || !strings.HasSuffix(rest, ".md") {
 			continue
 		}
-		out[strings.TrimSuffix(rest, ".md")] = parseToolsBlock(string(body))
+		out[strings.TrimSuffix(rest, ".md")] = charter{tools: parseToolsBlock(string(body)), model: parseModel(string(body))}
 	}
 	return out
+}
+
+// parseModel extracts the `model:` line from a charter's frontmatter.
+func parseModel(body string) string {
+	fm, _, ok := strings.Cut(strings.TrimPrefix(body, "---\n"), "\n---")
+	if !ok {
+		return ""
+	}
+	for l := range strings.SplitSeq(fm, "\n") {
+		if v, ok := strings.CutPrefix(l, "model:"); ok {
+			return strings.TrimSpace(v)
+		}
+	}
+	return ""
 }
 
 // parseToolsBlock extracts the YAML `tools:` sequence from a charter's
@@ -437,6 +461,7 @@ func render(manifests map[string]methodassets.StepManifest) ([]byte, error) {
 		fmt.Fprintf(&b, "\t\tCommand: %q,\n", m.Command)
 		fmt.Fprintf(&b, "\t\tAgent:   %q,\n", m.Agent)
 		fmt.Fprintf(&b, "\t\tMode:    %q,\n", m.Mode)
+		fmt.Fprintf(&b, "\t\tModel:   %q,\n", m.Model)
 		fmt.Fprintf(&b, "\t\tSkills:  []string{%s},\n", quoteList(m.Skills))
 		fmt.Fprintf(&b, "\t\tTools:   []string{%s},\n", quoteList(m.Tools))
 		b.WriteString("\t},\n")

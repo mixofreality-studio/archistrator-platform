@@ -138,8 +138,8 @@ func TestEveryComposedVerbIsReachable(t *testing.T) {
 		t.Fatal(err)
 	}
 	declared := map[string]bool{}
-	for _, tools := range parseCharters(files) {
-		for _, tool := range tools {
+	for _, c := range parseCharters(files) {
+		for _, tool := range c.tools {
 			if verb, isMCP := strings.CutPrefix(tool, mcp); isMCP {
 				declared[verb] = true
 			}

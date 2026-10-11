@@ -10,6 +10,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "activity-list-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -67,6 +68,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "compressed-solution-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -124,6 +126,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "core-use-cases-critique",
 		Agent:   "product-manager",
 		Mode:    "critique",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -157,6 +160,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "core-use-cases-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -194,6 +198,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "decompressed-solution-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -251,6 +256,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "deployment-construction",
 		Agent:   "junior-developer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -284,6 +290,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "deployment-detailed-design",
 		Agent:   "project-manager",
 		Mode:    "construct",
+		Model:   "fable",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -332,6 +339,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "deployment-integration",
 		Agent:   "system-architect",
 		Mode:    "construct",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -367,6 +375,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "design-answer",
 		Agent:   "system-architect",
 		Mode:    "answer",
+		Model:   "opus",
 		Skills: []string{
 			"the-method",
 			"the-method-activity-list",
@@ -418,6 +427,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "design-answer-pm",
 		Agent:   "product-manager",
 		Mode:    "answer",
+		Model:   "opus",
 		Skills: []string{
 			"the-method",
 			"the-method-activity-list",
@@ -466,6 +476,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "documentation-construction",
 		Agent:   "system-architect",
 		Mode:    "construct",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -501,6 +512,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "documentation-detailed-design",
 		Agent:   "system-architect",
 		Mode:    "construct",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -536,6 +548,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "documentation-integration",
 		Agent:   "system-architect",
 		Mode:    "construct",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -571,6 +584,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "frontend-construction",
 		Agent:   "junior-developer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -604,6 +618,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "frontend-detailed-design",
 		Agent:   "ui-designer",
 		Mode:    "construct",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -652,6 +667,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "frontend-integration",
 		Agent:   "system-architect",
 		Mode:    "construct",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -702,6 +718,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "frontend-requirements",
 		Agent:   "ui-designer",
 		Mode:    "construct",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -735,6 +752,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "frontend-test-plan",
 		Agent:   "test-engineer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -785,6 +803,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "glossary-critique",
 		Agent:   "product-manager",
 		Mode:    "critique",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -818,6 +837,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "glossary-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -855,6 +875,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "mission-critique",
 		Agent:   "product-manager",
 		Mode:    "critique",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -888,6 +909,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "mission-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -925,6 +947,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "network-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -982,6 +1005,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "normal-solution-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1039,6 +1063,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "operational-concepts-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -1076,6 +1101,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "planning-assumptions-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1133,6 +1159,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "risk-model-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1190,6 +1217,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "scrubbed-requirements-critique",
 		Agent:   "product-manager",
 		Mode:    "critique",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -1223,6 +1251,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "scrubbed-requirements-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -1260,6 +1289,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "service-construction",
 		Agent:   "junior-developer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -1293,6 +1323,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "service-detailed-design",
 		Agent:   "senior-developer",
 		Mode:    "construct",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1342,6 +1373,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "service-integration",
 		Agent:   "system-architect",
 		Mode:    "construct",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1392,6 +1424,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "service-requirements",
 		Agent:   "senior-developer",
 		Mode:    "construct",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1441,6 +1474,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "service-test-plan",
 		Agent:   "test-engineer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1491,6 +1525,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "standard-check-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -1528,6 +1563,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "subcritical-solution-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1585,6 +1621,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "system-critique",
 		Agent:   "system-architect",
 		Mode:    "critique",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -1621,6 +1658,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "system-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -1658,6 +1696,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "testing-harness-construction",
 		Agent:   "test-engineer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1708,6 +1747,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "testing-harness-detailed-design",
 		Agent:   "test-engineer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1758,6 +1798,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "testing-harness-integration",
 		Agent:   "qa-engineer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1807,6 +1848,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "testing-perf-construction",
 		Agent:   "test-engineer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1857,6 +1899,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "testing-perf-detailed-design",
 		Agent:   "test-engineer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1907,6 +1950,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "testing-perf-integration",
 		Agent:   "qa-engineer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -1956,6 +2000,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "testing-qa-construction",
 		Agent:   "qa-engineer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -2005,6 +2050,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "testing-qa-detailed-design",
 		Agent:   "qa-engineer",
 		Mode:    "construct",
+		Model:   "sonnet",
 		Skills: []string{
 			"the-method-activity-list",
 			"the-method-architecture",
@@ -2054,6 +2100,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "volatilities-critique",
 		Agent:   "system-architect",
 		Mode:    "critique",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",
@@ -2090,6 +2137,7 @@ var stepManifests = map[string]StepManifest{
 		Command: "volatilities-draft",
 		Agent:   "system-architect",
 		Mode:    "draft",
+		Model:   "opus",
 		Skills: []string{
 			"the-method-architecture",
 			"the-method-business-alignment",

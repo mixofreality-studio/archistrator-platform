@@ -62,6 +62,20 @@ type StepManifest struct {
 	// Mode is the job mode this step runs under: draft, critique, answer, or
 	// construct. It is what narrows the charter's tools to the legal set.
 	Mode string
+	// Model is the charter's model: line — the CLI --model alias this step runs on.
+	Model string
+}
+
+// ModelForAgent is the model a charter declares, read from any manifest whose
+// Agent is that charter. Every charter backs at least one command, so a charter
+// with no manifest is not a dispatchable worker class.
+func ModelForAgent(agent string) (string, bool) {
+	for _, m := range stepManifests {
+		if m.Agent == agent {
+			return m.Model, true
+		}
+	}
+	return "", false
 }
 
 // MCPTools returns the manifest's MCP tool names with the server prefix
