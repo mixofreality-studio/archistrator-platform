@@ -177,7 +177,10 @@ func renderedDesignWorkflow(t *testing.T) string {
 }
 
 // designInputs are the design workflow's dispatch inputs the first step validates.
-var designInputs = []string{"command", "artifact_kind", "job_mode", "target_branch", "prior_state_ref"}
+var designInputs = []string{
+	"command", "artifact_kind", "job_mode", "target_branch", "prior_state_ref",
+	"activity_id", "task_id", "spec_hash", "revision",
+}
 
 // TestDesignWorkflow_ValidatesInputsBeforeAnyUse pins that validation is the draft
 // job's first step and reads every input from env.
@@ -222,7 +225,10 @@ func TestDesignWorkflow_MCPConfigIsJQFromEnv(t *testing.T) {
 	if !strings.Contains(cfg.run, "jq -n") || strings.Contains(cfg.run, "<<") {
 		t.Errorf("the MCP config must be built with jq -n from env, never a heredoc:\n%s", cfg.run)
 	}
-	for _, k := range []string{"AIARCH_ARTIFACT_KIND", "AIARCH_JOB_MODE", "AIARCH_TARGET_BRANCH", "AIARCH_COMMAND", "AIARCH_PROJECT_ID", "AIARCH_STATE_ROOT"} {
+	for _, k := range []string{
+		"AIARCH_ARTIFACT_KIND", "AIARCH_JOB_MODE", "AIARCH_TARGET_BRANCH", "AIARCH_COMMAND", "AIARCH_PROJECT_ID", "AIARCH_STATE_ROOT",
+		"AIARCH_ACTIVITY_ID", "AIARCH_TASK_ID", "AIARCH_SPEC_HASH",
+	} {
 		if cfg.env[k] == "" {
 			t.Errorf("the MCP-config step must take %s from env; env = %v", k, cfg.env)
 		}
@@ -247,6 +253,9 @@ func TestDesignWorkflow_MCPConfigCarriesHostileValuesVerbatim(t *testing.T) {
 				"AIARCH_TARGET_BRANCH": v,
 				"AIARCH_STATE_ROOT":    "/home/runner/work/shop/shop",
 				"AIARCH_COMMAND":       v,
+				"AIARCH_ACTIVITY_ID":   v,
+				"AIARCH_TASK_ID":       v,
+				"AIARCH_SPEC_HASH":     v,
 			}
 			if out, err := runStepScript(t, cfg.run, work, env); err != nil {
 				t.Fatalf("the MCP-config script failed on a hostile value: %v\n%s", err, out)
@@ -274,10 +283,10 @@ func TestDesignWorkflow_MCPConfigCarriesHostileValuesVerbatim(t *testing.T) {
 				keys = append(keys, k)
 			}
 			sort.Strings(keys)
-			if strings.Join(keys, ",") != "AIARCH_ARTIFACT_KIND,AIARCH_COMMAND,AIARCH_JOB_MODE,AIARCH_PROJECT_ID,AIARCH_STATE_ROOT,AIARCH_TARGET_BRANCH" {
+			if strings.Join(keys, ",") != "AIARCH_ACTIVITY_ID,AIARCH_ARTIFACT_KIND,AIARCH_COMMAND,AIARCH_JOB_MODE,AIARCH_PROJECT_ID,AIARCH_SPEC_HASH,AIARCH_STATE_ROOT,AIARCH_TARGET_BRANCH,AIARCH_TASK_ID" {
 				t.Fatalf("env keys = %v", keys)
 			}
-			for _, k := range []string{"AIARCH_ARTIFACT_KIND", "AIARCH_JOB_MODE", "AIARCH_TARGET_BRANCH", "AIARCH_COMMAND"} {
+			for _, k := range []string{"AIARCH_ARTIFACT_KIND", "AIARCH_JOB_MODE", "AIARCH_TARGET_BRANCH", "AIARCH_COMMAND", "AIARCH_ACTIVITY_ID", "AIARCH_TASK_ID", "AIARCH_SPEC_HASH"} {
 				if srv.Env[k] != v {
 					t.Errorf("%s did not round-trip byte-exact:\n got %q\nwant %q", k, srv.Env[k], v)
 				}
@@ -295,9 +304,12 @@ func TestDesignWorkflow_ValidationRejectsHostileInputs(t *testing.T) {
 	good := map[string]string{
 		"command": "mission-draft", "artifact_kind": "ScrubbedRequirements", "job_mode": "draft",
 		"target_branch": "aiarch-design/gtd-qa2/3-amend-2", "prior_state_ref": "",
+		"activity_id": "SD-mission", "task_id": "draft", "revision": "",
+		"spec_hash": "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef",
 	}
+	ghEnv := filepath.Join(t.TempDir(), "github_env")
 	envFor := func(vals map[string]string) map[string]string {
-		env := map[string]string{}
+		env := map[string]string{"GITHUB_ENV": ghEnv}
 		for k, v := range validate.env {
 			for _, in := range designInputs {
 				if v == "${{ inputs."+in+" }}" {
@@ -323,6 +335,9 @@ func TestDesignWorkflow_ValidationRejectsHostileInputs(t *testing.T) {
 		with("prior_state_ref", "0123456789abcdef0123456789abcdef01234567"),
 		with("prior_state_ref", "main"),
 		with("prior_state_ref", "release/v1.2"),
+		with("activity_id", "C-billing.v2:x/y"),
+		with("task_id", "critique"),
+		with("revision", "SD-mission:draft:2"),
 	}
 	for _, vals := range valids {
 		if out, err := runStepScript(t, validate.run, work, envFor(vals)); err != nil {
@@ -340,6 +355,13 @@ func TestDesignWorkflow_ValidationRejectsHostileInputs(t *testing.T) {
 		"job_mode":        append([]string{"", "Draft", "draft ", "draftx", "construct", "draft|critique"}, common...),
 		"target_branch":   append([]string{"", "/abs", "trail/", "a//b", "a/.hidden", "a.", "a/-x", "refs/heads/../main"}, common...),
 		"prior_state_ref": append([]string{"/abs", "a//b", "HEAD~1", "@{-1}", "a.lock/.."}, common...),
+		"activity_id":     append([]string{"", "/abs", "a//b", "a/./b", "C-PE.", ".hidden"}, common...),
+		"task_id":         append([]string{"", "/abs", "a//b", "a/./b", "x.", ".x"}, common...),
+		"revision":        append([]string{"/abs", "a//b", "a/./b", "x.", ".x"}, common...),
+		"spec_hash": append([]string{
+			"", strings.Repeat("0", 63), strings.Repeat("0", 65), strings.Repeat("A", 64), strings.Repeat("g", 64),
+			strings.Repeat("0", 64) + "\ntouch PWNED_HASH",
+		}, common...),
 	}
 	for in, vals := range hostile {
 		for _, h := range vals {
@@ -349,4 +371,21 @@ func TestDesignWorkflow_ValidationRejectsHostileInputs(t *testing.T) {
 		}
 	}
 	assertNothingExecuted(t, work)
+
+	// A valid dispatch exports the validated ids for every later step.
+	if err := os.Remove(ghEnv); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if out, err := runStepScript(t, validate.run, work, envFor(good)); err != nil {
+		t.Fatalf("valid inputs were rejected: %v\n%s", err, out)
+	}
+	exported, err := os.ReadFile(ghEnv)
+	if err != nil {
+		t.Fatalf("the validation step exported nothing: %v", err)
+	}
+	for _, line := range []string{"AIARCH_ACTIVITY_ID=SD-mission", "AIARCH_TASK_ID=draft", "AIARCH_SPEC_HASH=" + good["spec_hash"]} {
+		if !strings.Contains("\n"+string(exported), "\n"+line+"\n") {
+			t.Errorf("$GITHUB_ENV is missing %q:\n%s", line, exported)
+		}
+	}
 }

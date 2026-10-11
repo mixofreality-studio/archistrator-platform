@@ -61,13 +61,65 @@ func TestWorkflowTemplatesScopeThePromptSurface(t *testing.T) {
 		if !strings.Contains(s, "--strict-mcp-config") {
 			t.Errorf("%s: claude_args must keep --strict-mcp-config", name)
 		}
-		// The deny list must come from the binary (one source of truth), never
-		// be restated in YAML.
-		if !strings.Contains(s, "step-tools --command") {
-			t.Errorf("%s: must resolve --disallowedTools via `aiarch-state-mcp step-tools`", name)
+		// The built-in surface is the task spec's allowlist (--tools), resolved by
+		// the binary from the same code the server hashed. The old deny path
+		// (step-tools --disallowed) is gone: an allowlist cannot silently admit a
+		// tool a future CLI adds.
+		if !strings.Contains(s, "--tools '${{ steps.spec.outputs.builtin }}'") {
+			t.Errorf("%s: claude_args must restrict the built-ins to the spec's allowlist", name)
 		}
-		if !strings.Contains(s, "${{ steps.steptools.outputs.disallowed }}") {
-			t.Errorf("%s: claude_args must consume the resolved deny list", name)
+		if !strings.Contains(s, "--model ${{ steps.spec.outputs.model }}") {
+			t.Errorf("%s: claude_args must run the spec's model", name)
+		}
+	}
+}
+
+// TestWorkflowTemplatesRunTheSpec pins the job half of the agent task spec
+// (spec §5.2): the job recomputes the spec and refuses a drifted hash, runs the
+// agent on the spec's model and built-in allowlist, then gates the edit scope,
+// runs the full check set, uploads the logs, records the CheckRun and fails red.
+func TestWorkflowTemplatesRunTheSpec(t *testing.T) {
+	for _, name := range []string{"aiarch-construct.yml.tmpl", "aiarch-design.yml.tmpl"} {
+		raw, err := assetsFS.ReadFile("assets/workflows/" + name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		body := string(raw)
+		for _, want := range []string{
+			`task-spec --activity "${AIARCH_ACTIVITY_ID}" --task "${AIARCH_TASK_ID}"`,
+			`if [ "${got}" != "${AIARCH_SPEC_HASH}" ]; then`,
+			`steps.spec.outputs.model`,
+			`--tools '${{ steps.spec.outputs.builtin }}'`,
+			`edit-scope --spec`,
+			`run-checks --gate --spec`,
+			`record-check-run --spec`,
+			`name: check-results-${{ inputs.activity_id }}-${{ github.run_id }}`,
+		} {
+			if !strings.Contains(body, want) {
+				t.Errorf("%s: missing %q", name, want)
+			}
+		}
+		for _, gone := range []string{"--disallowedTools", "step-tools --command", "Fail on a red scenario run", "steps.steptools"} {
+			if strings.Contains(body, gone) {
+				t.Errorf("%s: still has %q", name, gone)
+			}
+		}
+		// Order: the spec is resolved before the agent; every gate follows it.
+		agent := strings.Index(body, "uses: anthropics/claude-code-action@v1")
+		if at := strings.Index(body, "name: Resolve the task spec"); at < 0 || at > agent {
+			t.Errorf("%s: the task spec must be resolved before the agent step", name)
+		}
+		at := agent
+		for _, step := range []string{
+			"name: Gate the edit scope", "name: Run the checks", "name: Upload check results",
+			"name: Record the check run", "name: Fail on a red check",
+		} {
+			i := strings.Index(body, step)
+			if i < at {
+				t.Errorf("%s: %q is missing or out of order (agent, edit scope, checks, upload, record, fail)", name, step)
+				continue
+			}
+			at = i
 		}
 	}
 }

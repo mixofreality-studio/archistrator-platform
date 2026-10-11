@@ -75,28 +75,24 @@ func TestScaffoldFiles(t *testing.T) {
 const testgenModuleRootArgs = "-project .aiarch/state/project.json -root . -uitests uitests/generated"
 
 // TestConstructTemplateHasScenarioSteps pins the venue half of deterministic
-// component testing as spec §12 B12 shapes it: the integration TASK generates the
-// tests from the reviewed plan, fills their hooks, runs them and records the run
-// with `record-test-run` before publishDraft (so the run rides the agent's
-// publish onto the activity branch). The construct workflow, on the integration
-// phase only, therefore (1) hands the agent the recorder on PATH, the run id and
-// the artifact name BEFORE the agent step, (2) re-checks testgen drift after it,
-// (3) uploads ONE results tree under that same artifact name, and (4) fails the
-// job on a red run. It never records a run itself — a record written after the
-// agent published would never leave the runner — and go-checks runs the testgen
-// drift check on every PR (spec §5.3). Both testgen invocations spell the
-// module-root -uitests dir.
+// component testing under the agent task spec (spec §5.2, R2): the deterministic
+// half of integration lives in the JOB, not the prompt. On the integration phase
+// only, the job (1) generates the scenario tests BEFORE the agent (make gen-tests
+// seeds the hooks file; the agent fills the hooks and commits the generated tests
+// with its wiring). After the agent, on every phase, the job (2) runs the spec's
+// full check set with `run-checks --gate` from a clean test-results/ (no stale
+// pass from the agent's own runs leaks into the gate; testgen drift is the
+// integration spec's gen-tests-check), (3) uploads the check logs and the
+// scenario results tree under one artifact name, (4) records the CheckRun with
+// that same name, and (5) fails the job on a red check. Neither the agent nor
+// the job records a TestRun any more (CheckRun replaces it). go-checks still
+// runs the testgen drift check on every PR, spelling the module-root -uitests dir.
 //
-// Artifact layout (pinned here because two consumers were written against it):
-// actions/upload-artifact@v4 roots the zip at the least common ancestor of its
-// SEARCH PATHS, so the single `test-results/**` yields entries `go-test.jsonl`
-// and `<component>/results.json` — the layout the local venue (spec §6.3,
-// .aiarch/test-results/<run>/<component>/results.json) and Plan 2's cloud
-// TestRun reader (`OpenTestRunFile(ctx, ref, "<component>/results.json")`,
-// TestRunPanel `fileUrl('go-test.jsonl')`) expect. A second upload path would
-// re-root the zip at the checkout for Go-only components too; the
-// frontend-integration command mirrors uitests/test-results/<component> into
-// test-results/ instead (TestIntegrationCommandsRunAndRecordTheScenarios).
+// Artifact layout: actions/upload-artifact@v4 roots the zip at the least common
+// ancestor of its SEARCH PATHS. With check-results/** and test-results/** that is
+// the checkout, so entries are `check-results/results.json`,
+// `check-results/checks/<checkId>.log` and `test-results/<component>/results.json`
+// — the layout the CheckRun reader opens.
 func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 	out, err := ScaffoldFiles(testData)
 	if err != nil {
@@ -104,17 +100,6 @@ func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 	}
 	testgen := AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion
 	y := string(out[".github/workflows/aiarch-construct.yml"])
-	for _, s := range []string{
-		"name: Expose the test-run recorder to the integration step",
-		"name: Check the generated scenario tests",
-		"name: Upload test results", "actions/upload-artifact@v4",
-		"name: Fail on a red scenario run",
-		testgen + " " + testgenModuleRootArgs + " -check",
-	} {
-		if !strings.Contains(y, s) {
-			t.Errorf("aiarch-construct.yml missing %q", s)
-		}
-	}
 	step := func(name string) string {
 		i := strings.Index(y, "name: "+name)
 		if i < 0 {
@@ -126,64 +111,64 @@ func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 		}
 		return rest
 	}
-	for _, name := range []string{
-		"Expose the test-run recorder to the integration step", "Check the generated scenario tests",
-		"Upload test results", "Fail on a red scenario run",
-	} {
-		if !strings.Contains(step(name), "inputs.phase == 'integration'") {
-			t.Errorf("step %q must run on the integration phase only:\n%s", name, step(name))
-		}
-	}
 	agent := strings.Index(y, "name: Run construction step (claude-code-action)")
-	if expose := strings.Index(y, "name: Expose the test-run recorder"); expose < 0 || expose > agent {
-		t.Error("the recorder must be exposed BEFORE the agent step, which records the run")
+	if agent < 0 {
+		t.Fatal("aiarch-construct.yml has no agent step")
 	}
-	for _, name := range []string{"Check the generated scenario tests", "Upload test results", "Fail on a red scenario run"} {
-		if strings.Index(y, "name: "+name) < agent {
-			t.Errorf("step %q must follow the agent step", name)
-		}
+
+	gen := step("Generate the scenario tests")
+	if !strings.Contains(gen, "inputs.phase == 'integration'") || !strings.Contains(gen, "make gen-tests") ||
+		!strings.Contains(gen, `GOWORK: "off"`) {
+		t.Errorf("the integration phase must generate the scenario tests (make gen-tests, GOWORK off):\n%s", gen)
 	}
-	expose := step("Expose the test-run recorder to the integration step")
-	for _, s := range []string{
-		`dirname "${MCP_BIN}" >> "$GITHUB_PATH"`,
-		`AIARCH_TEST_RUN_ID=%s\n' "${AIARCH_RUN_ID}" >> "$GITHUB_ENV"`,
-		// The run's revision is the attempt the dispatch names (DCT plan 5 r2).
-		`AIARCH_REVISION: ${{ inputs.revision }}`,
-		`AIARCH_REVISION=%s\n' "${AIARCH_REVISION}" >> "$GITHUB_ENV"`,
-		`AIARCH_TEST_ARTIFACT=test-results-%s-%s\n' "${AIARCH_ACTIVITY_ID}" "${AIARCH_RUN_ID}" >> "$GITHUB_ENV"`,
+	if strings.Index(y, "name: Generate the scenario tests") > agent {
+		t.Error("the scenario tests must be generated BEFORE the agent step, which fills their hooks")
+	}
+
+	// The venue no longer hands the agent a recorder, re-runs the drift check
+	// itself, or reads a scenario index: the check gate owns all three.
+	for _, gone := range []string{
+		"Expose the test-run recorder", "Check the generated scenario tests", "name: Upload test results",
+		"Fail on a red scenario run", "AIARCH_TEST_ARTIFACT", "AIARCH_TEST_RUN_ID",
 	} {
-		if !strings.Contains(expose, s) {
-			t.Errorf("the expose step must write %q:\n%s", s, expose)
+		if strings.Contains(y, gone) {
+			t.Errorf("aiarch-construct.yml still carries %q", gone)
 		}
-	}
-	// The revision input is an id: validated by the first step before it reaches $GITHUB_ENV.
-	validate := step("Validate dispatch inputs")
-	for _, s := range []string{`REVISION: ${{ inputs.revision }}`, `valid "${REVISION}" "${id_re}"`} {
-		if !strings.Contains(validate, s) {
-			t.Errorf("the validate step must check the revision input (%q):\n%s", s, validate)
-		}
-	}
-	// The recorded run and the uploaded tree must agree on one artifact name.
-	upload := step("Upload test results")
-	if !strings.Contains(upload, "name: test-results-${{ inputs.activity_id }}-${{ github.run_id }}") {
-		t.Errorf("Upload test results must use the artifact name the expose step hands the agent:\n%s", upload)
-	}
-	if !strings.Contains(upload, "path: test-results/**") || !strings.Contains(upload, "if-no-files-found: error") {
-		t.Errorf("Upload test results must upload the single test-results/** tree and fail on an empty one:\n%s", upload)
-	}
-	if strings.Contains(upload, "uitests/test-results") {
-		t.Errorf("Upload test results must not add a second search path (it re-roots the zip at the checkout):\n%s", upload)
-	}
-	if !strings.Contains(upload, "always()") {
-		t.Errorf("Upload test results must upload a run's evidence after a failed agent step too:\n%s", upload)
-	}
-	if red := step("Fail on a red scenario run"); !strings.Contains(red, `all(.[]; .status == "pass")`) ||
-		!strings.Contains(red, `"test-results/${AIARCH_COMPONENT_ID}/results.json"`) {
-		t.Errorf("a red (or skipped) scenario must fail the job:\n%s", red)
 	}
 	for line := range strings.SplitSeq(y, "\n") {
 		if l := strings.TrimSpace(line); !strings.HasPrefix(l, "#") && strings.Contains(l, "record-test-run") {
-			t.Errorf("the construct workflow must not record a run itself (the integration agent records it before publishDraft): %q", l)
+			t.Errorf("the construct workflow must not record a TestRun (CheckRun replaces it): %q", l)
+		}
+	}
+
+	checks := step("Run the checks")
+	if !strings.Contains(checks, "rm -rf test-results") ||
+		strings.Index(checks, "rm -rf test-results") > strings.Index(checks, "run-checks --gate") {
+		t.Errorf("the gate must start from a clean test-results/:\n%s", checks)
+	}
+	upload := step("Upload check results")
+	for _, s := range []string{
+		"actions/upload-artifact@v4", "name: check-results-${{ inputs.activity_id }}-${{ github.run_id }}",
+		"check-results/**", "test-results/**", "always()",
+	} {
+		if !strings.Contains(upload, s) {
+			t.Errorf("Upload check results must carry %q:\n%s", s, upload)
+		}
+	}
+	// The recorded run and the uploaded tree must agree on one artifact name.
+	record := step("Record the check run")
+	if !strings.Contains(record, `--artifact "check-results-${AIARCH_ACTIVITY_ID}-${GITHUB_RUN_ID}"`) ||
+		!strings.Contains(record, `--revision "${AIARCH_REVISION}"`) {
+		t.Errorf("the record must name the uploaded artifact and the dispatched attempt:\n%s", record)
+	}
+	// The revision input is an id: validated by the first step before it reaches $GITHUB_ENV.
+	validate := step("Validate dispatch inputs")
+	for _, s := range []string{
+		`REVISION: ${{ inputs.revision }}`, `valid "${REVISION}" "${id_re}"`,
+		`printf 'AIARCH_REVISION=%s\n' "${REVISION}"`, `} >> "$GITHUB_ENV"`,
+	} {
+		if !strings.Contains(validate, s) {
+			t.Errorf("the validate step must check and export the revision input (%q):\n%s", s, validate)
 		}
 	}
 	g := string(out[".github/workflows/go-checks.yml"])

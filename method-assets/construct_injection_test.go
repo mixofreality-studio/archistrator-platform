@@ -196,7 +196,7 @@ func TestConstructWorkflow_ValidatesIdsBeforeAnyUse(t *testing.T) {
 	if steps[0].name != "Validate dispatch inputs" {
 		t.Fatalf("the first step is %q; it must be \"Validate dispatch inputs\"", steps[0].name)
 	}
-	for _, in := range []string{"activity_id", "component_id", "command"} {
+	for _, in := range []string{"activity_id", "component_id", "command", "task_id", "spec_hash"} {
 		found := false
 		for k, v := range steps[0].env {
 			if v == "${{ inputs."+in+" }}" {
@@ -308,6 +308,9 @@ func TestConstructWorkflow_MCPConfigCarriesHostileNotesVerbatim(t *testing.T) {
 				"AIARCH_ACTIVITY_ID":   "C-orders-manager",
 				"AIARCH_STATE_ROOT":    "/home/runner/work/shop/shop",
 				"AIARCH_COMMAND":       "service-construction",
+				"AIARCH_TASK_ID":       "integrate",
+				"AIARCH_SPEC_HASH":     strings.Repeat("ab", 32),
+				"AIARCH_REVISION":      "C-orders-manager:integrate:1",
 				"AIARCH_OPERATOR_NOTE": note,
 			}
 			if out, err := runStepScript(t, cfg.run, work, env); err != nil {
@@ -345,6 +348,11 @@ func TestConstructWorkflow_MCPConfigCarriesHostileNotesVerbatim(t *testing.T) {
 				"AIARCH_TARGET_BRANCH": "activity/C-orders-manager",
 				"AIARCH_STATE_ROOT":    "/home/runner/work/shop/shop",
 				"AIARCH_COMMAND":       "service-construction",
+				// The task-spec envelope: run_checks resolves the session's spec
+				// from these, at the dispatched attempt.
+				"AIARCH_TASK_ID":   "integrate",
+				"AIARCH_SPEC_HASH": strings.Repeat("ab", 32),
+				"AIARCH_REVISION":  "C-orders-manager:integrate:1",
 			}
 			for k, v := range want {
 				if srv.Env[k] != v {
@@ -372,6 +380,7 @@ func TestConstructWorkflow_MCPConfigOmitsAnEmptyNote(t *testing.T) {
 		"RUNNER_TEMP": tmp, "MCP_BIN": "/bin/mcp", "AIARCH_PROJECT_ID": "shop",
 		"AIARCH_COMPONENT_ID": "c", "AIARCH_ACTIVITY_ID": "C-c", "AIARCH_STATE_ROOT": "/w",
 		"AIARCH_COMMAND": "service-construction", "AIARCH_OPERATOR_NOTE": "",
+		"AIARCH_TASK_ID": "construct", "AIARCH_SPEC_HASH": strings.Repeat("0", 64), "AIARCH_REVISION": "",
 	}
 	if out, err := runStepScript(t, cfg.run, t.TempDir(), env); err != nil {
 		t.Fatalf("the MCP-config script failed with no note: %v\n%s", err, out)
@@ -383,6 +392,9 @@ func TestConstructWorkflow_MCPConfigOmitsAnEmptyNote(t *testing.T) {
 	if strings.Contains(string(raw), "AIARCH_OPERATOR_NOTE") {
 		t.Fatalf("an empty note must not stamp AIARCH_OPERATOR_NOTE:\n%s", raw)
 	}
+	if strings.Contains(string(raw), "AIARCH_REVISION") {
+		t.Fatalf("an undispatched revision must not stamp AIARCH_REVISION:\n%s", raw)
+	}
 }
 
 // TestConstructWorkflow_ValidationRejectsHostileIds runs the validation step: a
@@ -392,8 +404,11 @@ func TestConstructWorkflow_ValidationRejectsHostileIds(t *testing.T) {
 	steps := parseSteps(t, renderedConstructWorkflow(t))
 	validate := steps[0]
 	good := map[string]string{"ACTIVITY_ID": "U-SPA-web-client", "COMPONENT_ID": "web-client", "COMMAND": "frontend-construction"}
-	envFor := func(activity, component, command string) map[string]string {
-		env := map[string]string{}
+	goodTask, goodHash := "integrate", "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef"
+	work := t.TempDir()
+	ghEnv := filepath.Join(t.TempDir(), "github_env")
+	envForAll := func(activity, component, command, task, hash string) map[string]string {
+		env := map[string]string{"GITHUB_ENV": ghEnv}
 		for k, v := range validate.env {
 			switch v {
 			case "${{ inputs.activity_id }}":
@@ -402,11 +417,17 @@ func TestConstructWorkflow_ValidationRejectsHostileIds(t *testing.T) {
 				env[k] = component
 			case "${{ inputs.command }}":
 				env[k] = command
+			case "${{ inputs.task_id }}":
+				env[k] = task
+			case "${{ inputs.spec_hash }}":
+				env[k] = hash
 			}
 		}
 		return env
 	}
-	work := t.TempDir()
+	envFor := func(activity, component, command string) map[string]string {
+		return envForAll(activity, component, command, goodTask, goodHash)
+	}
 	for _, ok := range []struct{ a, c, cmd string }{
 		{good["ACTIVITY_ID"], good["COMPONENT_ID"], good["COMMAND"]},
 		{"C-PE", "project-state-access", "service-construction"},
@@ -443,6 +464,36 @@ func TestConstructWorkflow_ValidationRejectsHostileIds(t *testing.T) {
 			if _, err := runStepScript(t, validate.run, work, envFor(a, c, cmd)); err == nil {
 				t.Errorf("a hostile %s %q passed validation", which, h)
 			}
+		}
+	}
+	for _, h := range hostile {
+		if _, err := runStepScript(t, validate.run, work, envForAll(good["ACTIVITY_ID"], good["COMPONENT_ID"], good["COMMAND"], h, goodHash)); err == nil {
+			t.Errorf("a hostile task_id %q passed validation", h)
+		}
+	}
+	// spec_hash is a lowercase hex sha256, nothing else.
+	for _, h := range []string{
+		"", strings.Repeat("0", 63), strings.Repeat("0", 65), strings.Repeat("A", 64), strings.Repeat("g", 64),
+		goodHash + "\ntouch PWNED_HASH", "$(touch PWNED_HASH)" + goodHash[16:], "${{ secrets.X }}",
+	} {
+		if _, err := runStepScript(t, validate.run, work, envForAll(good["ACTIVITY_ID"], good["COMPONENT_ID"], good["COMMAND"], goodTask, h)); err == nil {
+			t.Errorf("a hostile spec_hash %q passed validation", h)
+		}
+	}
+	// A valid dispatch exports the validated ids for every later step.
+	if err := os.Remove(ghEnv); err != nil && !os.IsNotExist(err) {
+		t.Fatal(err)
+	}
+	if out, err := runStepScript(t, validate.run, work, envFor("C-PE", "project-state-access", "service-integration")); err != nil {
+		t.Fatalf("valid inputs were rejected: %v\n%s", err, out)
+	}
+	exported, err := os.ReadFile(ghEnv)
+	if err != nil {
+		t.Fatalf("the validation step exported nothing: %v", err)
+	}
+	for _, line := range []string{"AIARCH_ACTIVITY_ID=C-PE", "AIARCH_TASK_ID=" + goodTask, "AIARCH_SPEC_HASH=" + goodHash, "AIARCH_REVISION="} {
+		if !strings.Contains("\n"+string(exported), "\n"+line+"\n") {
+			t.Errorf("$GITHUB_ENV is missing %q:\n%s", line, exported)
 		}
 	}
 	for _, bad := range []string{"Service-Construction", "service_construction", "-x"} {
