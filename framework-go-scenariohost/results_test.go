@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 // readIndex reads component's results.json under root.
@@ -208,4 +209,63 @@ func TestHelperFailingScenario(t *testing.T) {
 	if err := h.Flush(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func flushVerdicts(t *testing.T, h *Host, component string) {
+	t.Helper()
+	by, _, _ := h.verdictsByComponent()
+	if err := h.writeIndex(component, by[component]); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWriteIndexMergesWithThePriorIndex(t *testing.T) {
+	h := &Host{ResultsRoot: t.TempDir()}
+	h.Record("c", ScenarioResult{Scenario: "a", Status: StatusPass})
+	h.Record("c", ScenarioResult{Scenario: "b", Status: StatusFail})
+	flushVerdicts(t, h, "c")
+
+	h2 := &Host{ResultsRoot: h.ResultsRoot}
+	h2.Record("c", ScenarioResult{Scenario: "b", Status: StatusPass})
+	flushVerdicts(t, h2, "c")
+
+	got := readIndex(t, h.ResultsRoot, "c")
+	if len(got) != 2 || got[0].Scenario != "a" || got[0].Status != StatusPass || got[1].Status != StatusPass {
+		t.Fatalf("merged index = %+v", got)
+	}
+}
+
+func TestScenarioTimeoutDefaultAndEnv(t *testing.T) {
+	t.Setenv("AIARCH_SCENARIO_TIMEOUT", "")
+	if ScenarioTimeout() != 5*time.Minute {
+		t.Fatal("default")
+	}
+	t.Setenv("AIARCH_SCENARIO_TIMEOUT", "2s")
+	if ScenarioTimeout() != 2*time.Second {
+		t.Fatal("env")
+	}
+}
+
+func TestHungScenarioIsRecordedAsTimeoutAndExitsOne(t *testing.T) {
+	dir := t.TempDir()
+	cmd := exec.Command(os.Args[0], "-test.run=^TestHelperHangingScenario$")
+	cmd.Env = append(os.Environ(), helperEnv+"="+dir, "AIARCH_SCENARIO_TIMEOUT=1s")
+	out, err := cmd.CombinedOutput()
+	ee, ok := err.(*exec.ExitError)
+	if !ok || ee.ExitCode() != 1 {
+		t.Fatalf("want exit code 1, got %v\n%s", err, out)
+	}
+	got := readIndex(t, dir, "x")
+	if len(got) != 1 || got[0].Scenario != "x-H1" || got[0].Status != StatusTimeout {
+		t.Fatalf("index = %+v", got)
+	}
+}
+
+func TestHelperHangingScenario(t *testing.T) {
+	dir := os.Getenv(helperEnv)
+	if dir == "" {
+		t.Skip("helper for TestHungScenarioIsRecordedAsTimeoutAndExitsOne; runs only in its child process")
+	}
+	h := &Host{ResultsRoot: dir}
+	h.RunScenario(t, "x", "x-H1", func(t *testing.T) { select {} })
 }

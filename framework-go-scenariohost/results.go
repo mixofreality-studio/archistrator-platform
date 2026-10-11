@@ -28,6 +28,8 @@ const (
 	StatusPass = "pass"
 	StatusFail = "fail"
 	StatusSkip = "skip"
+	// StatusTimeout marks a scenario that outlived ScenarioTimeout.
+	StatusTimeout = "timeout"
 )
 
 // ScenarioResult is one scenario's verdict as written to results.json. The
@@ -36,7 +38,7 @@ const (
 // shape (with VideoRef / TraceRef) for UI clients.
 type ScenarioResult struct {
 	Scenario   string `json:"scenario"`
-	Status     string `json:"status"` // pass|fail|skip
+	Status     string `json:"status"` // pass|fail|skip|timeout
 	DurationMs int    `json:"durationMs"`
 	Stdout     string `json:"stdout,omitempty"`
 	Stderr     string `json:"stderr,omitempty"`
@@ -133,7 +135,9 @@ func (h *Host) ResultsDir(component string) string {
 // Flush first runs the replay gate (replay.go) when the host has one, then
 // writes ResultsDir(c)/results.json for every component c that recorded a
 // verdict in this process: that component's verdicts, sorted by scenario id,
-// as an indented JSON array. A component none of whose scenarios ran — a
+// as an indented JSON array, merged by scenario id into any index already there
+// (a subset run keeps the other scenarios' verdicts; delete the directory for a
+// fresh index). A component none of whose scenarios ran — a
 // `go test -run` that selects no TestScenario_ (make method-check), or a
 // component that projects no scenario at all — gets NO index: its last
 // recorded index stays as it was, and a component with no index at all is
@@ -209,22 +213,58 @@ func nonEmpty(s string) []string {
 	return []string{s}
 }
 
-// writeIndex writes one component's verdicts, sorted by scenario id.
-func (h *Host) writeIndex(component string, out []ScenarioResult) error {
+// writeIndex merges one component's verdicts into its results.json by
+// scenario id — this process's verdicts replace the prior index's entry for the
+// same scenario, every other prior entry survives — and writes the result
+// sorted by scenario id. A subset run therefore never wipes the verdicts of the
+// scenarios it did not run; a caller that wants a fresh index deletes
+// test-results/<component>/ first.
+func (h *Host) writeIndex(component string, verdicts []ScenarioResult) error {
+	dir := h.ResultsDir(component)
+	path := filepath.Join(dir, resultsFile)
+	merged := map[string]ScenarioResult{}
+	prior, err := os.ReadFile(path)
+	switch {
+	case err == nil:
+		var old []ScenarioResult
+		if err := json.Unmarshal(prior, &old); err != nil {
+			return fmt.Errorf("scenariohost: read prior %s: %w", path, err)
+		}
+		for _, r := range old {
+			merged[r.Scenario] = r
+		}
+	case !errors.Is(err, os.ErrNotExist):
+		return fmt.Errorf("scenariohost: read prior %s: %w", path, err)
+	}
+	for _, r := range verdicts {
+		merged[r.Scenario] = r
+	}
+	out := make([]ScenarioResult, 0, len(merged))
+	for _, r := range merged {
+		out = append(out, r)
+	}
 	sort.Slice(out, func(i, j int) bool { return out[i].Scenario < out[j].Scenario })
 	raw, err := json.MarshalIndent(out, "", "  ")
 	if err != nil {
 		return fmt.Errorf("scenariohost: encode %s results: %w", component, err)
 	}
-	dir := h.ResultsDir(component)
 	if err := os.MkdirAll(dir, 0o750); err != nil {
 		return fmt.Errorf("scenariohost: mkdir %s: %w", dir, err)
 	}
-	path := filepath.Join(dir, resultsFile)
 	if err := os.WriteFile(path, raw, 0o600); err != nil {
 		return fmt.Errorf("scenariohost: write %s: %w", path, err)
 	}
 	return nil
+}
+
+// ScenarioTimeout is the per-scenario cap (env AIARCH_SCENARIO_TIMEOUT, a Go
+// duration; default 5m). A scenario that outlives it is recorded as timeout and
+// the process exits, so one hung scenario can never hang a job.
+func ScenarioTimeout() time.Duration {
+	if d, err := time.ParseDuration(os.Getenv("AIARCH_SCENARIO_TIMEOUT")); err == nil && d > 0 {
+		return d
+	}
+	return 5 * time.Minute
 }
 
 // RunScenario runs fn as the sub-test named id and records its verdict under
@@ -242,10 +282,24 @@ func (h *Host) writeIndex(component string, out []ScenarioResult) error {
 // Stdout / Stderr stay empty (but for the replay gate's findings) and the
 // venue's raw `go test -json` stream, which is uploaded next to results.json,
 // carries that text.
+//
+// A scenario still running after ScenarioTimeout() is recorded as timeout, the
+// verdicts of this process are flushed (the replay gate is skipped), and the
+// process exits with code 1: a hung scenario cannot be interrupted in-process.
 func (h *Host) RunScenario(t *testing.T, component, id string, fn func(t *testing.T)) {
 	t.Helper()
 	t.Run(id, func(t *testing.T) {
 		start := time.Now()
+		limit := ScenarioTimeout()
+		timer := time.AfterFunc(limit, func() {
+			h.Record(component, ScenarioResult{Scenario: id, Status: StatusTimeout,
+				DurationMs: int(time.Since(start) / time.Millisecond),
+				Stderr:     fmt.Sprintf("scenario exceeded %s", limit)})
+			_ = h.writeIndexes()
+			fmt.Fprintf(os.Stderr, "scenariohost: %s/%s timed out\n", component, id)
+			os.Exit(1)
+		})
+		defer timer.Stop()
 		defer func() {
 			r := ScenarioResult{Scenario: id, DurationMs: int(time.Since(start) / time.Millisecond)}
 			panicked := recover()
