@@ -189,6 +189,7 @@ export default defineConfig({
   testMatch: /\.spec\.gen\.ts$/,
   workers: 1,
   fullyParallel: false,
+  timeout: Number(process.env.AIARCH_SCENARIO_TIMEOUT_MS ?? 300000),
   outputDir: ` + tsStr(results) + `,
   use: { video: 'on', trace: 'on' },
   reporter: [
@@ -202,7 +203,7 @@ export default defineConfig({
 
 // playwrightReporter maps Playwright's test results to results.json in the
 // TestRun shape (design §4.2): scenario from the annotation, status folded to
-// pass|fail|skip, videoRef/traceRef from the attachments.
+// pass|fail|skip|timeout, videoRef/traceRef from the attachments.
 const playwrightReporter = genHeader + `
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -210,7 +211,7 @@ import type { FullConfig, Reporter, TestCase, TestResult } from '@playwright/tes
 
 type ScenarioResult = {
   scenario: string;
-  status: 'pass' | 'fail' | 'skip';
+  status: 'pass' | 'fail' | 'skip' | 'timeout';
   durationMs: number;
   stdout?: string;
   stderr?: string;
@@ -228,7 +229,7 @@ class ScenarioReporter implements Reporter {
 
   onTestEnd(test: TestCase, result: TestResult): void {
     const scenario = test.annotations.find((a) => a.type === 'scenario')?.description ?? test.title;
-    const status = result.status === 'passed' ? 'pass' : result.status === 'skipped' ? 'skip' : 'fail';
+    const status = result.status === 'passed' ? 'pass' : result.status === 'skipped' ? 'skip' : result.status === 'timedOut' ? 'timeout' : 'fail';
     const r: ScenarioResult = { scenario, status, durationMs: result.duration };
     const stdout = result.stdout.map(String).join('');
     if (stdout) r.stdout = stdout;
@@ -242,9 +243,15 @@ class ScenarioReporter implements Reporter {
   }
 
   onEnd(): void {
-    const out = [...this.results.values()].sort((a, b) => (a.scenario < b.scenario ? -1 : a.scenario > b.scenario ? 1 : 0));
     fs.mkdirSync(this.outputDir, { recursive: true });
-    fs.writeFileSync(path.join(this.outputDir, 'results.json'), JSON.stringify(out, null, 2) + '\n');
+    const file = path.join(this.outputDir, 'results.json');
+    // A subset run (run_checks failedOnly) reports only its own scenarios: overlay
+    // them on the existing index so every other scenario's verdict survives.
+    const prior: ScenarioResult[] = fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : [];
+    const merged = new Map(prior.map((r) => [r.scenario, r]));
+    for (const r of this.results.values()) merged.set(r.scenario, r);
+    const out = [...merged.values()].sort((a, b) => (a.scenario < b.scenario ? -1 : a.scenario > b.scenario ? 1 : 0));
+    fs.writeFileSync(file, JSON.stringify(out, null, 2) + '\n');
   }
 }
 

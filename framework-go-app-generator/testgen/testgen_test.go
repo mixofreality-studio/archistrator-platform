@@ -155,6 +155,30 @@ func TestGenerate_PlaywrightSpec(t *testing.T) {
 	}
 }
 
+// TestGenerate_PlaywrightReporterMergesAndTimesOut pins the subset-run
+// contract: the reporter overlays this run's verdicts onto an existing
+// results.json (newest wins, others survive), a Playwright timedOut maps to
+// 'timeout', and the config's per-test timeout is env-driven.
+func TestGenerate_PlaywrightReporterMergesAndTimesOut(t *testing.T) {
+	out := generate(t)
+	rep := string(out.Generated[shopReporter])
+	read := strings.Index(rep, "readFileSync(")
+	write := strings.Index(rep, "writeFileSync(")
+	exists := strings.Index(rep, "existsSync(")
+	if exists < 0 || read < 0 || write < 0 || !(exists < write && read < write) {
+		t.Errorf("reporter must read the prior results.json before writing:\n%s", rep)
+	}
+	for _, want := range []string{"'timedOut' ? 'timeout'", "'pass' | 'fail' | 'skip' | 'timeout'"} {
+		if !strings.Contains(rep, want) {
+			t.Errorf("reporter missing %q:\n%s", want, rep)
+		}
+	}
+	cfg := string(out.Generated[shopConfig])
+	if !strings.Contains(cfg, "timeout: Number(process.env.AIARCH_SCENARIO_TIMEOUT_MS ?? 300000),") {
+		t.Errorf("config missing env-driven timeout:\n%s", cfg)
+	}
+}
+
 // TestGenerate_PlaywrightSkipCarriesScenarioAnnotation pins the skipped UI
 // binding's contract: reporter.gen.ts keys results.json by the 'scenario'
 // annotation and falls back to test.title ('<id> — <title>') without one, so a
