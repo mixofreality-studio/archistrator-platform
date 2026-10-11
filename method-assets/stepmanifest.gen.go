@@ -62,6 +62,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
 			"mcp__aiarch-state__reviewProposeReviews",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"compressed-solution-draft": {
@@ -120,6 +121,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
 			"mcp__aiarch-state__reviewProposeReviews",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"core-use-cases-critique": {
@@ -153,6 +155,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__listResearchSources",
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
+			"mcp__aiarch-state__run_checks",
 			"mcp__aiarch-state__setCritiqueVerdict",
 		},
 	},
@@ -192,6 +195,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"decompressed-solution-draft": {
@@ -250,6 +254,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
 			"mcp__aiarch-state__reviewProposeReviews",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"deployment-construction": {
@@ -284,6 +289,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"deployment-detailed-design": {
@@ -333,6 +339,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"deployment-integration": {
@@ -369,6 +376,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordServiceContract",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"design-answer": {
@@ -421,6 +429,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__respondToReviewComment",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"design-answer-pm": {
@@ -470,6 +479,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__respondToReviewComment",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"documentation-construction": {
@@ -506,6 +516,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordServiceContract",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"documentation-detailed-design": {
@@ -542,6 +553,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordServiceContract",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"documentation-integration": {
@@ -578,6 +590,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordServiceContract",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"frontend-construction": {
@@ -612,6 +625,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"frontend-detailed-design": {
@@ -661,6 +675,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"frontend-integration": {
@@ -712,6 +727,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordServiceContract",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"frontend-requirements": {
@@ -746,6 +762,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"frontend-test-plan": {
@@ -797,6 +814,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordTestingState",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"glossary-critique": {
@@ -830,6 +848,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__listResearchSources",
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
+			"mcp__aiarch-state__run_checks",
 			"mcp__aiarch-state__setCritiqueVerdict",
 		},
 	},
@@ -869,6 +888,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"mission-critique": {
@@ -902,6 +922,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__listResearchSources",
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
+			"mcp__aiarch-state__run_checks",
 			"mcp__aiarch-state__setCritiqueVerdict",
 		},
 	},
@@ -941,6 +962,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"network-draft": {
@@ -999,6 +1021,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
 			"mcp__aiarch-state__reviewProposeReviews",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"normal-solution-draft": {
@@ -1057,6 +1080,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
 			"mcp__aiarch-state__reviewProposeReviews",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"operational-concepts-draft": {
@@ -1095,6 +1119,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"planning-assumptions-draft": {
@@ -1153,6 +1178,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
 			"mcp__aiarch-state__reviewProposeReviews",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"risk-model-draft": {
@@ -1211,6 +1237,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
 			"mcp__aiarch-state__reviewProposeReviews",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"scrubbed-requirements-critique": {
@@ -1244,6 +1271,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__listResearchSources",
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
+			"mcp__aiarch-state__run_checks",
 			"mcp__aiarch-state__setCritiqueVerdict",
 		},
 	},
@@ -1283,6 +1311,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"service-construction": {
@@ -1317,6 +1346,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"service-detailed-design": {
@@ -1367,6 +1397,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordServiceContract",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"service-integration": {
@@ -1418,6 +1449,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordServiceContract",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"service-requirements": {
@@ -1468,6 +1500,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordServiceContract",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"service-test-plan": {
@@ -1519,6 +1552,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordTestingState",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"standard-check-draft": {
@@ -1557,6 +1591,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"subcritical-solution-draft": {
@@ -1615,6 +1650,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
 			"mcp__aiarch-state__reviewProposeReviews",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"system-critique": {
@@ -1651,6 +1687,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateListProjects",
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
+			"mcp__aiarch-state__run_checks",
 			"mcp__aiarch-state__setCritiqueVerdict",
 		},
 	},
@@ -1690,6 +1727,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"testing-harness-construction": {
@@ -1741,6 +1779,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordTestingState",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"testing-harness-detailed-design": {
@@ -1792,6 +1831,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordTestingState",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"testing-harness-integration": {
@@ -1842,6 +1882,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordTestingState",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"testing-perf-construction": {
@@ -1893,6 +1934,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordTestingState",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"testing-perf-detailed-design": {
@@ -1944,6 +1986,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordTestingState",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"testing-perf-integration": {
@@ -1994,6 +2037,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordTestingState",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"testing-qa-construction": {
@@ -2044,6 +2088,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordTestingState",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"testing-qa-detailed-design": {
@@ -2094,6 +2139,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__recordPhaseArtifact",
 			"mcp__aiarch-state__recordTestingState",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"volatilities-critique": {
@@ -2130,6 +2176,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateListProjects",
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
+			"mcp__aiarch-state__run_checks",
 			"mcp__aiarch-state__setCritiqueVerdict",
 		},
 	},
@@ -2169,6 +2216,7 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__putDraftModel",
 			"mcp__aiarch-state__respondToReviewComment",
+			"mcp__aiarch-state__run_checks",
 		},
 	},
 }

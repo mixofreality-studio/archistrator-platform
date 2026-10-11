@@ -361,3 +361,11 @@ func charterModel(t *testing.T, body string) string {
 	}
 	return ""
 }
+
+func TestEveryStepIsGrantedRunChecks(t *testing.T) {
+	for slug, m := range Manifests() {
+		if !slices.Contains(m.MCPTools(), "run_checks") {
+			t.Errorf("%s: run_checks not granted", slug)
+		}
+	}
+}

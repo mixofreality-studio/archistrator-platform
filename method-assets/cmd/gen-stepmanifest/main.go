@@ -105,6 +105,8 @@ var composedVerbModes = map[string][]string{
 	"recordTestingState":     {modeConstruct},
 	// the construct-mode read of the operator's steer for this attempt
 	"getOperatorNotes": {modeConstruct},
+	// the step's own gate: every mode runs its checks
+	"run_checks": {modeDraft, modeCritique, modeAnswer, modeConstruct},
 }
 
 // modeImplicitVerbs are the composed verbs EVERY step of a mode is granted,
@@ -112,9 +114,13 @@ var composedVerbModes = map[string][]string{
 // the attempt (a send-back, retry or re-queue note): every construct command
 // tells the agent to call it first, so every construct step must hold it —
 // a step whose charter predates the tool would otherwise have it filtered out
-// of its surface (archistrator B1, amendment §C.1 finding H9).
+// of its surface (archistrator B1, amendment §C.1 finding H9). run_checks is
+// the step's own gate: every step runs its checks, whatever its charter lists.
 var modeImplicitVerbs = map[string][]string{
-	modeConstruct: {"getOperatorNotes"},
+	modeDraft:     {"run_checks"},
+	modeCritique:  {"run_checks"},
+	modeAnswer:    {"run_checks"},
+	modeConstruct: {"getOperatorNotes", "run_checks"},
 }
 
 // withModeImplicit adds the mode-implicit verbs to an already-narrowed tool
