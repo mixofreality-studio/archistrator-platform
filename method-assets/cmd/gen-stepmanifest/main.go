@@ -105,8 +105,10 @@ var composedVerbModes = map[string][]string{
 	"recordTestingState":     {modeConstruct},
 	// the construct-mode read of the operator's steer for this attempt
 	"getOperatorNotes": {modeConstruct},
-	// the step's own gate: every mode runs its checks
-	"run_checks": {modeDraft, modeCritique, modeAnswer, modeConstruct},
+	// the step's own gate: every lifecycle task runs its checks. NOT answer mode
+	// (ruling R53): an answer job is not a lifecycle task, carries no task spec
+	// (R30), and so has no checks for run_checks to resolve.
+	"run_checks": {modeDraft, modeCritique, modeConstruct},
 }
 
 // modeImplicitVerbs are the composed verbs EVERY step of a mode is granted,
@@ -115,11 +117,11 @@ var composedVerbModes = map[string][]string{
 // tells the agent to call it first, so every construct step must hold it —
 // a step whose charter predates the tool would otherwise have it filtered out
 // of its surface (archistrator B1, amendment §C.1 finding H9). run_checks is
-// the step's own gate: every step runs its checks, whatever its charter lists.
+// the step's own gate: every lifecycle step runs its checks, whatever its
+// charter lists. Answer mode has none (ruling R53): it runs no task spec.
 var modeImplicitVerbs = map[string][]string{
 	modeDraft:     {"run_checks"},
 	modeCritique:  {"run_checks"},
-	modeAnswer:    {"run_checks"},
 	modeConstruct: {"getOperatorNotes", "run_checks"},
 }
 

@@ -7,15 +7,25 @@ import (
 
 const checksLine = "**Checks.** Call `run_checks()` until it reports every check passing, and finish with one full `run_checks()` call. Do not run the checks yourself."
 
-// Every dispatched step runs its checks through the run_checks tool, and no
-// command tells the agent to generate, run or record tests: the workflow owns it.
+// Every dispatched lifecycle step runs its checks through the run_checks tool, and
+// no command tells the agent to generate, run or record tests: the workflow owns it.
+// An answer step is not a lifecycle task and has no task spec (R30), so its prompt
+// never mentions run_checks (ruling R53): every call would error.
 func TestEveryStepCommandRunsItsChecks(t *testing.T) {
 	files, err := ClaudeFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
-	for slug := range Manifests() {
+	answers := 0
+	for slug, m := range Manifests() {
 		body := string(files[".claude/commands/"+slug+".md"])
+		if m.Mode == "answer" {
+			answers++
+			if strings.Contains(body, "run_checks") {
+				t.Errorf("%s: an answer prompt must not mention run_checks (answer jobs have no spec)", slug)
+			}
+			continue
+		}
 		if strings.Count(body, checksLine) != 1 {
 			t.Errorf("%s: want exactly one run_checks line", slug)
 		}
@@ -27,5 +37,8 @@ func TestEveryStepCommandRunsItsChecks(t *testing.T) {
 				t.Errorf("%s: still tells the agent to %q (the workflow owns it)", slug, banned)
 			}
 		}
+	}
+	if answers < 2 {
+		t.Errorf("found %d answer-mode steps; design-answer and design-answer-pm must be among them", answers)
 	}
 }

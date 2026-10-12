@@ -362,9 +362,16 @@ func charterModel(t *testing.T, body string) string {
 	return ""
 }
 
+// TestEveryStepIsGrantedRunChecks: every lifecycle step holds run_checks; an
+// answer step does not (ruling R53): it runs no task spec, so the verb could
+// only error.
 func TestEveryStepIsGrantedRunChecks(t *testing.T) {
 	for slug, m := range Manifests() {
-		if !slices.Contains(m.MCPTools(), "run_checks") {
+		granted := slices.Contains(m.MCPTools(), "run_checks")
+		if m.Mode == "answer" && granted {
+			t.Errorf("%s: an answer step must not be granted run_checks (it has no task spec)", slug)
+		}
+		if m.Mode != "answer" && !granted {
 			t.Errorf("%s: run_checks not granted", slug)
 		}
 	}

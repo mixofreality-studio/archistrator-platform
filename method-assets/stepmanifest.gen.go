@@ -429,7 +429,6 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__respondToReviewComment",
-			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"design-answer-pm": {
@@ -479,7 +478,6 @@ var stepManifests = map[string]StepManifest{
 			"mcp__aiarch-state__projectStateReadProject",
 			"mcp__aiarch-state__publishDraft",
 			"mcp__aiarch-state__respondToReviewComment",
-			"mcp__aiarch-state__run_checks",
 		},
 	},
 	"documentation-construction": {
