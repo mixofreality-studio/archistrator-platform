@@ -62,8 +62,9 @@ func TestDesignWorkflow_AnswerModeSkipsTheTaskSpec(t *testing.T) {
 	if !strings.Contains(stepText(t, doc, "Fail on a red check"), "inputs.job_mode != 'answer'") {
 		t.Error("`Fail on a red check` must not fire for answer jobs: no checks ran, so rc is unset")
 	}
-	if v := stepText(t, doc, "Verify claude pushed a commit to the target branch"); !strings.Contains(v, "inputs.job_mode == 'answer'") {
-		t.Error("the push guard must still run for answer jobs, which skip the spec step it otherwise requires")
+	const verifyIf = "        if: always() && steps.inputs.outcome == 'success' && (steps.spec.outcome == 'success' || inputs.job_mode == 'answer')\n"
+	if v := stepText(t, doc, "Verify claude pushed a commit to the target branch"); !strings.Contains(v, verifyIf) {
+		t.Errorf("the push guard's `if:` must be exactly (precedence matters):\n%s", verifyIf)
 	}
 	// The answer agent: runs for answer only, as before the wave (no spec outputs).
 	ans := stepText(t, doc, "Answer the review comments (claude-code-action)")
@@ -184,5 +185,31 @@ func TestConstructWorkflow_ActivityBranchStepBehaves(t *testing.T) {
 	git(t, work3, "remote", "set-url", "origin", filepath.Join(t.TempDir(), "gone.git"))
 	if out, err := runStepScript(t, co.run, work3, env); err == nil {
 		t.Errorf("an unreadable origin must fail, not read as 'no activity branch':\n%s", out)
+	}
+}
+
+// TestDesignWorkflow_SpecResolvesOnTheUnmergedTipBeforeTheRefresh (R34): the server
+// hashed the unmerged session-branch tip, so the spec step runs after that tip is
+// checked out and before the step that merges origin/main (and self-heals to it).
+func TestDesignWorkflow_SpecResolvesOnTheUnmergedTipBeforeTheRefresh(t *testing.T) {
+	doc := renderedDesignWorkflow(t)
+	tip := strings.Index(doc, "      - name: Check out the session branch tip\n")
+	spec := strings.Index(doc, "      - name: Resolve the task spec\n")
+	refresh := strings.Index(doc, "      - name: Refresh the session branch from main\n")
+	if tip < 0 || spec < 0 || refresh < 0 || !(tip < spec && spec < refresh) {
+		t.Fatalf("order must be tip checkout < spec < refresh (got %d, %d, %d)", tip, spec, refresh)
+	}
+	// Neither the merge nor the self-heal reset may appear before the spec step.
+	before := doc[:spec]
+	for _, bad := range []string{"git merge ", "self_heal_reset()", "git reset --hard"} {
+		if strings.Contains(before, bad) {
+			t.Errorf("%q runs before the task spec resolves", bad)
+		}
+	}
+	if !strings.Contains(stepText(t, doc, "Refresh the session branch from main"), "git merge --no-edit origin/main") {
+		t.Error("the refresh step must still merge origin/main")
+	}
+	if strings.Contains(stepText(t, doc, "Refresh the session branch from main"), `git checkout -B "${TARGET_BRANCH}"`) {
+		t.Error("the refresh step must not re-checkout the tip: the tip step owns it")
 	}
 }

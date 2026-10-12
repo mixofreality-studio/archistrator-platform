@@ -401,6 +401,81 @@ jobs:
           go install [[.StateMcpModulePath]]@"${AIARCH_STATE_MCP_PIN}"
           echo "bin=${GOBIN}/aiarch-state-mcp" >> "$GITHUB_OUTPUT"
 
+      # THE SESSION-BRANCH TIP (ruling R34, the design twin of R31). The server hashed
+      # the task spec over the UNMERGED session-branch tip, so the job checks that tip
+      # out and resolves the spec on it BEFORE anything merges origin/main into it or
+      # self-heals it to main. The refresh step after the spec then merges as before.
+      - name: Check out the session branch tip
+        env:
+          TARGET_BRANCH: ${{ inputs.target_branch }}
+        run: |
+          git fetch --no-tags origin "${TARGET_BRANCH}"
+          git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
+
+      # THE TASK SPEC (spec 2026-10-11 §5.2 step 1) — the construct workflow's step,
+      # over the UNMERGED session-branch tip (R34). The job recomputes the agent task spec
+      # from the SAME code the server ran and refuses to start when its hash differs
+      # from the dispatched one. The spec's model and built-in allowlist reach
+      # claude_args through step outputs, so each is held to a plain shape here.
+      # The edit-scope base is NOT taken here: it is the base SHA recorded after the
+      # refresh, the tip the agent starts from.
+      # NOT for an answer job (ruling R30): answer jobs are not lifecycle tasks and
+      # have no AgentTaskSpec, so this step and every gate that reads its spec are
+      # skipped, and the answer agent runs on the step-tools scope below.
+      - name: Resolve the task spec
+        id: spec
+        if: ${{ inputs.job_mode != 'answer' }}
+        env:
+          MCP_BIN: ${{ steps.statemcp.outputs.bin }}
+        run: |
+          got="$("${MCP_BIN}" task-spec --activity "${AIARCH_ACTIVITY_ID}" --task "${AIARCH_TASK_ID}" --root . --out "${RUNNER_TEMP}/spec.json")"
+          if [ "${got}" != "${AIARCH_SPEC_HASH}" ]; then
+            echo "::error::task spec drifted: dispatched ${AIARCH_SPEC_HASH}, job resolved ${got}"; exit 1
+          fi
+          # jq -e: a missing field fails here instead of becoming the string "null".
+          model="$(jq -er .model.id "${RUNNER_TEMP}/spec.json")" || { echo "::error::the task spec has no model.id"; exit 1; }
+          builtin="$(jq -er '.tools.builtin | join(",")' "${RUNNER_TEMP}/spec.json")" || { echo "::error::the task spec has no tools.builtin list"; exit 1; }
+          # A whole-value match of at most $3 characters: no newline (grep matches
+          # per line), never "null". The bound is a length test, not an ERE
+          # interval: BSD grep caps intervals at 255.
+          plain() {
+            case "$1" in *$'\n'*|null) return 1 ;; esac
+            [ "${#1}" -le "$3" ] || return 1
+            printf '%s' "$1" | grep -Ex -- "$2" > /dev/null
+          }
+          if ! plain "${model}" '[A-Za-z0-9][]A-Za-z0-9._:[-]*' 128; then
+            echo "::error::the task spec's model is not a model id"; exit 1
+          fi
+          # An empty allowlist is valid: --tools '' means no built-ins.
+          if [ -n "${builtin}" ] && ! plain "${builtin}" '[A-Za-z0-9_,():*.-]*' 4096; then
+            echo "::error::the task spec's built-in tools are not a tool list"; exit 1
+          fi
+          echo "model=${model}" >> "$GITHUB_OUTPUT"
+          echo "builtin=${builtin}" >> "$GITHUB_OUTPUT"
+          # The edit-scope gate takes commit SHAs only (a ref name is refused), so
+          # main is pinned here, before the agent can move any ref. A shallow
+          # checkout cannot compute merge-base(main, head): deepen it to full
+          # history first (checkout's fetch-depth: 0 normally makes this a no-op),
+          # so every later fetch into this repo is complete too. main_sha is
+          # absent only when origin has no main (ls-remote exits 2); the gate then
+          # judges the whole base..head diff (--no-main).
+          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
+            git fetch --no-tags --unshallow origin
+          fi
+          rc=0; git ls-remote --exit-code --heads origin refs/heads/main > /dev/null || rc=$?
+          if [ "${rc}" = 0 ]; then
+            git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
+            main_sha="$(git rev-parse --verify "refs/remotes/origin/main^{commit}")"
+          elif [ "${rc}" = 2 ]; then
+            main_sha=""
+          else
+            echo "::error::could not read origin's main (git ls-remote exit ${rc})"; exit 1
+          fi
+          echo "main_sha=${main_sha}" >> "$GITHUB_OUTPUT"
+
+      # R34: this step runs on the unmerged session-branch tip, before the refresh
+      # below merges main. The agent still runs on the merged tree.
+
       # REFRESH-FROM-MAIN (F40 founder ruling 2026-07-05; F80 reconcile 2026-07-05). One
       # persistent session branch per artifact accumulates every draft/critique/redraft
       # until it merges (not a branch-per-attempt). The stale-base problem the old
@@ -444,7 +519,6 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git fetch --no-tags origin main "${TARGET_BRANCH}"
-          git checkout -B "${TARGET_BRANCH}" "origin/${TARGET_BRANCH}"
           if [ "${JOB_MODE}" = "answer" ]; then
             echo "answer job: on the session-branch tip, skipping merge-from-main (F80a)"
             exit 0
@@ -532,66 +606,6 @@ jobs:
           for line in /test-results/ /check-results/; do
             grep -qxF -- "${line}" "${exclude}" || printf '%s\n' "${line}" >> "${exclude}"
           done
-
-      # THE TASK SPEC (spec 2026-10-11 §5.2 step 1) — the construct workflow's step,
-      # over the refreshed session branch. The job recomputes the agent task spec
-      # from the SAME code the server ran and refuses to start when its hash differs
-      # from the dispatched one. The spec's model and built-in allowlist reach
-      # claude_args through step outputs, so each is held to a plain shape here.
-      # The edit-scope base is the base SHA recorded above.
-      # NOT for an answer job (ruling R30): answer jobs are not lifecycle tasks and
-      # have no AgentTaskSpec, so this step and every gate that reads its spec are
-      # skipped, and the answer agent runs on the step-tools scope below.
-      - name: Resolve the task spec
-        id: spec
-        if: ${{ inputs.job_mode != 'answer' }}
-        env:
-          MCP_BIN: ${{ steps.statemcp.outputs.bin }}
-        run: |
-          got="$("${MCP_BIN}" task-spec --activity "${AIARCH_ACTIVITY_ID}" --task "${AIARCH_TASK_ID}" --root . --out "${RUNNER_TEMP}/spec.json")"
-          if [ "${got}" != "${AIARCH_SPEC_HASH}" ]; then
-            echo "::error::task spec drifted: dispatched ${AIARCH_SPEC_HASH}, job resolved ${got}"; exit 1
-          fi
-          # jq -e: a missing field fails here instead of becoming the string "null".
-          model="$(jq -er .model.id "${RUNNER_TEMP}/spec.json")" || { echo "::error::the task spec has no model.id"; exit 1; }
-          builtin="$(jq -er '.tools.builtin | join(",")' "${RUNNER_TEMP}/spec.json")" || { echo "::error::the task spec has no tools.builtin list"; exit 1; }
-          # A whole-value match of at most $3 characters: no newline (grep matches
-          # per line), never "null". The bound is a length test, not an ERE
-          # interval: BSD grep caps intervals at 255.
-          plain() {
-            case "$1" in *$'\n'*|null) return 1 ;; esac
-            [ "${#1}" -le "$3" ] || return 1
-            printf '%s' "$1" | grep -Ex -- "$2" > /dev/null
-          }
-          if ! plain "${model}" '[A-Za-z0-9][]A-Za-z0-9._:[-]*' 128; then
-            echo "::error::the task spec's model is not a model id"; exit 1
-          fi
-          # An empty allowlist is valid: --tools '' means no built-ins.
-          if [ -n "${builtin}" ] && ! plain "${builtin}" '[A-Za-z0-9_,():*.-]*' 4096; then
-            echo "::error::the task spec's built-in tools are not a tool list"; exit 1
-          fi
-          echo "model=${model}" >> "$GITHUB_OUTPUT"
-          echo "builtin=${builtin}" >> "$GITHUB_OUTPUT"
-          # The edit-scope gate takes commit SHAs only (a ref name is refused), so
-          # main is pinned here, before the agent can move any ref. A shallow
-          # checkout cannot compute merge-base(main, head): deepen it to full
-          # history first (checkout's fetch-depth: 0 normally makes this a no-op),
-          # so every later fetch into this repo is complete too. main_sha is
-          # absent only when origin has no main (ls-remote exits 2); the gate then
-          # judges the whole base..head diff (--no-main).
-          if [ "$(git rev-parse --is-shallow-repository)" = true ]; then
-            git fetch --no-tags --unshallow origin
-          fi
-          rc=0; git ls-remote --exit-code --heads origin refs/heads/main > /dev/null || rc=$?
-          if [ "${rc}" = 0 ]; then
-            git fetch --no-tags origin "+refs/heads/main:refs/remotes/origin/main"
-            main_sha="$(git rev-parse --verify "refs/remotes/origin/main^{commit}")"
-          elif [ "${rc}" = 2 ]; then
-            main_sha=""
-          else
-            echo "::error::could not read origin's main (git ls-remote exit ${rc})"; exit 1
-          fi
-          echo "main_sha=${main_sha}" >> "$GITHUB_OUTPUT"
 
       # The MCP config claude-code-action passes to the Claude CLI (--mcp-config). The
       # ambient session context and the task-spec envelope (activity, task, spec hash,
