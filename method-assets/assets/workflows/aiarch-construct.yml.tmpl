@@ -199,6 +199,27 @@ jobs:
         with:
           fetch-depth: 0
 
+      # THE ACTIVITY BRANCH (ruling R31). The server hashed the task spec over the
+      # state on activity/<activity_id> (earlier tasks' artifacts live there, not on
+      # the dispatch ref), so the job works on that branch BEFORE the spec step
+      # hashes anything. Only when the branch does not exist yet (the activity's
+      # first task) does the job stay on the dispatch ref. ls-remote tells the two
+      # apart: exit 2 is "no such branch"; any other failure fails the step rather
+      # than silently hashing the wrong state. The spec step's base is this
+      # branch's tip, captured before the agent runs.
+      - name: Check out the activity branch
+        run: |
+          branch="activity/${AIARCH_ACTIVITY_ID}"
+          rc=0; git ls-remote --exit-code --heads origin "refs/heads/${branch}" > /dev/null || rc=$?
+          if [ "${rc}" = 0 ]; then
+            git fetch --no-tags origin "+refs/heads/${branch}:refs/remotes/origin/${branch}"
+            git checkout -f -B "${branch}" "refs/remotes/origin/${branch}"
+          elif [ "${rc}" = 2 ]; then
+            echo "::notice::${branch} does not exist yet: this task runs on the dispatch ref"
+          else
+            echo "::error::could not read origin's ${branch} (git ls-remote exit ${rc})"; exit 1
+          fi
+
       - name: Set up Go (for the aiarch-state MCP server)
         uses: actions/setup-go@v5
         with:

@@ -116,7 +116,13 @@ func TestWorkflowTemplatesRunTheSpec(t *testing.T) {
 				t.Errorf("%s: missing %q", name, want)
 			}
 		}
-		for _, gone := range []string{"--disallowedTools", "step-tools --command", "Fail on a red scenario run", "steps.steptools"} {
+		gones := []string{"Fail on a red scenario run"}
+		if name == "aiarch-construct.yml.tmpl" {
+			// The design workflow keeps the deny path for ANSWER jobs only (R30,
+			// pinned by workflow_answer_test.go).
+			gones = append(gones, "--disallowedTools", "step-tools --command", "steps.steptools")
+		}
+		for _, gone := range gones {
 			if strings.Contains(body, gone) {
 				t.Errorf("%s: still has %q", name, gone)
 			}

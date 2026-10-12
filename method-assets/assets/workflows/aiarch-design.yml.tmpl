@@ -180,18 +180,21 @@ on:
       # --- The agent task spec this job runs (spec 2026-10-11 §5) ---
       # The design activity and lifecycle task, and the hash of the spec the server
       # resolved for them. The job recomputes the spec and refuses to start when the
-      # hashes differ.
+      # hashes differ. All three are REQUIRED for a draft or critique job and ABSENT
+      # for an answer job (ruling R30): an answer job is not a lifecycle task and has
+      # no AgentTaskSpec, so the first step enforces presence by job_mode and the
+      # input declaration itself cannot require them.
       activity_id:
-        description: "design activity id this dispatch runs"
-        required: true
+        description: "design activity id this dispatch runs (draft and critique jobs; absent for answer)"
+        required: false
         type: string
       task_id:
-        description: "lifecycle task id this dispatch runs (e.g. draft)"
-        required: true
+        description: "lifecycle task id this dispatch runs, e.g. draft (draft and critique jobs; absent for answer)"
+        required: false
         type: string
       spec_hash:
-        description: "sha256 of the agent task spec the server resolved for this task"
-        required: true
+        description: "sha256 of the agent task spec the server resolved for this task (draft and critique jobs; absent for answer)"
+        required: false
         type: string
       # The attempt this job runs under ("<activity>:<task>:<n>"), recorded as the
       # CheckRun's revision. Validated as an id by the first step.
@@ -306,17 +309,26 @@ jobs:
             echo "::error::prior_state_ref is not a valid git ref"
             ok=0
           fi
-          if ! valid "${ACTIVITY_ID}" "${id_re}"; then
-            echo "::error::activity_id is not a valid activity id"
-            ok=0
+          # The task-spec envelope (R30): required for a draft or critique job, which
+          # run the spec; an answer job has no spec, so its ids are optional, but a
+          # value that IS supplied is held to the same shape.
+          if [ "${JOB_MODE}" != answer ] || [ -n "${ACTIVITY_ID}" ]; then
+            if ! valid "${ACTIVITY_ID}" "${id_re}"; then
+              echo "::error::activity_id is not a valid activity id"
+              ok=0
+            fi
           fi
-          if ! valid "${TASK_ID}" "${id_re}"; then
-            echo "::error::task_id is not a valid task id"
-            ok=0
+          if [ "${JOB_MODE}" != answer ] || [ -n "${TASK_ID}" ]; then
+            if ! valid "${TASK_ID}" "${id_re}"; then
+              echo "::error::task_id is not a valid task id"
+              ok=0
+            fi
           fi
-          if ! valid "${SPEC_HASH}" "${hash_re}"; then
-            echo "::error::spec_hash is not a sha256 hex digest"
-            ok=0
+          if [ "${JOB_MODE}" != answer ] || [ -n "${SPEC_HASH}" ]; then
+            if ! valid "${SPEC_HASH}" "${hash_re}"; then
+              echo "::error::spec_hash is not a sha256 hex digest"
+              ok=0
+            fi
           fi
           if [ -n "${REVISION}" ] && ! valid "${REVISION}" "${id_re}"; then
             echo "::error::revision is not a valid attempt id"
@@ -527,8 +539,12 @@ jobs:
       # from the dispatched one. The spec's model and built-in allowlist reach
       # claude_args through step outputs, so each is held to a plain shape here.
       # The edit-scope base is the base SHA recorded above.
+      # NOT for an answer job (ruling R30): answer jobs are not lifecycle tasks and
+      # have no AgentTaskSpec, so this step and every gate that reads its spec are
+      # skipped, and the answer agent runs on the step-tools scope below.
       - name: Resolve the task spec
         id: spec
+        if: ${{ inputs.job_mode != 'answer' }}
         env:
           MCP_BIN: ${{ steps.statemcp.outputs.bin }}
         run: |
@@ -617,14 +633,15 @@ jobs:
                 AIARCH_JOB_MODE: $mode,
                 AIARCH_TARGET_BRANCH: $branch,
                 AIARCH_STATE_ROOT: $root,
-                AIARCH_COMMAND: $command,
-                AIARCH_ACTIVITY_ID: $activity,
-                AIARCH_TASK_ID: $task,
-                AIARCH_SPEC_HASH: $hash
-              } + (if $revision == "" then {} else {AIARCH_REVISION: $revision} end))}}}' \
+                AIARCH_COMMAND: $command
+              } + (if $activity == "" then {} else {AIARCH_ACTIVITY_ID: $activity} end)
+                + (if $task == "" then {} else {AIARCH_TASK_ID: $task} end)
+                + (if $hash == "" then {} else {AIARCH_SPEC_HASH: $hash} end)
+                + (if $revision == "" then {} else {AIARCH_REVISION: $revision} end))}}}' \
             > "${RUNNER_TEMP}/aiarch-mcp.json"
 
       - name: Draft the typed Method artifact (claude-code-action)
+        if: ${{ inputs.job_mode != 'answer' }}
         timeout-minutes: 25
         uses: anthropics/claude-code-action@v1
         with:
@@ -671,6 +688,53 @@ jobs:
           prompt: |
             /${{ inputs.command }}
 
+      # ANSWER JOBS (ruling R30). An answer job commits per-question responses and is
+      # not a lifecycle task: no spec, no model/allowlist, no gates. Its built-in tool
+      # scope is the SAME step-manifest deny list the local executor uses.
+      - name: Resolve the answer step's built-in tool scope
+        id: steptools
+        if: ${{ inputs.job_mode == 'answer' }}
+        env:
+          MCP_BIN: ${{ steps.statemcp.outputs.bin }}
+          AIARCH_COMMAND: ${{ inputs.command }}
+        run: |
+          echo "disallowed=$("${MCP_BIN}" step-tools --command "${AIARCH_COMMAND}" --disallowed)" >> "$GITHUB_OUTPUT"
+
+      - name: Answer the review comments (claude-code-action)
+        if: ${{ inputs.job_mode == 'answer' }}
+        uses: anthropics/claude-code-action@v1
+        with:
+          # The user's OAuth token, provisioned as a repo Actions secret by the
+          # Claude Code GitHub App (/install-github-app). NAME-only reference —
+          # aiarch never mints or sees this value.
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          [[- if .AppSlug ]]
+          # The DESIGN workflow is ALWAYS workflow_dispatch'ed by the aiarch GitHub
+          # App (a Bot actor); claude-code-action refuses bot-initiated runs unless
+          # the bot is allow-listed (observed live: run 28723145540 failed with
+          # "Workflow initiated by non-human actor: <app> (type: Bot). Add bot to
+          # allowed_bots list"). Mirrors aiarch-construct.yml's allowed_bots. The App
+          # slug varies per deployment, so the SERVER templates it here; when it is
+          # unconfigured this line is omitted entirely, leaving human-dispatched runs
+          # working.
+          allowed_bots: [[.AppSlug]]
+          [[- end ]]
+          # Autonomous CI, exactly as the draft step above: --dangerously-skip-permissions
+          # auto-allows tool calls in the unattended runner; the trust boundary is the
+          # state tools' own validation and the REQUIRED `validate` check.
+          # An answer job has no task spec (ruling R30), so there is no --model or
+          # --tools allowlist: the built-in surface is the step manifest's deny list,
+          # resolved above, as it was before the task-spec wave.
+          claude_args: "--dangerously-skip-permissions --mcp-config ${{ runner.temp }}/aiarch-mcp.json --strict-mcp-config --setting-sources project --exclude-dynamic-system-prompt-sections --disallowedTools ${{ steps.steptools.outputs.disallowed }}"
+          # Thin prompt: NO drafting logic here. The intent lives entirely in the
+          # per-kind design command under .claude/commands/, which pulls its role
+          # agent + Method skill + the-method-project-state (the doctrine that ALL
+          # reads/writes go through the "aiarch-state" MCP tools, that publishDraft is
+          # the last call, and that no PR is opened by the agent). The Manager computed
+          # `command`; the workflow just runs it against the ambient design job.
+          prompt: |
+            /${{ inputs.command }}
+
       # Silent-failure guard. claude-code-action can exit SUCCESS while committing
       # nothing (observed live 2026-07-04, run 28724066929: draft job green, zero
       # commits, no PR — the Manager's observe loop only ever saw the validate failure).
@@ -688,7 +752,7 @@ jobs:
       # failed: target_branch becomes part of an API path here, and an unvalidated
       # value must not reach it.
       - name: Verify claude pushed a commit to the target branch
-        if: always() && steps.inputs.outcome == 'success' && steps.spec.outcome == 'success'
+        if: always() && steps.inputs.outcome == 'success' && (steps.spec.outcome == 'success' || inputs.job_mode == 'answer')
         env:
           TARGET_BRANCH: ${{ inputs.target_branch }}
           BASE_SHA: ${{ steps.base.outputs.sha }}
@@ -803,7 +867,7 @@ jobs:
           fi
 
       - name: Fail on a red check
-        if: ${{ always() && steps.checks.outputs.rc != '0' }}
+        if: ${{ always() && inputs.job_mode != 'answer' && steps.checks.outputs.rc != '0' }}
         run: exit 1
 
   # ---------------------------------------------------------------------------
