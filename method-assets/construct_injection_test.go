@@ -532,3 +532,107 @@ func TestDumpRenderedWorkflowsForLint(t *testing.T) {
 		}
 	}
 }
+
+// genTestsScript returns the run: body of the integration step that runs
+// `make gen-tests` (R43: it runs in the project's module dir).
+func genTestsScript(t *testing.T) string {
+	t.Helper()
+	st := stepNamed(t, parseSteps(t, renderedConstructWorkflow(t)), "Generate the scenario tests")
+	if strings.Contains(st.run, "${{") {
+		t.Fatal("the gen-tests step has an expression inside run:")
+	}
+	return st.run
+}
+
+// genTestsRepo builds a temp repo whose project.json declares moduleDir (omitted when
+// moduleDir is nil) and whose every Makefile records the directory make ran in.
+func genTestsRepo(t *testing.T, moduleDir *string, dirs ...string) string {
+	t.Helper()
+	root := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(root, ".aiarch", "state"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	doc := `{"id":"x"}`
+	if moduleDir != nil {
+		b, _ := json.Marshal(map[string]string{"id": "x", "moduleDir": *moduleDir})
+		doc = string(b)
+	}
+	if err := os.WriteFile(filepath.Join(root, ".aiarch", "state", "project.json"), []byte(doc), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	mk := "gen-tests:\n\t@pwd > \"$(CURDIR)/ran-here.txt\"\n"
+	for _, d := range append([]string{"."}, dirs...) {
+		full := filepath.Join(root, d)
+		if err := os.MkdirAll(full, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(full, "Makefile"), []byte(mk), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return root
+}
+
+func requireMake(t *testing.T) {
+	t.Helper()
+	requireJQ(t)
+	if _, err := exec.LookPath("make"); err != nil {
+		if os.Getenv("CI") == "true" {
+			t.Fatal("make is required")
+		}
+		t.Skip("make not on PATH")
+	}
+}
+
+// TestConstructWorkflow_GenTestsRunsInTheModuleDir: moduleDir "server" runs make in
+// server/ only; "" and an absent field run it at the root only.
+func TestConstructWorkflow_GenTestsRunsInTheModuleDir(t *testing.T) {
+	requireMake(t)
+	script := genTestsScript(t)
+	server, empty := "server", ""
+	cases := []struct {
+		name      string
+		moduleDir *string
+		ranIn     string
+		notIn     string
+	}{
+		{"server", &server, "server", "."},
+		{"empty", &empty, ".", "server"},
+		{"absent", nil, ".", "server"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			root := genTestsRepo(t, c.moduleDir, "server")
+			if out, err := runStepScript(t, script, root, map[string]string{"GOWORK": "off"}); err != nil {
+				t.Fatalf("step failed: %v\n%s", err, out)
+			}
+			if _, err := os.Stat(filepath.Join(root, c.ranIn, "ran-here.txt")); err != nil {
+				t.Fatalf("make did not run in %q: %v", c.ranIn, err)
+			}
+			if _, err := os.Stat(filepath.Join(root, c.notIn, "ran-here.txt")); err == nil {
+				t.Fatalf("make ran in %q too", c.notIn)
+			}
+		})
+	}
+}
+
+// TestConstructWorkflow_GenTestsRefusesAnUnsafeModuleDir: absolute, '..' and missing
+// dirs are refused before make runs anywhere.
+func TestConstructWorkflow_GenTestsRefusesAnUnsafeModuleDir(t *testing.T) {
+	requireMake(t)
+	script := genTestsScript(t)
+	for _, bad := range []string{"..", "../x", "server/..", "a/../b", "/tmp", "nope"} {
+		t.Run(bad, func(t *testing.T) {
+			root := genTestsRepo(t, &bad, "server")
+			out, err := runStepScript(t, script, root, map[string]string{"GOWORK": "off"})
+			if err == nil {
+				t.Fatalf("moduleDir %q was accepted:\n%s", bad, out)
+			}
+			for _, d := range []string{".", "server"} {
+				if _, e := os.Stat(filepath.Join(root, d, "ran-here.txt")); e == nil {
+					t.Fatalf("make ran in %q despite refusal", d)
+				}
+			}
+		})
+	}
+}

@@ -422,7 +422,20 @@ jobs:
         if: ${{ steps.spec.outputs.integration == 'true' }}
         env:
           GOWORK: "off"
-        run: make gen-tests
+        run: |
+          # R43: the target lives in the project's module dir (project.json moduleDir,
+          # repo-relative; "" = the repo root). The task spec does not carry it, so it
+          # is read from the checked-out state, then validated before it reaches make.
+          mod="$(jq -r '.moduleDir // ""' .aiarch/state/project.json)" || { echo "::error::cannot read moduleDir from .aiarch/state/project.json"; exit 1; }
+          case "${mod}" in
+            /*|..|../*|*/..|*/../*) echo "::error::moduleDir must be a relative path without '..': ${mod}"; exit 1 ;;
+          esac
+          if [ -z "${mod}" ]; then
+            make gen-tests
+          else
+            [ -d "${mod}" ] || { echo "::error::moduleDir is not a directory in this checkout: ${mod}"; exit 1; }
+            make -C "${mod}" gen-tests
+          fi
 
       - name: Run construction step (claude-code-action)
         # The agent's bound — claude must implement + publish within this window or
