@@ -1,6 +1,7 @@
 package methodassets
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -156,6 +157,45 @@ func TestWorkflowTemplatesRunTheSpec(t *testing.T) {
 				continue
 			}
 			at = i
+		}
+	}
+}
+
+// TestWorkflowJobsDeclareTimeout pins that every job in both templates bounds its
+// own runtime: a job without timeout-minutes inherits GitHub's 360-minute default.
+func TestWorkflowJobsDeclareTimeout(t *testing.T) {
+	jobKey := regexp.MustCompile(`^  ([A-Za-z0-9_-]+):\s*$`)
+	for _, name := range []string{"aiarch-design.yml.tmpl", "aiarch-construct.yml.tmpl"} {
+		raw, err := assetsFS.ReadFile("assets/workflows/" + name)
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		inJobs, job, jobs := false, "", map[string]bool{}
+		for _, line := range strings.Split(string(raw), "\n") {
+			if strings.HasPrefix(line, "jobs:") {
+				inJobs = true
+				continue
+			}
+			if !inJobs {
+				continue
+			}
+			if line != "" && !strings.HasPrefix(line, " ") && !strings.HasPrefix(line, "#") {
+				break // next top-level key
+			}
+			if m := jobKey.FindStringSubmatch(line); m != nil {
+				job = m[1]
+				jobs[job] = false
+			} else if job != "" && strings.HasPrefix(line, "    timeout-minutes:") {
+				jobs[job] = true
+			}
+		}
+		if len(jobs) == 0 {
+			t.Fatalf("%s: found no jobs", name)
+		}
+		for j, ok := range jobs {
+			if !ok {
+				t.Errorf("%s: job %q declares no timeout-minutes", name, j)
+			}
 		}
 	}
 }
