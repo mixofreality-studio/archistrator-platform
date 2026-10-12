@@ -203,7 +203,17 @@ func runSpecStep(t *testing.T, spec workflowStep, work, tmp, specJSON, printedHa
 	return readOutputs(t, outFile), out, err
 }
 
-const plainSpec = `{"model":{"id":"opus"},"tools":{"builtin":["Read"]}}`
+// plainSpec carries the dispatched hash, as task-spec writes it: the gates
+// re-check it against AIARCH_SPEC_HASH before they read the spec.
+const plainSpec = `{"model":{"id":"opus"},"tools":{"builtin":["Read"]},"hash":"` + gateHash + `"}`
+
+// writeGateSpec writes the spec.json the gates read into tmp, carrying hash.
+func writeGateSpec(t *testing.T, tmp, hash string) {
+	t.Helper()
+	if err := os.WriteFile(filepath.Join(tmp, "spec.json"), []byte(`{"hash":"`+hash+`"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+}
 
 // commitOn commits one file on branch in a fresh clone of remote and pushes it.
 func commitOn(t *testing.T, remote, branch, from, file string) string {
@@ -286,7 +296,7 @@ func TestEditScopeGate_PassesShasAndMain(t *testing.T) {
 		gateEnv := func(tmp, base, mainSHA string) map[string]string {
 			e := map[string]string{
 				"MCP_BIN": filepath.Join(tmp, "aiarch-state-mcp"), "RUNNER_TEMP": tmp, "AIARCH_ACTIVITY_ID": "C-orders",
-				"AIARCH_BASE": base, "AIARCH_MAIN_SHA": mainSHA,
+				"AIARCH_BASE": base, "AIARCH_MAIN_SHA": mainSHA, "AIARCH_SPEC_HASH": gateHash,
 			}
 			for k, v := range wf.env {
 				e[k] = v
@@ -339,6 +349,7 @@ func TestEditScopeGate_PassesShasAndMain(t *testing.T) {
 			commitOn(t, remote, wf.branch, "trunk", "agent.txt")
 			tmp := t.TempDir()
 			writeExecutable(t, filepath.Join(tmp, "aiarch-state-mcp"), fakeStateMCP)
+			writeGateSpec(t, tmp, gateHash)
 			if log, err := runStepScript(t, gate.run, work, gateEnv(tmp, base, "")); err != nil {
 				t.Fatalf("the gate broke the edit-scope contract without a main: %v\n%s", err, log)
 			}
@@ -408,6 +419,7 @@ func TestRecordStep_RetriesOnceOnAMovedBranch(t *testing.T) {
 			e := map[string]string{
 				"MCP_BIN": bin, "RUNNER_TEMP": tmp, "GITHUB_RUN_ID": "7", "GITHUB_RUN_ATTEMPT": "2",
 				"AIARCH_ACTIVITY_ID": "C-orders", "AIARCH_REVISION": "C-orders:integration:1",
+				"AIARCH_SPEC_HASH": gateHash,
 			}
 			for k, v := range wf.env {
 				e[k] = v
@@ -427,6 +439,7 @@ func TestRecordStep_RetriesOnceOnAMovedBranch(t *testing.T) {
 			git(t, other, "push", "-q", "origin", "HEAD:"+wf.branch)
 
 			tmp := t.TempDir()
+			writeGateSpec(t, tmp, gateHash)
 			bin := filepath.Join(tmp, "aiarch-state-mcp")
 			writeExecutable(t, bin, "echo \"$*\" >> .aiarch/state/project.json\n")
 			log, err := runStepScript(t, record.run, work, env(tmp, bin))
@@ -450,6 +463,7 @@ func TestRecordStep_RetriesOnceOnAMovedBranch(t *testing.T) {
 		t.Run(name+"/nothing to record", func(t *testing.T) {
 			remote, work := bareWithBranch(t, wf.branch)
 			tmp := t.TempDir()
+			writeGateSpec(t, tmp, gateHash)
 			bin := filepath.Join(tmp, "aiarch-state-mcp")
 			writeExecutable(t, bin, "exit 0\n")
 			before := git(t, remote, "rev-parse", wf.branch)
@@ -504,5 +518,50 @@ func TestExcludeStep_IgnoresCheckOutputIdempotently(t *testing.T) {
 				t.Errorf("git add -A staged check output: %s", staged)
 			}
 		})
+	}
+}
+
+// TestGates_RefuseASpecThatIsNotTheDispatchedOne (ruling R57 M1): every gate that
+// reads spec.json first holds its hash to the dispatched AIARCH_SPEC_HASH, so a
+// spec rewritten after the spec step (the binary refuses one whose content does
+// not hash to its own field) or a missing one fails the gate before it runs.
+func TestGates_RefuseASpecThatIsNotTheDispatchedOne(t *testing.T) {
+	requireJQ(t)
+	for name, wf := range gateWorkflows(t) {
+		for _, step := range []string{"Gate the edit scope", "Run the checks", "Record the check run"} {
+			for label, hash := range map[string]string{"rewritten": strings.Repeat("e", 64), "missing": ""} {
+				t.Run(name+"/"+step+"/"+label, func(t *testing.T) {
+					t.Parallel()
+					s := stepNamed(t, wf.steps, step)
+					remote, work := bareWithBranch(t, "main")
+					commitOn(t, remote, wf.branch, "main", "agent.txt") // the agent published
+					tmp := t.TempDir()
+					if hash != "" {
+						writeGateSpec(t, tmp, hash)
+					}
+					bin := filepath.Join(tmp, "aiarch-state-mcp")
+					writeExecutable(t, bin, "touch \"$RUNNER_TEMP/RAN\"\n")
+					env := map[string]string{
+						"MCP_BIN": bin, "RUNNER_TEMP": tmp, "GITHUB_OUTPUT": filepath.Join(tmp, "output"),
+						"AIARCH_ACTIVITY_ID": "C-orders", "AIARCH_SPEC_HASH": gateHash,
+						"AIARCH_BASE": git(t, work, "rev-parse", "HEAD"), "AIARCH_MAIN_SHA": "",
+						"GITHUB_RUN_ID": "7", "GITHUB_RUN_ATTEMPT": "1",
+					}
+					for k, v := range wf.env {
+						env[k] = v
+					}
+					log, err := runStepScript(t, s.run, work, env)
+					if err == nil {
+						t.Fatalf("the gate ran on a %s spec:\n%s", label, log)
+					}
+					if !strings.Contains(log, "no longer carries the dispatched spec hash") {
+						t.Errorf("the refusal must name the spec hash:\n%s", log)
+					}
+					if _, err := os.Stat(filepath.Join(tmp, "RAN")); err == nil {
+						t.Error("the gate's binary ran on a spec that is not the dispatched one")
+					}
+				})
+			}
+		}
 	}
 }
