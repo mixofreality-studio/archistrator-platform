@@ -15,8 +15,8 @@ import (
 )
 
 // resultsFile is the index every scenario run leaves behind, one per component
-// under ResultsDir(component). Its shape is the TestRun contract: the renderer
-// on the testing task reads nothing else.
+// under ResultsDir(component). Its shape is the scenario-results contract: the
+// reader behind the CheckRun record reads nothing else.
 const resultsFile = "results.json"
 
 // replayTimeout bounds one flush's replay pass (listing, fetching and

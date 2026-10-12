@@ -741,16 +741,18 @@ type TestExpect struct {
 	ErrorCode     string `json:"errorCode,omitempty"`
 }
 
-// ---- test runs (mirror projectstate/phaseartifacts.go TestingState) ----
+// ---- check runs (mirror projectstate/phaseartifacts.go TestingState; the Go type
+// names keep the TestRun spelling, the concept is the CheckRun record) ----
 
-// TestingState mirrors the top-level `.testingState` record: the runs the venues
-// record after executing a component's scenario tests.
+// TestingState mirrors the top-level `.testingState` record: the check runs the
+// venues record after executing a task's checks (scenario tests included).
 type TestingState struct {
 	TestRuns []TestRun `json:"testRuns"`
 }
 
-// TestRun is one execution of a component's scenario tests at a revision; Artifact
-// is the venue's results handle (a GitHub Actions artifact id, say).
+// TestRun is one check run (the CheckRun record; the type keeps its old name) of a
+// component's checks at a revision; Artifact is the venue's results handle (a
+// GitHub Actions artifact id, say).
 type TestRun struct {
 	ID        string           `json:"id"`
 	Activity  string           `json:"activity"`

@@ -2,8 +2,8 @@
 // scenario tests runs against — a Temporal dev server, a Postgres
 // testcontainer (outside -short), the GitHub REST and Actions fakes and a real
 // bare git repo — ONCE per test process, and collects every scenario's verdict
-// into test-results/<component>/results.json, the TestRun contract the testing
-// task renders. Verdicts are keyed by (component, scenario): several
+// into test-results/<component>/results.json, the scenario-results contract the
+// checks task renders. Verdicts are keyed by (component, scenario): several
 // components (facets) may share one Go package and so one test process, and
 // each still gets its own index. A manager package's scenarios are also
 // gated by workflow replay (MainWithWorkflows, replay.go): every workflow
