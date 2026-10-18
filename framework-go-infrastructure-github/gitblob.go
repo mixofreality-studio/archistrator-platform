@@ -102,8 +102,10 @@ type GitObjectFile struct {
 // never produces a duplicate even if the RA's probe raced.
 //
 // A non-fast-forward push rejection means a concurrent writer advanced the SAME
-// content branch between clone and push — surfaced as fwra.Conflict (retryable;
-// the calling Manager re-runs the Activity, which re-clones and dedups).
+// content branch between clone and push — surfaced as fwra.Conflict (the calling
+// Manager re-runs the Activity, which re-clones and dedups). A refusal by a
+// checked-out, dirty content branch in a local target is NOT a CAS loss: it is a
+// non-retryable fwra.Infrastructure (classifyPushError, FIX-002).
 func (s *GitBlobStore) StoreOutput(
 	ctx context.Context,
 	branch string,
@@ -111,6 +113,24 @@ func (s *GitBlobStore) StoreOutput(
 	message string,
 	auth GitAuth,
 ) (commitHash string, err error) {
+	// A LOCAL target is locked across clone → commit → push (INTERIM, FIX-002:
+	// see localrepolock.go), exactly as GitStore.CommitSubtree is.
+	err = withLocalRepoLock(ctx, s.repoURL, func() error {
+		var opErr error
+		commitHash, opErr = s.storeOutput(ctx, branch, files, message, auth)
+		return opErr
+	})
+	return commitHash, err
+}
+
+// storeOutput is StoreOutput's clone → checkout → commit → push body.
+func (s *GitBlobStore) storeOutput(
+	ctx context.Context,
+	branch string,
+	files []GitObjectFile,
+	message string,
+	auth GitAuth,
+) (string, error) {
 	repo, err := s.clone(ctx, auth)
 	if err != nil {
 		return "", err
@@ -127,13 +147,22 @@ func (s *GitBlobStore) StoreOutput(
 
 	// Base the write on the content-derived branch tip when it exists (so the push
 	// is a fast-forward and identical content collapses to the existing commit);
-	// otherwise base on the default branch HEAD the clone provides.
-	co := &gogit.CheckoutOptions{Branch: branchRef, Create: true, Force: true}
-	if branchExists {
+	// otherwise base on the default branch HEAD the clone provides. When the
+	// remote's HEAD IS the content branch (a user checked it out in a local
+	// target), the clone already made it a LOCAL branch: check it out without
+	// re-creating it and hard-reset it to the observed tip.
+	_, localErr := repo.Reference(branchRef, false)
+	co := &gogit.CheckoutOptions{Branch: branchRef, Create: localErr != nil, Force: true}
+	if branchExists && co.Create {
 		co.Hash = priorTip
 	}
 	if coErr := wt.Checkout(co); coErr != nil {
 		return "", fwra.Wrap(fwra.Infrastructure, coErr, "github.GitBlobStore.StoreOutput: checkout branch")
+	}
+	if branchExists && !co.Create {
+		if rErr := wt.Reset(&gogit.ResetOptions{Commit: priorTip, Mode: gogit.HardReset}); rErr != nil {
+			return "", fwra.Wrap(fwra.Infrastructure, rErr, "github.GitBlobStore.StoreOutput: reset to branch tip")
+		}
 	}
 
 	if err := writeAndStageFiles(wt, files); err != nil {
@@ -158,12 +187,8 @@ func commitAndPushBlobContent(ctx context.Context, repo *gogit.Repository, wt *g
 		Auth:     auth.authMethod(),
 		RefSpecs: []config.RefSpec{config.RefSpec(string(branchRef) + ":" + string(branchRef))},
 	})
-	if pushErr != nil && !errors.Is(pushErr, gogit.NoErrAlreadyUpToDate) {
-		if isNonFastForward(pushErr) {
-			return "", fwra.Wrap(fwra.Conflict, pushErr,
-				"github.GitBlobStore.StoreOutput: concurrent content-branch advance (non-fast-forward)")
-		}
-		return "", ClassifyGitError(pushErr, "github.GitBlobStore.StoreOutput: push")
+	if err := classifyPushError(pushErr, "github.GitBlobStore.StoreOutput"); err != nil {
+		return "", err
 	}
 	return hash.String(), nil
 }

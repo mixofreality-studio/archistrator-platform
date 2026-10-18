@@ -201,6 +201,27 @@ func (s *GitStore) CommitSubtree(
 	message string,
 	auth GitAuth,
 ) (GitCommitResult, error) {
+	// A LOCAL target is locked across clone → commit → push (INTERIM, FIX-002:
+	// see localrepolock.go). The CAS pre-check inside is unchanged, so a genuinely
+	// stale base is still a Conflict that converges on re-read.
+	var res GitCommitResult
+	err := withLocalRepoLock(ctx, s.repoURL, func() error {
+		var opErr error
+		res, opErr = s.commitSubtree(ctx, pathPrefix, files, expectedBase, message, auth)
+		return opErr
+	})
+	return res, err
+}
+
+// commitSubtree is CommitSubtree's clone → CAS pre-check → commit → push body.
+func (s *GitStore) commitSubtree(
+	ctx context.Context,
+	pathPrefix string,
+	files map[string][]byte,
+	expectedBase string,
+	message string,
+	auth GitAuth,
+) (GitCommitResult, error) {
 	repo, err := s.clone(ctx, auth)
 	if err != nil && !errors.Is(err, transport.ErrEmptyRemoteRepository) {
 		return GitCommitResult{}, err
@@ -234,11 +255,12 @@ func (s *GitStore) CommitSubtree(
 		return GitCommitResult{}, err
 	}
 
-	// Plain (non-force) push. Non-fast-forward rejection = CAS loss.
-	if err := handleSubtreePushError(repo.PushContext(ctx, &gogit.PushOptions{
+	// Plain (non-force) push. Non-fast-forward rejection = CAS loss; a refusal by
+	// the target's checked-out working tree is NOT (see classifyPushError).
+	if err := classifyPushError(repo.PushContext(ctx, &gogit.PushOptions{
 		Auth:     auth.authMethod(),
 		RefSpecs: []config.RefSpec{config.RefSpec(fmt.Sprintf("%s:%s", branchRef, branchRef))},
-	})); err != nil {
+	}), "github.CommitSubtree"); err != nil {
 		return GitCommitResult{}, err
 	}
 	return GitCommitResult{Base: commitHash.String()}, nil
@@ -257,17 +279,6 @@ func checkCASPrecondition(expectedBase string, exists bool, tip plumbing.Hash) e
 			"github.CommitSubtree: stale base (branch advanced since read)")
 	}
 	return nil
-}
-
-func handleSubtreePushError(err error) error {
-	if err == nil || errors.Is(err, gogit.NoErrAlreadyUpToDate) {
-		return nil
-	}
-	if isNonFastForward(err) {
-		return fwra.Wrap(fwra.Conflict, ErrRefCASLost,
-			"github.CommitSubtree: concurrent ref advance (non-fast-forward)")
-	}
-	return ClassifyGitError(err, "github.CommitSubtree: push")
 }
 
 // clone fetches ONLY the target branch's tip commit into in-memory storage (no
@@ -602,24 +613,4 @@ func pathDir(p string) string {
 		return ""
 	}
 	return p[:i]
-}
-
-// isNonFastForward reports whether a push error is the non-fast-forward rejection
-// that signals a CAS loss (a concurrent writer advanced the ref).
-func isNonFastForward(err error) bool {
-	if errors.Is(err, gogit.ErrNonFastForwardUpdate) {
-		return true
-	}
-	msg := strings.ToLower(err.Error())
-	return strings.Contains(msg, "non-fast-forward") ||
-		strings.Contains(msg, "fetch first") ||
-		// Server-side receive-pack report-status for a rejected ref update. Over the
-		// file/smart transports a losing CAS push surfaces as a per-command report
-		// rather than the client-side ErrNonFastForwardUpdate sentinel; the ref-update
-		// rejection IS the compare-and-swap loss.
-		strings.Contains(msg, "failed to update ref") ||
-		strings.Contains(msg, "command error on") ||
-		strings.Contains(msg, "cannot lock ref") ||
-		strings.Contains(msg, "stale info") ||
-		strings.Contains(msg, "already exists") // first-writer race creating the branch
 }
