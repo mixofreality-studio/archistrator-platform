@@ -39,11 +39,11 @@ State is git-as-DB: all of this lives in `.aiarch/state/project.json` (a typed J
 
 ## Output
 
-The contract is a **typed entry in `.aiarch/state/project.json` under `.serviceContracts["<ComponentName>"]`** — git is the database. It is NOT a `designs/.../contracts/<ComponentName>.md` file; any markdown (including the Step 8 template) is a render-on-read of that JSON.
+The contract is a **typed entry in `.aiarch/state/project.json` under `.serviceContracts["<contractKey>"]`** — the component's `contractKey` (camelCase, server-derived from its kebab id: `billing-engine` → `billingEngine`; read it from the component's `contractKey` on the committed System, `.slots["5"].model.components[]`) — git is the database. It is NOT a `designs/.../contracts/<ComponentName>.md` file; any markdown (including the Step 8 template) is a render-on-read of that JSON.
 
 The JSON shape mirrors the Go `ServiceContract` type (`internal/resourceaccess/projectstate/servicecontract.go`): `Component`, `Layer`, `Stereotype`, `Volatility`, `Status` (`IN-DESIGN` | `FROZEN`), `Inbound` / `Outbound` parties, `Ops` (operation signatures + their I/O structs), `DataContracts`, `ErrorModel`, `Idempotency`, `Revisions`.
 
-The `.serviceContracts` map accumulates the per-component contract corpus that drives Phase 3 construction. A construction agent reads its component's entry directly from `.serviceContracts["<component>"]` in project state. Repeat the skill for each component.
+The `.serviceContracts` map accumulates the per-component contract corpus that drives Phase 3 construction. A construction agent reads its component's entry directly from `.serviceContracts["<contractKey>"]` in project state. Repeat the skill for each component.
 
 ## Procedure
 
@@ -167,7 +167,7 @@ Six items. Each marked PASS / WAIVED (with justification) / FAIL (return to Step
 
 Items 2d, 5, and 6 are non-waivable. The others may be waived with a written justification.
 
-### Step 8 — Record the contract in `project.json .serviceContracts["<ComponentName>"]`
+### Step 8 — Record the contract in `project.json .serviceContracts["<contractKey>"]`
 
 The canonical form is the typed JSON entry (shape in **Output** above). The markdown below is the equivalent **human rendering** — use it to review the contract, but the source of truth is the JSON in `.aiarch/state/project.json`, not a `designs/*.md` file:
 
@@ -250,7 +250,7 @@ How a different team implementing the same business facet would implement this c
 
 ## Exit criteria (for router)
 
-- A `.serviceContracts["<ComponentName>"]` entry exists in `.aiarch/state/project.json` (shape per **Output**)
+- A `.serviceContracts["<contractKey>"]` entry exists in `.aiarch/state/project.json` (shape per **Output**)
 - Operations are listed with inputs, outputs, and behaviour
 - Operation count is in [3, 12] (or in [2, 12] with a written justification for the low count); count is **never** ≥ 20
 - No property-like operations

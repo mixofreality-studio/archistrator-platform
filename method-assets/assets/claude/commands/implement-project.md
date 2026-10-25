@@ -5,7 +5,8 @@
 > **archistrator is a single Go server repo. State is git-as-DB:** all project
 > state lives in typed slots in `.aiarch/state/project.json`, NOT in
 > `designs/<product>/*.md` files. Each component lives in the package its
-> contract names — the `goPackage` in `.serviceContracts["<component>"]`.
+> contract names — the `goPackage` in `.serviceContracts["<contractKey>"]` (the
+> component's `contractKey` on the System, not its kebab id).
 > Markdown/DSL is render-on-read.
 
 **Skill reference:** Invoke `the-method` skill. This command orchestrates the Phase 3 sub-skills:
@@ -109,17 +110,17 @@ Invoke [[the-method-service-contract]]. The hand-off model from Step 0 determine
 - **senior-as-junior-architect** → senior designs the contract under architect mentorship; architect reviews.
 - **junior hand-off** → junior designs the contract; architect reviews.
 
-The designer is dispatched first; the reviewer is dispatched on completion. Output is the typed contract committed to `.serviceContracts[<component>]` (there is no `designs/.../contracts/<component>.md` file; markdown is render-on-read). Walk the Appendix B contract design rules and the Appendix C §6 standard check (3–5 ops per contract, max 12, reject ≥20).
+The designer is dispatched first; the reviewer is dispatched on completion. Output is the typed contract committed to `.serviceContracts[<contractKey>]` (there is no `designs/.../contracts/<component>.md` file; markdown is render-on-read). Walk the Appendix B contract design rules and the Appendix C §6 standard check (3–5 ops per contract, max 12, reject ≥20).
 
 #### If `next.type == "construction"`
 
 Dispatch the implementer (`junior-developer` by default; `senior-developer` if the activity carries a `role: senior-developer` override):
 
 > Implement `<next.component>` against its service contract in
-> `.aiarch/state/project.json` → `.serviceContracts["<next.component>"]`.
+> `.aiarch/state/project.json` → `.serviceContracts["<next.component's contractKey>"]`.
 > Activity: `<next.id> — <next.name>`. Duration estimate:
 > `<next.duration_days>` days. Component package: the contract's
-> `goPackage` in `.serviceContracts["<next.component>"]`.
+> `goPackage` in that contract.
 >
 > System context: the committed `.systemDesign` artifact.
 >
@@ -145,7 +146,7 @@ The dispatched agent gets the activity context (id, name, type, component, durat
 After the role agent returns:
 
 - For `construction` activities: verify `GOWORK=off go build/vet/test` passes from the target package's module root AND that the senior review (per hand-off model) is recorded against `.activityConstruction[<next.id>]`. If failing, **do not mark done**. The activity stays in-progress and the user must fix.
-- For `detailed-design` activities: verify the contract entry exists at `.serviceContracts[<component>]` and that the appropriate reviewer (per hand-off model) has signed off (recorded on the contract / activity record). The Appendix C §6 contract checklist must pass.
+- For `detailed-design` activities: verify the contract entry exists at `.serviceContracts[<contractKey>]` and that the appropriate reviewer (per hand-off model) has signed off (recorded on the contract / activity record). The Appendix C §6 contract checklist must pass.
 - For `noncoding` / `integration` / testing activities: verify the named output exists in its `.phaseArtifacts` / `.testingState` slot.
 
 If verified:

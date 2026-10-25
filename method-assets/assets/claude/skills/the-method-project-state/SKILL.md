@@ -25,7 +25,7 @@ The on-disk JSON is produced by the Go codec (`EncodeProjectJSON`/`DecodeProject
 
 | key | Go type | read/write | holds |
 |---|---|---|---|
-| `.serviceContracts["<component-id>"]` | `map[string]projectstate.ServiceContract` (`servicecontract.go`) | READ + WRITE (detailed-design writes here) | component, layer, goPackage, infra, deps, stub, title, `$defs`, `interface` (ops) |
+| `.serviceContracts["<contractKey>"]` (the component's `contractKey`, below) | `map[string]projectstate.ServiceContract` (`servicecontract.go`) | READ + WRITE (detailed-design writes here) | component, layer, goPackage, infra, deps, stub, title, `$defs`, `interface` (ops) |
 | `.activityConstruction["<activity-id>"]` | `map[string]projectstate.ActivityConstructionStatus` (`activityconstructionstatus.go`) | READ-ONLY — Manager-owned | activityID, phase, buildStatus, `produced[]`, failure info |
 | `.constructionProgress` | `*projectstate.ConstructionProgress` (`constructionprogress.go`) | READ-ONLY — Manager-owned | Week, TotalWeeks, HandOffModel, SupervisionCap (earned-value rollup) |
 | `.testingState` | `*projectstate.TestingState` (`phaseartifacts.go`) | READ + WRITE (testing phases) | `harnessModule`, `perfHarness`, `qualityGates[]`, `qualityAuditReport`, `checkRuns[]` (recorded only by the workflow, never by an agent), `defects[]` |
@@ -63,9 +63,11 @@ There is **no** `.handoff` slot. Worker-class / hand-off is decided by the Manag
 There is no jq pre-extraction step in CI. You read what you need directly. Common paths — Phase-1/2 artifacts go through `.slots["<ordinal>"].model`, everything else is flat:
 
 - The dispatched activity: `jq '.slots["9"].model.activities[] | select(.name=="<ACTIVITY_ID>")' .aiarch/state/project.json`
-- Its service contract: `jq '.serviceContracts["<COMPONENT_ID>"]' .aiarch/state/project.json`
+- Its contract key — **the one name its service contract is filed under**. Every non-Resource component carries a `contractKey` on the System, server-derived from its kebab id (lowerCamel: `billing-engine` → `billingEngine`); a Resource has none (it is provisioned, it has no contract). Never key `.serviceContracts` by the kebab id. Read it (your own via `$AIARCH_COMPONENT_ID`, a neighbour's by its id):
+  `jq -r --arg id "$AIARCH_COMPONENT_ID" '.slots["5"].model.components[] | select(.id==$id) | .contractKey' .aiarch/state/project.json`
+- Its service contract: `jq --arg k "<contractKey>" '.serviceContracts[$k]' .aiarch/state/project.json` (a key with no entry means the contract is not recorded yet)
 - The system design (components, relationships, views): `jq '.slots["5"].model' .aiarch/state/project.json`
-- Neighbour discovery for integration/detailed-design: read `.slots["5"].model.relationships`, find the inbound/outbound component ids for your component (kebab-case), then read each `.serviceContracts[<neighbour>]` (camelCase key).
+- Neighbour discovery for integration/detailed-design: read `.slots["5"].model.relationships`, find the inbound/outbound component ids for your component (kebab-case), then read each neighbour's `contractKey` (recipe above) and its `.serviceContracts[<neighbour contractKey>]` entry.
 - Core use cases: `jq '.slots["4"].model' .aiarch/state/project.json`; Mission: `jq '.slots["0"].model' .aiarch/state/project.json`.
 
 Prefer reading the smallest slice that answers your question; you may run several `jq` reads. (The `aiarch-state` `getCommittedSlot` tool returns a committed artifact's typed model directly if you'd rather read through the tool than `jq`.)
@@ -76,7 +78,7 @@ When your phase produces an artifact that lives in state, record it through the 
 
 | artifact | tool | target |
 |---|---|---|
-| service contract (detailed-design) | `recordServiceContract` | `.serviceContracts["<ambient component>"]` |
+| service contract (detailed-design) | `recordServiceContract` | `.serviceContracts["<the ambient component's contractKey>"]` (the verb resolves the key itself — you pass only the contract) |
 | UI-design concept / SRS / component test plan / integration note / provisioning spec / deploy note / doc outline·note | `recordPhaseArtifact` (set exactly one payload field, pass the `mapKey`) | `.phaseArtifacts.<field>["<mapKey>"]` |
 | testing results (harness, quality gate, test run, defect, audit report — a component's test plan is a phase artifact, above) | `recordTestingState` (set exactly one payload field) | `.testingState.<field>` |
 | code | *(files, not state)* | files in the package the contract's `goPackage` names |
