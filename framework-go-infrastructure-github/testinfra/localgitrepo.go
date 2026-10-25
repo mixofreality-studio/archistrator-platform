@@ -66,3 +66,44 @@ func run(t *testing.T, dir string, name string, args ...string) {
 		t.Fatalf("%s %v: %v\n%s", name, args, err, out)
 	}
 }
+
+// StartLocalCheckedOutRepo creates the topology `archistrator init` produces for
+// the LOCAL venue: a NON-bare repo with `branch` (default "main") CHECKED OUT and
+// receive.denyCurrentBranch=updateInstead, seeded with one empty commit. A push
+// into it runs git's push-to-checkout (read-tree -u -m) BEFORE the ref
+// transaction checks the old value, so a racing loser can leave staged changes
+// behind and wedge every later push (FIX-002). The bare StartLocalGitRepo cannot
+// reproduce that: a lost push there changes nothing.
+//
+// Dir is the working tree (the .git dir lives under it); URL is its file:// form.
+// It skips the test if `git` is not on PATH.
+func StartLocalCheckedOutRepo(t *testing.T, branch string) LocalGitRepo {
+	t.Helper()
+	if _, err := exec.LookPath("git"); err != nil {
+		t.Skip("git not on PATH; skipping real-git checked-out-repo test")
+	}
+	if branch == "" {
+		branch = "main"
+	}
+	dir := filepath.Join(t.TempDir(), "state")
+	run(t, filepath.Dir(dir), "git", "init", "--initial-branch="+branch, dir)
+	run(t, dir, "git", "config", "user.email", "seed@aiarch.local")
+	run(t, dir, "git", "config", "user.name", "seed")
+	run(t, dir, "git", "config", "receive.denyCurrentBranch", "updateInstead")
+	run(t, dir, "git", "commit", "--allow-empty", "-m", "seed")
+	return LocalGitRepo{Dir: dir, URL: "file://" + dir}
+}
+
+// Git runs `git args...` in the repo's directory and returns its combined
+// output, failing the test on error. Lets a test inspect or perturb the target
+// (git status, stage a change, check out a branch) without its own exec plumbing.
+func (r LocalGitRepo) Git(t *testing.T, args ...string) string {
+	t.Helper()
+	cmd := exec.Command("git", args...)
+	cmd.Dir = r.Dir
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+	return string(out)
+}
