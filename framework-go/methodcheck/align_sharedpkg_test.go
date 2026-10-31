@@ -56,7 +56,7 @@ func sharedPkgPkgs() []classifiedPackage {
 func TestAlign_SharedGoPackage_MissingBeforeJoin(t *testing.T) {
 	s := sharedPkgSystem(t)
 	pkgs := sharedPkgPkgs()
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil, nil, nil)
 	if !hasRuleFindings(got, ruleAlignMissingPkg) {
 		t.Fatalf("without a contracts join, a name-unmatched secondary component must still emit ALIGN-MISSING-PKG, got %+v", got)
 	}
@@ -70,7 +70,7 @@ func TestAlign_SharedGoPackage_Aligned(t *testing.T) {
 	s := sharedPkgSystem(t)
 	pkgs := sharedPkgPkgs()
 	contracts := sharedPkgContracts()
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, contracts)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, contracts, nil, nil)
 	if len(got) != 0 {
 		t.Fatalf("a secondary component whose contractKey joins to an existing goPackage must align cleanly, got %+v", got)
 	}
@@ -87,7 +87,7 @@ func TestAlign_SharedGoPackage_NamePrimaryStillWins(t *testing.T) {
 	contracts := map[string]ServiceContract{
 		"projectStateAccess": {Component: "ProjectStateAccess", Layer: layerResourceAccess, GoPackage: "internal/resourceaccess/DOES-NOT-EXIST"},
 	}
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, contracts)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, contracts, nil, nil)
 	if len(got) != 0 {
 		t.Fatalf("a component whose own name matches a package must align by name regardless of a (even broken) contractKey join, got %+v", got)
 	}
@@ -102,7 +102,7 @@ func TestAlign_SharedGoPackage_ContractKeyMissing_StillErrors(t *testing.T) {
 	s := System{Components: []Component{secondary}}
 	pkgs := sharedPkgPkgs()
 	// No contracts map entry for "constructionTransitionAccess" at all.
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil, nil, nil)
 	if !hasRuleFindings(got, ruleAlignMissingPkg) {
 		t.Fatalf("a contractKey naming no .serviceContracts entry must still emit ALIGN-MISSING-PKG, got %+v", got)
 	}
@@ -123,7 +123,7 @@ func TestAlign_SharedGoPackage_GoPackageNotOnDisk_StillErrors(t *testing.T) {
 			GoPackage: "internal/resourceaccess/ghoststate",
 		},
 	}
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, contracts)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, contracts, nil, nil)
 	if !hasRuleFindings(got, ruleAlignMissingPkg) {
 		t.Fatalf("a contractKey whose goPackage names no loaded package must still emit ALIGN-MISSING-PKG, got %+v", got)
 	}
@@ -140,7 +140,7 @@ func TestAlign_SharedGoPackage_NoGoPackage_FallsThroughToMissing(t *testing.T) {
 	contracts := map[string]ServiceContract{
 		"constructionTransitionAccess": {Component: "ConstructionTransitionAccess", Layer: layerResourceAccess},
 	}
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, contracts)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, contracts, nil, nil)
 	if !hasRuleFindings(got, ruleAlignMissingPkg) {
 		t.Fatalf("a contract with no goPackage must fall through to ALIGN-MISSING-PKG, got %+v", got)
 	}
@@ -155,7 +155,7 @@ func TestAlign_SharedGoPackage_OrphanNotDoubleCounted(t *testing.T) {
 	s := sharedPkgSystem(t)
 	pkgs := append(sharedPkgPkgs(), cpkg("example.com/app/internal/resourceaccess/ghost", "ghost", "ResourceAccess"))
 	contracts := sharedPkgContracts()
-	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, contracts)
+	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, contracts, nil, nil)
 	if hasRuleFindings(got, ruleAlignMissingPkg) {
 		t.Fatalf("primary + joined secondary must both align, got %+v", got)
 	}

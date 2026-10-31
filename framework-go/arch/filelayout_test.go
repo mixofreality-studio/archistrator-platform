@@ -22,7 +22,7 @@ import (
 const layoutPrefix = "example.com/layoutapp/internal/"
 
 func layoutSpec() Spec {
-	return MethodSpec("testdata/layoutapp", layoutPrefix)
+	return MethodSpec("testdata/layoutapp")
 }
 
 // loadLayoutPkgs loads the testdata module (a nested module → GOWORK=off) with
@@ -125,7 +125,8 @@ func TestFileLayoutScenarioTestsOnlyPositive(t *testing.T) {
 // Spec.HooksImportAllowlist prefix are allowed; everything else is not.
 func TestHooksImportAllowed(t *testing.T) {
 	own := "example.com/app/internal/manager/goodmgr"
-	spec := MethodSpec("unused", "example.com/app/internal/")
+	spec := MethodSpec("unused")
+	spec.ModulePrefix = "example.com/app/internal/"
 	spec.HooksImportAllowlist = []string{"example.com/app/internal/contracts/", "example.com/app/internal/engine/listed/fake"}
 	for _, tc := range []struct {
 		path string

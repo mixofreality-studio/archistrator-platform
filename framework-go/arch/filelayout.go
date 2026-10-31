@@ -85,6 +85,7 @@ type fileLayoutViolation struct{ Pkg, File, Rule, Detail string }
 // Layer.FileStereotype).
 func CheckFileLayout(t *testing.T, spec Spec) {
 	t.Helper()
+	spec.requireSpec(t)
 	cfg := &packages.Config{
 		// The check is AST-name-based (file names + parsed syntax); it never
 		// touches type information, so Types/TypesInfo are deliberately not loaded.

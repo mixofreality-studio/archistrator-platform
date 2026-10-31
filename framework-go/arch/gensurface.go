@@ -64,6 +64,7 @@ type surfaceViolation struct {
 // allowlist after a contract change) instead of failing.
 func CheckGeneratedSurface(t *testing.T, spec Spec, allowlist map[string][]string) {
 	t.Helper()
+	spec.requireSpec(t)
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
 			packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo |

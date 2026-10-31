@@ -198,7 +198,13 @@ func componentLayerName(layer string) string {
 //   - external → no missing-package failure; ALIGN-EXTERNAL-NONUTILITY for a non-Utility,
 //     else ALIGN-EXTERNAL-UNWIRED (Warning) unless a framework utility import backs it.
 //   - built (absent) → the ordinary missing/mismatch/extra reconciliation.
-func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string) string, contracts map[string]ServiceContract) []Finding {
+//
+// A MISSING package is tolerated while the component's construction is still to come:
+// pendingIDs names the components whose covering activity has not completed (see
+// Project.componentProgress). A component no activity covers stays obligated, and one
+// whose activity was skipped surfaces as a warning. Orphan and layer-mismatch findings are
+// unaffected: code that exists is always held to the design.
+func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string) string, contracts map[string]ServiceContract, pendingIDs, skippedIDs map[string]bool) []Finding {
 	if len(pkgs) == 0 {
 		return nil
 	}
@@ -219,10 +225,30 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 			continue
 		}
 		section := fmt.Sprintf("component %d (%s)", i+1, c.Name)
-		out = append(out, alignComponent(c, key, section, i, pkgs, contracts, layersByName, pkgByName, matched, normalize, compKeys)...)
+		found := alignComponent(c, key, section, i, pkgs, contracts, layersByName, pkgByName, matched, normalize, compKeys)
+		out = append(out, softenMissingPackage(found, c.ID, pendingIDs, skippedIDs)...)
 	}
 
 	out = append(out, checkOrphanedPackages(byNameLayer, matched)...)
+	return out
+}
+
+// softenMissingPackage applies a component's construction progress to its findings: a
+// pending component's ALIGN-MISSING-PKG is dropped, a skipped one's is a warning, and every
+// other finding passes through untouched.
+func softenMissingPackage(found []Finding, id string, pendingIDs, skippedIDs map[string]bool) []Finding {
+	out := make([]Finding, 0, len(found))
+	for _, f := range found {
+		if f.RuleID == ruleAlignMissingPkg {
+			if pendingIDs[id] {
+				continue
+			}
+			if skippedIDs[id] {
+				f.Severity = SeverityWarning
+			}
+		}
+		out = append(out, f)
+	}
 	return out
 }
 
@@ -476,6 +502,24 @@ func frameworkUtilityImportMatches(ip, key string, normalize func(string) string
 		seg = seg[:j]
 	}
 	return normalize(seg) == key
+}
+
+// loadUnclassifiedCode lists the loaded packages that contribute non-test Go files.
+// Called only when none of them classified, so all of them are unclassified.
+func loadUnclassifiedCode(spec arch.Spec) ([]string, error) {
+	cfg := &packages.Config{Mode: packages.NeedName | packages.NeedFiles, Dir: spec.ModuleRoot, Tests: false}
+	pkgs, err := packages.Load(cfg, spec.Patterns...)
+	if err != nil {
+		return nil, fmt.Errorf("packages.Load: %w", err)
+	}
+	var out []string
+	for _, pkg := range pkgs {
+		if len(pkg.GoFiles) > 0 {
+			out = append(out, pkg.PkgPath)
+		}
+	}
+	sort.Strings(out)
+	return out, nil
 }
 
 func makeSpecClassifier(spec arch.Spec) func(string) (string, bool) {

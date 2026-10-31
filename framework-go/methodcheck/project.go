@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"regexp"
+	"slices"
 	"strings"
 )
 
@@ -767,6 +768,76 @@ type ScenarioResult struct {
 	Scenario   string `json:"scenario"`
 	Status     string `json:"status"` // pass|fail|skip
 	DurationMs int    `json:"durationMs"`
+}
+
+// slotKindActivityList is the activity-list slot's kind ordinal (projectstate's
+// KindActivityList).
+const slotKindActivityList = 9
+
+// activityOutcomeSkipped is the server's TaskOutcome wire name for a skipped attempt.
+const activityOutcomeSkipped = "skipped"
+
+// componentProgress derives, from the committed activity list and .activityExecution,
+// which components' construction is still to come (pending) and which was skipped by an
+// operator. Derived rather than stored: the row is the only record of an activity's
+// terminality, and a written marker would have to live in a reviewed design slot.
+//
+// A component is pending until an activity covering it COMPLETES: no row, a row in flight,
+// and a row that failed all leave its code legitimately absent. A skipped covering activity
+// moves it to skipped. A component with no covering activity appears in neither, so it
+// stays obligated. With several covering activities, one that completed wins.
+func (p Project) componentProgress() (pending, skipped map[string]bool, err error) {
+	pending, skipped = map[string]bool{}, map[string]bool{}
+	slot, ok := p.slotByKind(slotKindActivityList)
+	if !ok {
+		return pending, skipped, nil
+	}
+	var list struct {
+		Activities []struct {
+			Name        string `json:"name"`
+			ComponentID string `json:"componentId"`
+		} `json:"activities"`
+	}
+	if err := json.Unmarshal(slot.Model, &list); err != nil {
+		return nil, nil, fmt.Errorf("activity list: %w", err)
+	}
+	rows := p.ActivityExecution
+	if rows == nil {
+		rows = p.LegacyActivityConstruction
+	}
+	done := map[string]bool{}
+	for _, a := range list.Activities {
+		if a.ComponentID == "" {
+			continue
+		}
+		row, started := rows[a.Name]
+		switch {
+		case started && row.completed():
+			done[a.ComponentID] = true
+		case started && row.skipped():
+			skipped[a.ComponentID] = true
+		default:
+			pending[a.ComponentID] = true
+		}
+	}
+	for id := range done {
+		delete(pending, id)
+		delete(skipped, id)
+	}
+	for id := range skipped {
+		delete(pending, id)
+	}
+	return pending, skipped, nil
+}
+
+// completed reports whether the activity ended without a failure and without a skip.
+func (r ActivityRow) completed() bool {
+	return len(r.CompletedAt) > 0 && string(r.CompletedAt) != "null" && r.FailureReason == 0 && !r.skipped()
+}
+
+// skipped reports whether the row's ledger records a skipped attempt.
+func (r ActivityRow) skipped() bool {
+	return slices.ContainsFunc(r.Attempts, func(a TaskAttempt) bool { return a.Outcome == activityOutcomeSkipped })
 }
 
 // slotByKind returns the committed slot for a kind ordinal, or false when the slot

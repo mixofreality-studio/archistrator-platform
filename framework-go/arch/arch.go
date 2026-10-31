@@ -115,6 +115,18 @@ type Spec struct {
 	// matched as string prefixes. Leave nil/empty (the default) and only the
 	// built-in set is allowed.
 	HooksImportAllowlist []string
+
+	// loadErr is why MethodSpec could not derive the module prefix; every Check*
+	// entry fails on it rather than checking nothing.
+	loadErr error
+}
+
+// requireSpec fails the test when the spec could not be built from the module.
+func (s Spec) requireSpec(t *testing.T) {
+	t.Helper()
+	if s.loadErr != nil {
+		t.Fatalf("arch: %v", s.loadErr)
+	}
 }
 
 // MethodSpec returns the standard Method layer configuration: Client (entry
@@ -138,11 +150,24 @@ type Spec struct {
 // Access$ ports, so the Utility layer carries no IfaceSuffix. A Utility imports
 // no Temporal (it is not the TemporalLayer), so a utility/ package that pulls in
 // go.temporal.io still fails the Temporal-isolation rule.
-func MethodSpec(moduleRoot, modulePrefix string) Spec {
+//
+// The module prefix is DERIVED from <moduleRoot>/go.mod (`<module>/internal/`), so no
+// consumer can hand it a prefix that matches nothing and turn every layer rule into a
+// silent pass (the seated gate did exactly that). An unreadable go.mod fails every
+// Check* call loudly. The dependency allowlist starts at the framework's menu
+// (DefaultAllowedImportPrefixes); a consumer appends only its own extras.
+func MethodSpec(moduleRoot string) Spec {
+	module, err := ModulePathOf(moduleRoot)
+	prefix, allowed := "", DefaultAllowedImportPrefixes("")
+	if err == nil {
+		prefix, allowed = module+"/internal/", DefaultAllowedImportPrefixes(module)
+	}
 	return Spec{
-		ModuleRoot:   moduleRoot,
-		ModulePrefix: modulePrefix,
-		Patterns:     []string{"./internal/..."},
+		ModuleRoot:            moduleRoot,
+		ModulePrefix:          prefix,
+		AllowedImportPrefixes: allowed,
+		loadErr:               err,
+		Patterns:              []string{"./internal/..."},
 		Layers: []Layer{
 			{Name: "Client", DirPrefix: "client", IfaceSuffix: nil, FileStereotype: "client"},
 			{Name: "Manager", DirPrefix: "manager", IfaceSuffix: nil, FileStereotype: "manager"},
@@ -157,6 +182,7 @@ func MethodSpec(moduleRoot, modulePrefix string) Spec {
 // Check loads the module and reports every architecture violation via t.Errorf.
 func Check(t *testing.T, spec Spec) {
 	t.Helper()
+	spec.requireSpec(t)
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedImports | packages.NeedTypes |
 			packages.NeedTypesInfo | packages.NeedSyntax | packages.NeedCompiledGoFiles,

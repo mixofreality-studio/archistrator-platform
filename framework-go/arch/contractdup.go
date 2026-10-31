@@ -93,6 +93,7 @@ const (
 // is nothing for a consuming repo to configure.
 func CheckContractDuplication(t *testing.T, spec Spec) {
 	t.Helper()
+	spec.requireSpec(t)
 	cfg := &packages.Config{
 		Mode: packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
 			packages.NeedSyntax | packages.NeedTypes | packages.NeedTypesInfo,

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
@@ -135,8 +136,26 @@ func runArchPhase(t *testing.T, spec ProjectSpec, proj Project) int {
 	}
 	if len(pkgs) > 0 {
 		runLayerAndAlignmentChecks(t, spec, proj, pkgs)
+		return len(pkgs)
 	}
-	return len(pkgs)
+	requireNotVacuous(t, spec.Arch)
+	return 0
+}
+
+// requireNotVacuous fails when the patterns hold non-test Go code and none of it
+// classified into a layer. "No code yet" is the only legitimate reason to skip the layer,
+// layout, contract-duplication and alignment passes; code that classifies nowhere means
+// either a wrong prefix (the gate would pass while checking nothing) or a package outside
+// the layer model, and neither may read as green.
+func requireNotVacuous(t *testing.T, spec arch.Spec) {
+	t.Helper()
+	code, err := loadUnclassifiedCode(spec)
+	if err != nil {
+		t.Fatalf("methodcheck: load packages for the vacuity guard: %v", err)
+	}
+	if len(code) > 0 {
+		t.Errorf("methodcheck: %s holds Go code but no package classifies into a Method layer under prefix %q: %v; the architecture checks would pass vacuously — the package belongs under one of the layer directories", strings.Join(spec.Patterns, " "), spec.ModulePrefix, code)
+	}
 }
 
 // runLayerAndAlignmentChecks runs (a) the full arch layer rules and (b) the
@@ -175,7 +194,11 @@ func runLayerAndAlignmentChecks(t *testing.T, spec ProjectSpec, proj Project, pk
 		t.Fatalf("methodcheck: decode System for alignment: %v", sErr)
 	}
 	if sysOK {
-		reportFindings(t, alignSystemToCode(sys, pkgs, spec.NameNormalizer, proj.ServiceContracts))
+		pending, skipped, pErr := proj.componentProgress()
+		if pErr != nil {
+			t.Fatalf("methodcheck: decode the activity list for alignment: %v", pErr)
+		}
+		reportFindings(t, alignSystemToCode(sys, pkgs, spec.NameNormalizer, proj.ServiceContracts, pending, skipped))
 		reportFindings(t, conformanceCheck(sys, pkgs, spec.NameNormalizer))
 	}
 }
