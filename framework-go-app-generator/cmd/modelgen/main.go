@@ -192,12 +192,12 @@ func checkFiles(root string, files map[string][]byte, out io.Writer) error {
 		switch {
 		case errors.Is(err, os.ErrNotExist):
 			drifted = true
-			fmt.Fprintf(out, "missing: %s\n", p)
+			_, _ = fmt.Fprintf(out, "missing: %s\n", p)
 		case err != nil:
 			return err
 		case !bytes.Equal(have, files[p]):
 			drifted = true
-			fmt.Fprintf(out, "stale: %s\n", p)
+			_, _ = fmt.Fprintf(out, "stale: %s\n", p)
 		}
 	}
 	if drifted {

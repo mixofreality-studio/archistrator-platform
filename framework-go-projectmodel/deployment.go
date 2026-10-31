@@ -3,6 +3,7 @@ package projectmodel
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
 )
 
@@ -274,21 +275,11 @@ func DefaultDeployment(contracts map[string]*Contract, containerKey string) *Dep
 		if c.GoPackage == "" || c.Stub || c.Layer == "" || strings.EqualFold(c.Layer, "client") {
 			continue
 		}
-		key := c.Key
-		if key == "" {
-			key = c.Component
-		}
+		key := contractKeyOf(c)
 		components = append(components, key)
 		hasManager = hasManager || strings.EqualFold(c.Layer, "manager")
-		for _, infra := range c.Infra {
-			switch infra {
-			case infraPostgres:
-				usesPostgres = true
-				d.Bindings = append(d.Bindings, defaultBinding(key, infra, []string{"postgres"}, profiles))
-			case infraExternalHTTP:
-				d.Bindings = append(d.Bindings, defaultBinding(key, infra, nil, profiles))
-			}
-		}
+		usesPostgres = usesPostgres || slices.Contains(c.Infra, infraPostgres)
+		d.Bindings = append(d.Bindings, defaultBindings(key, c.Infra, profiles)...)
 	}
 	if hasManager {
 		d.Infrastructure = append(d.Infrastructure, InfraDecl{Key: "temporal", Substrate: "temporal", Profiles: profiles, Presence: "required"})
@@ -298,6 +289,28 @@ func DefaultDeployment(contracts map[string]*Contract, containerKey string) *Dep
 	}
 	d.Containers = []DeployContainer{{Key: containerKey, Name: containerKey, Components: components}}
 	return d
+}
+
+func contractKeyOf(c *Contract) string {
+	if c.Key != "" {
+		return c.Key
+	}
+	return c.Component
+}
+
+// defaultBindings is the bindings a contract's infra gets in a default deployment. Only the
+// infra the default can wire has one; anything else needs an authored deployment.
+func defaultBindings(key string, infra, profiles []string) []Binding {
+	var out []Binding
+	for _, name := range infra {
+		switch name {
+		case infraPostgres:
+			out = append(out, defaultBinding(key, name, []string{"postgres"}, profiles))
+		case infraExternalHTTP:
+			out = append(out, defaultBinding(key, name, nil, profiles))
+		}
+	}
+	return out
 }
 
 func defaultBinding(component, variant string, infra, profiles []string) Binding {

@@ -260,7 +260,7 @@ func emit(o options, files map[string][]byte, out io.Writer) error {
 			have, err := os.ReadFile(dest) // #nosec G304 G703 -- derived from the repo's own project.json
 			if err != nil || !bytes.Equal(have, files[p]) {
 				drifted = true
-				fmt.Fprintf(out, "drift: %s\n", p)
+				_, _ = fmt.Fprintf(out, "drift: %s\n", p)
 			}
 			continue
 		}

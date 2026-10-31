@@ -77,21 +77,30 @@ func moduleFileViolations(gomod []byte) []string {
 	sc := bufio.NewScanner(bytes.NewReader(gomod))
 	for sc.Scan() {
 		fields := strings.Fields(stripModComment(sc.Text()))
-		switch {
-		case len(fields) == 0:
-		case inReplace && fields[0] == ")":
-			inReplace = false
-		case inReplace:
-			out = append(out, localReplaceViolations(fields)...)
-		case fields[0] == "toolchain":
-			out = append(out, "a toolchain line is not allowed: the module builds with the job's toolchain ("+strings.Join(fields, " ")+")")
-		case fields[0] == "replace" && len(fields) > 1 && fields[1] == "(":
-			inReplace = true
-		case fields[0] == "replace":
-			out = append(out, localReplaceViolations(fields[1:])...)
+		if len(fields) == 0 {
+			continue
 		}
+		if inReplace {
+			inReplace = fields[0] != ")"
+			out = append(out, localReplaceViolations(fields)...)
+			continue
+		}
+		inReplace = fields[0] == "replace" && len(fields) > 1 && fields[1] == "("
+		out = append(out, directiveViolations(fields)...)
 	}
 	return out
+}
+
+// directiveViolations reports one top-level go.mod directive that is not allowed.
+func directiveViolations(fields []string) []string {
+	switch fields[0] {
+	case "toolchain":
+		return []string{"a toolchain line is not allowed: the module builds with the job's toolchain (" + strings.Join(fields, " ") + ")"}
+	case "replace":
+		return localReplaceViolations(fields[1:])
+	default:
+		return nil
+	}
 }
 
 // localReplaceViolations reports a replace directive (`old [v] => new [v]`) whose

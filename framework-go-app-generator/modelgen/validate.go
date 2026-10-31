@@ -52,19 +52,31 @@ func ValidateContract(key string, raw []byte) error {
 	if _, ok := layerContext[doc.Interface.Layer]; !ok {
 		return fmt.Errorf("contract %q: interface.layer %q is not one of %s", key, doc.Interface.Layer, strings.Join(layerNames(), ", "))
 	}
-	for _, name := range doc.Infra {
-		if _, ok := infraBindings[name]; !ok {
-			return fmt.Errorf("contract %q: infra %q is not approved; choose from %s (a Resource's name is not an infra name: a service reached over HTTP is ExternalHTTP)", key, name, strings.Join(ApprovedInfra(), ", "))
-		}
+	if err := validateInfra(key, doc.Infra); err != nil {
+		return err
 	}
 	if doc.Interface.Layer == "resourceaccess" && !doc.Stub && doc.GoPackage != "" && len(doc.Infra) == 0 {
 		return fmt.Errorf("contract %q: a ResourceAccess must bind the infrastructure it fronts, or nothing can construct it; set infra from %s", key, strings.Join(ApprovedInfra(), ", "))
 	}
-	if doc.GoPackage != "" {
-		dir := "internal/" + doc.Interface.Layer + "/"
-		if !strings.HasPrefix(doc.GoPackage, dir) || len(doc.GoPackage) == len(dir) {
-			return fmt.Errorf("contract %q: goPackage %q must be a package under %s (every app lays its components out the same way)", key, doc.GoPackage, dir)
+	return validateGoPackage(key, doc.GoPackage, doc.Interface.Layer)
+}
+
+func validateInfra(key string, infra []string) error {
+	for _, name := range infra {
+		if _, ok := infraBindings[name]; !ok {
+			return fmt.Errorf("contract %q: infra %q is not approved; choose from %s (a Resource's name is not an infra name: a service reached over HTTP is ExternalHTTP)", key, name, strings.Join(ApprovedInfra(), ", "))
 		}
+	}
+	return nil
+}
+
+func validateGoPackage(key, goPackage, layer string) error {
+	if goPackage == "" {
+		return nil
+	}
+	dir := "internal/" + layer + "/"
+	if !strings.HasPrefix(goPackage, dir) || len(goPackage) == len(dir) {
+		return fmt.Errorf("contract %q: goPackage %q must be a package under %s (every app lays its components out the same way)", key, goPackage, dir)
 	}
 	return nil
 }

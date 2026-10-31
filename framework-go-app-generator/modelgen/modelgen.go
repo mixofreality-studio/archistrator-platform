@@ -164,15 +164,11 @@ func selectGroups(keys []string, contracts map[string]json.RawMessage, only []st
 	}
 	want := map[string]bool{}
 	for _, key := range only {
-		found := false
-		for goPkg, members := range groups {
-			if slices.Contains(members, key) {
-				want[goPkg], found = true, true
-			}
-		}
+		goPkg, found := groupOf(key, groups)
 		if !found {
 			return nil, nil, fmt.Errorf("modelgen: contract %q has no generatable entry (absent, a client contract, or no goPackage)", key)
 		}
+		want[goPkg] = true
 	}
 	kept := make([]string, 0, len(want))
 	for _, goPkg := range order {
@@ -181,6 +177,16 @@ func selectGroups(keys []string, contracts map[string]json.RawMessage, only []st
 		}
 	}
 	return kept, groups, nil
+}
+
+// groupOf is the goPackage holding the contract key.
+func groupOf(key string, groups map[string][]string) (string, bool) {
+	for goPkg, members := range groups {
+		if slices.Contains(members, key) {
+			return goPkg, true
+		}
+	}
+	return "", false
 }
 
 // emitGoPackage emits one goPackage's contract.gen.go: the original

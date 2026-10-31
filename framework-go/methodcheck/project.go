@@ -807,17 +807,8 @@ func (p Project) componentProgress() (pending, skipped map[string]bool, err erro
 	}
 	done := map[string]bool{}
 	for _, a := range list.Activities {
-		if a.ComponentID == "" {
-			continue
-		}
-		row, started := rows[a.Name]
-		switch {
-		case started && row.completed():
-			done[a.ComponentID] = true
-		case started && row.skipped():
-			skipped[a.ComponentID] = true
-		default:
-			pending[a.ComponentID] = true
+		if a.ComponentID != "" {
+			markProgress(a.ComponentID, rows[a.Name], done, pending, skipped)
 		}
 	}
 	for id := range done {
@@ -828,6 +819,18 @@ func (p Project) componentProgress() (pending, skipped map[string]bool, err erro
 		delete(pending, id)
 	}
 	return pending, skipped, nil
+}
+
+// markProgress files one covering activity's row. An absent row is the zero row: pending.
+func markProgress(id string, row ActivityRow, done, pending, skipped map[string]bool) {
+	switch {
+	case row.completed():
+		done[id] = true
+	case row.skipped():
+		skipped[id] = true
+	default:
+		pending[id] = true
+	}
 }
 
 // completed reports whether the activity ended without a failure and without a skip.
