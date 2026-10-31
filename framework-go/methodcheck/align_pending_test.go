@@ -119,3 +119,34 @@ func TestLoadUnclassifiedCodeSeesCodeOutsideTheLayers(t *testing.T) {
 		t.Fatalf("got %v, %v", code, err)
 	}
 }
+
+// A generated fake is test support, not a component the design failed to declare, even when
+// its parent package was matched only through a contract join.
+func TestLoadClassifiedPackagesDropsGeneratedFakes(t *testing.T) {
+	dir := t.TempDir()
+	write := func(rel, body string) {
+		p := filepath.Join(dir, rel)
+		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	write("go.mod", "module example.com/fresh\n\ngo 1.25\n")
+	write("internal/resourceaccess/todo/contract.gen.go", "package todo\n")
+	write("internal/resourceaccess/todo/fake/fake.gen.go", "package todofake\n")
+	write("internal/resourceaccess/handmade/fake/fake.go", "package fake\n")
+	pkgs, err := loadClassifiedPackages(arch.MethodSpec(dir))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got []string
+	for _, p := range pkgs {
+		got = append(got, p.pkgPath)
+	}
+	want := []string{"example.com/fresh/internal/resourceaccess/handmade/fake", "example.com/fresh/internal/resourceaccess/todo"}
+	if len(got) != len(want) || got[0] != want[0] || got[1] != want[1] {
+		t.Fatalf("got %v, want %v: a hand-written package named fake is still a package", got, want)
+	}
+}

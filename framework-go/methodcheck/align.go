@@ -2,6 +2,7 @@ package methodcheck
 
 import (
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -145,6 +146,9 @@ func classifyLoadedPackage(pkg *packages.Package, classify func(string) (string,
 	if len(pkg.GoFiles) == 0 {
 		return classifiedPackage{}, false
 	}
+	if isGeneratedFake(pkg) {
+		return classifiedPackage{}, false
+	}
 	layer, ok := classify(pkg.PkgPath)
 	if !ok {
 		return classifiedPackage{}, false
@@ -159,6 +163,16 @@ func classifyLoadedPackage(pkg *packages.Package, classify func(string) (string,
 	}
 	sort.Strings(imports)
 	return classifiedPackage{pkgPath: pkg.PkgPath, leaf: leaf, layer: layer, imports: imports}, true
+}
+
+// isGeneratedFake reports a component's generated test double (<goPackage>/fake, only
+// *.gen.go files). It is test support beside the component, not a component of its own, so
+// it never reads as code the design failed to declare, however its parent was matched.
+func isGeneratedFake(pkg *packages.Package) bool {
+	if !strings.HasSuffix(pkg.PkgPath, "/fake") {
+		return false
+	}
+	return !slices.ContainsFunc(pkg.GoFiles, func(f string) bool { return !strings.HasSuffix(f, ".gen.go") })
 }
 
 // componentLayerName maps a design Component to the arch.Layer.Name its declared

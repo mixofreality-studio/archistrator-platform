@@ -41,7 +41,8 @@ func TestMethodLayering(t *testing.T) {
 
 func TestMethod(t *testing.T) {
 	methodcheck.Check(t, methodcheck.ProjectSpec{
-		RepoRoot: moduleRoot,
-		Arch:     arch.MethodSpec(moduleRoot),
+		RepoRoot:       moduleRoot,
+		Arch:           arch.MethodSpec(moduleRoot),
+		NameNormalizer: methodcheck.StereotypeSuffixNormalizer,
 	})
 }
