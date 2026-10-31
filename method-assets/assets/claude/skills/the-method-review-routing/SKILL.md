@@ -19,7 +19,7 @@ Encapsulates the **ReviewPolicy** volatility (see the committed `.volatilities` 
 ## Relationship to other skills
 
 - `[[the-method-handoff]]` casts **who fills each role** (human vs AI, per the team/customer). This skill computes **which roles must review** a given change. Handoff = actors; review-routing = graph.
-- `[[the-method-service-contract]]` produces the per-component **service contract** (`.serviceContracts[component]`) this skill reads to find each component's owner and contract. (Historically called the `D###` detailed-design; it is now the typed contract entry, not a `designs/*.md` file.)
+- `[[the-method-service-contract]]` produces the per-component **service contract** (`.serviceContracts[<contractKey>]`, keyed by the component's `contractKey`, not its kebab id) this skill reads to find each component's owner and contract. (Historically called the `D###` detailed-design; it is now the typed contract entry, not a `designs/*.md` file.)
 
 ## Input
 
@@ -43,7 +43,7 @@ State is git-as-DB: everything below is read from `.aiarch/state/project.json`.
 
 To find neighbours of `componentId`: read the `.systemDesign` relationships and collect every relationship where `componentId` is the source (outbound) or destination (inbound), excluding Utilities (logging/diagnostics/security) and Resource edges. The other endpoint is a neighbour whose owner must review.
 
-To find a component's contract author/owner: the contract for that component was produced by the `senior-developer` role (per `[[the-method-handoff]]`) and recorded in `.serviceContracts[component]`. Re-dispatch that role, primed with the component's contract entry.
+To find a component's contract author/owner: the contract for that component was produced by the `senior-developer` role (per `[[the-method-handoff]]`) and recorded in `.serviceContracts[<contractKey>]`. Re-dispatch that role, primed with the component's contract entry.
 
 ### Step 2 — Dispatch the reviews
 

@@ -39,13 +39,13 @@ When dispatched on a `construction` activity for component `<X>`:
 **archistrator runs as a single Go server repo. State is git-as-DB:** the canonical
 project state lives in `.aiarch/state/project.json`, NOT in `designs/<product>/*.md`.
 Each component lives in the package its contract names — the `goPackage` in
-`.serviceContracts["<component>"]` is the authoritative module-relative package path;
+`.serviceContracts["<contractKey>"]` (the component's `contractKey`, not its kebab id — see [[the-method-project-state]]) is the authoritative module-relative package path;
 place files per the repo's existing layout for that package (create it at the module
 path the contract implies if new).
 
 1. **Read context:**
    - The component's **service contract** — a typed entry in `.aiarch/state/project.json`
-     under `.serviceContracts["<component>"]`. It carries the component's `Layer`, `Ops`
+     under `.serviceContracts["<contractKey>"]`. It carries the component's `Layer`, `Ops`
      (operation signatures + I/O structs), `Inbound`/`Outbound` parties, `DataContracts`,
      `ErrorModel`, and `Idempotency`. There is no `designs/*.md` contract file — the contract
      *is* the JSON; any markdown is a render-on-read.
@@ -100,7 +100,8 @@ path the contract implies if new).
 ## Workflow
 
 ```pseudocode
-contract = read .aiarch/state/project.json .serviceContracts["<component>"]
+key      = the component's .contractKey on .slots["5"].model.components[]
+contract = read .aiarch/state/project.json .serviceContracts[key]
 layer    = contract.Layer        # Manager | Engine | ResourceAccess | Resource | Utility
 pkg      = contract.goPackage    # module-relative package path the contract names
 

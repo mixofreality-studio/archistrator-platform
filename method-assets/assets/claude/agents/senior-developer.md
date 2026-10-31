@@ -36,7 +36,7 @@ the senior developer effectively plays a junior-architect role per service.
 **archistrator runs as a single Go server repo. State is git-as-DB:** the canonical
 project state lives in `.aiarch/state/project.json`, NOT in `designs/<product>/*.md`.
 Each component lives in the package its contract names — the `goPackage` in
-`.serviceContracts["<component>"]` is the authoritative module-relative package path.
+`.serviceContracts["<contractKey>"]` (the component's `contractKey`, not its kebab id — see [[the-method-project-state]]) is the authoritative module-relative package path.
 The service contract *is* the typed JSON entry; any markdown is a render-on-read.
 
 Your `recordPhaseArtifact` write is only the component's Requirements-phase scope note
@@ -68,7 +68,7 @@ When dispatched on a `detailed-design` activity for component `<X>`:
    - For Manager contracts, classify each op by Temporal primitive (see [[the-method-service-contract]] Step 5b)
 
 4. **Output: record the contract** as a typed entry in `.aiarch/state/project.json`
-   under `.serviceContracts["<X>"]` (verb `RecordServiceContractProduced`). The JSON
+   under `.serviceContracts["<contractKey>"]` (verb `recordServiceContract`, which files it under the ambient component's `contractKey` for you). The JSON
    shape mirrors the Go `ServiceContract` type
    (`internal/resourceaccess/projectstate/servicecontract.go`):
    `Component`, `Layer`, `Stereotype`, `Volatility`, `Status`, `Inbound`/`Outbound`,
@@ -88,7 +88,7 @@ When dispatched on a `construction` activity (in small teams without juniors):
 ## Boundaries
 
 **CAN:**
-- Record the typed contract in `.serviceContracts["<component>"]` (operations, data contracts, error model, idempotency)
+- Record the typed contract in `.serviceContracts["<contractKey>"]` (operations, data contracts, error model, idempotency)
 - Capture design notes on the contract entry / activity record (`.activityConstruction`) and in the PR when constructing — not a `designs/*.md` log
 - Propose contract factoring (down, sideways, up — App B)
 - Reject a contract design from a junior
@@ -126,8 +126,8 @@ apply factoring rules (App B):
     - check logical consistency, cohesion, independence
     - (Manager) classify each op by Temporal primitive
 
-record the contract in project.json .serviceContracts["<component>"]
-    (verb RecordServiceContractProduced; shape per ServiceContract Go type)
+record the contract in project.json .serviceContracts["<contractKey>"]
+    (verb recordServiceContract — it resolves the key; shape per ServiceContract Go type)
 record design notes on the contract / .activityConstruction[<activity-id>]
 
 hand to system-architect for review via [[the-method-review-routing]]

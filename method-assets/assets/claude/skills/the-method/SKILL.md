@@ -69,7 +69,7 @@ design, weekly tracking, and event-triggered scope changes.
 | Skill | Cadence | `project.json` target |
 |---|---|---|
 | [[the-method-handoff]] | once at Phase 3 start | `.handoff` |
-| [[the-method-service-contract]] | per component, during detailed-design activity | `.serviceContracts[component]` |
+| [[the-method-service-contract]] | per component, during detailed-design activity | `.serviceContracts[<contractKey>]` |
 | [[the-method-review-routing]] | per produced change during construction | `.activityConstruction[activityId]` (review verdicts) |
 | [[the-method-project-tracking]] | weekly | `.activityConstruction` + tracking projections |
 | [[the-method-scope-change]] | event-triggered (scope shift or significant variance) | re-runs Phase 2 → `.sdpReview` + `.network` |
