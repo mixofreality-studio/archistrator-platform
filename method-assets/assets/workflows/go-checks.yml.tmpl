@@ -63,18 +63,25 @@ jobs:
         with:
           version: v2.12
 
+      # The module graph is owned by the job that tidies it: main always passes this.
+      - name: Module graph is tidy
+        run: go mod tidy -diff
+
+      # Generated contract drift: a contracted package with code must carry the current
+      # contract.gen.go, so a component cannot skip generation to stay out of the surface gate.
+      - name: Generated model drift
+        run: make gen-models-check
+
       # Deterministic component testing drift gate (spec §5.3): the generated
       # scenario tests (*_scenarios_test.gen.go, *.spec.gen.ts) must match the
       # committed test plan, and every hook the generated tests reference must
-      # exist in the hand-filled hooks file with no orphans. `go run pkg@version`
-      # needs no go.mod entry; the pin is the scaffold's app-generator version.
-      # Module-root-relative: the app module lives at the repo root, so -uitests
-      # is spelled (testgen's default ../uitests/generated assumes a server/ dir).
+      # exist in the hand-filled hooks file with no orphans.
       - name: Scenario test drift
-        run: go run [[.AppGeneratorModulePath]]/cmd/testgen@[[.AppGeneratorVersion]] -project .aiarch/state/project.json -root . -uitests uitests/generated -check
+        run: make gen-tests-check
 
-      # aiarch_method_test.go (scaffolded) runs methodcheck.Check, which calls
-      # arch.CheckFileLayout — so the scenario-tests-only arch gate runs on every
-      # app repo through this one `go test ./...` (spec §5.1).
+      # internal/aiarch_arch_test.go (scaffolded) runs the arch gates and
+      # methodcheck.Check, which calls arch.CheckFileLayout — so the
+      # scenario-tests-only arch gate runs on every app repo through this one
+      # `go test ./...` (spec §5.1).
       - name: Test
         run: go test ./...

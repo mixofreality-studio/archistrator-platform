@@ -1,0 +1,5 @@
+# Seated by archistrator. Sibling activities each add their own requires, so a text
+# conflict on these files is never a real one: union them, and the merge tail's
+# `go mod tidy` normalises the result. A merge the tidy cannot settle is an honest conflict.
+go.mod merge=union
+go.sum merge=union

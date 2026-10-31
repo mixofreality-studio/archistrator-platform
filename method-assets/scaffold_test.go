@@ -2,6 +2,10 @@ package methodassets
 
 import (
 	"encoding/json"
+	"os"
+	"os/exec"
+	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -22,7 +26,7 @@ func TestScaffoldFiles(t *testing.T) {
 	for _, want := range []string{
 		".github/workflows/aiarch-design.yml", ".github/workflows/aiarch-construct.yml",
 		".github/workflows/go-checks.yml", ".golangci.yml",
-		"go.mod", "aiarch_method_test.go", "internal/.gitkeep", "Makefile.scenarios.mk",
+		"go.mod", "go.sum", ArchGatePath, "Makefile", "Makefile.scenarios.mk", ".gitattributes",
 		".claude/agents/system-architect.md",
 	} {
 		if _, ok := files[want]; !ok {
@@ -51,28 +55,18 @@ func TestScaffoldFiles(t *testing.T) {
 	for _, want := range []string{
 		"module github.com/acme/widgets",
 		"go 1.26.0",
-		"require github.com/mixofreality-studio/archistrator-platform/framework-go " + FrameworkGoVersion,
-		"tool github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/cmd/httpgen",
-		"tool github.com/mixofreality-studio/archistrator-platform/framework-go-mcp-generator/cmd/mcpgen",
+		"github.com/mixofreality-studio/archistrator-platform/framework-go " + FrameworkGoVersion,
 	} {
 		if !strings.Contains(gomod, want) {
 			t.Errorf("go.mod missing %q", want)
 		}
 	}
-	// framework-go-app-generator ships no cmd/ main package (library-only); a
-	// tool directive against it breaks `go mod tidy` in generated apps.
-	if strings.Contains(gomod, "framework-go-app-generator") {
-		t.Errorf("go.mod must not reference framework-go-app-generator: it ships no cmd/ main package")
+	for _, tool := range ScaffoldTools() {
+		if !strings.Contains(gomod, tool) {
+			t.Errorf("go.mod does not make %q runnable as `go tool`", tool)
+		}
 	}
 }
-
-// testgenModuleRootArgs is the testgen invocation every scaffolded caller
-// must use on the module-root layout. The pinned CLI defaults -uitests to
-// ../uitests/generated RELATIVE TO -root (the server/ layout), so a caller that
-// passes only `-root .` writes the Playwright specs, config and hooks.ts
-// OUTSIDE the checkout and its -check is permanently red for any project with
-// a UI client; -uitests must be spelled explicitly.
-const testgenModuleRootArgs = "-project .aiarch/state/project.json -root . -uitests uitests/generated"
 
 // TestConstructTemplateHasScenarioSteps pins the venue half of deterministic
 // component testing under the agent task spec (spec §5.2, R2): the deterministic
@@ -98,7 +92,6 @@ func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	testgen := AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion
 	y := string(out[".github/workflows/aiarch-construct.yml"])
 	step := func(name string) string {
 		i := strings.Index(y, "name: "+name)
@@ -172,8 +165,10 @@ func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 		}
 	}
 	g := string(out[".github/workflows/go-checks.yml"])
-	if !strings.Contains(g, testgen+" "+testgenModuleRootArgs+" -check") {
-		t.Errorf("go-checks must run the pinned testgen drift check with module-root paths:\n%s", g)
+	for _, want := range []string{"make gen-tests-check", "make gen-models-check", "go mod tidy -diff"} {
+		if !strings.Contains(g, want) {
+			t.Errorf("go-checks must run %q:\n%s", want, g)
+		}
 	}
 }
 
@@ -191,24 +186,91 @@ func TestScaffoldMakefileScenariosInclude(t *testing.T) {
 		t.Fatal("missing Makefile.scenarios.mk")
 	}
 	m := string(mk)
-	testgen := AppGeneratorModulePath + "/cmd/testgen@" + AppGeneratorVersion
-	for _, s := range []string{
-		"gen-tests:", "gen-tests-check:", "test-scenarios:",
-		testgen + " " + testgenModuleRootArgs + "\n",
-		testgen + " " + testgenModuleRootArgs + " -check\n",
+	for _, want := range []string{
+		"gen-models:", "gen-models-check:", "gen-tests:", "gen-tests-check:", "test-scenarios:",
+		"go tool modelgen", "go tool testgen",
+		// testgen's default resolves one level above -root; every call must spell it.
+		"TESTGEN_ARGS = -project .aiarch/state/project.json -root . -uitests uitests/generated",
 		"-run 'TestScenario_'", "test-results/go-test.jsonl",
 	} {
-		if !strings.Contains(m, s) {
-			t.Errorf("Makefile.scenarios.mk missing %q", s)
+		if !strings.Contains(m, want) {
+			t.Errorf("Makefile.scenarios.mk missing %q", want)
 		}
-	}
-	// Every testgen call (write and check) spells -uitests: a bare -root . would
-	// default it to ../uitests/generated and write outside the checkout.
-	if got := strings.Count(m, "cmd/testgen@"); got != strings.Count(m, "-uitests uitests/generated") {
-		t.Errorf("every testgen invocation must pass -uitests uitests/generated (%d invocations):\n%s", got, m)
 	}
 	if strings.Contains(m, "../") || strings.Contains(m, "server/") {
 		t.Errorf("Makefile.scenarios.mk must be module-root-relative:\n%s", m)
+	}
+	if !strings.Contains(string(out["Makefile"]), "include Makefile.scenarios.mk") {
+		t.Errorf("the root Makefile must include the fragment:\n%s", out["Makefile"])
+	}
+}
+
+// TestScaffoldNeverRunsAGeneratorByVersion: `go run pkg@version` is refused for a module
+// with replace directives, which the published generators have. A generator reached that
+// way is dead on arrival in every project.
+func TestScaffoldNeverRunsAGeneratorByVersion(t *testing.T) {
+	out, err := ScaffoldFiles(testData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	banned := regexp.MustCompile(`go run [^\s]*@|go install [^\s]*(testgen|modelgen|webgen|appgen)`)
+	for p, b := range out {
+		if strings.HasPrefix(p, ".claude/") {
+			continue
+		}
+		if m := banned.Find(b); m != nil {
+			t.Errorf("%s runs a generator by version: %q", p, m)
+		}
+	}
+}
+
+// TestScaffoldGateDerivesItsPrefix: the seated gate must not name a prefix. Handing
+// MethodSpec one is how every check silently stopped applying to built apps.
+func TestScaffoldGateDerivesItsPrefix(t *testing.T) {
+	out, err := ScaffoldFiles(testData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	gate := string(out[ArchGatePath])
+	for _, want := range []string{"package internal_test", "func TestFileLayout", "func TestGeneratedOnlyPublic", "func TestMethodLayering", "func TestMethod(", "arch.MethodSpec(moduleRoot)", "arch.CheckModuleFile"} {
+		if !strings.Contains(gate, want) {
+			t.Errorf("the seated gate is missing %q", want)
+		}
+	}
+	if _, stale := out["aiarch_method_test.go"]; stale {
+		t.Error("the root method test is retired: the gate lives under internal/")
+	}
+}
+
+// TestScaffoldModuleIsTidy holds the release to the invariant every project is born under:
+// main passes `go mod tidy -diff`. It renders the seated module and asks the go command, so
+// a pin bumped without running cmd/gen-scaffold-mod fails here. It resolves the pins
+// through GOPROXY.
+func TestScaffoldModuleIsTidy(t *testing.T) {
+	out, err := ScaffoldFiles(testData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	for _, p := range []string{"go.mod", "go.sum", ArchGatePath} {
+		dest := filepath.Join(dir, p)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(dest, out[p], 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command("go", "mod", "tidy", "-diff")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GOTOOLCHAIN=local")
+	if b, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the seated module is not tidy; run go run ./cmd/gen-scaffold-mod: %v\n%s", err, b)
+	}
+	for _, line := range strings.Split(string(out["go.mod"]), "\n") {
+		if strings.HasPrefix(strings.TrimSpace(line), "replace") || strings.HasPrefix(line, "toolchain") {
+			t.Errorf("the seated go.mod must not carry %q", line)
+		}
 	}
 }
 
@@ -260,7 +322,7 @@ func TestScaffoldFilesIncludesManifest(t *testing.T) {
 	// No other new key appeared: every output key is either a known rendered
 	// destination, the .claude/** passthrough, or the manifest itself.
 	for p := range files {
-		if p == manifestPath || p == "internal/.gitkeep" || strings.HasPrefix(p, ".claude/") {
+		if p == manifestPath || strings.HasPrefix(p, ".claude/") {
 			continue
 		}
 		if _, ok := renderedPaths[p]; !ok {
