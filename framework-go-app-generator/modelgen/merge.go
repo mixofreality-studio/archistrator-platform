@@ -51,7 +51,7 @@ type mergedDefSet struct {
 // For a single-entry group, Generate calls genOne directly instead (see
 // emitGoPackage) so single-component packages are byte-identical to before
 // this function existed; genGroup only runs when len(keys) > 1.
-func genGroup(goPkg string, keys []string, contracts map[string]json.RawMessage, modulePath string, allow map[string]bool, resolver map[string]contractRef) ([]byte, error) {
+func genGroup(goPkg string, keys []string, contracts map[string]json.RawMessage, modulePath string, resolver map[string]contractRef) ([]byte, error) {
 	pendingImports = map[string]string{}
 	var buf bytes.Buffer
 
@@ -66,7 +66,7 @@ func genGroup(goPkg string, keys []string, contracts map[string]json.RawMessage,
 	}
 
 	for _, e := range entries {
-		if err := emitGroupEntry(&buf, e, modulePath, allow, resolver); err != nil {
+		if err := emitGroupEntry(&buf, e, modulePath, resolver); err != nil {
 			return nil, err
 		}
 	}
@@ -160,13 +160,13 @@ func requireSameShape(goPkg, defName, firstKey, secondKey string, a, b json.RawM
 // emitGroupEntry writes one entry's interface + impl surface (its own
 // Interface, Component, Infra, Deps) into buf — the second half of genGroup,
 // run once per entry after the merged $defs block.
-func emitGroupEntry(buf *bytes.Buffer, e parsedEntry, modulePath string, allow map[string]bool, resolver map[string]contractRef) error {
+func emitGroupEntry(buf *bytes.Buffer, e parsedEntry, modulePath string, resolver map[string]contractRef) error {
 	iface, haveIface, err := decodeAndEmitInterface(buf, &e.doc)
 	if err != nil {
 		return fmt.Errorf("modelgen %s: %w", e.key, err)
 	}
 	if haveIface {
-		if err := emitImplSurface(buf, iface, e.meta, modulePath, allow, resolver); err != nil {
+		if err := emitImplSurface(buf, iface, e.meta, modulePath, resolver); err != nil {
 			return fmt.Errorf("modelgen %s: %w", e.key, err)
 		}
 	}

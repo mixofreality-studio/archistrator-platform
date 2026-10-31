@@ -24,11 +24,8 @@
 // one deduped $defs block plus each entry's own interface/impl, in ascending
 // contract-key order.
 //
-// This is the library form of archistrator's server/cmd/modelgen (a thin CLI
-// shim now wraps it). The module path and engine-impl allowlist — the only two
-// project-specific inputs — are supplied via Config; everything else (the
-// header string, the raw-JSON property-order recovery, the infra-bindings
-// registry) is a faithful, byte-identical port.
+// cmd/modelgen is the CLI every app runs (`go tool modelgen`). The module path is the
+// one project-specific input; there is nothing else for an app to configure.
 package modelgen
 
 import (
@@ -36,12 +33,14 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"slices"
 	"sort"
+	"strings"
 
 	"github.com/google/jsonschema-go/jsonschema"
 )
 
-// Config parameterizes Generate with the only two project-specific inputs.
+// Config parameterizes Generate.
 type Config struct {
 	// ModulePath is the Go module path of the target server tree — the prefix
 	// modelgen prepends to a dep's `goPackage` (e.g.
@@ -49,11 +48,11 @@ type Config struct {
 	// dep's published-interface package (see emitManagerConstructor). For
 	// archistrator this is "github.com/mixofreality-studio/archistrator/server".
 	ModulePath string
-	// EngineImplAllowlist is the set of Engine contract `component` keys that gain
-	// a generated impl struct + constructor. Engines carry no `infra` field, so an
-	// explicit allowlist scopes the impl emission. All current engines are pure
-	// (field-less impl, no-arg constructor).
-	EngineImplAllowlist []string
+	// Only, when non-empty, restricts generation to the goPackages of these contract
+	// keys (a package's every sharing contract is emitted with it). A construction task
+	// generates only its own: a delegating constructor for a sibling whose builder does
+	// not exist yet would break that package's build.
+	Only []string
 }
 
 // schemaFile names the legacy per-component seed; retained only so the generated
@@ -69,6 +68,7 @@ const schemaFile = "contract.schema.json"
 type contractMeta struct {
 	GoPackage string        `json:"goPackage"`
 	Component string        `json:"component"`
+	Layer     string        `json:"layer"`
 	Infra     []string      `json:"infra"`
 	Stub      bool          `json:"stub"`
 	Deps      []contractDep `json:"deps"`
@@ -102,22 +102,20 @@ func Generate(projectJSON []byte, cfg Config) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	allow := toSet(cfg.EngineImplAllowlist)
-
 	keys := make([]string, 0, len(contracts))
 	for k := range contracts {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 
-	groupOrder, groups, err := groupByGoPackage(keys, contracts)
+	groupOrder, groups, err := selectGroups(keys, contracts, cfg.Only)
 	if err != nil {
 		return nil, err
 	}
 
 	out := map[string][]byte{}
 	for _, goPkg := range groupOrder {
-		src, err := emitGoPackage(goPkg, groups[goPkg], contracts, cfg.ModulePath, allow, resolver)
+		src, err := emitGoPackage(goPkg, groups[goPkg], contracts, cfg.ModulePath, resolver)
 		if err != nil {
 			return nil, err
 		}
@@ -143,6 +141,12 @@ func groupByGoPackage(keys []string, contracts map[string]json.RawMessage) ([]st
 		if meta.GoPackage == "" { // no goPackage ⇒ skip (stub / unbuilt entry)
 			continue
 		}
+		if strings.EqualFold(meta.Layer, "client") {
+			// A client contract is the test surface of a generated client (the web
+			// client's actions, the MCP client's tools). It may name a goPackage, but
+			// its Go is the client layer `appgen clients` emits, not a model.
+			continue
+		}
 		if _, seen := groups[meta.GoPackage]; !seen {
 			order = append(order, meta.GoPackage)
 		}
@@ -151,23 +155,51 @@ func groupByGoPackage(keys []string, contracts map[string]json.RawMessage) ([]st
 	return order, groups, nil
 }
 
+// selectGroups is groupByGoPackage narrowed to the goPackages of the only keys. A key
+// that names no generatable contract is an error, not a silent omission.
+func selectGroups(keys []string, contracts map[string]json.RawMessage, only []string) ([]string, map[string][]string, error) {
+	order, groups, err := groupByGoPackage(keys, contracts)
+	if err != nil || len(only) == 0 {
+		return order, groups, err
+	}
+	want := map[string]bool{}
+	for _, key := range only {
+		found := false
+		for goPkg, members := range groups {
+			if slices.Contains(members, key) {
+				want[goPkg], found = true, true
+			}
+		}
+		if !found {
+			return nil, nil, fmt.Errorf("modelgen: contract %q has no generatable entry (absent, a client contract, or no goPackage)", key)
+		}
+	}
+	kept := make([]string, 0, len(want))
+	for _, goPkg := range order {
+		if want[goPkg] {
+			kept = append(kept, goPkg)
+		}
+	}
+	return kept, groups, nil
+}
+
 // emitGoPackage emits one goPackage's contract.gen.go: the original
 // single-entry path (genOne, via emitContract) when exactly one contract key
 // maps to it — byte-identical to before merge support existed — or the merge
 // path (genGroup) when two or more share it.
-func emitGoPackage(goPkg string, keys []string, contracts map[string]json.RawMessage, modulePath string, allow map[string]bool, resolver map[string]contractRef) ([]byte, error) {
+func emitGoPackage(goPkg string, keys []string, contracts map[string]json.RawMessage, modulePath string, resolver map[string]contractRef) ([]byte, error) {
 	if len(keys) == 1 {
-		_, src, err := emitContract(keys[0], contracts[keys[0]], modulePath, allow, resolver)
+		_, src, err := emitContract(keys[0], contracts[keys[0]], modulePath, resolver)
 		return src, err
 	}
-	return genGroup(goPkg, keys, contracts, modulePath, allow, resolver)
+	return genGroup(goPkg, keys, contracts, modulePath, resolver)
 }
 
 // emitContract processes one .serviceContracts entry: it returns the entry's
 // goPackage + formatted bytes, or an empty goPackage to signal "skip" (no
 // goPackage). Errors carry the contract key, preserving the source's two fatal
 // prefixes ("parse contract" vs "modelgen").
-func emitContract(k string, entry json.RawMessage, modulePath string, allow map[string]bool, resolver map[string]contractRef) (string, []byte, error) {
+func emitContract(k string, entry json.RawMessage, modulePath string, resolver map[string]contractRef) (string, []byte, error) {
 	var meta contractMeta
 	if err := json.Unmarshal(entry, &meta); err != nil {
 		return "", nil, fmt.Errorf("parse contract %q: %w", k, err)
@@ -175,7 +207,7 @@ func emitContract(k string, entry json.RawMessage, modulePath string, allow map[
 	if meta.GoPackage == "" {
 		return "", nil, nil
 	}
-	src, err := genOne(entry, meta, modulePath, allow, resolver)
+	src, err := genOne(entry, meta, modulePath, resolver)
 	if err != nil {
 		return "", nil, fmt.Errorf("modelgen %s: %w", k, err)
 	}
@@ -218,22 +250,13 @@ func buildResolver(contracts map[string]json.RawMessage) (map[string]contractRef
 	return resolver, nil
 }
 
-// toSet turns the config allowlist slice into a membership set.
-func toSet(keys []string) map[string]bool {
-	set := make(map[string]bool, len(keys))
-	for _, k := range keys {
-		set[k] = true
-	}
-	return set
-}
-
 // genOne emits one component's contract.gen.go from its project.json contract
 // entry (raw JSON) and returns the formatted bytes. The entry is a superset of
 // the old contract.schema.json (it adds component/layer/goPackage/title around the
 // same `$defs` + `interface`), so it feeds the UNCHANGED emission path directly:
 // the extra metadata keys land in Schema.Extra and are ignored, while $defs and
 // interface are read exactly as before — keeping the output byte-identical.
-func genOne(raw []byte, meta contractMeta, modulePath string, allow map[string]bool, resolver map[string]contractRef) ([]byte, error) {
+func genOne(raw []byte, meta contractMeta, modulePath string, resolver map[string]contractRef) ([]byte, error) {
 	pkg := filepath.Base(meta.GoPackage)
 
 	// Emit the type/interface body first so x-go-type bindings can register their
@@ -255,7 +278,7 @@ func genOne(raw []byte, meta contractMeta, modulePath string, allow map[string]b
 	}
 
 	if haveIface {
-		if err := emitImplSurface(&buf, iface, meta, modulePath, allow, resolver); err != nil {
+		if err := emitImplSurface(&buf, iface, meta, modulePath, resolver); err != nil {
 			return nil, err
 		}
 	}

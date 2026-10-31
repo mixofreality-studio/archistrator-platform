@@ -13,22 +13,9 @@ import (
 
 var update = flag.Bool("update", false, "rewrite golden files")
 
-// archistratorAllowlist is the 8-key engine-impl allowlist copied verbatim from
-// the source emitter's engineImplAllowlist.
-var archistratorAllowlist = []string{
-	"reviewEngine",
-	"handOffEngine",
-	"interventionEngine",
-	"settlementEngine",
-	"billingEngine",
-	"operationEstimationEngine",
-	"autoscalerEngine",
-	"estimationEngine",
-}
-
 // TestGenerateGreenfieldGolden runs Generate over the synthetic greenfield
 // fixture (one manager with a plain + two component deps, one Postgres-backed
-// RA, one allowlisted engine) and byte-compares each emitted file against a
+// RA, one engine) and byte-compares each emitted file against a
 // committed golden keyed by the goPackage's last segment.
 func TestGenerateGreenfieldGolden(t *testing.T) {
 	raw, err := os.ReadFile("../testdata/greenfield.project.json")
@@ -37,8 +24,7 @@ func TestGenerateGreenfieldGolden(t *testing.T) {
 	}
 
 	got, err := modelgen.Generate(raw, modelgen.Config{
-		ModulePath:          "example.com/greenfield",
-		EngineImplAllowlist: []string{"pricingEngine"},
+		ModulePath: "example.com/greenfield",
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)
@@ -66,7 +52,7 @@ func TestGenerateGreenfieldGolden(t *testing.T) {
 }
 
 // TestGenerateArchistratorFidelity runs Generate over the real archistrator
-// project.json fixture with archistrator's ModulePath + 8-key allowlist, asserts
+// project.json fixture with archistrator's ModulePath, asserts
 // every emitted file go/parser-parses, and byte-matches the systemdesign manager
 // + projectstate RA outputs against the REAL committed contract.gen.go files
 // snapshotted into testdata. A mismatch means the PORT has a bug (never edit the
@@ -78,8 +64,7 @@ func TestGenerateArchistratorFidelity(t *testing.T) {
 	}
 
 	got, err := modelgen.Generate(raw, modelgen.Config{
-		ModulePath:          "github.com/mixofreality-studio/archistrator/server",
-		EngineImplAllowlist: archistratorAllowlist,
+		ModulePath: "github.com/mixofreality-studio/archistrator/server",
 	})
 	if err != nil {
 		t.Fatalf("generate: %v", err)

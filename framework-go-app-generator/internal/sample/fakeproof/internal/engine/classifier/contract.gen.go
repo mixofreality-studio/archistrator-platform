@@ -15,3 +15,10 @@ type WidgetID string
 type ClassifierEngine interface {
 	Classify(rc fweng.Context, id WidgetID) (Classification, error)
 }
+
+// NewClassifierEngine constructs the ClassifierEngine, delegating to the hand-written, unexported
+// builder newClassifierEngine in this package. The constructor returns the interface, so
+// the concrete impl stays unexported.
+func NewClassifierEngine() ClassifierEngine {
+	return newClassifierEngine()
+}

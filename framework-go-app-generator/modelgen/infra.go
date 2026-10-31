@@ -98,6 +98,17 @@ var infraBindings = map[string]infraBinding{
 
 	// --- OPTION-1 DELEGATED RAs (stateful; impl hand-written + unexported) -------
 
+	// any service reached over HTTP: an identity provider, a payment API, a webhook
+	// target. The builder holds the base URL and client; validation can fail.
+	"ExternalHTTP": {
+		delegated:    true,
+		returnsError: true,
+		params: []infraField{
+			{name: "baseURL", typ: "string"},
+			{name: "client", typ: "*http.Client", imports: map[string]string{"net/http": ""}},
+		},
+	},
+
 	// sourcecontrol → GitHub. The hand-written builder wires the unexported githubClient
 	// seam over the framework *fwgithub.AppClient (which satisfies the seam directly) plus
 	// the composition-root config (default account / App slug / repo visibility), then the
