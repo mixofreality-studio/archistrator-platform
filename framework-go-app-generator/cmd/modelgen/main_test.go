@@ -49,8 +49,10 @@ func TestATaskGeneratesOnlyItsOwnContract(t *testing.T) {
 			t.Errorf("%s was not written", p)
 		}
 	}
-	if exists(root, "internal/engine/sibling/contract.gen.go") {
-		t.Error("a sibling's constructor must not land in this task's tree: its builder does not exist yet")
+	for _, p := range []string{"internal/engine/sibling/contract.gen.go", "internal/engine/sibling/fake/fake.gen.go"} {
+		if exists(root, p) {
+			t.Errorf("%s must not land in this task's tree: a sibling's generated code imports a package that does not exist yet", p)
+		}
 	}
 	if err := run([]string{"-project", project, "-root", root, "-check", "-contract", "todoAccess"}, io.Discard); err != nil {
 		t.Errorf("the generated file must be current: %v", err)

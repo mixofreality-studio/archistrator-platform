@@ -49,7 +49,7 @@ func GenerateFakes(projectJSON []byte, cfg Config) (map[string][]byte, error) {
 	}
 	sort.Strings(keys)
 
-	groupOrder, groups, err := groupByGoPackage(keys, contracts)
+	groupOrder, groups, err := selectGroups(keys, contracts, cfg.Only)
 	if err != nil {
 		return nil, err
 	}
