@@ -3,6 +3,7 @@ package projectmodel
 import (
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Deployment is the codegen-relevant slice of the operationalConcepts slot
@@ -243,4 +244,76 @@ func validateSettings(scope string, settings []Setting) error {
 		}
 	}
 	return nil
+}
+
+// Binding variants a default deployment can wire without authored knowledge: an approved
+// infra with a substrate the composition root already constructs, or a hook-supplied one.
+const (
+	infraPostgres     = "Postgres"
+	infraExternalHTTP = "ExternalHTTP"
+)
+
+// DefaultDeployment derives the single-container deployment a project gets when design
+// authored none: every non-client contract with a package in one container, a local and a
+// cloud profile, Temporal when there is a Manager, Postgres when a contract binds it, and one
+// binding per ResourceAccess infra the default can wire. It is a pure function of the
+// contracts. An authored deployment always overrides it (EffectiveDeployment).
+func DefaultDeployment(contracts map[string]*Contract, containerKey string) *Deployment {
+	d := &Deployment{
+		DeliveryStyle: "local",
+		Environments: []DeployEnvironment{
+			{Profile: "cloud", Title: "Cloud"},
+			{Profile: "local", Title: "Local"},
+		},
+		Infrastructure: []InfraDecl{{Key: "otel", Substrate: "otel", Profiles: []string{"cloud", "local"}, Presence: "optional"}},
+	}
+	profiles := []string{"cloud", "local"}
+	var components []string
+	var usesPostgres, hasManager bool
+	for _, c := range sortedContracts(contracts) {
+		if c.GoPackage == "" || c.Stub || c.Layer == "" || strings.EqualFold(c.Layer, "client") {
+			continue
+		}
+		key := c.Key
+		if key == "" {
+			key = c.Component
+		}
+		components = append(components, key)
+		hasManager = hasManager || strings.EqualFold(c.Layer, "manager")
+		for _, infra := range c.Infra {
+			switch infra {
+			case infraPostgres:
+				usesPostgres = true
+				d.Bindings = append(d.Bindings, defaultBinding(key, infra, []string{"postgres"}, profiles))
+			case infraExternalHTTP:
+				d.Bindings = append(d.Bindings, defaultBinding(key, infra, nil, profiles))
+			}
+		}
+	}
+	if hasManager {
+		d.Infrastructure = append(d.Infrastructure, InfraDecl{Key: "temporal", Substrate: "temporal", Profiles: profiles, Presence: "required"})
+	}
+	if usesPostgres {
+		d.Infrastructure = append(d.Infrastructure, InfraDecl{Key: "postgres", Substrate: "postgres", Profiles: profiles, Presence: "required"})
+	}
+	d.Containers = []DeployContainer{{Key: containerKey, Name: containerKey, Components: components}}
+	return d
+}
+
+func defaultBinding(component, variant string, infra, profiles []string) Binding {
+	per := make(map[string]BindingVariant, len(profiles))
+	for _, p := range profiles {
+		per[p] = BindingVariant{Variant: variant, Infra: infra}
+	}
+	return Binding{Component: component, PerProfile: per, Presence: "required"}
+}
+
+// EffectiveDeployment is the authored deployment when it names a container, else the
+// derived default. RUN-007's archived slots carried no deployment model at all, and
+// composition needs one, so an app that never authored one still gets a server.
+func (m *Model) EffectiveDeployment(containerKey string) *Deployment {
+	if m.Deployment != nil && len(m.Deployment.Containers) > 0 {
+		return m.Deployment
+	}
+	return DefaultDeployment(m.Contracts, containerKey)
 }

@@ -144,3 +144,36 @@ func TestLoadRejectsBadSettingType(t *testing.T) {
 		t.Fatalf("want setting-type error, got %v", err)
 	}
 }
+
+func TestDefaultDeploymentIsDerivedFromTheContracts(t *testing.T) {
+	contracts := map[string]*Contract{
+		"list":   {Key: "list", Layer: "Manager", GoPackage: "internal/manager/list"},
+		"todo":   {Key: "todo", Layer: "ResourceAccess", GoPackage: "internal/resourceaccess/todo", Infra: []string{"Postgres"}},
+		"caller": {Key: "caller", Layer: "ResourceAccess", GoPackage: "internal/resourceaccess/caller", Infra: []string{"ExternalHTTP"}},
+		"web":    {Key: "web", Layer: "Client"},
+	}
+	d := DefaultDeployment(contracts, "server")
+	if len(d.Containers) != 1 || d.Containers[0].Key != "server" || len(d.Containers[0].Components) != 3 {
+		t.Fatalf("containers = %+v", d.Containers)
+	}
+	infra := map[string]bool{}
+	for _, i := range d.Infrastructure {
+		infra[i.Key] = true
+	}
+	if !infra["temporal"] || !infra["postgres"] {
+		t.Errorf("a Manager needs Temporal and a Postgres contract needs a pool: %+v", d.Infrastructure)
+	}
+	if len(d.Bindings) != 2 {
+		t.Errorf("bindings = %+v", d.Bindings)
+	}
+}
+
+func TestEffectiveDeploymentPrefersTheAuthoredOne(t *testing.T) {
+	authored := &Deployment{Containers: []DeployContainer{{Key: "authored"}}}
+	if got := (&Model{Deployment: authored}).EffectiveDeployment("server"); got != authored {
+		t.Errorf("an authored deployment must win, got %+v", got)
+	}
+	if got := (&Model{}).EffectiveDeployment("server"); got.Containers[0].Key != "server" {
+		t.Errorf("no authored deployment must fall back to the default, got %+v", got)
+	}
+}
