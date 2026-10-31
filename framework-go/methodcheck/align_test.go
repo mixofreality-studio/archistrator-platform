@@ -132,28 +132,20 @@ func TestAlign_EmptyCodeDesignPhaseIsNoOp(t *testing.T) {
 // TestAlign_GeneratedFakeSubpackageNotOrphaned PROVES absorbOwnedPackages already
 // folds a <component>/fake generated test-double sub-package under its owning
 // component instead of flagging it ALIGN-EXTRA-PKG, so the alignment pass needed
-// NO change for Task B1a: testdata/alignapp/internal/resourceaccess/stateaccess/fake
-// is a fully-generated fake.gen.go double (leaf "fake") sitting under the
-// StateAccess component's own resourceaccess/stateaccess directory. ownerKeyForPackage
-// walks pkgPath's segments deepest-first — "fake" matches no component, so it falls
-// through to "stateaccess", which DOES — and absorbOwnedPackages marks it matched
-// exactly as it would any other owned sub-package (the MCPClient shape). No
-// fake-specific code exists in align.go; this fixture would regress LOUDLY (a new
-// ALIGN-EXTRA-PKG finding) if that ownership walk ever stopped covering it.
+// testdata/alignapp/internal/resourceaccess/stateaccess/fake is a fully-generated
+// fake.gen.go double under the StateAccess component's directory. It is dropped at
+// classification (isGeneratedFake), so it can never read as an orphan, however its parent
+// package was matched.
 func TestAlign_GeneratedFakeSubpackageNotOrphaned(t *testing.T) {
 	pkgs := loadAlignPkgs(t)
-	foundFake := false
 	for _, p := range pkgs {
-		if p.leaf == "fake" && p.layer == "ResourceAccess" {
-			foundFake = true
+		if p.leaf == "fake" {
+			t.Errorf("a generated fake must not classify as component code: %+v", p)
 		}
-	}
-	if !foundFake {
-		t.Fatal("expected the stateaccess/fake generated test-double package to be loaded and classified into ResourceAccess — fixture missing or misclassified")
 	}
 	findings := alignSystemToCode(alignAppSystem(), pkgs, nil, nil, nil, nil)
 	if hasRuleFindings(findings, ruleAlignExtraPkg) {
-		t.Errorf("expected the stateaccess/fake sub-package to be absorbed under its owning StateAccess component (no ALIGN-EXTRA-PKG), got %+v", findings)
+		t.Errorf("no generated fake may read as ALIGN-EXTRA-PKG, got %+v", findings)
 	}
 }
 
