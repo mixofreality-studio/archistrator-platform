@@ -253,26 +253,36 @@ func emit(o options, files map[string][]byte, out io.Writer) error {
 		paths = append(paths, p)
 	}
 	slices.Sort(paths)
+	if o.check {
+		return checkDrift(o.root, paths, files, out)
+	}
+	for _, p := range paths {
+		if err := writeGenerated(filepath.Join(o.root, p), files[p]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// checkDrift reports every generated file that is missing or differs from what is on disk.
+func checkDrift(root string, paths []string, files map[string][]byte, out io.Writer) error {
 	drifted := false
 	for _, p := range paths {
-		dest := filepath.Join(o.root, p)
-		if o.check {
-			have, err := os.ReadFile(dest) // #nosec G304 G703 -- derived from the repo's own project.json
-			if err != nil || !bytes.Equal(have, files[p]) {
-				drifted = true
-				_, _ = fmt.Fprintf(out, "drift: %s\n", p)
-			}
-			continue
-		}
-		if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil { // #nosec G301 G703 -- derived from the repo's own project.json
-			return err
-		}
-		if err := os.WriteFile(dest, files[p], 0o600); err != nil { // #nosec G306 G703 -- derived from the repo's own project.json
-			return err
+		have, err := os.ReadFile(filepath.Join(root, p)) // #nosec G304 G703 -- derived from the repo's own project.json
+		if err != nil || !bytes.Equal(have, files[p]) {
+			drifted = true
+			_, _ = fmt.Fprintf(out, "drift: %s\n", p)
 		}
 	}
 	if drifted {
 		return errDrift
 	}
 	return nil
+}
+
+func writeGenerated(dest string, content []byte) error {
+	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil { // #nosec G301 G703 -- derived from the repo's own project.json
+		return err
+	}
+	return os.WriteFile(dest, content, 0o600) // #nosec G306 G703 -- derived from the repo's own project.json
 }
