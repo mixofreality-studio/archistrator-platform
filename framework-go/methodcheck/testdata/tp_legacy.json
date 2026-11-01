@@ -324,7 +324,7 @@
           {
             "id": "shop-client",
             "name": "ShopClient",
-            "kind": "client",
+            "kind": "client", "uiSurface": false,
             "layer": "client",
             "encapsulates": "",
             "atomicBusinessVerbs": null

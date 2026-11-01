@@ -29,6 +29,9 @@ const (
 	ruleSysRAOrphan     RuleID = "SYS-RA-ORPHAN"
 	ruleSysEncapsulates RuleID = "SYS-ENCAPSULATES"
 	ruleSysRelDup       RuleID = "SYS-REL-DUP"
+	// ruleSysClientSurface is not a twin: it requires every Client to state whether it is a
+	// browser surface, because that one field picks its lifecycle.
+	ruleSysClientSurface RuleID = "SYS-CLIENT-UISURFACE"
 
 	// CoreUseCases twins.
 	ruleUCActPresent   RuleID = "UC-ACT-PRESENT"
@@ -65,6 +68,27 @@ func raOrphan(s System) []Finding {
 			RuleID:   ruleSysRAOrphan,
 			Severity: SeverityError,
 			Message:  fmt.Sprintf("ResourceAccess %q has no outbound sync/queued relationship to a resource (or documented external system); every ResourceAccess must encapsulate at least one resource", label),
+			Location: loc(i+1, "component "+label),
+		})
+	}
+	return out
+}
+
+// clientSurfaceExplicit — SYS-CLIENT-UISURFACE (error). A Client's uiSurface decides what gets
+// built: true is a browser surface on the frontend lifecycle, false a machine client generated
+// into a Go package. Left absent it would silently read as false, and a browser app would be
+// planned as a Go service with nothing to compile.
+func clientSurfaceExplicit(s System) []Finding {
+	var out []Finding
+	for i, c := range s.Components {
+		if c.Kind != kindClient || c.UISurface != nil {
+			continue
+		}
+		label := componentName(c, i)
+		out = append(out, Finding{
+			RuleID:   ruleSysClientSurface,
+			Severity: SeverityError,
+			Message:  fmt.Sprintf("Client %q does not state uiSurface; set uiSurface: true for a surface a person uses in a browser, false for a machine client such as an API or MCP server", label),
 			Location: loc(i+1, "component "+label),
 		})
 	}

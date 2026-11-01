@@ -319,6 +319,23 @@ type Component struct {
 	// badge and the gate. Empty (absent) means BUILT — the component is expected to
 	// have code. See buildStatus* constants.
 	BuildStatus string `json:"buildStatus,omitempty"`
+
+	// UISurface says whether a Client is a browser surface: true means its code is hand-built
+	// under webApp/src/<id>/ on the frontend lifecycle, so it has no Go package of its own;
+	// false means it is a machine client generated into internal/client/<leaf>. It is a
+	// pointer because the choice must be explicit: an absent value is a defect
+	// (SYS-CLIENT-UISURFACE), never a default.
+	UISurface *bool `json:"uiSurface,omitempty"`
+
+	// ConstructionProfile is how the component comes to exist. "generated" means no activity
+	// builds it: a generated Client appears when the Managers it fronts are integrated.
+	ConstructionProfile string `json:"constructionProfile,omitempty"`
+}
+
+// isBrowserSurface reports a Client whose code lives in the web project rather than a Go
+// package.
+func (c Component) isBrowserSurface() bool {
+	return c.Kind == kindClient && c.UISurface != nil && *c.UISurface
 }
 
 // Relationship is a directed edge between two Components.
@@ -774,6 +791,9 @@ type ScenarioResult struct {
 // KindActivityList).
 const slotKindActivityList = 9
 
+// constructionGenerated is the constructionProfile of a component no activity builds.
+const constructionGenerated = "generated"
+
 // activityOutcomeSkipped is the server's TaskOutcome wire name for a skipped attempt.
 const activityOutcomeSkipped = "skipped"
 
@@ -819,6 +839,25 @@ func (p Project) componentProgress() (pending, skipped map[string]bool, err erro
 		delete(pending, id)
 	}
 	return pending, skipped, nil
+}
+
+// withGeneratedClientsPending adds to pending every generated Client no activity covers, while
+// a Manager's construction is still to come. Its package is written when a Manager is
+// integrated, so it cannot exist before then, and no activity of its own can say so. Once no
+// Manager is pending it is obligated like any other component.
+func withGeneratedClientsPending(s System, pending map[string]bool) {
+	managerPending := false
+	for _, c := range s.Components {
+		managerPending = managerPending || (c.Kind == kindManager && pending[c.ID])
+	}
+	if !managerPending {
+		return
+	}
+	for _, c := range s.Components {
+		if c.Kind == kindClient && c.ConstructionProfile == constructionGenerated {
+			pending[c.ID] = true
+		}
+	}
 }
 
 // markProgress files one covering activity's row. An absent row is the zero row: pending.

@@ -1,6 +1,11 @@
 package methodcheck
 
-import "testing"
+import (
+	"strings"
+	"testing"
+
+	"golang.org/x/tools/go/packages"
+)
 
 // align_buildstatus_test.go exercises the ALIGN-gate mechanisms layered on top of the
 // design↔code alignment pass: the StereotypeSuffixNormalizer, layer-scoped matching,
@@ -346,5 +351,91 @@ func TestAlign_Built_OrphanSubpackage_StillExtra(t *testing.T) {
 	got := alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil, nil, nil)
 	if !hasRuleFindings(got, ruleAlignExtraPkg) {
 		t.Fatalf("a subpackage under no component directory must still be ALIGN-EXTRA-PKG, got %+v", got)
+	}
+}
+
+func boolPtr(b bool) *bool { return &b }
+
+// A browser surface's code is under webApp/src/, so finishing its activity must not turn the
+// Go alignment gate red for every later task. A machine client still owes a package.
+func TestAlignBrowserSurfaceOwesNoPackage(t *testing.T) {
+	sys := System{Components: []Component{
+		{ID: "web-app", Name: "WebApp", Kind: kindClient, Layer: layerClient, UISurface: boolPtr(true)},
+		{ID: "machine-api", Name: "MachineApi", Kind: kindClient, Layer: layerClient, UISurface: boolPtr(false)},
+		{ID: "list-manager", Name: "ListManager", Kind: kindManager, Layer: layerManager},
+	}}
+	pkgs := []classifiedPackage{{pkgPath: "m/internal/manager/list", leaf: "list", layer: "Manager"}}
+	got := alignSystemToCode(sys, pkgs, StereotypeSuffixNormalizer, nil, nil, nil)
+	if len(got) != 1 || got[0].RuleID != ruleAlignMissingPkg || !strings.Contains(got[0].Message, "MachineApi") {
+		t.Fatalf("only the machine client owes a package, got %+v", got)
+	}
+}
+
+// Generated shared transport is nobody's component; a hand-written package beside it still is
+// an orphan.
+func TestAlignGeneratedTransportIsNotAnOrphan(t *testing.T) {
+	sys := System{Components: []Component{{ID: "list-manager", Name: "ListManager", Kind: kindManager, Layer: layerManager}}}
+	pkgs := []classifiedPackage{
+		{pkgPath: "m/internal/manager/list", leaf: "list", layer: "Manager"},
+		{pkgPath: "m/internal/client/web", leaf: "web", layer: "Client", transport: true},
+		{pkgPath: "m/internal/client/web/list", leaf: "list", layer: "Client", transport: true},
+	}
+	if got := alignSystemToCode(sys, pkgs, StereotypeSuffixNormalizer, nil, nil, nil); len(got) != 0 {
+		t.Fatalf("generated transport must not be an orphan, got %+v", got)
+	}
+	pkgs = append(pkgs, classifiedPackage{pkgPath: "m/internal/client/rogue", leaf: "rogue", layer: "Client"})
+	got := alignSystemToCode(sys, pkgs, StereotypeSuffixNormalizer, nil, nil, nil)
+	if len(got) != 1 || got[0].RuleID != ruleAlignExtraPkg {
+		t.Fatalf("a hand-written client package must stay an orphan, got %+v", got)
+	}
+}
+
+func TestIsGeneratedTransport(t *testing.T) {
+	cases := []struct {
+		path  string
+		files []string
+		want  bool
+	}{
+		{"m/internal/client/web", []string{"/x/server.gen.go"}, true},
+		{"m/internal/client/mcp/list", []string{"/x/list_tools.gen.go"}, true},
+		{"m/internal/client/web/list", []string{"/x/h.gen.go", "/x/hand.go"}, false},
+		{"m/internal/client/machineapi", []string{"/x/a.gen.go"}, false},
+		{"m/internal/client/webhooks", []string{"/x/a.gen.go"}, false},
+	}
+	for _, c := range cases {
+		if got := isGeneratedTransport(&packages.Package{PkgPath: c.path, GoFiles: c.files}); got != c.want {
+			t.Errorf("%s %v: got %v", c.path, c.files, got)
+		}
+	}
+}
+
+// A generated Client no activity covers cannot exist before a Manager is integrated.
+func TestGeneratedClientPendingFollowsItsManagers(t *testing.T) {
+	sys := System{Components: []Component{
+		{ID: "mcp", Kind: kindClient, ConstructionProfile: constructionGenerated},
+		{ID: "hand", Kind: kindClient},
+		{ID: "mgr", Kind: kindManager},
+	}}
+	pending := map[string]bool{"mgr": true}
+	withGeneratedClientsPending(sys, pending)
+	if !pending["mcp"] || pending["hand"] {
+		t.Fatalf("got %v", pending)
+	}
+	pending = map[string]bool{}
+	withGeneratedClientsPending(sys, pending)
+	if pending["mcp"] {
+		t.Fatal("once the Managers are integrated a generated client is obligated")
+	}
+}
+
+func TestClientSurfaceMustBeExplicit(t *testing.T) {
+	s := System{Components: []Component{
+		{ID: "a", Name: "A", Kind: kindClient},
+		{ID: "b", Name: "B", Kind: kindClient, UISurface: boolPtr(false)},
+		{ID: "c", Name: "C", Kind: kindManager},
+	}}
+	got := clientSurfaceExplicit(s)
+	if len(got) != 1 || got[0].RuleID != ruleSysClientSurface || got[0].Severity != SeverityError {
+		t.Fatalf("got %+v", got)
 	}
 }

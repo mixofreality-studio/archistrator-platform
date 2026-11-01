@@ -93,6 +93,10 @@ type classifiedPackage struct {
 	leaf    string   // the last path segment (the component-named package dir)
 	layer   string   // the arch.Layer.Name it classified into
 	imports []string // full import paths this package imports (for conformance)
+	// transport marks generated client transport shared by every surface
+	// (internal/client/{web,mcp}/**, only *.gen.go files). No one component owns it, so it
+	// never reads as code the design failed to declare.
+	transport bool
 }
 
 // defaultNormalizer maps a name to a comparable match key: lowercase + strip every
@@ -162,7 +166,22 @@ func classifyLoadedPackage(pkg *packages.Package, classify func(string) (string,
 		imports = append(imports, ip)
 	}
 	sort.Strings(imports)
-	return classifiedPackage{pkgPath: pkg.PkgPath, leaf: leaf, layer: layer, imports: imports}, true
+	return classifiedPackage{pkgPath: pkg.PkgPath, leaf: leaf, layer: layer, imports: imports, transport: isGeneratedTransport(pkg)}, true
+}
+
+// generatedTransportMarkers are the import-path segments of the shared generated transport:
+// the REST handlers and server every browser surface and machine client reaches, and the
+// default home of the MCP tool tables.
+var generatedTransportMarkers = []string{"/internal/client/web", "/internal/client/mcp"}
+
+// isGeneratedTransport reports a package of nothing but generated files under the shared
+// transport roots. A hand-written file in one of these directories keeps the package an
+// ordinary one, held to the design like any other.
+func isGeneratedTransport(pkg *packages.Package) bool {
+	inRoot := slices.ContainsFunc(generatedTransportMarkers, func(m string) bool {
+		return strings.HasSuffix(pkg.PkgPath, m) || strings.Contains(pkg.PkgPath, m+"/")
+	})
+	return inRoot && !slices.ContainsFunc(pkg.GoFiles, func(f string) bool { return !strings.HasSuffix(f, ".gen.go") })
 }
 
 // isGeneratedFake reports a component's generated test double (<goPackage>/fake, only
@@ -218,6 +237,10 @@ func componentLayerName(layer string) string {
 // Project.componentProgress). A component no activity covers stays obligated, and one
 // whose activity was skipped surfaces as a warning. Orphan and layer-mismatch findings are
 // unaffected: code that exists is always held to the design.
+//
+// A browser surface (Component.UISurface) is held to its contract, not to a package: its code
+// is under webApp/src/, which this Go check cannot see, so it never owes a package. If a Go
+// package does carry its name, the ordinary reconciliation still accounts it.
 func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string) string, contracts map[string]ServiceContract, pendingIDs, skippedIDs map[string]bool) []Finding {
 	if len(pkgs) == 0 {
 		return nil
@@ -240,11 +263,30 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 		}
 		section := fmt.Sprintf("component %d (%s)", i+1, c.Name)
 		found := alignComponent(c, key, section, i, pkgs, contracts, layersByName, pkgByName, matched, normalize, compKeys)
+		if c.isBrowserSurface() {
+			found = withoutMissingPackage(found)
+		}
 		out = append(out, softenMissingPackage(found, c.ID, pendingIDs, skippedIDs)...)
 	}
 
+	markGeneratedTransport(pkgs, normalize, matched)
 	out = append(out, checkOrphanedPackages(byNameLayer, matched)...)
 	return out
+}
+
+// withoutMissingPackage drops ALIGN-MISSING-PKG and keeps everything else.
+func withoutMissingPackage(found []Finding) []Finding {
+	return slices.DeleteFunc(found, func(f Finding) bool { return f.RuleID == ruleAlignMissingPkg })
+}
+
+// markGeneratedTransport accounts the shared generated transport so it is not reported as
+// orphaned. See classifiedPackage.transport.
+func markGeneratedTransport(pkgs []classifiedPackage, normalize func(string) string, matched map[compKey]bool) {
+	for _, p := range pkgs {
+		if p.transport {
+			matched[compKey{name: normalize(p.leaf), layer: p.layer}] = true
+		}
+	}
 }
 
 // softenMissingPackage applies a component's construction progress to its findings: a

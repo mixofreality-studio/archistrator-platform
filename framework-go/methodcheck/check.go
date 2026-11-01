@@ -198,6 +198,7 @@ func runLayerAndAlignmentChecks(t *testing.T, spec ProjectSpec, proj Project, pk
 		if pErr != nil {
 			t.Fatalf("methodcheck: decode the activity list for alignment: %v", pErr)
 		}
+		withGeneratedClientsPending(sys, pending)
 		reportFindings(t, alignSystemToCode(sys, pkgs, spec.NameNormalizer, proj.ServiceContracts, pending, skipped))
 		reportFindings(t, conformanceCheck(sys, pkgs, spec.NameNormalizer))
 	}

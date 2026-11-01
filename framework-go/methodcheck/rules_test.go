@@ -78,7 +78,11 @@ func comp(t *testing.T, name, kind string) Component {
 	// Encapsulates is populated so the shared fixtures satisfy the SYS-ENCAPSULATES
 	// twin (a Manager/Engine/ResourceAccess with an empty encapsulates is an ERROR);
 	// tests that specifically exercise SYS-ENCAPSULATES build their own components.
-	return Component{ID: Slug(name), Name: name, Kind: kind, Layer: layer, Encapsulates: name + " volatility"}
+	c := Component{ID: Slug(name), Name: name, Kind: kind, Layer: layer, Encapsulates: name + " volatility"}
+	if kind == kindClient {
+		c.UISurface = boolPtr(false)
+	}
+	return c
 }
 
 // traceOf projects a DECLARED static relationship onto the realized call a step
