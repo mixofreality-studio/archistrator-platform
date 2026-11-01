@@ -56,12 +56,14 @@ func tidiedModule() (mod, sum []byte, err error) {
 		return nil, nil, err
 	}
 	defer func() { _ = os.RemoveAll(dir) }()
-	gate := filepath.Join(dir, methodassets.ArchGatePath)
-	if err := os.MkdirAll(filepath.Dir(gate), 0o750); err != nil {
-		return nil, nil, err
-	}
-	if err := os.WriteFile(gate, files[methodassets.ArchGatePath], 0o600); err != nil {
-		return nil, nil, err
+	for _, seat := range []string{methodassets.ArchGatePath, methodassets.DepsPinPath} {
+		dest := filepath.Join(dir, seat)
+		if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+			return nil, nil, err
+		}
+		if err := os.WriteFile(dest, files[seat], 0o600); err != nil { // #nosec G703 -- under our own temp dir
+			return nil, nil, err
+		}
 	}
 	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(startingMod()), 0o600); err != nil {
 		return nil, nil, err

@@ -1,5 +1,7 @@
 package webgen
 
+import "strings"
+
 // Bootstrap renders the web project a fresh app's first frontend job starts from, and the
 // browser surface it is building. It is written through WriteScaffold, so what exists stays:
 // the second surface adds only its own files, and every seat is the app's from then on.
@@ -26,6 +28,25 @@ func Bootstrap(app, surface string) ([]File, error) {
 		out = append(out, File{Path: f.out, Content: content})
 	}
 	return out, nil
+}
+
+// AppSlug is a module path's app name in the shape Config.App requires: its last segment
+// (the one before a trailing "server"), lower-cased, with anything else as '-'.
+func AppSlug(module string) string {
+	segs := strings.Split(module, "/")
+	leaf := segs[len(segs)-1]
+	if leaf == "server" && len(segs) > 1 {
+		leaf = segs[len(segs)-2]
+	}
+	var b strings.Builder
+	for _, r := range strings.ToLower(leaf) {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+		} else if b.Len() > 0 {
+			b.WriteByte('-')
+		}
+	}
+	return strings.Trim(b.String()[:min(b.Len(), 40)], "-")
 }
 
 func bootstrapFiles(surface string) []struct{ tmpl, out string } {

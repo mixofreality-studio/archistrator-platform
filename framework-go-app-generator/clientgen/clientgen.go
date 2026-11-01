@@ -59,6 +59,10 @@ type Config struct {
 	// operation, for a Manager whose contract does not carry its own prose. A Manager listed
 	// here must document every operation.
 	OpDocs map[string]map[string]string
+	// OAS is where the merged document is written, module-root-relative (default
+	// api/openapi.yaml). An app that post-processes the document keeps the generated form
+	// here, so the drift check still holds.
+	OAS string
 }
 
 // Project is the input: the raw contract entries, which generation keeps verbatim, and the
@@ -107,7 +111,11 @@ func Generate(p Project, cfg Config) (map[string][]byte, error) {
 	if err != nil {
 		return nil, fmt.Errorf("clientgen: marshal the merged OpenAPI: %w", err)
 	}
-	files[oasPath] = out
+	dest := cfg.OAS
+	if dest == "" {
+		dest = oasPath
+	}
+	files[dest] = out
 	return files, nil
 }
 

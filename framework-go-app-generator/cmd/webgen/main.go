@@ -6,7 +6,7 @@
 //	webgen generate                                 rewrite the generated files
 //	webgen check                                    exit 1 when a generated file drifted
 //	webgen scaffold                                 write the scaffold files that are absent
-//	webgen bootstrap -app <name> -surface <id>      write a fresh web project and surface; keeps what exists
+//	webgen bootstrap -surface <id>                  write a fresh web project and surface; keeps what exists
 //	webgen skeleton -route /x <opId>...             print a minimal fixture for a screen state
 //
 // Run it from a Go module that requires framework-go-app-generator (the app's
@@ -30,6 +30,7 @@ import (
 	"path/filepath"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/webgen"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 )
 
 func main() {
@@ -127,12 +128,15 @@ func cmdScaffold(fs *flag.FlagSet, args []string, out io.Writer) error {
 }
 
 func cmdBootstrap(fs *flag.FlagSet, args []string, out io.Writer) error {
-	app := fs.String("app", "", "the app name")
 	surface := fs.String("surface", "", "the browser surface's id")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
-	files, err := webgen.Bootstrap(*app, *surface)
+	module, err := arch.ModulePathOf(".") // go tool runs in the app's module
+	if err != nil {
+		return err
+	}
+	files, err := webgen.Bootstrap(webgen.AppSlug(module), *surface)
 	if err != nil {
 		return err
 	}

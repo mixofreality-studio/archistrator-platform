@@ -564,3 +564,15 @@ func TestBootstrapSeatsAProjectAndASurface(t *testing.T) {
 		t.Fatalf("second surface wrote %v", wrote)
 	}
 }
+
+func TestAppSlug(t *testing.T) {
+	for module, want := range map[string]string{
+		"github.com/acme/ToDo_MVC":            "todo-mvc",
+		"github.com/acme/archistrator/server": "archistrator",
+		"example.com/app":                     "app",
+	} {
+		if got := AppSlug(module); got != want {
+			t.Errorf("%s: got %q, want %q", module, got, want)
+		}
+	}
+}

@@ -64,6 +64,7 @@ type clientsConfig struct {
 	App     string                       `json:"app"`
 	Exposed map[string][]string          `json:"exposed"`
 	OpDocs  map[string]map[string]string `json:"opDocs"`
+	OAS     string                       `json:"oas"`
 }
 
 type options struct {
@@ -293,7 +294,7 @@ func genClients(m *projectmodel.Model, cfg config, module, project string) (map[
 	}
 	return clientgen.Generate(clientgen.Project{Contracts: built, System: m.System}, clientgen.Config{
 		ModulePath: module, Title: cfg.Clients.Title, App: cfg.Clients.App,
-		Exposed: cfg.Clients.Exposed, OpDocs: cfg.Clients.OpDocs,
+		Exposed: cfg.Clients.Exposed, OpDocs: cfg.Clients.OpDocs, OAS: cfg.Clients.OAS,
 	})
 }
 

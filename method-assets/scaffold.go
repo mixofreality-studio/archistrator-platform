@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"embed"
 	"encoding/json"
+	"maps"
 	"strings"
 	"text/template"
 )
@@ -29,6 +30,11 @@ const (
 	MCPGeneratorVersion  = "v0.3.0"
 	ProjectModelVersion  = "v0.2.4"
 
+	// The composition root's own dependencies; see compositionPins.
+	InfraOtelVersion     = "v0.1.0"
+	InfraPostgresVersion = "v0.1.0"
+	InfraTemporalVersion = "v0.2.0"
+
 	// AppGeneratorModulePath is the published module that ships the generators.
 	AppGeneratorModulePath = "github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator"
 )
@@ -48,14 +54,34 @@ func ScaffoldTools() []string {
 	}
 }
 
+// compositionPins are the modules the generated composition root and client layer import, at
+// versions the platform's own modules build with. A generated import nothing in the module
+// graph requires would be resolved by `go mod tidy` to its latest release: otelhttp's latest
+// pulls an otel/log the platform's otel satellite does not compile against, so the seated
+// aiarch_deps.go keeps them pinned from birth.
+func compositionPins() map[string]string {
+	return map[string]string{
+		platformModule + "framework-go-infrastructure-otel":             InfraOtelVersion,
+		platformModule + "framework-go-infrastructure-postgres":         InfraPostgresVersion,
+		platformModule + "framework-go-infrastructure-temporal":         InfraTemporalVersion,
+		"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp": "v0.60.0",
+		"go.temporal.io/sdk/contrib/opentelemetry":                      "v0.7.0",
+		"github.com/modelcontextprotocol/go-sdk":                        "v1.6.1",
+		"github.com/google/jsonschema-go":                               "v0.4.3",
+		"github.com/jackc/pgx/v5":                                       "v5.9.2",
+	}
+}
+
 // ScaffoldRequires is module path → version of the pins the tidied go.mod starts from.
 func ScaffoldRequires() map[string]string {
-	return map[string]string{
+	out := map[string]string{
 		platformModule + "framework-go":                FrameworkGoVersion,
 		AppGeneratorModulePath:                         AppGeneratorVersion,
 		platformModule + "framework-go-http-generator": HTTPGeneratorVersion,
 		platformModule + "framework-go-mcp-generator":  MCPGeneratorVersion,
 	}
+	maps.Copy(out, compositionPins())
+	return out
 }
 
 // ScaffoldData is the template data rendered into a newly seeded project repo.
@@ -90,6 +116,10 @@ var renderedPaths = map[string]string{ // dest path -> template asset
 	// the arch check has for every app; beside the code it holds to the layer model.
 	ArchGatePath: "assets/scaffold/aiarch_arch_test.go.tmpl",
 	"Makefile":   "assets/scaffold/Makefile.tmpl",
+	// Keeps the composition root's dependencies in the module graph from birth.
+	DepsPinPath: "assets/scaffold/aiarch_deps.go.tmpl",
+	// appgen's knobs. A fresh app has none: every one has a default from the design.
+	"appgen.json": "assets/scaffold/appgen.json",
 	// The generated-code and scenario-test make targets the construction commands and
 	// the local venue call; the app Makefile includes it. Module-root-relative: the
 	// seated app module lives at the repo root (go.mod above), so there is no server/
@@ -104,6 +134,9 @@ var renderedPaths = map[string]string{ // dest path -> template asset
 
 // ArchGatePath is where the Method gate is seated.
 const ArchGatePath = "internal/aiarch_arch_test.go"
+
+// DepsPinPath is the seat that keeps the composition root's dependencies pinned.
+const DepsPinPath = "aiarch_deps.go"
 
 // ScaffoldFiles renders the complete managed-scaffold file set for one app
 // repo: workflows + go.mod + go.sum + Makefile + the Method gate + the .claude tree, plus a seat
