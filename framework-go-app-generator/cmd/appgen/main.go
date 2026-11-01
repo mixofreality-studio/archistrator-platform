@@ -239,11 +239,16 @@ func composeConfig(m, effective *projectmodel.Model, cfg config, module string) 
 		hooks = map[string][]composegen.HookArgType{}
 	}
 	// ExternalHTTP is the one approved binding no substrate supplies: its URL and client
-	// come from the app's hooks.
+	// come from the app's hooks, and modelgen's constructor for it returns an error.
+	returnsError := map[string]bool{}
 	for _, b := range effective.Deployment.Bindings {
 		for _, v := range b.PerProfile {
 			key := b.Component + "/" + v.Variant
-			if _, set := hooks[key]; v.Variant == "ExternalHTTP" && !set {
+			if v.Variant != "ExternalHTTP" {
+				continue
+			}
+			returnsError[key] = true
+			if _, set := hooks[key]; !set {
 				hooks[key] = []composegen.HookArgType{{GoType: "string"}, {GoType: "*http.Client", GoImport: "net/http"}}
 			}
 		}
@@ -251,7 +256,8 @@ func composeConfig(m, effective *projectmodel.Model, cfg config, module string) 
 	return composegen.Config{
 		ContainerKey: containerOf(m, cfg), ModulePath: module, PackageName: "main", EnvPrefix: cfg.EnvPrefix,
 		WebExposedManagers: cfg.WebExposedManagers, VariantHookArgs: hooks,
-		VariantConstructorNoError: cfg.VariantConstructorNoError, ScheduleRegistrarComponent: cfg.ScheduleRegistrarComponent,
+		VariantConstructorNoError: cfg.VariantConstructorNoError, VariantConstructorReturnsError: returnsError,
+		ScheduleRegistrarComponent: cfg.ScheduleRegistrarComponent,
 	}
 }
 

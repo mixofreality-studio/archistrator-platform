@@ -419,17 +419,16 @@ func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding,
 // (messageBus's "Temporal" variant binds BOTH local and cloud) —
 // addVariantHook dedupes by name. Otherwise (no hook) the positional
 // convention applies: infra values (per the substrate catalog) then binding
-// settings; a variant that consumes any infra or a hook returns (Interface, error)
+// settings; a variant that consumes any infra returns (Interface, error)
 // UNLESS overridden by Config.VariantConstructorNoError
 // (messagebus.NewTemporalMessageBus is single-return despite consuming the
 // temporal infra) — an infra-free variant (memory/dry-run) returns the
 // interface alone.
 func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.BindingVariant, settings []projectmodel.Setting) variantArm {
 	ctor := rb.alias + ".New" + variantToken(pv.Variant) + rb.iface
-	specs, hooked := r.cfg.VariantHookArgs[rb.key+"/"+pv.Variant]
-	// Taking a hook's values means the variant builds something external, so it can fail,
-	// exactly as consuming infra does (ExternalHTTP validates its base URL).
-	returnsError := (len(pv.Infra) > 0 || hooked) && !r.cfg.VariantConstructorNoError[rb.key+"/"+pv.Variant]
+	key := rb.key + "/" + pv.Variant
+	returnsError := r.cfg.VariantConstructorReturnsError[key] || (len(pv.Infra) > 0 && !r.cfg.VariantConstructorNoError[key])
+	specs, hooked := r.cfg.VariantHookArgs[key]
 	if hooked {
 		extraCtorArgs := r.hookExtraCtorArgs(pv.Infra)
 		r.addVariantHook(rb, pv.Variant, specs)

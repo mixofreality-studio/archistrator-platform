@@ -75,6 +75,10 @@ type Config struct {
 	// ("<component>/<variant>"); a variant NOT listed keeps the existing
 	// infra-implies-error heuristic unchanged.
 	VariantConstructorNoError map[string]bool
+	// VariantConstructorReturnsError is the opposite override, keyed the same way: a
+	// variant that consumes no infra but whose constructor returns an error, such as the
+	// ExternalHTTP binding, which validates its base URL.
+	VariantConstructorReturnsError map[string]bool
 	// ScheduleRegistrarComponent names the component key (fix round 1, Task 7c
 	// live-firing review, FINDING 4 — replaces the earlier hard-coded
 	// "messageBus" constant) whose Manager dependents get a startup
