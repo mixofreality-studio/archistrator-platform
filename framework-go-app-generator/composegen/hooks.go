@@ -7,6 +7,9 @@ import "strings"
 type hookMethod struct {
 	doc  []string
 	line string
+	// seed is the method's body in the once-seeded hooks.go: a value that is always safe
+	// where there is one, or a FILL panic where only the app can answer ("" means FILL).
+	seed string
 }
 
 // deriveHooks computes the container's Hooks method set from the resolved plan.
@@ -110,6 +113,7 @@ func workerGateHook(iface string) hookMethod {
 			"register; gate on the dep presence / a dry-run stub otherwise).",
 		},
 		line: "Register" + iface + "Worker(cfg *Config) bool",
+		seed: "return true",
 	}
 }
 
@@ -145,6 +149,7 @@ func finalizeHook(rb raBinding) hookMethod {
 			"dry-run stub swap-in) — the identity implementation is always correct.",
 		},
 		line: name + "(cfg *Config, v " + typ + ") " + typ,
+		seed: "return v",
 	}
 }
 
@@ -155,6 +160,7 @@ func hookResolveProfile() hookMethod {
 			"deployment profile whose per-binding variants are constructed.",
 		},
 		line: "ResolveProfile(cfg *Config) string",
+		seed: `return "local"`,
 	}
 }
 
@@ -165,6 +171,7 @@ func hookTemporalLogger() hookMethod {
 			"SDK logger the client + embedded workers log through.",
 		},
 		line: "TemporalLogger(logger *slog.Logger) tlog.Logger",
+		seed: "return tlog.NewStructuredLogger(logger)",
 	}
 }
 
@@ -185,6 +192,7 @@ func hookTokenValidator() hookMethod {
 			"selects the dev-principal / deny middleware path. IdP-specific.",
 		},
 		line: "TokenValidator(ctx context.Context, cfg *Config) (security.Validator, error)",
+		seed: "return nil, nil",
 	}
 }
 
@@ -195,6 +203,7 @@ func hookDevConfig() hookMethod {
 			"middleware (the config_adapter seam).",
 		},
 		line: "DevConfig(cfg *Config) web.DevConfig",
+		seed: "return web.DevConfig{}",
 	}
 }
 
@@ -206,6 +215,7 @@ func hookWrapManagers() hookMethod {
 			"Return the argument unchanged for no wrapping.",
 		},
 		line: "WrapManagers(managers WebManagers) WebManagers",
+		seed: "return managers",
 	}
 }
 
@@ -217,6 +227,7 @@ func hookExtraMounts() hookMethod {
 			"managers are supplied for transports the generated server does not mount.",
 		},
 		line: "ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, managers WebManagers)",
+		seed: "// No composition-root routes yet.",
 	}
 }
 

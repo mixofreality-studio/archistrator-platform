@@ -3,7 +3,7 @@
 //
 //	go tool appgen temporal [-check]   per-Manager activities, invokers and worker
 //	go tool appgen config   [-check]   cmd/server/config.gen.go
-//	go tool appgen compose  [-check]   cmd/server/main.gen.go
+//	go tool appgen compose  [-check]   cmd/server/main.gen.go, and hooks.go if absent
 //	go tool appgen clients  [-check]   internal/client/** and api/openapi.yaml
 //
 // A contract is wired only once its package holds code, so the generated composition
@@ -113,7 +113,7 @@ func run(args []string, out io.Writer) error {
 	case "config":
 		files, err = genConfig(m, cfg)
 	case "compose":
-		files, err = genCompose(m, cfg, module)
+		files, err = genCompose(m, cfg, module, o)
 	case "clients":
 		files, err = genClients(m, cfg, module, o.project)
 	default:
@@ -218,8 +218,22 @@ func genConfig(m *projectmodel.Model, cfg config) (map[string][]byte, error) {
 	return prefixed(generated), nil
 }
 
-func genCompose(m *projectmodel.Model, cfg config, module string) (map[string][]byte, error) {
+func genCompose(m *projectmodel.Model, cfg config, module string, o options) (map[string][]byte, error) {
 	effective := withDeployment(m, cfg)
+	cc := composeConfig(m, effective, cfg, module)
+	generated, err := composegen.Generate(effective, cc)
+	if err != nil {
+		return nil, fmt.Errorf("composegen: %w", err)
+	}
+	if !o.check {
+		if err := seedHooks(effective, cc, o.root); err != nil {
+			return nil, err
+		}
+	}
+	return prefixed(generated), nil
+}
+
+func composeConfig(m, effective *projectmodel.Model, cfg config, module string) composegen.Config {
 	hooks := maps.Clone(cfg.VariantHookArgs)
 	if hooks == nil {
 		hooks = map[string][]composegen.HookArgType{}
@@ -234,15 +248,24 @@ func genCompose(m *projectmodel.Model, cfg config, module string) (map[string][]
 			}
 		}
 	}
-	generated, err := composegen.Generate(effective, composegen.Config{
+	return composegen.Config{
 		ContainerKey: containerOf(m, cfg), ModulePath: module, PackageName: "main", EnvPrefix: cfg.EnvPrefix,
 		WebExposedManagers: cfg.WebExposedManagers, VariantHookArgs: hooks,
 		VariantConstructorNoError: cfg.VariantConstructorNoError, ScheduleRegistrarComponent: cfg.ScheduleRegistrarComponent,
-	})
-	if err != nil {
-		return nil, fmt.Errorf("composegen: %w", err)
 	}
-	return prefixed(generated), nil
+}
+
+// seedHooks writes the once-seeded hooks.go if the app has none: it is the app's own afterwards.
+func seedHooks(m *projectmodel.Model, cc composegen.Config, root string) error {
+	dest := filepath.Join(root, serverDir, composegen.HooksSeedFile)
+	if _, err := os.Stat(dest); !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	seed, err := composegen.HooksSeed(m, cc)
+	if err != nil {
+		return fmt.Errorf("composegen: seed %s: %w", composegen.HooksSeedFile, err)
+	}
+	return writeGenerated(dest, seed)
 }
 
 // genClients generates the client layer of the Managers that hold code: wireOnlyBuilt has

@@ -288,7 +288,16 @@ func DefaultDeployment(contracts map[string]*Contract, containerKey string) *Dep
 		d.Infrastructure = append(d.Infrastructure, InfraDecl{Key: "postgres", Substrate: "postgres", Profiles: profiles, Presence: "required"})
 	}
 	d.Containers = []DeployContainer{{Key: containerKey, Name: containerKey, Components: components}}
+	d.Settings = defaultServerSettings()
 	return d
+}
+
+// defaultServerSettings are the settings a generated HTTP server reads.
+func defaultServerSettings() []Setting {
+	return []Setting{
+		{Name: "listenAddr", Type: "string", Default: ":8080", Description: "The HTTP listen address."},
+		{Name: "shutdownTimeout", Type: "duration", Default: "20s", Description: "How long a graceful shutdown waits."},
+	}
 }
 
 func contractKeyOf(c *Contract) string {

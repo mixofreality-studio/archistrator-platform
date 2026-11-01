@@ -88,3 +88,52 @@ func TestKnobsFileRefusesUnknownFields(t *testing.T) {
 		t.Fatal("a misspelled knob must not be ignored")
 	}
 }
+
+// The hooks file is the app's after the first generation: seeded once, never overwritten, and
+// -check neither writes nor requires it.
+func TestComposeSeedsHooksOnce(t *testing.T) {
+	root, base := appFixture(t, "internal/resourceaccess/todo", "internal/manager/list")
+	hooks := filepath.Join(root, "cmd/server/hooks.go")
+	if err := run(append([]string{"compose"}, base...), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	seed, err := os.ReadFile(hooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"func main()", "RunGenerated(cfg, appHooks{}, logger)"} {
+		if !strings.Contains(string(seed), want) {
+			t.Errorf("the seed has no %s:\n%s", want, seed)
+		}
+	}
+	if err := os.WriteFile(hooks, []byte("package main\n// mine\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(append([]string{"compose"}, base...), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if got, _ := os.ReadFile(hooks); !strings.Contains(string(got), "// mine") {
+		t.Fatalf("compose overwrote the app's hooks:\n%s", got)
+	}
+}
+
+func TestClientsGeneratesFromTheSystem(t *testing.T) {
+	root, base := appFixture(t, "internal/manager/list")
+	doc := strings.TrimSuffix(strings.TrimSpace(projectDoc), "}") + `,"slots":{"5":{"kind":5,"model":{
+"components":[{"id":"api","name":"MachineApi","kind":"client","uiSurface":false},{"id":"list-manager","name":"ListManager","kind":"manager","contractKey":"listManager"}],
+"relationships":[{"from":"api","to":"list-manager"}]}}}}`
+	if err := os.WriteFile(filepath.Join(root, ".aiarch/state/project.json"), []byte(doc), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(append([]string{"clients"}, base...), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"internal/client/web/server.gen.go", "internal/client/web/list/list_handlers.gen.go", "internal/client/machineapi/list/list_tools.gen.go", "api/openapi.yaml"} {
+		if _, err := os.Stat(filepath.Join(root, want)); err != nil {
+			t.Errorf("no %s", want)
+		}
+	}
+	if err := run(append([]string{"clients", "-check"}, base...), io.Discard); err != nil {
+		t.Errorf("clients -check after clients: %v", err)
+	}
+}

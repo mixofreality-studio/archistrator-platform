@@ -69,12 +69,35 @@ func emitWorker(ec emitContext) ([]byte, error) {
 		"// interface name).\nconst TaskQueue = %q\n\n", taskQueue)
 	b.WriteString(workerManifestBlock)
 	b.WriteString(registerWorkerFunc(acts))
+	b.WriteString(registerManagerWorkerFunc(ec.mgr.Doc.Interface.Name))
 
 	formatted, err := format.Source([]byte(b.String()))
 	if err != nil {
 		return nil, err
 	}
 	return formatted, nil
+}
+
+// registerManagerWorkerFunc emits RegisterManagerWorker, the composition root's one entry: it
+// takes the Manager as its contract, so the concrete type stays unexported, and reads the
+// manifest the hand-written Manager supplies.
+func registerManagerWorkerFunc(iface string) string {
+	return fmt.Sprintf(`
+// workerManifestSource is what the hand-written manager implements to supply its workflows.
+type workerManifestSource interface {
+	WorkerManifest() genWorkerManifest
+}
+
+// RegisterManagerWorker registers the manager built by New%[1]s on w. It panics when the
+// manager does not supply a manifest: a boot-time programming error, like a missing workflow.
+func RegisterManagerWorker(w worker.Worker, m %[1]s) {
+	src, ok := m.(workerManifestSource)
+	if !ok {
+		panic("RegisterManagerWorker: %[1]s must implement WorkerManifest() genWorkerManifest")
+	}
+	RegisterWorker(w, src.WorkerManifest())
+}
+`, iface)
 }
 
 // registerWorkerFunc emits RegisterWorker: workflows first, then each generated
