@@ -4,6 +4,7 @@
 //	go tool appgen temporal [-check]   per-Manager activities, invokers and worker
 //	go tool appgen config   [-check]   cmd/server/config.gen.go
 //	go tool appgen compose  [-check]   cmd/server/main.gen.go
+//	go tool appgen clients  [-check]   internal/client/** and api/openapi.yaml
 //
 // A contract is wired only once its package holds code, so the generated composition
 // root always builds at whatever point construction has reached. The knobs an app may
@@ -27,6 +28,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/clientgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/configgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/temporalgen"
@@ -53,6 +55,15 @@ type config struct {
 	VariantHookArgs            map[string][]composegen.HookArgType `json:"variantHookArgs"`
 	VariantConstructorNoError  map[string]bool                     `json:"variantConstructorNoError"`
 	ScheduleRegistrarComponent string                              `json:"scheduleRegistrarComponent"`
+	Clients                    clientsConfig                       `json:"clients"`
+}
+
+// clientsConfig is appgen clients' knobs: see clientgen.Config.
+type clientsConfig struct {
+	Title   string                       `json:"title"`
+	App     string                       `json:"app"`
+	Exposed map[string][]string          `json:"exposed"`
+	OpDocs  map[string]map[string]string `json:"opDocs"`
 }
 
 type options struct {
@@ -69,7 +80,7 @@ func main() {
 
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: appgen temporal|config|compose [-check]")
+		return errors.New("usage: appgen temporal|config|compose|clients [-check]")
 	}
 	sub, args := args[0], args[1:]
 	var o options
@@ -103,6 +114,8 @@ func run(args []string, out io.Writer) error {
 		files, err = genConfig(m, cfg)
 	case "compose":
 		files, err = genCompose(m, cfg, module)
+	case "clients":
+		files, err = genClients(m, cfg, module, o.project)
 	default:
 		return fmt.Errorf("appgen: unknown subcommand %q", sub)
 	}
@@ -230,6 +243,29 @@ func genCompose(m *projectmodel.Model, cfg config, module string) (map[string][]
 		return nil, fmt.Errorf("composegen: %w", err)
 	}
 	return prefixed(generated), nil
+}
+
+// genClients generates the client layer of the Managers that hold code: wireOnlyBuilt has
+// already dropped the rest from m.
+func genClients(m *projectmodel.Model, cfg config, module, project string) (map[string][]byte, error) {
+	raw, err := os.ReadFile(project) // #nosec G304 G703 -- the CLI's own argument; no trust boundary
+	if err != nil {
+		return nil, err
+	}
+	var doc struct {
+		ServiceContracts map[string]json.RawMessage `json:"serviceContracts"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil, fmt.Errorf("%s: %w", project, err)
+	}
+	built := make(map[string]json.RawMessage, len(m.Contracts))
+	for key := range m.Contracts {
+		built[key] = doc.ServiceContracts[key]
+	}
+	return clientgen.Generate(clientgen.Project{Contracts: built, System: m.System}, clientgen.Config{
+		ModulePath: module, Title: cfg.Clients.Title, App: cfg.Clients.App,
+		Exposed: cfg.Clients.Exposed, OpDocs: cfg.Clients.OpDocs,
+	})
 }
 
 func containerOf(m *projectmodel.Model, cfg config) string {

@@ -27,6 +27,15 @@ type SystemComponent struct {
 	// the field — spec: Schema ownership & evolution, tolerant evolution) the
 	// case-convention heuristic is used instead.
 	ContractKey string `json:"contractKey,omitempty"`
+	// UISurface is a Client's browser-surface choice; nil means unstated.
+	UISurface *bool `json:"uiSurface,omitempty"`
+	// BuildStatus is the component's lifecycle marker ("planned", "external"; "" is built).
+	BuildStatus string `json:"buildStatus,omitempty"`
+}
+
+// IsBrowserSurface reports a Client that is a browser surface.
+func (c SystemComponent) IsBrowserSurface() bool {
+	return c.UISurface != nil && *c.UISurface
 }
 
 // Relationship is one systemDesign edge between two components.
