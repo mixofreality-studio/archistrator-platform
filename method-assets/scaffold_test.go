@@ -118,6 +118,17 @@ func TestConstructTemplateHasScenarioSteps(t *testing.T) {
 		t.Error("the scenario tests must be generated BEFORE the agent step, which fills their hooks")
 	}
 
+	generators := step("Run the task's generators")
+	if !strings.Contains(generators, ".generate") || !strings.Contains(generators, `GOWORK: "off"`) {
+		t.Errorf("the job must run the generators the task spec names:\n%s", generators)
+	}
+	if strings.Index(y, "name: Run the task's generators") > agent {
+		t.Error("the task's generators must run BEFORE the agent step, which commits their output")
+	}
+	if !strings.Contains(step("Keep check output out of commits"), ".temporal/") {
+		t.Error("the scenario host's database must be kept out of commits")
+	}
+
 	// The venue no longer hands the agent a recorder, re-runs the drift check
 	// itself, or reads a scenario index: the check gate owns all three.
 	for _, gone := range []string{
@@ -236,6 +247,9 @@ func TestScaffoldGateDerivesItsPrefix(t *testing.T) {
 		if !strings.Contains(gate, want) {
 			t.Errorf("the seated gate is missing %q", want)
 		}
+	}
+	if got := strings.Count(gate, "arch.MethodSpec(moduleRoot)"); got != 4 {
+		t.Errorf("every one of the gate's checks must judge the module's derived spec, %d do:\n%s", got, gate)
 	}
 	if _, stale := out["aiarch_method_test.go"]; stale {
 		t.Error("the root method test is retired: the gate lives under internal/")

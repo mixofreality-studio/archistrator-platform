@@ -501,7 +501,12 @@ func TestExcludeStep_IgnoresCheckOutputIdempotently(t *testing.T) {
 				}
 			}
 			raw, _ := os.ReadFile(exclude)
-			if want := "# existing\n/keep-me\n/test-results/\n/check-results/\n"; string(raw) != want {
+			want := "# existing\n/keep-me\n/test-results/\n/check-results/\n"
+			if name == "construct" {
+				// Only construction runs the scenario host, whose database lands at the module root.
+				want += ".temporal/\n"
+			}
+			if string(raw) != want {
 				t.Errorf("exclude = %q, want %q", raw, want)
 			}
 			for _, p := range []string{"test-results/c/results.json", "check-results/results.json"} {
@@ -563,5 +568,49 @@ func TestGates_RefuseASpecThatIsNotTheDispatchedOne(t *testing.T) {
 				})
 			}
 		}
+	}
+}
+
+// TestGeneratorsStep_RunsWhatTheSpecNames: the job runs the task's generators in the module dir,
+// in order, and refuses anything that is not a go tool run.
+func TestGeneratorsStep_RunsWhatTheSpecNames(t *testing.T) {
+	wf := gateWorkflows(t)["construct"]
+	step := stepNamed(t, wf.steps, "Run the task's generators")
+	run := func(t *testing.T, spec string) (string, string, error) {
+		t.Helper()
+		work, tmp, bin := t.TempDir(), t.TempDir(), t.TempDir()
+		for rel, body := range map[string]string{".aiarch/state/project.json": `{"moduleDir":"mod"}`, "mod/keep": ""} {
+			full := filepath.Join(work, rel)
+			if err := os.MkdirAll(filepath.Dir(full), 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(full, []byte(body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		if err := os.WriteFile(filepath.Join(tmp, "spec.json"), []byte(spec), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		calls := filepath.Join(tmp, "calls")
+		fake := "#!/bin/sh\necho \"$(basename \"$PWD\") go $*\" >> " + calls + "\n"
+		if err := os.WriteFile(filepath.Join(bin, "go"), []byte(fake), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		log, err := runStepScript(t, step.run, work, map[string]string{"RUNNER_TEMP": tmp, "PATH": bin + ":" + os.Getenv("PATH")})
+		got, _ := os.ReadFile(calls)
+		return string(got), log, err
+	}
+	got, log, err := run(t, `{"generate":[{"title":"a","argv":["go","tool","appgen","temporal","-root","."]},{"title":"b","argv":["go","tool","webgen","generate","-C","../my web"]}]}`)
+	if err != nil {
+		t.Fatalf("%v\n%s", err, log)
+	}
+	if want := "mod go tool appgen temporal -root .\nmod go tool webgen generate -C ../my web\n"; got != want {
+		t.Errorf("calls = %q, want %q", got, want)
+	}
+	if got, log, err := run(t, `{}`); err != nil || got != "" {
+		t.Errorf("a task with no generators must run nothing: %v %q\n%s", err, got, log)
+	}
+	if got, _, err := run(t, `{"generate":[{"title":"x","argv":["sh","-c","true"]}]}`); err == nil || got != "" {
+		t.Errorf("a non go-tool generator must be refused: %v %q", err, got)
 	}
 }

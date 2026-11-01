@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -55,6 +56,22 @@ func TestComposeWiresOnlyBuiltPackages(t *testing.T) {
 	}
 	if err := run(append([]string{"compose", "-check"}, base...), io.Discard); err != nil {
 		t.Errorf("compose -check after compose: %v", err)
+	}
+}
+
+// ExternalHTTP consumes no declared infra, yet its constructor validates its base URL and can
+// fail. A call that drops that error does not compile.
+func TestComposeHandlesTheExternalHTTPConstructorsError(t *testing.T) {
+	root, base := appFixture(t, "internal/resourceaccess/caller")
+	if err := run(append([]string{"compose"}, base...), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile(filepath.Join(root, "cmd/server/main.gen.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !regexp.MustCompile(`\w+, err :?= \w+\.NewExternalHTTPCallerAccess\(`).Match(src) {
+		t.Errorf("the constructor's error is not handled:\n%s", src)
 	}
 }
 

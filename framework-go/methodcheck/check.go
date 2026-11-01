@@ -194,12 +194,11 @@ func runLayerAndAlignmentChecks(t *testing.T, spec ProjectSpec, proj Project, pk
 		t.Fatalf("methodcheck: decode System for alignment: %v", sErr)
 	}
 	if sysOK {
-		pending, skipped, pErr := proj.componentProgress()
+		found, pErr := alignProject(sys, pkgs, spec.NameNormalizer, proj)
 		if pErr != nil {
 			t.Fatalf("methodcheck: decode the activity list for alignment: %v", pErr)
 		}
-		withGeneratedClientsPending(sys, pending)
-		reportFindings(t, alignSystemToCode(sys, pkgs, spec.NameNormalizer, proj.ServiceContracts, pending, skipped))
+		reportFindings(t, found)
 		reportFindings(t, conformanceCheck(sys, pkgs, spec.NameNormalizer))
 	}
 }
@@ -225,4 +224,15 @@ func formatFinding(f Finding) string {
 		at = "  (at " + f.Location.Section + ")"
 	}
 	return severityLabel(f.Severity) + "  [" + string(f.RuleID) + "]  " + f.Message + at
+}
+
+// alignProject reconciles the System with the code, given what the project's own progress says
+// is still to come.
+func alignProject(sys System, pkgs []classifiedPackage, normalize func(string) string, proj Project) ([]Finding, error) {
+	pending, skipped, err := proj.componentProgress()
+	if err != nil {
+		return nil, err
+	}
+	withGeneratedClientsPending(sys, pending)
+	return alignSystemToCode(sys, pkgs, normalize, proj.ServiceContracts, pending, skipped), nil
 }

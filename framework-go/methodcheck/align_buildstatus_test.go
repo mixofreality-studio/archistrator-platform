@@ -1,6 +1,7 @@
 package methodcheck
 
 import (
+	"slices"
 	"strings"
 	"testing"
 
@@ -425,6 +426,47 @@ func TestGeneratedClientPendingFollowsItsManagers(t *testing.T) {
 	withGeneratedClientsPending(sys, pending)
 	if pending["mcp"] {
 		t.Fatal("once the Managers are integrated a generated client is obligated")
+	}
+}
+
+// The whole path a project takes: a generated Client owes nothing while a Manager is still to
+// come, and is owed once every Manager's activity has completed.
+func TestAlignProjectAppliesTheGeneratedClientTolerance(t *testing.T) {
+	sys := System{Components: []Component{
+		{ID: "mcp", Name: "Mcp", Kind: kindClient, Layer: layerClient, ConstructionProfile: constructionGenerated},
+		{ID: "mgr", Name: "Mgr", Kind: kindManager, Layer: layerManager},
+	}}
+	pkgs := []classifiedPackage{{pkgPath: "m/internal/manager/mgr", leaf: "mgr", layer: "Manager"}}
+	missing := func(rows map[string]ActivityRow) int {
+		t.Helper()
+		found, err := alignProject(sys, pkgs, defaultNormalizer, pendingProject(t, []string{"mgr"}, rows))
+		if err != nil {
+			t.Fatal(err)
+		}
+		n := 0
+		for _, f := range found {
+			if f.RuleID == ruleAlignMissingPkg {
+				n++
+			}
+		}
+		return n
+	}
+	if got := missing(nil); got != 0 {
+		t.Errorf("a pending Manager leaves a generated client pending, got %d missing", got)
+	}
+	if got := missing(map[string]ActivityRow{"C-mgr": {CompletedAt: done}}); got != 1 {
+		t.Errorf("an integrated Manager makes the generated client owed, got %d missing", got)
+	}
+}
+
+// The rule is live on the slot the architect drafts, not only as a function.
+func TestArchitectureValidationRequiresClientSurface(t *testing.T) {
+	res, err := validateArchitecture(System{Components: []Component{{ID: "a", Name: "A", Kind: kindClient}}}, CoreUseCases{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.ContainsFunc(res.Findings, func(f Finding) bool { return f.RuleID == ruleSysClientSurface }) {
+		t.Fatalf("no %s in %+v", ruleSysClientSurface, res.Findings)
 	}
 }
 
