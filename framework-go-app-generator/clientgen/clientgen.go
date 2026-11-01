@@ -85,20 +85,11 @@ func Generate(p Project, cfg Config) (map[string][]byte, error) {
 	keys := slices.Sorted(maps.Keys(exposed))
 	docs := make([]contractOAS, 0, len(keys))
 	for _, key := range keys {
-		g, err := newContractGen(p, cfg, key, exposed[key])
-		if err != nil {
-			return nil, fmt.Errorf("clientgen: contract %q: %w", key, err)
-		}
-		doc, err := g.rest(files)
+		doc, err := generateManager(p, cfg, key, exposed[key], files)
 		if err != nil {
 			return nil, fmt.Errorf("clientgen: contract %q: %w", key, err)
 		}
 		docs = append(docs, doc)
-		for _, c := range machineClients(p, cfg, key) {
-			if err := g.mcpTools(files, c); err != nil {
-				return nil, fmt.Errorf("clientgen: contract %q: %w", key, err)
-			}
-		}
 	}
 	if err := wiring(files); err != nil {
 		return nil, err
@@ -117,6 +108,25 @@ func Generate(p Project, cfg Config) (map[string][]byte, error) {
 	}
 	files[dest] = out
 	return files, nil
+}
+
+// generateManager writes one Manager's REST handlers and the tool table of each machine client
+// that fronts it, and returns its OpenAPI document.
+func generateManager(p Project, cfg Config, key string, ops []string, files map[string][]byte) (contractOAS, error) {
+	g, err := newContractGen(p, cfg, key, ops)
+	if err != nil {
+		return contractOAS{}, err
+	}
+	doc, err := g.rest(files)
+	if err != nil {
+		return contractOAS{}, err
+	}
+	for _, c := range machineClients(p, cfg, key) {
+		if err := g.mcpTools(files, c); err != nil {
+			return contractOAS{}, err
+		}
+	}
+	return doc, nil
 }
 
 func wiring(files map[string][]byte) error {
@@ -356,6 +366,26 @@ func ExposedContract(entry json.RawMessage, ops []string) (json.RawMessage, erro
 	if err := json.Unmarshal(iface["operations"], &all); err != nil {
 		return nil, fmt.Errorf("parse interface.operations: %w", err)
 	}
+	kept, err := keepOps(all, ops)
+	if err != nil {
+		return nil, err
+	}
+	if iface["operations"], err = json.Marshal(kept); err != nil {
+		return nil, err
+	}
+	if doc["interface"], err = json.Marshal(iface); err != nil {
+		return nil, err
+	}
+	if raw, ok := doc["$defs"]; ok {
+		if doc["$defs"], err = reachedDefs(raw, kept); err != nil {
+			return nil, err
+		}
+	}
+	return json.Marshal(doc)
+}
+
+// keepOps is the operations ops names, in contract order; an op it does not find is an error.
+func keepOps(all []json.RawMessage, ops []string) ([]json.RawMessage, error) {
 	want := map[string]bool{}
 	for _, op := range ops {
 		want[op] = true
@@ -376,19 +406,7 @@ func ExposedContract(entry json.RawMessage, ops []string) (json.RawMessage, erro
 	if len(want) > 0 {
 		return nil, fmt.Errorf("exposed ops not on the interface: %s", strings.Join(slices.Sorted(maps.Keys(want)), ", "))
 	}
-	var err error
-	if iface["operations"], err = json.Marshal(kept); err != nil {
-		return nil, err
-	}
-	if doc["interface"], err = json.Marshal(iface); err != nil {
-		return nil, err
-	}
-	if raw, ok := doc["$defs"]; ok {
-		if doc["$defs"], err = reachedDefs(raw, kept); err != nil {
-			return nil, err
-		}
-	}
-	return json.Marshal(doc)
+	return kept, nil
 }
 
 // defRef matches a local "$defs" reference and captures the type name.
@@ -403,27 +421,31 @@ func reachedDefs(raw json.RawMessage, ops []json.RawMessage) (json.RawMessage, e
 	}
 	kept := map[string]json.RawMessage{}
 	var queue []string
-	visit := func(b []byte) {
-		for _, m := range defRef.FindAllSubmatch(b, -1) {
-			name := string(m[1])
-			if _, seen := kept[name]; seen {
-				continue
-			}
-			if def, ok := defs[name]; ok {
-				kept[name] = def
-				queue = append(queue, name)
-			}
-		}
-	}
 	for _, op := range ops {
-		visit(op)
+		queue = append(queue, referencedDefs(op, defs, kept)...)
 	}
 	for len(queue) > 0 {
 		name := queue[0]
-		queue = queue[1:]
-		visit(defs[name])
+		queue = append(queue[1:], referencedDefs(defs[name], defs, kept)...)
 	}
 	return json.Marshal(kept)
+}
+
+// referencedDefs adds to kept the defs b references that it does not yet hold, and returns
+// their names.
+func referencedDefs(b []byte, defs, kept map[string]json.RawMessage) []string {
+	var added []string
+	for _, m := range defRef.FindAllSubmatch(b, -1) {
+		name := string(m[1])
+		if _, seen := kept[name]; seen {
+			continue
+		}
+		if def, ok := defs[name]; ok {
+			kept[name] = def
+			added = append(added, name)
+		}
+	}
+	return added
 }
 
 // contractOAS pairs one contract's OpenAPI document with the Manager base that namespaces its
@@ -444,27 +466,11 @@ func MergeOpenAPI(docs []contractOAS, title string) (map[string]any, error) {
 	schemas := map[string]any{}
 	for _, c := range docs {
 		prefixRefs(c.doc, c.prefix)
-		if p, ok := c.doc["paths"].(map[string]any); ok {
-			for route, ops := range p {
-				if _, dup := paths[route]; dup {
-					return nil, fmt.Errorf("clientgen: duplicate route %q across contracts", route)
-				}
-				paths[route] = ops
-			}
+		if err := mergePaths(paths, c.doc); err != nil {
+			return nil, err
 		}
-		comps, ok := c.doc["components"].(map[string]any)
-		if !ok {
-			continue
-		}
-		sch, ok := comps["schemas"].(map[string]any)
-		if !ok {
-			continue
-		}
-		for name, def := range sch {
-			if existing, dup := schemas[name]; dup && !reflect.DeepEqual(existing, def) {
-				return nil, fmt.Errorf("clientgen: conflicting definitions for namespaced schema %q", name)
-			}
-			schemas[name] = def
+		if err := mergeSchemas(schemas, c.doc); err != nil {
+			return nil, err
 		}
 	}
 	return map[string]any{
@@ -475,6 +481,29 @@ func MergeOpenAPI(docs []contractOAS, title string) (map[string]any, error) {
 			"schemas": schemas,
 		},
 	}, nil
+}
+
+func mergePaths(paths, doc map[string]any) error {
+	p, _ := doc["paths"].(map[string]any)
+	for route, ops := range p {
+		if _, dup := paths[route]; dup {
+			return fmt.Errorf("clientgen: duplicate route %q across contracts", route)
+		}
+		paths[route] = ops
+	}
+	return nil
+}
+
+func mergeSchemas(schemas, doc map[string]any) error {
+	comps, _ := doc["components"].(map[string]any)
+	sch, _ := comps["schemas"].(map[string]any)
+	for name, def := range sch {
+		if existing, dup := schemas[name]; dup && !reflect.DeepEqual(existing, def) {
+			return fmt.Errorf("clientgen: conflicting definitions for namespaced schema %q", name)
+		}
+		schemas[name] = def
+	}
+	return nil
 }
 
 // schemaRefPrefix is the JSON-pointer prefix every component schema $ref carries.
@@ -500,16 +529,20 @@ func prefixRefs(doc map[string]any, prefix string) {
 func rewriteRefStrings(node any, prefix string) {
 	switch v := node.(type) {
 	case map[string]any:
-		for k, val := range v {
-			if s, ok := val.(string); ok && k == "$ref" && strings.HasPrefix(s, schemaRefPrefix) {
-				v[k] = schemaRefPrefix + prefix + strings.TrimPrefix(s, schemaRefPrefix)
-				continue
-			}
-			rewriteRefStrings(val, prefix)
-		}
+		rewriteMapRefs(v, prefix)
 	case []any:
 		for _, item := range v {
 			rewriteRefStrings(item, prefix)
 		}
+	}
+}
+
+func rewriteMapRefs(m map[string]any, prefix string) {
+	for k, val := range m {
+		if s, ok := val.(string); ok && k == "$ref" && strings.HasPrefix(s, schemaRefPrefix) {
+			m[k] = schemaRefPrefix + prefix + strings.TrimPrefix(s, schemaRefPrefix)
+			continue
+		}
+		rewriteRefStrings(val, prefix)
 	}
 }

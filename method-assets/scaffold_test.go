@@ -252,7 +252,7 @@ func TestScaffoldModuleIsTidy(t *testing.T) {
 		t.Fatal(err)
 	}
 	dir := t.TempDir()
-	for _, p := range []string{"go.mod", "go.sum", ArchGatePath} {
+	for _, p := range []string{"go.mod", "go.sum", ArchGatePath, DepsPinPath} {
 		dest := filepath.Join(dir, p)
 		if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
 			t.Fatal(err)

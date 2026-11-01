@@ -35,10 +35,20 @@ func HooksSeed(m *projectmodel.Model, cfg Config) ([]byte, error) {
 		}
 		body.WriteString("\nfunc (appHooks) " + h.line + " {\n\t" + stmt + "\n}\n")
 	}
+	src := body.String()
+	out := "package " + cfg.PackageName + "\n\n" + seedImports(r, src).render() + src
+	formatted, err := format.Source([]byte(out))
+	if err != nil {
+		return nil, wrapFormatErr(err, out)
+	}
+	return formatted, nil
+}
+
+// seedImports is the composition root's imports the seed's source actually names.
+func seedImports(r *resolved, src string) *importSet {
 	imports := newImportSet()
 	imports.add("log/slog", "")
 	imports.add("os", "")
-	src := body.String()
 	for p, alias := range r.computeImports().byPath {
 		name := alias
 		if name == "" {
@@ -48,12 +58,7 @@ func HooksSeed(m *projectmodel.Model, cfg Config) ([]byte, error) {
 			imports.add(p, alias)
 		}
 	}
-	out := "package " + cfg.PackageName + "\n\n" + imports.render() + src
-	formatted, err := format.Source([]byte(out))
-	if err != nil {
-		return nil, wrapFormatErr(err, out)
-	}
-	return formatted, nil
+	return imports
 }
 
 const seedMain = `// main loads the configuration and runs the generated composition root.

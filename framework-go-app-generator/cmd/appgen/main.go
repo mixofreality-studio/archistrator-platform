@@ -107,23 +107,26 @@ func run(args []string, out io.Writer) error {
 		return err
 	}
 	wireOnlyBuilt(m, o.root, sub == "temporal")
-	var files map[string][]byte
-	switch sub {
-	case "temporal":
-		files, err = genTemporal(m, cfg, module)
-	case "config":
-		files, err = genConfig(m, cfg)
-	case "compose":
-		files, err = genCompose(m, cfg, module, o)
-	case "clients":
-		files, err = genClients(m, cfg, module, o.project)
-	default:
-		return fmt.Errorf("appgen: unknown subcommand %q", sub)
-	}
+	files, err := generate(sub, m, cfg, module, o)
 	if err != nil {
 		return err
 	}
 	return emit(o, files, out)
+}
+
+func generate(sub string, m *projectmodel.Model, cfg config, module string, o options) (map[string][]byte, error) {
+	switch sub {
+	case "temporal":
+		return genTemporal(m, cfg, module)
+	case "config":
+		return genConfig(m, cfg)
+	case "compose":
+		return genCompose(m, cfg, module, o)
+	case "clients":
+		return genClients(m, cfg, module, o.project)
+	default:
+		return nil, fmt.Errorf("appgen: unknown subcommand %q", sub)
+	}
 }
 
 func readConfig(o options) (config, error) {

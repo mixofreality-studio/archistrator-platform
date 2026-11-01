@@ -1,0 +1,56 @@
+// describeContractFields stamps contractFieldDescriptions onto an inferred
+// schema, walking it in step with the Go type it was inferred from, so a
+// description lands only on the property the contract documents — wherever
+// that type appears in the output (a map value, a slice element, a field).
+// It runs LAST: relaxRawJSON may replace a node wholesale, and a description
+// written before that would be lost with it.
+func describeContractFields(s *jsonschema.Schema, t reflect.Type) {
+	if s == nil {
+		return
+	}
+	for t.Kind() == reflect.Pointer {
+		t = t.Elem()
+	}
+	k := t.Kind()
+	if k == reflect.Slice || k == reflect.Array {
+		describeContractFields(s.Items, t.Elem())
+		return
+	}
+	if k == reflect.Map {
+		describeContractFields(s.AdditionalProperties, t.Elem())
+		return
+	}
+	if k != reflect.Struct {
+		return
+	}
+	descs := contractFieldDescriptions[t]
+	for i := range t.NumField() {
+		f := t.Field(i)
+		name := jsonFieldName(f)
+		p, ok := s.Properties[name]
+		if name == "" || !ok {
+			continue
+		}
+		if d, ok := descs[name]; ok {
+			p.Description = d
+		}
+		describeContractFields(p, f.Type)
+	}
+}
+
+// jsonFieldName is the wire key encoding/json uses for a struct field ("" for
+// an unexported or json:"-" field, which no schema property stands for).
+func jsonFieldName(f reflect.StructField) string {
+	if !f.IsExported() {
+		return ""
+	}
+	name, _, _ := strings.Cut(f.Tag.Get("json"), ",")
+	switch name {
+	case "-":
+		return ""
+	case "":
+		return f.Name
+	}
+	return name
+}
+

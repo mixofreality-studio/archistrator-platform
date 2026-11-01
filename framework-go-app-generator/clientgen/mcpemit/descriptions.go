@@ -1,6 +1,7 @@
 package mcpemit
 
 import (
+	_ "embed" // the walker's fixed source
 	"encoding/json"
 	"fmt"
 	"sort"
@@ -33,31 +34,33 @@ func parseFieldDescriptions(entry json.RawMessage) (fieldDescriptions, error) {
 	}
 	out := fieldDescriptions{}
 	for name, raw := range top.Defs {
-		var def struct {
-			Properties map[string]struct {
-				Description string `json:"description"`
-			} `json:"properties"`
-			GoType    string          `json:"x-go-type"`
-			GoSumtype json.RawMessage `json:"x-go-sumtype"`
-		}
-		if err := json.Unmarshal(raw, &def); err != nil {
-			continue // not an object def with object-shaped properties
-		}
-		if def.GoType != "" || len(def.GoSumtype) > 0 {
-			continue
-		}
-		for prop, p := range def.Properties {
-			d := strings.TrimSpace(p.Description)
-			if d == "" {
-				continue
-			}
-			if out[name] == nil {
-				out[name] = map[string]string{}
-			}
-			out[name][prop] = d
+		if docs := defFieldDescriptions(raw); len(docs) > 0 {
+			out[name] = docs
 		}
 	}
 	return out, nil
+}
+
+// defFieldDescriptions is one $def's documented properties: none for a def bound to an
+// existing Go type, or one that is not an object with object-shaped properties.
+func defFieldDescriptions(raw json.RawMessage) map[string]string {
+	var def struct {
+		Properties map[string]struct {
+			Description string `json:"description"`
+		} `json:"properties"`
+		GoType    string          `json:"x-go-type"`
+		GoSumtype json.RawMessage `json:"x-go-sumtype"`
+	}
+	if err := json.Unmarshal(raw, &def); err != nil || def.GoType != "" || len(def.GoSumtype) > 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for prop, p := range def.Properties {
+		if d := strings.TrimSpace(p.Description); d != "" {
+			out[prop] = d
+		}
+	}
+	return out
 }
 
 func sortedDescriptionKeys[V any](m map[string]V) []string {
@@ -89,42 +92,10 @@ func writeFieldDescriptions(b *strings.Builder, descs fieldDescriptions) {
 	}
 	b.WriteString("}\n\n")
 
-	b.WriteString("// describeContractFields stamps contractFieldDescriptions onto an inferred\n")
-	b.WriteString("// schema, walking it in step with the Go type it was inferred from, so a\n")
-	b.WriteString("// description lands only on the property the contract documents — wherever\n")
-	b.WriteString("// that type appears in the output (a map value, a slice element, a field).\n")
-	b.WriteString("// It runs LAST: relaxRawJSON may replace a node wholesale, and a description\n")
-	b.WriteString("// written before that would be lost with it.\n")
-	b.WriteString("func describeContractFields(s *jsonschema.Schema, t reflect.Type) {\n")
-	b.WriteString("\tif s == nil {\n\t\treturn\n\t}\n")
-	b.WriteString("\tfor t.Kind() == reflect.Pointer {\n\t\tt = t.Elem()\n\t}\n")
-	// An if-chain, not a switch over reflect.Kind: only three kinds carry nested
-	// schemas, and a switch would have to name all ~26 to satisfy the exhaustive
-	// gate for no behavioural gain.
-	b.WriteString("\tk := t.Kind()\n")
-	b.WriteString("\tif k == reflect.Slice || k == reflect.Array {\n\t\tdescribeContractFields(s.Items, t.Elem())\n\t\treturn\n\t}\n")
-	b.WriteString("\tif k == reflect.Map {\n\t\tdescribeContractFields(s.AdditionalProperties, t.Elem())\n\t\treturn\n\t}\n")
-	b.WriteString("\tif k != reflect.Struct {\n\t\treturn\n\t}\n")
-	b.WriteString("\tdescs := contractFieldDescriptions[t]\n")
-	b.WriteString("\tfor i := range t.NumField() {\n")
-	b.WriteString("\t\tf := t.Field(i)\n")
-	b.WriteString("\t\tname := jsonFieldName(f)\n")
-	b.WriteString("\t\tp, ok := s.Properties[name]\n")
-	b.WriteString("\t\tif name == \"\" || !ok {\n\t\t\tcontinue\n\t\t}\n")
-	b.WriteString("\t\tif d, ok := descs[name]; ok {\n\t\t\tp.Description = d\n\t\t}\n")
-	b.WriteString("\t\tdescribeContractFields(p, f.Type)\n")
-	b.WriteString("\t}\n")
-	b.WriteString("}\n\n")
-
-	b.WriteString("// jsonFieldName is the wire key encoding/json uses for a struct field (\"\" for\n")
-	b.WriteString("// an unexported or json:\"-\" field, which no schema property stands for).\n")
-	b.WriteString("func jsonFieldName(f reflect.StructField) string {\n")
-	b.WriteString("\tif !f.IsExported() {\n\t\treturn \"\"\n\t}\n")
-	b.WriteString("\tname, _, _ := strings.Cut(f.Tag.Get(\"json\"), \",\")\n")
-	b.WriteString("\tswitch name {\n")
-	b.WriteString("\tcase \"-\":\n\t\treturn \"\"\n")
-	b.WriteString("\tcase \"\":\n\t\treturn f.Name\n")
-	b.WriteString("\t}\n")
-	b.WriteString("\treturn name\n")
-	b.WriteString("}\n\n")
+	b.WriteString(describeWalkerSrc)
 }
+
+// describeWalkerSrc is the walker that stamps the descriptions onto an inferred schema.
+//
+//go:embed describe_walker.go.txt
+var describeWalkerSrc string
