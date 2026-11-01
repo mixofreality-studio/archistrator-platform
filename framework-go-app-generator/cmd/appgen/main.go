@@ -106,7 +106,7 @@ func run(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	wireOnlyBuilt(m, o.root)
+	wireOnlyBuilt(m, o.root, sub == "temporal")
 	var files map[string][]byte
 	switch sub {
 	case "temporal":
@@ -147,18 +147,30 @@ func readConfig(o options) (config, error) {
 	return cfg, nil
 }
 
-// wireOnlyBuilt drops every contract whose package holds no code yet. A generated main
-// that names an unbuilt package fails to compile, which would fail every other component's
-// checks along with it.
-func wireOnlyBuilt(m *projectmodel.Model, root string) {
+// wireOnlyBuilt drops every contract whose package holds no code yet. A generated main that
+// names an unbuilt package fails to compile, which would fail every other component's checks
+// along with it. With managerContracts, a Manager whose package holds only its generated
+// contract stays: its Temporal layer is what the hand-written Manager is built against, so it
+// must exist before the first line of the Manager does.
+func wireOnlyBuilt(m *projectmodel.Model, root string, managerContracts bool) {
 	for key, c := range m.Contracts {
 		if c.GoPackage == "" {
 			continue
 		}
-		if !holdsCode(filepath.Join(root, c.GoPackage)) {
-			delete(m.Contracts, key)
+		dir := filepath.Join(root, c.GoPackage)
+		if holdsCode(dir) {
+			continue
 		}
+		if managerContracts && strings.EqualFold(c.Layer, "manager") && hasGeneratedContract(dir) {
+			continue
+		}
+		delete(m.Contracts, key)
 	}
+}
+
+func hasGeneratedContract(dir string) bool {
+	_, err := os.Stat(filepath.Join(dir, "contract.gen.go"))
+	return err == nil
 }
 
 func holdsCode(dir string) bool {
@@ -168,7 +180,7 @@ func holdsCode(dir string) bool {
 	}
 	return slices.ContainsFunc(entries, func(e os.DirEntry) bool {
 		n := e.Name()
-		return !e.IsDir() && strings.HasSuffix(n, ".go") && !strings.HasSuffix(n, "_test.go") && n != "contract.gen.go"
+		return !e.IsDir() && strings.HasSuffix(n, ".go") && !strings.HasSuffix(n, "_test.go") && !strings.HasSuffix(n, ".gen.go")
 	})
 }
 

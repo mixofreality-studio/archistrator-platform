@@ -137,3 +137,33 @@ func TestClientsGeneratesFromTheSystem(t *testing.T) {
 		t.Errorf("clients -check after clients: %v", err)
 	}
 }
+
+// A Manager's Temporal layer exists from its first construction task, because the hand-written
+// Manager is built against it, and generated files never count as the Manager being built: the
+// composition root must not wire a package with no hand-written code yet.
+func TestTemporalPrecedesTheManagersCode(t *testing.T) {
+	root, base := appFixture(t, "internal/resourceaccess/todo")
+	contract := filepath.Join(root, "internal/manager/list/contract.gen.go")
+	if err := os.MkdirAll(filepath.Dir(contract), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(contract, []byte("package list\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if err := run(append([]string{"temporal"}, base...), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(filepath.Join(root, "internal/manager/list/worker.gen.go")); err != nil {
+		t.Fatalf("no Temporal layer before the Manager's code: %v", err)
+	}
+	if err := run(append([]string{"compose"}, base...), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile(filepath.Join(root, "cmd/server/main.gen.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(src), "NewListManager") {
+		t.Fatal("compose wired a Manager with only generated files")
+	}
+}
