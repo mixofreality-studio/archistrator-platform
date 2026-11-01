@@ -201,10 +201,55 @@ func TestCheck_AlignmentSurfacesMissingPackage(t *testing.T) {
 	}
 }
 
+const vacuousSubprocessEnv = "METHODCHECK_VACUOUS_SUBPROCESS"
+
+// TestCheck_CodeThatClassifiesNowhereFailsCheck: finding no layered package is only a legitimate
+// skip when there is no code. Code that classifies nowhere means a wrong prefix or a package
+// outside the layer model, and the gate must not read as green while checking nothing. An
+// empty tree stays green: that is a project before its first component.
+func TestCheck_CodeThatClassifiesNowhereFailsCheck(t *testing.T) {
+	if root := os.Getenv(vacuousSubprocessEnv); root != "" {
+		Check(t, ProjectSpec{RepoRoot: root, Arch: arch.MethodSpec(root)})
+		return
+	}
+	module := func(extra ...string) string {
+		root := t.TempDir()
+		files := map[string]string{"go.mod": "module example.com/vacuous\n\ngo 1.26.0\n", ".aiarch/state/project.json": "{}\n", "internal/keep_test.go": "package internal_test\n"}
+		for _, rel := range extra {
+			files[rel] = "package rogue\n"
+		}
+		for rel, body := range files {
+			path := filepath.Join(root, rel)
+			if err := os.MkdirAll(filepath.Dir(path), 0o750); err != nil {
+				t.Fatal(err)
+			}
+			if err := os.WriteFile(path, []byte(body), 0o600); err != nil {
+				t.Fatal(err)
+			}
+		}
+		return root
+	}
+	child := func(root string) ([]byte, error) {
+		cmd := exec.Command(os.Args[0], "-test.run=^TestCheck_CodeThatClassifiesNowhereFailsCheck$", "-test.v")
+		cmd.Env = append(os.Environ(), vacuousSubprocessEnv+"="+root)
+		return cmd.CombinedOutput()
+	}
+	out, err := child(module("internal/domain/rogue/rogue.go"))
+	if err == nil {
+		t.Fatalf("code outside the layers passed Check:\n%s", out)
+	}
+	if !strings.Contains(string(out), "pass vacuously") || !strings.Contains(string(out), "domain/rogue") {
+		t.Fatalf("Check failed, but not on the vacuity guard naming the package:\n%s", out)
+	}
+	if out, err := child(module()); err != nil {
+		t.Fatalf("a project with no code yet must stay green:\n%s", out)
+	}
+}
+
 const opReachedSubprocessEnv = "METHODCHECK_OPREACHED_SUBPROCESS"
 
 // TestCheck_UnreachedOpFailsCheck proves the A5 ruling is enforced in every app repo:
-// Check (the scaffolded aiarch_method_test.go entry point) FAILS a project carrying a
+// Check (the entry point of the scaffolded internal/aiarch_arch_test.go) FAILS a project carrying a
 // contract operation no use case's dynamic view calls. The child drives Check over
 // tp_clean.json plus one unreached op; the parent asserts the child failed on
 // TP-OP-REACHED as an ERROR naming the op.

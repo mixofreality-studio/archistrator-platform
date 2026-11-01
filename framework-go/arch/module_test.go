@@ -20,6 +20,24 @@ func TestMethodSpecDerivesPrefixFromGoMod(t *testing.T) {
 	}
 }
 
+// The menu is the fixed infrastructure every app builds on. Widening it is a decision, so it
+// is spelled here: a stray prefix (or a whole host) must not slip in with an unrelated change.
+func TestDefaultMenuIsExactlyTheSanctionedSet(t *testing.T) {
+	want := []string{
+		PlatformModulePrefix,
+		"example.com/app/",
+		"github.com/google/uuid",
+		"github.com/jackc/pgx",
+		"github.com/go-git/",
+		"go.temporal.io/",
+		"github.com/modelcontextprotocol/go-sdk",
+		"github.com/google/jsonschema-go",
+	}
+	if got := DefaultAllowedImportPrefixes("example.com/app"); !slices.Equal(got, want) {
+		t.Fatalf("the dependency menu changed:\n got %v\nwant %v", got, want)
+	}
+}
+
 func TestMethodSpecRecordsAnUnreadableModule(t *testing.T) {
 	if spec := MethodSpec(t.TempDir()); spec.loadErr == nil || spec.ModulePrefix != "" {
 		t.Fatalf("a directory with no go.mod must not yield a usable spec: %+v", spec)
