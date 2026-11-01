@@ -5,6 +5,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -518,5 +519,48 @@ func TestConfig(t *testing.T) {
 		if _, err := ParseConfig([]byte(src)); err == nil {
 			t.Errorf("want an error for %s", src)
 		}
+	}
+}
+
+// The seat is the published package's code, byte for byte below its header.
+func TestVendoredESLintConfigMatches(t *testing.T) {
+	upstream, err := os.ReadFile("../../framework-web-eslint-config/index.js")
+	if err != nil {
+		t.Skip("the eslint package is not beside this module: ", err)
+	}
+	seat, err := templates.ReadFile("templates/bootstrap/eslint.platform.config.js.tmpl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(string(seat), string(upstream)) {
+		t.Fatal("re-vendor framework-web-eslint-config/index.js into templates/bootstrap/eslint.platform.config.js.tmpl")
+	}
+}
+
+func TestBootstrapSeatsAProjectAndASurface(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "webApp")
+	files, err := Bootstrap("todomvc", "web-app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := WriteScaffold(dir, files); err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"package.json", ".gitignore", ".tool-versions", "web-app.html", "src/web-app/main.tsx", "src/web-app/routes/App.tsx", "../uitests/package.json"} {
+		if _, err := os.Stat(filepath.Join(dir, want)); err != nil {
+			t.Errorf("no %s: %v", want, err)
+		}
+	}
+	// A second surface adds only its own files, and the project keeps its config.
+	second, err := Bootstrap("todomvc", "workspace-embed")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wrote, err := WriteScaffold(dir, second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(wrote, []string{"workspace-embed.html", "src/workspace-embed/main.tsx", "src/workspace-embed/routes/App.tsx"}) {
+		t.Fatalf("second surface wrote %v", wrote)
 	}
 }

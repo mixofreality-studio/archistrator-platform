@@ -24,14 +24,21 @@ import eslintConfigPrettier from 'eslint-config-prettier';
 // previewShell is the preview-mode entry (webgen's scaffold): it boots the SAME
 // App over the fixture transport, so it may reach routes and the api layer, and
 // nothing may import it (design-renderer-data.md §2′.5).
+//
+// src/*/<layer> is the same layer inside one surface of a multi-surface web project: each
+// browser surface has src/<surface>/, and code they share is under src/shared/.
 export const ELEMENTS = [
   { type: 'routes', mode: 'folder', pattern: 'src/routes' },
+  { type: 'routes', mode: 'folder', pattern: 'src/*/routes' },
   { type: 'routes', mode: 'full', pattern: 'src/App.tsx' },
   { type: 'components', mode: 'folder', pattern: 'src/components' },
+  { type: 'components', mode: 'folder', pattern: 'src/*/components' },
   { type: 'hooks', mode: 'folder', pattern: 'src/hooks' },
+  { type: 'hooks', mode: 'folder', pattern: 'src/*/hooks' },
   { type: 'api', mode: 'folder', pattern: 'src/api' },
   { type: 'contracts', mode: 'folder', pattern: 'src/contracts' },
   { type: 'utilities', mode: 'folder', pattern: 'src/utilities' },
+  { type: 'utilities', mode: 'folder', pattern: 'src/*/utilities' },
   { type: 'previewShell', mode: 'folder', pattern: 'src/previewShell' },
 ];
 
@@ -110,7 +117,7 @@ export default function archWeb({ tsconfigRootDir, ignores = [] } = {}) {
           node: { extensions: ['.ts', '.tsx', '.js', '.jsx'] },
         },
         // Entry/ambient files are not part of any layer.
-        'boundaries/ignore': ['src/main.tsx', 'src/vite-env.d.ts'],
+        'boundaries/ignore': ['src/main.tsx', 'src/*/main.tsx', 'src/vite-env.d.ts'],
         'boundaries/elements': ELEMENTS,
       },
       rules: {

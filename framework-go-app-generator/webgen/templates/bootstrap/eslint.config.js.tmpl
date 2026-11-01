@@ -1,0 +1,6 @@
+import archWeb from './eslint.platform.config.js';
+
+export default archWeb({
+  tsconfigRootDir: import.meta.dirname,
+  ignores: ['dist', 'src/contracts/schema.ts', 'src/api/ops.gen.ts'],
+});

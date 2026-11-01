@@ -34,6 +34,12 @@ type Config struct {
 	// purpose. An op with no tool that is not named here fails generation, and
 	// so does a name here that is not such an op (see CheckRestOnly).
 	RestOnly []string
+	// MCPOptional says the app may have no MCP tools, or not yet: an op with no tool then
+	// simply binds `tool: null`, and no tool directory is required.
+	MCPOptional bool
+	// Preview says the app has the preview shell. Default true; a fresh project starts
+	// without it, and webgen then generates only the transport.
+	Preview bool
 }
 
 // The name limits keep every templated TypeScript line within the app's
@@ -75,6 +81,8 @@ func ParseConfig(src []byte) (Config, error) {
 		OAS:         str(root, "oas"),
 		MCPTools:    str(root, "mcpTools"),
 		FixturesEnv: str(root, "fixturesEnv"),
+		MCPOptional: boolOr(root, "mcpOptional", false),
+		Preview:     boolOr(root, "preview", true),
 	}
 	routes, err := compositionRoutes(obj(path(root, "composition")))
 	if err != nil {
@@ -87,6 +95,19 @@ func ParseConfig(src []byte) (Config, error) {
 	}
 	c.RestOnly = restOnly
 	return c, c.Validate()
+}
+
+// boolOr reads an optional boolean.
+func boolOr(o *Object, key string, def bool) bool {
+	v, ok := o.Get(key)
+	if !ok {
+		return def
+	}
+	b, ok := v.(bool)
+	if !ok {
+		return def
+	}
+	return b
 }
 
 // strList reads an optional array of strings.
@@ -173,7 +194,10 @@ func LoadInputs(dir string, c Config) (Inputs, error) {
 	}
 	tools, err := LoadMCPTools(filepath.Join(dir, c.MCPTools))
 	if err != nil {
-		return Inputs{}, err
+		if !c.MCPOptional {
+			return Inputs{}, err
+		}
+		tools = map[string]bool{}
 	}
 	return Inputs{Config: c, OAS: doc, Tools: tools}, nil
 }
@@ -189,6 +213,9 @@ func (in Inputs) Bindings() ([]Binding, error) {
 	all, err := WithComposition(derived, in.Config.Composition)
 	if err != nil {
 		return nil, err
+	}
+	if in.Config.MCPOptional {
+		return all, nil
 	}
 	return all, CheckRestOnly(all, in.Config.RestOnly)
 }

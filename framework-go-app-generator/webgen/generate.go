@@ -10,7 +10,7 @@ import (
 	"strings"
 )
 
-//go:embed templates
+//go:embed all:templates
 var templates embed.FS
 
 // File is one output, at a path relative to the webApp root.
@@ -37,6 +37,9 @@ func Generate(in Inputs) ([]File, error) {
 	ops, err := EmitOps(bindings)
 	if err != nil {
 		return nil, err
+	}
+	if !in.Config.Preview {
+		return []File{{Path: "src/api/ops.gen.ts", Content: ops}}, nil
 	}
 	test, err := render("fixtures.gen.test.ts.tmpl", in.Config)
 	if err != nil {

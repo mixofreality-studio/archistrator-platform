@@ -6,6 +6,7 @@
 //	webgen generate                                 rewrite the generated files
 //	webgen check                                    exit 1 when a generated file drifted
 //	webgen scaffold                                 write the scaffold files that are absent
+//	webgen bootstrap -app <name> -surface <id>      write a fresh web project and surface; keeps what exists
 //	webgen skeleton -route /x <opId>...             print a minimal fixture for a screen state
 //
 // Run it from a Go module that requires framework-go-app-generator (the app's
@@ -41,16 +42,17 @@ func main() {
 type command func(fs *flag.FlagSet, args []string, out io.Writer) error
 
 var commands = map[string]command{
-	"init":     cmdInit,
-	"generate": cmdGenerate,
-	"check":    cmdCheck,
-	"scaffold": cmdScaffold,
-	"skeleton": cmdSkeleton,
+	"init":      cmdInit,
+	"generate":  cmdGenerate,
+	"check":     cmdCheck,
+	"scaffold":  cmdScaffold,
+	"bootstrap": cmdBootstrap,
+	"skeleton":  cmdSkeleton,
 }
 
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return fmt.Errorf("usage: webgen init|generate|check|scaffold|skeleton [-C dir] [flags]")
+		return fmt.Errorf("usage: webgen init|generate|check|scaffold|bootstrap|skeleton [-C dir] [flags]")
 	}
 	cmd, ok := commands[args[0]]
 	if !ok {
@@ -122,6 +124,20 @@ func cmdScaffold(fs *flag.FlagSet, args []string, out io.Writer) error {
 	}
 	wrote, err := webgen.WriteScaffold(dir, files)
 	return report(out, "scaffolded", wrote, err)
+}
+
+func cmdBootstrap(fs *flag.FlagSet, args []string, out io.Writer) error {
+	app := fs.String("app", "", "the app name")
+	surface := fs.String("surface", "", "the browser surface's id")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	files, err := webgen.Bootstrap(*app, *surface)
+	if err != nil {
+		return err
+	}
+	wrote, err := webgen.WriteScaffold(dirOf(fs), files)
+	return report(out, "bootstrapped", wrote, err)
 }
 
 func cmdSkeleton(fs *flag.FlagSet, args []string, out io.Writer) error {
