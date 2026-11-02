@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/google/jsonschema-go v0.4.3
-	github.com/mixofreality-studio/archistrator-platform/framework-go v0.17.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.18.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator v0.4.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.2.4
 	go.temporal.io/sdk v1.44.0
