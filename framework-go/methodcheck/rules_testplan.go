@@ -314,27 +314,6 @@ func browserOpsFindings(sys System, in scenario.Input, c Component) []Finding {
 		"browser surface %q's contract has operations %v, but the labels of the actor calls into it derive %v; a browser contract is derived, so correct the design's labels and re-record the UI design", c.ID, have, want)}
 }
 
-// DerivedBrowserOps is the operations a browser surface's contract is derived to hold, from a
-// project's design: what its UI design's record writes, and what TP-CLIENT-OPS holds it to.
-func DerivedBrowserOps(raw []byte, componentID string) ([]string, error) {
-	var p Project
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return nil, fmt.Errorf("decode the project: %w", err)
-	}
-	sys, ok, err := p.system()
-	if err != nil {
-		return nil, err
-	}
-	if !ok {
-		return nil, fmt.Errorf("the project has no committed System to derive %q's operations from", componentID)
-	}
-	in, err := ScenarioInput(p)
-	if err != nil {
-		return nil, err
-	}
-	return scenario.ClientOps(browserLabels(sys, in.Actors, componentID))
-}
-
 // browserLabels is the labels of the actor calls into a browser surface, in view order: the
 // input of scenario.ClientOps. Only design's own words reach the derivation.
 func browserLabels(sys System, actors map[string]bool, componentID string) []string {
