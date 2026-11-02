@@ -29,9 +29,14 @@ type SystemComponent struct {
 	ContractKey string `json:"contractKey,omitempty"`
 	// UISurface is a Client's browser-surface choice; nil means unstated.
 	UISurface *bool `json:"uiSurface,omitempty"`
+	// MachineProtocol is a built machine client's transport: "rest" or "mcp".
+	MachineProtocol string `json:"machineProtocol,omitempty"`
 	// BuildStatus is the component's lifecycle marker ("planned", "external"; "" is built).
 	BuildStatus string `json:"buildStatus,omitempty"`
 }
+
+// IsMCPClient reports a machine client whose generated surface is MCP tool tables.
+func (c SystemComponent) IsMCPClient() bool { return c.MachineProtocol == "mcp" }
 
 // IsBrowserSurface reports a Client that is a browser surface.
 func (c SystemComponent) IsBrowserSurface() bool {

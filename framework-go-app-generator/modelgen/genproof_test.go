@@ -55,8 +55,9 @@ func proofManager(params string) string {
 
 const proofSystem = `{"components":[
   {"id":"mcp-client","name":"MCPClient","kind":"client","uiSurface":false,"machineProtocol":"mcp"},
+  {"id":"web-api","name":"WebApi","kind":"client","uiSurface":false,"machineProtocol":"rest"},
   {"id":"proof-manager","name":"ProofManager","kind":"manager","contractKey":"proofManager"}],
-  "relationships":[{"from":"mcp-client","to":"proof-manager"}]}`
+  "relationships":[{"from":"mcp-client","to":"proof-manager"},{"from":"web-api","to":"proof-manager"}]}`
 
 // writeProofProject generates every file a fresh project would, under the tree dir, and adds
 // the hand-written Manager. It returns the generators' refusal, if any.
@@ -168,7 +169,7 @@ func addClientFiles(pc proofContracts, module string, files map[string][]byte) e
 	for rel, src := range out {
 		// The MCP tables need an SDK this module does not require, and they reach a param
 		// only as a field of their input struct, never as a local.
-		if strings.HasSuffix(rel, ".go") && !strings.HasSuffix(rel, "_tools.gen.go") {
+		if strings.HasSuffix(rel, ".go") && !strings.HasPrefix(rel, "internal/client/mcp/") {
 			files[rel] = src
 		}
 	}
@@ -351,6 +352,18 @@ func TestInlineSchemasCompileThroughEveryGenerator(t *testing.T) {
 	}
 	if len(names) == 0 {
 		t.Fatal("the table proved nothing")
+	}
+	// The REST machine client's own generated proof runs: a request of every op crosses the real
+	// handlers to the Manager double, over each inline shape.
+	rel, err := filepath.Rel("..", root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	cmd := exec.Command("go", "test", "-count=1", "./"+filepath.ToSlash(rel)+"/...")
+	cmd.Dir = ".."
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Errorf("the generated REST proof fails: %v\n%s", err, out)
 	}
 }
 

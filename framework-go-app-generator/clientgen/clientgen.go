@@ -2,12 +2,12 @@
 //
 //	internal/client/web/{middleware,server}.gen.go   the auth middleware and server wiring
 //	internal/client/web/<pkg>/<base>_handlers.gen.go one REST handler set per exposed Manager
-//	internal/client/<leaf>/<pkg>/<base>_tools.gen.go one MCP tool table per Manager a machine
-//	                                                 client fronts (uiSurface false)
+//	internal/client/<leaf>/<pkg>/<base>_tools.gen.go one MCP tool table per Manager an MCP client
+//	                                                 fronts (machineProtocol mcp)
 //	api/openapi.yaml                                 every exposed Manager's REST surface, merged
 //
 // Browser surfaces (uiSurface true) get no Go of their own: they all reach the shared REST
-// transport. <leaf> is the machine client's name without its stereotype, the same rule the
+// transport, and a REST machine client (machineProtocol rest) is that transport. <leaf> is the machine client's name without its stereotype, the same rule the
 // alignment gate matches by, so the package is found without a join: MCPClient lands in
 // internal/client/mcp and MachineApi in internal/client/machineapi.
 //
@@ -125,6 +125,17 @@ func generateManager(p Project, cfg Config, key string, ops []string, files map[
 		if err := g.mcpTools(files, c); err != nil {
 			return contractOAS{}, err
 		}
+		if hasMirrorContract(p, c) {
+			continue
+		}
+		if err := g.mcpWire(files, c); err != nil {
+			return contractOAS{}, err
+		}
+	}
+	if frontedByREST(p, key) {
+		if err := g.restWire(files); err != nil {
+			return contractOAS{}, err
+		}
 	}
 	return doc, nil
 }
@@ -214,11 +225,12 @@ func managersOf(p Project, clientID string) []string {
 	return slices.Compact(out)
 }
 
-// machineClients is the machine Clients that front the Manager key.
+// machineClients is the MCP Clients that front the Manager key. A REST client gets no tool
+// table: it is the shared REST transport.
 func machineClients(p Project, cfg Config, key string) []projectmodel.SystemComponent {
 	var out []projectmodel.SystemComponent
 	for _, c := range builtClients(p) {
-		if c.IsBrowserSurface() {
+		if c.IsBrowserSurface() || !c.IsMCPClient() {
 			continue
 		}
 		if cfg.Exposed != nil || slices.Contains(managersOf(p, c.ID), key) {
@@ -228,8 +240,40 @@ func machineClients(p Project, cfg Config, key string) []projectmodel.SystemComp
 	return out
 }
 
+// frontedByREST reports a REST machine client over the Manager key.
+func frontedByREST(p Project, key string) bool {
+	for _, c := range builtClients(p) {
+		if !c.IsBrowserSurface() && c.MachineProtocol == "rest" && slices.Contains(managersOf(p, c.ID), key) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasMirrorContract reports a machine client that keeps a contract over its tools
+// (methodcheck CLIENT-MACHINE-MIRROR): its own plan binds scenarios in that package.
+func hasMirrorContract(p Project, c projectmodel.SystemComponent) bool {
+	key := c.ContractKey
+	if key == "" {
+		key = projectmodel.LowerFirst(c.Name)
+	}
+	if _, ok := p.Contracts[key]; ok {
+		return true
+	}
+	for _, entry := range p.Contracts {
+		var meta struct {
+			Component string `json:"component"`
+		}
+		if json.Unmarshal(entry, &meta) == nil && meta.Component == key {
+			return true
+		}
+	}
+	return false
+}
+
 // contractGen generates one Manager's client surface.
 type contractGen struct {
+	module        string
 	entry         json.RawMessage
 	doc           *projectmodel.Doc
 	pkg, base     string
@@ -265,7 +309,8 @@ func newContractGen(p Project, cfg Config, key string, ops []string) (*contractG
 		app = moduleLeaf(cfg.ModulePath)
 	}
 	return &contractGen{
-		entry: entry, doc: doc, pkg: path.Base(meta.GoPackage),
+		module: cfg.ModulePath,
+		entry:  entry, doc: doc, pkg: path.Base(meta.GoPackage),
 		base:          projectmodel.Kebab(doc.ManagerBase()),
 		managerImport: cfg.ModulePath + "/" + meta.GoPackage,
 		opDoc:         opDoc,

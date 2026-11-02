@@ -137,7 +137,7 @@ func TestComposeSeedsHooksOnce(t *testing.T) {
 func TestClientsGeneratesFromTheSystem(t *testing.T) {
 	root, base := appFixture(t, "internal/manager/list")
 	doc := strings.TrimSuffix(strings.TrimSpace(projectDoc), "}") + `,"slots":{"5":{"kind":5,"model":{
-"components":[{"id":"api","name":"MachineApi","kind":"client","uiSurface":false},{"id":"list-manager","name":"ListManager","kind":"manager","contractKey":"listManager"}],
+"components":[{"id":"api","name":"MachineApi","kind":"client","uiSurface":false,"machineProtocol":"mcp"},{"id":"list-manager","name":"ListManager","kind":"manager","contractKey":"listManager"}],
 "relationships":[{"from":"api","to":"list-manager"}]}}}}`
 	if err := os.WriteFile(filepath.Join(root, ".aiarch/state/project.json"), []byte(doc), 0o600); err != nil {
 		t.Fatal(err)

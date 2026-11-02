@@ -119,8 +119,8 @@ func appProject() Project {
 		System: &projectmodel.System{
 			Components: []projectmodel.SystemComponent{
 				{ID: "web-app", Name: "WebApp", Kind: "client", UISurface: boolPtr(true)},
-				{ID: "machine-api", Name: "MachineApi", Kind: "client", UISurface: boolPtr(false)},
-				{ID: "later", Name: "LaterClient", Kind: "client", UISurface: boolPtr(false), BuildStatus: "planned"},
+				{ID: "machine-api", Name: "MachineApi", Kind: "client", UISurface: boolPtr(false), MachineProtocol: "mcp"},
+				{ID: "later", Name: "LaterClient", Kind: "client", UISurface: boolPtr(false), MachineProtocol: "mcp", BuildStatus: "planned"},
 				{ID: "list-manager", Name: "ListManager", Kind: "manager", ContractKey: "listManager"},
 			},
 			Relationships: []projectmodel.Relationship{
@@ -158,6 +158,49 @@ func TestGenerateDerivesTheClientLayerFromTheSystem(t *testing.T) {
 	}
 	if !strings.Contains(string(files["api/openapi.yaml"]), "title: todomvc API") {
 		t.Errorf("title: %s", files["api/openapi.yaml"])
+	}
+}
+
+// A REST machine client is the shared transport: no tool table of its own, and its proof sits
+// beside the handlers. An MCP one has both beside its tools, unless it keeps a mirror contract.
+func TestGenerateTheMachineClientsProof(t *testing.T) {
+	p := appProject()
+	p.System.Components[1].MachineProtocol = "rest"
+	files, err := Generate(p, Config{ModulePath: "example.com/todomvc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := files["internal/client/machineapi/list/list_tools.gen.go"]; ok {
+		t.Error("a REST client must get no MCP tool table")
+	}
+	rest := string(files["internal/client/web/list/client_scenarios.gen_test.go"])
+	if !strings.Contains(rest, "package list_test") || !strings.Contains(rest, "func TestWire") {
+		t.Errorf("a REST client's proof must be black-box beside the handlers:\n%s", rest)
+	}
+
+	p = appProject()
+	files, err = Generate(p, Config{ModulePath: "example.com/todomvc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	mcp := string(files["internal/client/machineapi/list/client_scenarios.gen_test.go"])
+	if !strings.Contains(mcp, "package list_test") || !strings.Contains(mcp, "NewInMemoryTransports") {
+		t.Errorf("an MCP client's proof must call its tools over a transport:\n%s", mcp)
+	}
+	if _, ok := files["internal/client/web/list/client_scenarios.gen_test.go"]; ok {
+		t.Error("with no REST machine client, the browser surfaces' own scenarios cover REST")
+	}
+
+	p.Contracts["machineApi"] = json.RawMessage(`{"component":"machineApi","layer":"Client","interface":{"name":"M","layer":"client","operations":[{"name":"ListRecall"}]}}`)
+	files, err = Generate(p, Config{ModulePath: "example.com/todomvc"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := files["internal/client/machineapi/list/client_scenarios.gen_test.go"]; ok {
+		t.Error("a mirror contract's plan owns the package's scenarios")
+	}
+	if _, ok := files["internal/client/machineapi/list/list_tools.gen.go"]; !ok {
+		t.Error("a mirror contract keeps the tool table")
 	}
 }
 
