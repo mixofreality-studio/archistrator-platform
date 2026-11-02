@@ -85,6 +85,26 @@ type SchemaNode struct {
 	Format    string      `json:"format"`
 	XGoType   string      `json:"x-go-type"`
 	XGoImport string      `json:"x-go-import"`
+	// Properties and AdditionalProperties decide an inline object's Go type, the same way
+	// modelgen decides it: an object with no properties and a schema for its other keys is a
+	// map of that schema.
+	Properties           map[string]json.RawMessage `json:"properties"`
+	AdditionalProperties *ObjectValueType           `json:"additionalProperties"`
+}
+
+// ObjectValueType decodes JSON Schema's "additionalProperties", which is either a schema or
+// a boolean. A boolean leaves Schema nil: it says nothing about the value's type.
+type ObjectValueType struct {
+	Schema *SchemaNode
+}
+
+// UnmarshalJSON accepts both the schema and the boolean form.
+func (v *ObjectValueType) UnmarshalJSON(b []byte) error {
+	if len(b) == 0 || b[0] != '{' {
+		return nil
+	}
+	v.Schema = &SchemaNode{}
+	return json.Unmarshal(b, v.Schema)
 }
 
 // TypeField decodes JSON Schema's "type", which is either a string or an array

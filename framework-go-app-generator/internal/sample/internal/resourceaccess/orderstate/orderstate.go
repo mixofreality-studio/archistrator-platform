@@ -43,7 +43,7 @@ type Access interface {
 	PutOrder(ctx fwra.Context, orderID OrderID, expectedVersion Version, order Order) (Version, error)
 	CancelOrder(ctx fwra.Context, orderID OrderID, expectedVersion Version, reason string) (Version, error)
 	ArchiveOrder(ctx fwra.Context, orderID OrderID, expectedVersion Version, idempotencyKey fwra.IdempotencyKey) (Version, error)
-	ChargeOrder(ctx fwra.Context, orderID OrderID, amountCents int, idempotencyKey fwra.IdempotencyKey) (Version, error)
+	ChargeOrder(ctx fwra.Context, orderID OrderID, amountCents int64, idempotencyKey fwra.IdempotencyKey) (Version, error)
 	PurgeOrder(ctx fwra.Context, orderID OrderID) error
 	ReceiptForOrder(ctx fwra.Context, orderID OrderID) (OrderReceipt, error)
 }

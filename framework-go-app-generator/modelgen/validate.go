@@ -3,6 +3,9 @@ package modelgen
 import (
 	"encoding/json"
 	"fmt"
+	"go/token"
+	"go/types"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -52,6 +55,7 @@ var (
 func ValidateContract(key string, raw []byte) error {
 	var doc struct {
 		contractMeta
+		Defs      map[string]json.RawMessage `json:"$defs"`
 		Interface struct {
 			Name       string            `json:"name"`
 			Layer      string            `json:"layer"`
@@ -63,6 +67,12 @@ func ValidateContract(key string, raw []byte) error {
 	}
 	if _, ok := layerContext[doc.Interface.Layer]; !ok {
 		return fmt.Errorf("contract %q: interface.layer %q is not one of %s", key, doc.Interface.Layer, strings.Join(layerNames(), ", "))
+	}
+	if err := validateIdentifiers(key, doc.Interface.Name, doc.Interface.Operations); err != nil {
+		return err
+	}
+	if err := validateDefs(key, doc.GoPackage, doc.Interface.Name, doc.Defs, raw); err != nil {
+		return err
 	}
 	if err := validateLayerRules(key, doc.Interface.Name, doc.Interface.Layer, doc.Interface.Operations); err != nil {
 		return err
@@ -78,8 +88,180 @@ func ValidateContract(key string, raw []byte) error {
 
 // contractOpShape is what the layer rules read of an operation.
 type contractOpShape struct {
-	Name  string `json:"name"`
-	Error bool   `json:"error"`
+	Name   string `json:"name"`
+	Error  bool   `json:"error"`
+	Params []struct {
+		Name string `json:"name"`
+	} `json:"params"`
+}
+
+// reservedParamNames are the identifiers the generated code around an operation already
+// uses, so a param of that name does not compile in at least one generated file. It holds
+// for every layer: one rule, because a contract's author should not need to know which
+// generator reads which layer. TestValidateContractMatchesWhatCompiles pins this list to
+// what really fails, in both directions.
+var reservedParamNames = []string{
+	"rc", // the call Context of every generated method
+	// the activity, invoker and fake wrappers of a dependency
+	"a", "ctx", "err", "f", "fwmanager", "fwra", "i", "out", "v", "workflow",
+	// the REST and MCP handlers of a Manager
+	"decision", "h", "http", "ok", "principal", "r", "result", "security", "w",
+}
+
+// ReservedParamNames is the sorted list a param name may not take, for the prompts and tests.
+func ReservedParamNames() []string {
+	out := slices.Clone(reservedParamNames)
+	slices.Sort(out)
+	return out
+}
+
+// validateDefs refuses the model types modelgen could not emit, or would emit into a package
+// that does not compile: it stops generation for the whole project, far from the one agent
+// that can fix the contract.
+func validateDefs(key, goPackage, ifaceName string, defs map[string]json.RawMessage, raw []byte) error {
+	if goPackage != "" && len(defs) == 0 {
+		return fmt.Errorf("contract %q: $defs is empty, and a built contract declares its model types there, because they are the component's public type surface; name at least the types its operations use", key)
+	}
+	for _, name := range slices.Sorted(maps.Keys(defs)) {
+		if !token.IsIdentifier(name) || name == ifaceName {
+			return fmt.Errorf("contract %q: $defs name %q must be a Go identifier other than the interface's own name, because it becomes a Go type in the component's package; rename it", key, name)
+		}
+		if err := validateDefFields(key, name, defs[name]); err != nil {
+			return err
+		}
+	}
+	if err := validateRefs(key, defs, raw); err != nil {
+		return err
+	}
+	iface, ok, err := parseInterfaceOnly(raw)
+	if err != nil {
+		return fmt.Errorf("contract %q: %w", key, err)
+	}
+	if !ok {
+		return nil
+	}
+	return validateExportedRefs(key, iface)
+}
+
+func validateDefFields(key, def string, raw json.RawMessage) error {
+	var shape struct {
+		Properties map[string]struct {
+			GoName string `json:"x-go-name"`
+		} `json:"properties"`
+		VarNames []string `json:"x-enum-varnames"`
+	}
+	if err := json.Unmarshal(raw, &shape); err != nil {
+		return fmt.Errorf("contract %q: $defs %s: %w", key, def, err)
+	}
+	seen := make(map[string]string, len(shape.Properties))
+	for _, prop := range slices.Sorted(maps.Keys(shape.Properties)) {
+		field := shape.Properties[prop].GoName
+		if field == "" {
+			field = exportName(prop)
+		}
+		if !token.IsIdentifier(field) {
+			return fmt.Errorf("contract %q: $defs %s: property %q becomes the Go field %q, which is no identifier; rename it (letters, digits and underscores)", key, def, prop, field)
+		}
+		if other, dup := seen[field]; dup {
+			return fmt.Errorf("contract %q: $defs %s: properties %q and %q become the same Go field %s; rename one", key, def, other, prop, field)
+		}
+		seen[field] = prop
+	}
+	for _, name := range shape.VarNames {
+		if !token.IsIdentifier(name) {
+			return fmt.Errorf("contract %q: $defs %s: x-enum-varnames %q must be a Go identifier, because it becomes a constant; rename it", key, def, name)
+		}
+	}
+	return nil
+}
+
+// validateRefs refuses a $ref that names no $def of this contract: the generated code would
+// use an undefined type.
+func validateRefs(key string, defs map[string]json.RawMessage, raw []byte) error {
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return fmt.Errorf("contract %q: %w", key, err)
+	}
+	var walk func(node any) error
+	walk = func(node any) error {
+		switch n := node.(type) {
+		case map[string]any:
+			if ref, ok := n["$ref"].(string); ok {
+				if _, known := defs[refName(ref)]; !known {
+					return fmt.Errorf("contract %q: $ref %q names no type in this contract's $defs; declare it there or correct the reference", key, ref)
+				}
+			}
+			for _, v := range n {
+				if err := walk(v); err != nil {
+					return err
+				}
+			}
+		case []any:
+			for _, v := range n {
+				if err := walk(v); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	return walk(doc)
+}
+
+// validateIdentifiers holds every name the contract hands to the generators to Go's rules.
+// Nothing downstream can repair a bad one: a lowercase operation still generates, and then
+// no fake or caller can implement or reach it, while a keyword stops generation for the
+// whole project. The generators must not repair it either, because the plan's TP-STEP-OP
+// compares operation names exactly, so one spelling has to be recorded.
+func validateIdentifiers(key, name string, ops []contractOpShape) error {
+	if !token.IsIdentifier(name) || !token.IsExported(name) {
+		return fmt.Errorf("contract %q: interface.name %q must be an exported Go identifier, because it names the generated interface and its constructor; rename it (a capital first letter, then letters and digits)", key, name)
+	}
+	seen := make(map[string]string, len(ops))
+	for _, op := range ops {
+		if !token.IsIdentifier(op.Name) || !token.IsExported(op.Name) {
+			return fmt.Errorf("contract %q: operation %q must be an exported Go identifier, because no fake or caller outside the package can reach anything else; rename it (a capital first letter, then letters and digits). A dynamic view's label such as %q still resolves to the capitalised operation, because labels are matched ignoring case", key, op.Name, op.Name+"(...)")
+		}
+		fold := strings.ToLower(op.Name)
+		if other, dup := seen[fold]; dup {
+			return fmt.Errorf("contract %q: operations %q and %q differ at most in case, and a dynamic view's label matches ignoring case, so it could not tell them apart; rename one", key, other, op.Name)
+		}
+		seen[fold] = op.Name
+		if err := validateParamNames(key, op); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func validateParamNames(key string, op contractOpShape) error {
+	seen := make(map[string]string, len(op.Params))
+	for _, p := range op.Params {
+		switch {
+		case !token.IsIdentifier(p.Name):
+			return fmt.Errorf("contract %q: operation %s: param %q must be a Go identifier and not a keyword, because it is a parameter of the generated method; rename it", key, op.Name, p.Name)
+		case slices.Contains(reservedParamNames, p.Name) || predeclaredInBodies(p.Name) || p.Name == "_":
+			return fmt.Errorf("contract %q: operation %s: param %q collides with a name the generated code uses (%s, and Go's predeclared types and nil); rename it", key, op.Name, p.Name, strings.Join(reservedParamNames, ", "))
+		}
+		fold := strings.ToLower(p.Name)
+		if other, dup := seen[fold]; dup {
+			return fmt.Errorf("contract %q: operation %s: params %q and %q differ at most in case, and the generated request struct exports both to one field; rename one", key, op.Name, other, p.Name)
+		}
+		seen[fold] = p.Name
+	}
+	return nil
+}
+
+// predeclaredInBodies reports a universe name a generated body uses: a type such as string,
+// or nil. A builtin function such as len or a constant such as true is never used there, so
+// it stays a legal param name.
+func predeclaredInBodies(name string) bool {
+	switch types.Universe.Lookup(name).(type) {
+	case *types.TypeName, *types.Nil:
+		return true
+	default:
+		return false
+	}
 }
 
 // validateLayerRules is the part of the construction arch gate a contract already decides.

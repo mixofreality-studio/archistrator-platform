@@ -47,7 +47,7 @@ func (a *genActivities) OrderStateCancelOrder(ctx context.Context, orderID order
 
 // OrderStateChargeOrder wraps orderStateAccess.chargeOrder.
 // Registered as "orderStateAccess.chargeOrder".
-func (a *genActivities) OrderStateChargeOrder(ctx context.Context, key fwra.IdempotencyKey, orderID orderstate.OrderID, amountCents int) (orderstate.Version, error) {
+func (a *genActivities) OrderStateChargeOrder(ctx context.Context, key fwra.IdempotencyKey, orderID orderstate.OrderID, amountCents int64) (orderstate.Version, error) {
 	v, err := a.OrderState.ChargeOrder(fwra.Context{Context: ctx, IdempotencyKey: key}, orderID, amountCents, key)
 	return v, fwmanager.MapError(err)
 }

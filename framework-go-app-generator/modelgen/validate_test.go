@@ -1,6 +1,8 @@
 package modelgen_test
 
 import (
+	"encoding/json"
+	"os"
 	"strings"
 	"testing"
 
@@ -12,22 +14,39 @@ func TestValidateContract(t *testing.T) {
 	for _, tc := range []struct {
 		name, doc, want string
 	}{
-		{"an RA with an approved infra", `{"goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"interface":{"name":"TodoAccess","layer":"resourceaccess"}}`, ""},
-		{"an external service", `{"goPackage":"internal/resourceaccess/caller","infra":["ExternalHTTP"],"interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, ""},
-		{"a manager", `{"goPackage":"internal/manager/list","interface":{"name":"ListManager","layer":"manager"}}`, ""},
+		{"an RA with an approved infra", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"interface":{"name":"TodoAccess","layer":"resourceaccess"}}`, ""},
+		{"an external service", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/resourceaccess/caller","infra":["ExternalHTTP"],"interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, ""},
+		{"a manager", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/manager/list","interface":{"name":"ListManager","layer":"manager"}}`, ""},
 		{"a client with no package", `{"interface":{"name":"Web","layer":"client"}}`, ""},
-		{"a capitalised layer", `{"goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"interface":{"name":"TodoAccess","layer":"ResourceAccess"}}`, "interface.layer"},
-		{"an unapproved infra names the menu", `{"goPackage":"internal/resourceaccess/caller","infra":["IdentityProvider"],"interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, "ExternalHTTP"},
-		{"an RA with no infra", `{"goPackage":"internal/resourceaccess/caller","interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, "must bind"},
-		{"a package outside its layer", `{"goPackage":"internal/domain/caller","infra":["Postgres"],"interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, "internal/resourceaccess/"},
-		{"an engine op returning an error", `{"goPackage":"internal/engine/a","interface":{"name":"AEngine","layer":"engine","operations":[{"name":"Do","error":true}]}}`, ""},
-		{"a total engine op with no error", `{"goPackage":"internal/engine/a","interface":{"name":"AEngine","layer":"engine","operations":[{"name":"Do","error":false}]}}`, "operation Do must declare error:true"},
-		{"an engine op omitting error", `{"goPackage":"internal/engine/a","interface":{"name":"AEngine","layer":"engine","operations":[{"name":"Do"}]}}`, "operation Do must declare error:true"},
-		{"an RA op with no error", `{"goPackage":"internal/resourceaccess/a","infra":["Postgres"],"interface":{"name":"AAccess","layer":"resourceaccess","operations":[{"name":"Do"}]}}`, "operation Do must declare error:true"},
-		{"a manager op with no error", `{"goPackage":"internal/manager/a","interface":{"name":"AManager","layer":"manager","operations":[{"name":"Do"}]}}`, "operation Do must declare error:true"},
-		{"an engine named without its suffix", `{"goPackage":"internal/engine/a","interface":{"name":"Resolver","layer":"engine"}}`, "must end in Engine"},
-		{"an RA named without its suffix", `{"goPackage":"internal/resourceaccess/a","infra":["Postgres"],"interface":{"name":"Store","layer":"resourceaccess"}}`, "must end in Access"},
-		{"a utility op may be total", `{"goPackage":"internal/utility/a","interface":{"name":"Clock","layer":"utility","operations":[{"name":"Now"}]}}`, ""},
+		{"a capitalised layer", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"interface":{"name":"TodoAccess","layer":"ResourceAccess"}}`, "interface.layer"},
+		{"an unapproved infra names the menu", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/resourceaccess/caller","infra":["IdentityProvider"],"interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, "ExternalHTTP"},
+		{"an RA with no infra", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/resourceaccess/caller","interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, "must bind"},
+		{"a package outside its layer", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/domain/caller","infra":["Postgres"],"interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, "internal/resourceaccess/"},
+		{"an engine op returning an error", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/engine/a","interface":{"name":"AEngine","layer":"engine","operations":[{"name":"Do","error":true}]}}`, ""},
+		{"a total engine op with no error", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/engine/a","interface":{"name":"AEngine","layer":"engine","operations":[{"name":"Do","error":false}]}}`, "operation Do must declare error:true"},
+		{"an engine op omitting error", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/engine/a","interface":{"name":"AEngine","layer":"engine","operations":[{"name":"Do"}]}}`, "operation Do must declare error:true"},
+		{"an RA op with no error", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/resourceaccess/a","infra":["Postgres"],"interface":{"name":"AAccess","layer":"resourceaccess","operations":[{"name":"Do"}]}}`, "operation Do must declare error:true"},
+		{"a manager op with no error", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/manager/a","interface":{"name":"AManager","layer":"manager","operations":[{"name":"Do"}]}}`, "operation Do must declare error:true"},
+		{"an engine named without its suffix", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/engine/a","interface":{"name":"Resolver","layer":"engine"}}`, "must end in Engine"},
+		{"an RA named without its suffix", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/resourceaccess/a","infra":["Postgres"],"interface":{"name":"Store","layer":"resourceaccess"}}`, "must end in Access"},
+		{"a utility op may be total", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/utility/a","interface":{"name":"Clock","layer":"utility","operations":[{"name":"Now"}]}}`, ""},
+		{"a lowercase utility op, RUN-009's wall", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/utility/a","interface":{"name":"PubSub","layer":"utility","operations":[{"name":"publish"}]}}`, "exported Go identifier"},
+		{"the refusal says a view's label still resolves", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/utility/a","interface":{"name":"PubSub","layer":"utility","operations":[{"name":"publish"}]}}`, "ignoring case"},
+		{"a lowercase interface", `{"$defs":{"T":{"type":"string"}},"goPackage":"internal/utility/a","interface":{"name":"pubSub","layer":"utility"}}`, "interface.name"},
+		{"no interface name", `{"interface":{"layer":"manager"}}`, "interface.name"},
+		{"a keyword param", `{"interface":{"name":"M","layer":"utility","operations":[{"name":"Do","params":[{"name":"type"}]}]}}`, "not a keyword"},
+		{"the call Context's name", `{"interface":{"name":"M","layer":"utility","operations":[{"name":"Do","params":[{"name":"rc"}]}]}}`, "collides"},
+		{"a param spelled with a dash", `{"interface":{"name":"M","layer":"utility","operations":[{"name":"Do","params":[{"name":"a-b"}]}]}}`, "Go identifier"},
+		{"two params folding together", `{"interface":{"name":"M","layer":"utility","operations":[{"name":"Do","params":[{"name":"id"},{"name":"ID"}]}]}}`, "differ at most in case"},
+		{"two ops folding together", `{"interface":{"name":"M","layer":"utility","operations":[{"name":"DoIt"},{"name":"Doit"}]}}`, "differ at most in case"},
+		{"a built contract with no types", `{"goPackage":"internal/manager/a","interface":{"name":"AManager","layer":"manager"}}`, "$defs is empty"},
+		{"a type named like the interface", `{"$defs":{"M":{"type":"string"}},"interface":{"name":"M","layer":"utility"}}`, "$defs name"},
+		{"a type that is no identifier", `{"$defs":{"a-b":{"type":"string"}},"interface":{"name":"M","layer":"utility"}}`, "$defs name"},
+		{"a property that is no identifier", `{"$defs":{"T":{"type":"object","properties":{"due-date":{"type":"string"}}}},"interface":{"name":"M","layer":"utility"}}`, "due-date"},
+		{"two properties one field", `{"$defs":{"T":{"type":"object","properties":{"id":{"type":"string"},"Id":{"type":"string"}}}},"interface":{"name":"M","layer":"utility"}}`, "same Go field"},
+		{"an enum constant that is no identifier", `{"$defs":{"T":{"type":"string","enum":["a"],"x-enum-varnames":["a-b"]}},"interface":{"name":"M","layer":"utility"}}`, "x-enum-varnames"},
+		{"a reference to nothing", `{"$defs":{"T":{"type":"string"}},"interface":{"name":"M","layer":"utility","operations":[{"name":"Do","result":{"$ref":"#/$defs/U"}}]}}`, "names no type"},
+		{"an unexported type on an op", `{"$defs":{"t":{"type":"string"}},"interface":{"name":"M","layer":"utility","operations":[{"name":"Do","result":{"$ref":"#/$defs/t"}}]}}`, "unexported"},
 		{"a client op may be total", `{"interface":{"name":"Web","layer":"client","operations":[{"name":"Open"}]}}`, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -140,5 +159,24 @@ func TestExternalHTTPConstructor(t *testing.T) {
 	src := string(got["internal/resourceaccess/caller"])
 	if !strings.Contains(src, "func NewExternalHTTPCallerAccess(baseURL string, client *http.Client) (CallerAccess, error)") {
 		t.Errorf("no ExternalHTTP constructor:\n%s", src)
+	}
+}
+
+// The fresh-project fixture every generator golden is built over stays legal under the rule.
+func TestValidateContractAcceptsTheGreenfieldProject(t *testing.T) {
+	raw, err := os.ReadFile("../testdata/greenfield.project.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc struct {
+		ServiceContracts map[string]json.RawMessage `json:"serviceContracts"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	for key, contract := range doc.ServiceContracts {
+		if err := modelgen.ValidateContract(key, contract); err != nil {
+			t.Error(err)
+		}
 	}
 }

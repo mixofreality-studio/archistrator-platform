@@ -272,7 +272,12 @@ func writeScalarBind(b *strings.Builder, doc *projectmodel.Doc, alias string, pa
 	case "integer":
 		fmt.Fprintf(b, "\t%sInt, err := strconv.Atoi(%s)\n", name, rawExpr)
 		b.WriteString(badRequest(name))
-		writeConv(b, name, name+"Int", ref, alias, param.Pointer)
+		// An inline integer is int64 in the contract, and Atoi gives an int.
+		src := name + "Int"
+		if ref == "" {
+			src = "int64(" + src + ")"
+		}
+		writeConv(b, name, src, ref, alias, param.Pointer)
 	case "number":
 		fmt.Fprintf(b, "\t%sFloat, err := strconv.ParseFloat(%s, 64)\n", name, rawExpr)
 		b.WriteString(badRequest(name))

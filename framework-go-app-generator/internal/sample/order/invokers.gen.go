@@ -60,7 +60,7 @@ func (i genInvokers) OrderStateCancelOrder(ctx workflow.Context, orderID orderst
 }
 
 // OrderStateChargeOrder invokes activity "orderStateAccess.chargeOrder".
-func (i genInvokers) OrderStateChargeOrder(ctx workflow.Context, key fwra.IdempotencyKey, orderID orderstate.OrderID, amountCents int) (orderstate.Version, error) {
+func (i genInvokers) OrderStateChargeOrder(ctx workflow.Context, key fwra.IdempotencyKey, orderID orderstate.OrderID, amountCents int64) (orderstate.Version, error) {
 	var out orderstate.Version
 	err := workflow.ExecuteActivity(i.options(ctx, "orderStateAccess.chargeOrder"), "orderStateAccess.chargeOrder", key, orderID, amountCents).Get(ctx, &out)
 	return out, err

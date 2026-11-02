@@ -2,7 +2,10 @@ package temporalgen
 
 import (
 	"fmt"
+	"go/ast"
 	"go/format"
+	"go/parser"
+	"go/token"
 	"strings"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
@@ -56,17 +59,24 @@ func (i genInvokers) options(ctx workflow.Context, name string) workflow.Context
 func emitInvokers(ec emitContext) ([]byte, error) {
 	deps := resolveRADeps(ec)
 
+	var methods strings.Builder
+	for _, rd := range deps {
+		for _, op := range rd.ops {
+			methods.WriteString(invokerMethod(ec, rd, op))
+		}
+	}
+	used, err := qualifiersUsed(methods.String())
+	if err != nil {
+		return nil, err
+	}
+
 	var b strings.Builder
 	b.WriteString(genHeader)
 	b.WriteString("\npackage " + ec.pkgName + "\n\n")
-	b.WriteString(invokerImports(deps))
+	b.WriteString(invokerImports(deps, used))
 	b.WriteString(invokerStruct)
 	b.WriteString(invokerOptionsHelper)
-	for _, rd := range deps {
-		for _, op := range rd.ops {
-			b.WriteString(invokerMethod(ec, rd, op))
-		}
-	}
+	b.WriteString(methods.String())
 
 	formatted, err := format.Source([]byte(b.String()))
 	if err != nil {
@@ -75,11 +85,31 @@ func emitInvokers(ec emitContext) ([]byte, error) {
 	return formatted, nil
 }
 
+// qualifiersUsed is the package qualifiers the invoker methods select from. An invoker names
+// a dep's package only through a contract type, so a dep whose operations take and return
+// only inline types must not be imported at all.
+func qualifiersUsed(methods string) (map[string]bool, error) {
+	f, err := parser.ParseFile(token.NewFileSet(), "", "package p\n"+methods, parser.SkipObjectResolution)
+	if err != nil {
+		return nil, err
+	}
+	used := map[string]bool{}
+	ast.Inspect(f, func(n ast.Node) bool {
+		if sel, ok := n.(*ast.SelectorExpr); ok {
+			if id, ok := sel.X.(*ast.Ident); ok {
+				used[id.Name] = true
+			}
+		}
+		return true
+	})
+	return used, nil
+}
+
 // invokerImports builds the grouped import block: stdlib ("time"), the
 // Temporal SDK (temporal, workflow), the framework packages, then the RA dep
-// packages (+ any foundational x-go-import types the ops reference). gofmt
-// sorts within each group.
-func invokerImports(deps []raDep) string {
+// packages the methods name (+ any foundational x-go-import types the ops
+// reference). gofmt sorts within each group.
+func invokerImports(deps []raDep, used map[string]bool) string {
 	stdlib := []string{importLine("time")}
 	sdk := []string{
 		importLine("go.temporal.io/sdk/temporal"),
@@ -91,7 +121,9 @@ func invokerImports(deps []raDep) string {
 	}
 	var module []string
 	for _, rd := range deps {
-		module = append(module, importLine(rd.importPath))
+		if used[rd.alias] {
+			module = append(module, importLine(rd.importPath))
+		}
 	}
 	for _, imp := range foundationalImports(deps) {
 		if isStdlib(imp) {
