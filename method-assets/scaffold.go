@@ -24,11 +24,11 @@ const (
 	// analyzer-based `go fix -diff` gate; runners resolve it via the go.mod
 	// toolchain directive / setup-go.
 	GoVersion            = "1.26.0"
-	FrameworkGoVersion   = "v0.18.0"
-	AppGeneratorVersion  = "v0.15.0"
-	HTTPGeneratorVersion = "v0.4.0"
+	FrameworkGoVersion   = "v0.19.0"
+	AppGeneratorVersion  = "v0.16.0"
+	HTTPGeneratorVersion = "v0.4.1"
 	MCPGeneratorVersion  = "v0.3.0"
-	ProjectModelVersion  = "v0.2.4"
+	ProjectModelVersion  = "v0.2.5"
 
 	// The composition root's own dependencies; see compositionPins.
 	InfraOtelVersion     = "v0.1.0"
