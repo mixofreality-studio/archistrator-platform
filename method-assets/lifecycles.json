@@ -181,6 +181,16 @@
         {"id": "integration", "kind": "dispatch", "title": "Integration", "phase": "integration", "dependsOn": [], "command": "service-integration", "workerClass": "system-architect", "artifactKind": "Integration"},
         {"id": "testing", "kind": "review", "title": "Integration Testing", "phase": "integration", "dependsOn": ["integration"], "reviews": "integration"}
       ]
+    },
+    {
+      "type": "machineClient",
+      "phases": [
+        {"id": "integration", "label": "Integration", "weight": 100, "gate": "testing", "exitCriterion": "The client's generated code is committed and its gate, including its generated wire proof, passes"}
+      ],
+      "tasks": [
+        {"id": "integration", "kind": "dispatch", "title": "Integration", "phase": "integration", "dependsOn": [], "command": "machine-client-integration", "workerClass": "system-architect", "artifactKind": "Integration"},
+        {"id": "testing", "kind": "review", "title": "Integration Testing", "phase": "integration", "dependsOn": ["integration"], "reviews": "integration"}
+      ]
     }
   ]
 }

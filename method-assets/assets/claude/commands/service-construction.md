@@ -14,6 +14,8 @@
 
 > **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
+> **A design gap is a failure, not a state.** If the committed design leaves something unimplementable, such as a relationship no dynamic view calls, say so and stop with your work unpublished rather than recording "Pending architect amendment" or anything like it: nothing ever reads such a note, and the activity would finish with the gap in it.
+
 > **State changes go through the `aiarch-state` MCP tools, not hand-edits.** Where a step below says to record a service contract, phase artifact, or testing artifact and "commit onto branch", do it with the matching tool — `recordServiceContract` / `recordPhaseArtifact` / `recordTestingState` — and finish with `publishDraft`. Do **not** hand-edit `.aiarch/state/project.json` or run `git` for state; only source/doc **files** (code, docs) are git-committed by you. See [[the-method-project-state]].
 
 1. **Read the contract** from `.aiarch/state/project.json` → `.serviceContracts["<contractKey>"]` — the component's `contractKey`, not its kebab id; read it per [[the-method-project-state]]. It carries `Layer`, `Ops`, `Inbound`/`Outbound`, `DataContracts`, `ErrorModel`, `Idempotency`. Implement exactly it. If it has a gap, do NOT widen it (see `junior-developer`).

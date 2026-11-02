@@ -43,8 +43,8 @@ func TestClaudeFilesInventory(t *testing.T) {
 	if agents != 9 {
 		t.Errorf("agents = %d, want 9", agents)
 	}
-	if commands != 53 {
-		t.Errorf("commands = %d, want 53", commands)
+	if commands != 54 {
+		t.Errorf("commands = %d, want 54", commands)
 	}
 	if len(skills) != 28 {
 		t.Errorf("skill dirs = %d, want 28", len(skills))

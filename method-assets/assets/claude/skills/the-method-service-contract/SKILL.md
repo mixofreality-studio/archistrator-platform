@@ -108,7 +108,9 @@ Cross-reference `[[the-method-layers]]`:
 | ResourceAccess | Be invokable by Managers and Engines. No queued operations. No events published. |
 | Resource | Domain-specific contract. No queued operations. No events published. |
 | Utility | Invokable by anyone. |
-| Client | This component does not expose a contract (Clients consume, do not provide). If you find yourself drafting a contract for a Client, the component is misclassified. |
+| Client | A Client authors no contract. A browser surface's contract is derived from its dynamic-view labels when its UI design is recorded; a machine client has none, and its generated proof holds its routes or tools to the Manager's operations. `recordServiceContract` refuses layer `client`. |
+
+**Names are Go.** `interface.name` and each operation name are exported Go identifiers, one spelling, recorded capitalised: the plan compares operation names exactly, and a dynamic view's label still resolves because labels match ignoring case. Each param name is a Go identifier that is no keyword and no name the generated code uses (`rc` among them). `recordServiceContract` refuses anything else and lists them.
 
 If the contract violates a layer rule (e.g., an Engine contract that publishes events), the violation is **in the decomposition**, not in the contract. Return to `[[the-method-architecture]]` and fix it there.
 

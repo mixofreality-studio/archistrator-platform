@@ -13,7 +13,7 @@ var wantLifecycleTypes = []string{
 	"requirements", "architecture", "projectDesign",
 	"service", "frontend",
 	"testing:harness", "testing:perf", "testing:qaProcess",
-	"deployment", "documentation", "uiDesign", "integration",
+	"deployment", "documentation", "uiDesign", "integration", "machineClient",
 }
 
 // figureA1TaskIDs are the ten non-conditional Figure A-1 task keys the app's
