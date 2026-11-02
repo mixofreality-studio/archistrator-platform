@@ -130,6 +130,7 @@ var renderedPaths = map[string]string{ // dest path -> template asset
 	".golangci.yml": "assets/scaffold/golangci.yml",
 	// Sibling go.mod/go.sum edits union instead of conflicting.
 	".gitattributes": "assets/scaffold/gitattributes",
+	".gitignore":     "assets/scaffold/gitignore",
 }
 
 // ArchGatePath is where the Method gate is seated.

@@ -26,7 +26,7 @@ func TestScaffoldFiles(t *testing.T) {
 	for _, want := range []string{
 		".github/workflows/aiarch-design.yml", ".github/workflows/aiarch-construct.yml",
 		".github/workflows/go-checks.yml", ".golangci.yml",
-		"go.mod", "go.sum", ArchGatePath, "Makefile", "Makefile.scenarios.mk", ".gitattributes",
+		"go.mod", "go.sum", ArchGatePath, "Makefile", "Makefile.scenarios.mk", ".gitattributes", ".gitignore",
 		".claude/agents/system-architect.md",
 	} {
 		if _, ok := files[want]; !ok {

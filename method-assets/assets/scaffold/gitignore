@@ -1,0 +1,4 @@
+# What a gate run leaves in the checkout: an agent's `git add -A` must not take it in.
+/test-results/
+/.temporal/
+.aiarch/traces/

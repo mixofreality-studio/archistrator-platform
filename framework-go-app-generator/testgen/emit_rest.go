@@ -17,6 +17,9 @@ import (
 // MCP transport. The two are separate tests of separate clients. The scenario bodies and the hooks
 // are the same code as the MCP dialect's (emit_mcp.go): only the transport under toolSession differs.
 
+// securityImport is the framework utility a generated REST handler authorizes through.
+const securityImport = "github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
+
 // restRoute is one generated route of a Manager.
 type restRoute struct{ Verb, Path string }
 
@@ -82,7 +85,7 @@ func isRESTPlan(plan componentPlan) (bool, error) {
 
 func transportImports(rest bool) []string {
 	if rest {
-		return []string{"bytes", "context", "encoding/json", "errors", "fmt", "io", "net", "net/http", "net/http/httptest", "net/url", "reflect", "strings"}
+		return []string{securityImport, "bytes", "context", "encoding/json", "errors", "fmt", "io", "net", "net/http", "net/http/httptest", "net/url", "reflect", "strings"}
 	}
 	return []string{"context", "encoding/json", "errors", "reflect", "strings", mcpSDKImport}
 }
@@ -109,9 +112,18 @@ type toolRegistrar interface {
 	Register(mux *http.ServeMux)
 }
 
+// permitAll is the Security a newSubject hands the handler. These scenarios prove the transport
+// over the real Manager; the app's own authorization policy is its composition root's hooks.
+type permitAll struct{ security.Security }
+
+// Authorize permits every call.
+func (permitAll) Authorize(context.Context, security.Principal, security.Action, security.ResourceRef) (security.Decision, error) {
+	return security.Decision{Permit: true}, nil
+}
+
 // toolServer is what newSubject builds: the handlers whose routes the scenarios
-// request, and the context requests carry (nil: the host's), the one place a
-// principal the handlers read is set.
+// request, and the context requests carry (nil: the host's). Every request is
+// authenticated as one scenario principal, as the server's middleware would.
 type toolServer struct {
 	Handlers []toolRegistrar
 	Context  context.Context
@@ -135,7 +147,8 @@ func serveTools(t *testing.T, h *scenariohost.Host, srv toolServer) *toolSession
 		r.Register(mux)
 	}
 	server := httptest.NewUnstartedServer(mux)
-	server.Config.BaseContext = func(net.Listener) context.Context { return ctx }
+	authenticated := security.WithPrincipal(ctx, security.Principal{Subject: "scenario"})
+	server.Config.BaseContext = func(net.Listener) context.Context { return authenticated }
 	server.Start()
 	t.Cleanup(server.Close)
 	return &toolSession{url: server.URL, ctx: ctx}
