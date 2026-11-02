@@ -122,12 +122,7 @@ func generateManager(p Project, cfg Config, key string, ops []string, files map[
 		return contractOAS{}, err
 	}
 	for _, c := range machineClients(p, cfg, key) {
-		if err := g.mcpClient(files, c, !hasMirrorContract(p, c)); err != nil {
-			return contractOAS{}, err
-		}
-	}
-	if frontedByREST(p, key) {
-		if err := g.restWire(files); err != nil {
+		if err := g.mcpTools(files, c); err != nil {
 			return contractOAS{}, err
 		}
 	}
@@ -234,48 +229,8 @@ func machineClients(p Project, cfg Config, key string) []projectmodel.SystemComp
 	return out
 }
 
-// mcpClient writes one MCP client's tool table and, unless a plan owns its scenarios, its proof.
-func (g *contractGen) mcpClient(files map[string][]byte, c projectmodel.SystemComponent, proof bool) error {
-	if err := g.mcpTools(files, c); err != nil || !proof {
-		return err
-	}
-	return g.mcpWire(files, c)
-}
-
-// frontedByREST reports a REST machine client over the Manager key.
-func frontedByREST(p Project, key string) bool {
-	for _, c := range builtClients(p) {
-		if !c.IsBrowserSurface() && c.MachineProtocol == "rest" && slices.Contains(managersOf(p, c.ID), key) {
-			return true
-		}
-	}
-	return false
-}
-
-// hasMirrorContract reports a machine client that keeps a contract over its tools
-// (methodcheck CLIENT-MACHINE-MIRROR): its own plan binds scenarios in that package.
-func hasMirrorContract(p Project, c projectmodel.SystemComponent) bool {
-	key := c.ContractKey
-	if key == "" {
-		key = projectmodel.LowerFirst(c.Name)
-	}
-	if _, ok := p.Contracts[key]; ok {
-		return true
-	}
-	for _, entry := range p.Contracts {
-		var meta struct {
-			Component string `json:"component"`
-		}
-		if json.Unmarshal(entry, &meta) == nil && meta.Component == key {
-			return true
-		}
-	}
-	return false
-}
-
 // contractGen generates one Manager's client surface.
 type contractGen struct {
-	module        string
 	entry         json.RawMessage
 	doc           *projectmodel.Doc
 	pkg, base     string
@@ -311,8 +266,7 @@ func newContractGen(p Project, cfg Config, key string, ops []string) (*contractG
 		app = moduleLeaf(cfg.ModulePath)
 	}
 	return &contractGen{
-		module: cfg.ModulePath,
-		entry:  entry, doc: doc, pkg: path.Base(meta.GoPackage),
+		entry: entry, doc: doc, pkg: path.Base(meta.GoPackage),
 		base:          projectmodel.Kebab(doc.ManagerBase()),
 		managerImport: cfg.ModulePath + "/" + meta.GoPackage,
 		opDoc:         opDoc,

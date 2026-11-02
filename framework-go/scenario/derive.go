@@ -240,14 +240,14 @@ func callStimuli(in Input, d Diagram, view *View, n Node, guard string) []InputE
 	}
 	var out []InputEv
 	for _, g := range groups {
-		out = append(out, groupStimuli(in, d, n, guard, g)...)
+		out = append(out, groupStimuli(in, d, n, guard, g, stepCalls(view, n.ID))...)
 	}
 	return out
 }
 
 // groupStimuli expands one call group into one stimulus per resolved op, each
 // on the contract that declares it (a facet of the callee, or the callee).
-func groupStimuli(in Input, d Diagram, n Node, guard string, g *callGroup) []InputEv {
+func groupStimuli(in Input, d Diagram, n Node, guard string, g *callGroup, step []Call) []InputEv {
 	first := g.calls[0]
 	base := InputEv{Kind: n.Kind, From: first.From, To: Normalize(first.To)}
 	if isComponent(in, first.From) {
@@ -263,6 +263,9 @@ func groupStimuli(in Input, d Diagram, n Node, guard string, g *callGroup) []Inp
 	}
 	call := fmt.Sprintf("%s/%s/%d", d.UseCaseID, n.ID, g.idx)
 	ops := groupOps(in, g.calls)
+	if len(ops) == 0 {
+		ops = throughManagerOps(in, first.To, step)
+	}
 	if len(ops) == 0 {
 		base.Call = call
 		return []InputEv{base}

@@ -126,8 +126,12 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 	if err != nil {
 		return out, err
 	}
+	routes, err := managerRoutes(projectJSON)
+	if err != nil {
+		return out, err
+	}
 	for _, goPkg := range sortedKeys(byPackage) {
-		if err := emitPackage(&out, cfg, goPkg, byPackage[goPkg]); err != nil {
+		if err := emitPackage(&out, cfg, goPkg, byPackage[goPkg], routes); err != nil {
 			return out, err
 		}
 	}
@@ -186,14 +190,15 @@ func routePlan(out *Output, cfg Config, plan componentPlan) (string, error) {
 
 // emitPackage emits one Go package's scenario tests: every contract in it is
 // of one layer, and a client package is the MCP dialect's in-process tools
-// test (emit_mcp.go), every other layer a direct-call test (emit_go.go).
-func emitPackage(out *Output, cfg Config, goPkg string, plans []componentPlan) error {
+// test or the REST dialect's in-process routes test (emit_mcp.go, emit_rest.go), every other
+// layer a direct-call test (emit_go.go).
+func emitPackage(out *Output, cfg Config, goPkg string, plans []componentPlan, routes map[string]restRoute) error {
 	stereotype, err := sharedStereotype(goPkg, plans)
 	if err != nil {
 		return err
 	}
 	if isClient(plans[0].Contract) {
-		return emitMCP(out, cfg, goPkg, stereotype, plans)
+		return emitMCP(out, cfg, goPkg, stereotype, plans, routes)
 	}
 	return emitGo(out, cfg, goPkg, stereotype, plans)
 }

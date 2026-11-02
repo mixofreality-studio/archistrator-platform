@@ -110,9 +110,16 @@ func clientSurfaceExplicit(s System) []Finding {
 // has no transport to name.
 func clientProtocolStated(s System) []Finding {
 	var out []Finding
+	rest := 0
 	for i, c := range s.Components {
 		label := componentName(c, i)
-		if msg := clientProtocolDefect(c, label); msg != "" {
+		msg := clientProtocolDefect(c, label)
+		if c.isRESTClient() {
+			if rest++; rest > 1 {
+				msg = fmt.Sprintf("%q is a second REST client; an app has one shared generated REST server, so one REST client states it", label)
+			}
+		}
+		if msg != "" {
 			out = append(out, Finding{RuleID: ruleSysClientProtocol, Severity: SeverityError, Message: msg, Location: loc(i+1, "component "+label)})
 		}
 	}

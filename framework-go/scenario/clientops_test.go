@@ -70,3 +70,32 @@ func TestPipeSplitsOnlyTheOpClause(t *testing.T) {
 		t.Errorf("a callee with no contract is not judged: %v", got)
 	}
 }
+
+// A machine client's prose label resolves through its own call into the Manager in that step.
+func TestProseCallResolvesThroughTheManager(t *testing.T) {
+	in := Input{
+		Actors: map[string]bool{"agent": true},
+		Contracts: map[string]Contract{
+			"listManager": {Interface: "ListManager", Ops: []Op{{Name: "AddTodo"}, {Name: "Drop"}}},
+			"mcpServer":   {Client: true, Interface: "McpServer", Ops: []Op{{Name: "ListAddTodo"}, {Name: "ListDrop"}}},
+			"store":       {Interface: "Store", Ops: []Op{{Name: "Put"}}},
+		},
+	}
+	step := []Call{
+		{From: "agent", To: "mcp-server", Label: "requests one action"},
+		{From: "mcp-server", To: "list-manager", Label: "addTodo | drop(x)"},
+	}
+	var got []string
+	for _, ot := range throughManagerOps(in, "mcp-server", step) {
+		got = append(got, ot.op)
+	}
+	if !slices.Equal(got, []string{"ListAddTodo", "ListDrop"}) {
+		t.Errorf("got %v", got)
+	}
+	if ops := throughManagerOps(in, "store", step); ops != nil {
+		t.Errorf("only a Client resolves through its callee: %v", ops)
+	}
+	if ops := throughManagerOps(in, "absent", step); ops != nil {
+		t.Errorf("no contract, no op: %v", ops)
+	}
+}

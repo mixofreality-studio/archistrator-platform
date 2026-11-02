@@ -161,9 +161,8 @@ func TestGenerateDerivesTheClientLayerFromTheSystem(t *testing.T) {
 	}
 }
 
-// A REST machine client is the shared transport: no tool table of its own, and its proof sits
-// beside the handlers. An MCP one has both beside its tools, unless it keeps a mirror contract.
-func TestGenerateTheMachineClientsProof(t *testing.T) {
+// A REST machine client is the shared transport: it gets no tool table of its own.
+func TestRESTClientGetsNoToolTable(t *testing.T) {
 	p := appProject()
 	p.System.Components[1].MachineProtocol = "rest"
 	files, err := Generate(p, Config{ModulePath: "example.com/todomvc"})
@@ -173,34 +172,8 @@ func TestGenerateTheMachineClientsProof(t *testing.T) {
 	if _, ok := files["internal/client/machineapi/list/list_tools.gen.go"]; ok {
 		t.Error("a REST client must get no MCP tool table")
 	}
-	rest := string(files["internal/client/web/list/client_scenarios.gen_test.go"])
-	if !strings.Contains(rest, "package list_test") || !strings.Contains(rest, "func TestWire") {
-		t.Errorf("a REST client's proof must be black-box beside the handlers:\n%s", rest)
-	}
-
-	p = appProject()
-	files, err = Generate(p, Config{ModulePath: "example.com/todomvc"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	mcp := string(files["internal/client/machineapi/list/client_scenarios.gen_test.go"])
-	if !strings.Contains(mcp, "package list_test") || !strings.Contains(mcp, "NewInMemoryTransports") {
-		t.Errorf("an MCP client's proof must call its tools over a transport:\n%s", mcp)
-	}
-	if _, ok := files["internal/client/web/list/client_scenarios.gen_test.go"]; ok {
-		t.Error("with no REST machine client, the browser surfaces' own scenarios cover REST")
-	}
-
-	p.Contracts["machineApi"] = json.RawMessage(`{"component":"machineApi","layer":"Client","interface":{"name":"M","layer":"client","operations":[{"name":"ListRecall"}]}}`)
-	files, err = Generate(p, Config{ModulePath: "example.com/todomvc"})
-	if err != nil {
-		t.Fatal(err)
-	}
-	if _, ok := files["internal/client/machineapi/list/client_scenarios.gen_test.go"]; ok {
-		t.Error("a mirror contract's plan owns the package's scenarios")
-	}
-	if _, ok := files["internal/client/machineapi/list/list_tools.gen.go"]; !ok {
-		t.Error("a mirror contract keeps the tool table")
+	if _, ok := files["internal/client/web/list/list_handlers.gen.go"]; !ok {
+		t.Error("the shared REST handlers are its surface")
 	}
 }
 

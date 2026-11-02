@@ -185,10 +185,13 @@
     {
       "type": "machineClient",
       "phases": [
-        {"id": "integration", "label": "Integration", "weight": 100, "gate": "testing", "exitCriterion": "The client's generated code is committed and its gate, including its generated wire proof, passes"}
+        {"id": "test_plan", "label": "Test Plan", "weight": 30, "gate": "stpReview", "exitCriterion": "Every projected scenario is bound and the TP-* rules pass"},
+        {"id": "integration", "label": "Integration", "weight": 70, "gate": "testing", "exitCriterion": "A test run at the current revision covers every scenario through this client, all pass, and the results render"}
       ],
       "tasks": [
-        {"id": "integration", "kind": "dispatch", "title": "Integration", "phase": "integration", "dependsOn": [], "command": "machine-client-integration", "workerClass": "system-architect", "artifactKind": "Integration"},
+        {"id": "stp", "kind": "dispatch", "title": "Test Plan", "phase": "test_plan", "dependsOn": [], "command": "service-test-plan", "workerClass": "test-engineer", "artifactKind": "STP"},
+        {"id": "stpReview", "kind": "review", "title": "Test Plan Review", "phase": "test_plan", "dependsOn": ["stp"], "reviews": "stp"},
+        {"id": "integration", "kind": "dispatch", "title": "Integration", "phase": "integration", "dependsOn": ["stpReview"], "command": "service-integration", "workerClass": "system-architect", "artifactKind": "Integration", "sendsBackTo": "stpReview"},
         {"id": "testing", "kind": "review", "title": "Integration Testing", "phase": "integration", "dependsOn": ["integration"], "reviews": "integration"}
       ]
     }

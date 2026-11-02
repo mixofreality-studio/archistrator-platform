@@ -40,7 +40,7 @@ const (
 	ruleTPClientOps RuleID = "TP-CLIENT-OPS"
 	// ruleTPLabelOp refuses a "|" alternative that names no op of a contracted callee.
 	ruleTPLabelOp RuleID = "TP-LABEL-OP"
-	// ruleClientMachineMirror holds an optional machine-client contract to the generated tools.
+	// ruleClientMachineMirror holds a machine client's contract to the Manager behind it.
 	ruleClientMachineMirror RuleID = "CLIENT-MACHINE-MIRROR"
 )
 
@@ -328,7 +328,7 @@ func browserLabels(sys System, actors map[string]bool, componentID string) []str
 	return out
 }
 
-// generatedToolNames is every tool name the generators can give a machine client: a Manager's
+// generatedToolNames is every operation name a machine client can have: a Manager's
 // interface name without its stereotype, then the operation.
 func generatedToolNames(p Project) map[string]bool {
 	out := map[string]bool{}
@@ -344,9 +344,9 @@ func generatedToolNames(p Project) map[string]bool {
 	return out
 }
 
-// machineMirrorFindings is CLIENT-MACHINE-MIRROR. A machine client authors no contract, and
-// none is required of it. One may exist only as a mirror an app already keeps over its MCP
-// tools: non-empty, and every op a generated tool. A REST client has no dialect to mirror in.
+// machineMirrorFindings is CLIENT-MACHINE-MIRROR. A machine client's contract is derived from the
+// Manager behind it when that Manager's contract is recorded, so it has operations and each is
+// one of that Manager's, as the generators name it, over REST and MCP alike.
 func machineMirrorFindings(in scenario.Input, c Component, tools map[string]bool) []Finding {
 	if !c.isBuilt() {
 		return nil
@@ -356,16 +356,13 @@ func machineMirrorFindings(in scenario.Input, c Component, tools map[string]bool
 		return nil
 	}
 	section := "component " + c.ID
-	switch {
-	case c.MachineProtocol == machineProtocolREST:
-		return []Finding{tpFinding(ruleClientMachineMirror, loc(0, section), "REST client %q has a contract; a machine client authors none, and no REST dialect exists to mirror its routes in, so remove it", c.ID)}
-	case len(have) == 0:
-		return []Finding{tpFinding(ruleClientMachineMirror, loc(0, section), "machine client %q has a contract with no operations; remove it, because a machine client authors no contract", c.ID)}
+	if len(have) == 0 {
+		return []Finding{tpFinding(ruleClientMachineMirror, loc(0, section), "machine client %q has a contract with no operations; its contract is derived from the Manager operations its views call", c.ID)}
 	}
 	var out []Finding
 	for _, op := range have {
 		if !tools[op] {
-			out = append(out, tpFinding(ruleClientMachineMirror, loc(0, section), "machine client %q has contract operation %q, which is no generated tool; a machine contract only mirrors the generated tools (the Manager's name without its stereotype, then the operation)", c.ID, op))
+			out = append(out, tpFinding(ruleClientMachineMirror, loc(0, section), "machine client %q has contract operation %q, which is none of its Manager's: a machine contract mirrors the Manager's operations (the Manager's name without its stereotype, then the operation)", c.ID, op))
 		}
 	}
 	return out

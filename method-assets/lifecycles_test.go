@@ -343,13 +343,13 @@ func TestValidateLifecycle_AcceptsTheFixtureAndAGateOnlyLifecycle(t *testing.T) 
 	}
 }
 
-// The route from integration back to the plan exists on exactly the two lifecycles that bind
-// a plan; the integration lifecycle shares the command but has no stp to send back to.
+// The route from integration back to the plan exists on exactly the lifecycles that bind a
+// plan; the integration lifecycle shares the command but has no stp to send back to.
 func TestLifecycles_OnlyPlanBindingIntegrationsSendBack(t *testing.T) {
 	for _, l := range lifecycles {
 		for _, task := range l.Tasks {
 			want := ""
-			if task.ID == "integration" && (l.Type == "service" || l.Type == "frontend") {
+			if task.ID == "integration" && (l.Type == "service" || l.Type == "frontend" || l.Type == "machineClient") {
 				want = "stpReview"
 			}
 			if task.SendsBackTo != want {

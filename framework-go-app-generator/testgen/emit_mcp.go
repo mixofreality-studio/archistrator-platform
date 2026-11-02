@@ -37,11 +37,19 @@ type dialect int
 const (
 	dialectWeb dialect = iota
 	dialectMCP
+	dialectREST
 )
 
+// restClientPackage is where a REST machine client's handlers live: the shared generated
+// transport. It is what tells a REST client's contract from an MCP one, whose ops look the same.
+const restClientPackage = "internal/client/web/"
+
 func (d dialect) String() string {
-	if d == dialectMCP {
+	switch d {
+	case dialectMCP:
 		return "mcp"
+	case dialectREST:
+		return "rest"
 	}
 	return "web"
 }
@@ -64,6 +72,8 @@ func clientDialect(comp string, sc methodcheck.ServiceContract) (dialect, error)
 		return dialectWeb, fmt.Errorf("testgen: %s mixes web actions (%s) and MCP tools (%s): a client surface is a browser or an MCP server, not both", comp, strings.Join(web, ", "), strings.Join(tools, ", "))
 	case len(web) > 0:
 		return dialectWeb, nil
+	case strings.HasPrefix(sc.GoPackage, restClientPackage):
+		return dialectREST, nil
 	case len(tools) > 0 || sc.GoPackage != "":
 		return dialectMCP, nil
 	default:
@@ -85,7 +95,7 @@ const mcpSDKImport = "github.com/modelcontextprotocol/go-sdk/mcp"
 // emitMCP emits one MCP client package's generated scenarios file and, when
 // any binding is runnable, its once-emitted hooks file. One package serves one
 // tools surface, so it hosts exactly one MCP client contract.
-func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componentPlan) error {
+func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componentPlan, routes map[string]restRoute) error {
 	if len(plans) != 1 {
 		return fmt.Errorf("testgen: %s hosts several MCP client contracts (%s); a package serves one tools surface", goPkg, hooksSubject(plans))
 	}
@@ -100,7 +110,7 @@ func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componen
 		}
 		g.emitToolScenario(plan, bs)
 	}
-	src, err := g.toolsFile(plan)
+	src, err := g.toolsFile(plan, routes)
 	if err != nil {
 		return err
 	}
@@ -177,14 +187,18 @@ func (g *goEmit) emitToolProbe(plan componentPlan, bs boundScenario, st boundSte
 // toolsFile assembles the MCP client's generated file: header, package
 // clause, imports, TestMain (plain: a client runs no workflow of its own), the
 // scenario tests and, when any runs, the tools server and assertion helpers.
-func (g *goEmit) toolsFile(plan componentPlan) ([]byte, error) {
+func (g *goEmit) toolsFile(plan componentPlan, routes map[string]restRoute) ([]byte, error) {
+	rest, err := isRESTPlan(plan)
+	if err != nil {
+		return nil, err
+	}
 	var b bytes.Buffer
 	b.WriteString(genHeader + "\n")
 	fmt.Fprintf(&b, "// Source: project.json .phaseArtifacts.testPlan.%s × scenario.ForComponent(%q)\n", plan.Key, plan.Key)
 	fmt.Fprintf(&b, "\npackage %s_test\n\n", g.pkg)
 	imps := map[string]string{"testing": "", scenarioHostImport: ""}
 	if g.subject {
-		for _, p := range []string{"context", "encoding/json", "errors", "reflect", "strings", mcpSDKImport} {
+		for _, p := range transportImports(rest) {
 			imps[p] = ""
 		}
 	}
@@ -192,7 +206,16 @@ func (g *goEmit) toolsFile(plan componentPlan) ([]byte, error) {
 	fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %s) }\n\n", strconv.Quote(plan.Key))
 	b.Write(g.body.Bytes())
 	if g.subject {
-		b.WriteString(toolsHelpers)
+		if rest {
+			table, err := restRouteTable(plan, routes)
+			if err != nil {
+				return nil, err
+			}
+			b.WriteString(table)
+			b.WriteString(restHelpers)
+		} else {
+			b.WriteString(toolsHelpers)
+		}
 		fmt.Fprintf(&b, expectHelpers, "`")
 		b.WriteString(toolsErrorHasCode)
 		b.WriteString(matchHelpers)
@@ -216,11 +239,11 @@ func (g *goEmit) toolsHooksFile(plan componentPlan) ([]byte, error) {
 	fmt.Fprintf(&b, "package %s_test\n\n", g.pkg)
 	g.writeImports(&b, map[string]string{"testing": "", scenarioHostImport: ""})
 	subject := g.subjectName(plan)
-	fmt.Fprintf(&b, `// %s builds the in-process MCP server the scenarios call: the Handler
-// of every generated MCP tools package serving the tools below, bound to real
-// managers on the host's stack, and Context when the tools need an identity
-// (the principal they read from it).
-// Tools: %s.
+	fmt.Fprintf(&b, `// %s builds the in-process server the scenarios call: the generated Handler
+// of this client serving the operations below, bound to real managers on the
+// host's stack, and Context when they need an identity (the principal they read
+// from it).
+// Operations: %s.
 // FILL: construct the handlers.
 func %s(t *testing.T, h *scenariohost.Host) toolServer {
 	t.Helper()

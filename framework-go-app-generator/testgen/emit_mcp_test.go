@@ -362,3 +362,21 @@ func TestGenerate_MCPClientCannotShareALayerPackage(t *testing.T) {
 		t.Fatalf("want a mixed-layer error, got %v", err)
 	}
 }
+
+// A REST machine client's scenarios request the routes the handlers mount, and it is a separate
+// test from an MCP client over the same Manager.
+func TestGenerate_RESTClientRequestsItsRoutes(t *testing.T) {
+	project := `{"serviceContracts":{
+	"listManager":{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list","$defs":{"Owner":{"type":"string"}},
+	  "interface":{"name":"ListManager","layer":"manager","operations":[{"name":"AddTodo","params":[{"name":"owner","schema":{"$ref":"#/$defs/Owner"}}],"result":{"$ref":"#/$defs/Owner"},"error":true}]}},
+	"webApi":{"component":"webApi","layer":"Client","goPackage":"internal/client/web/list","$defs":{"Owner":{"type":"string"}},
+	  "interface":{"name":"WebApi","layer":"client","operations":[{"name":"ListAddTodo","params":[{"name":"owner","schema":{"$ref":"#/$defs/Owner"}}],"result":{"$ref":"#/$defs/Owner"},"error":true}]}}},
+	"phaseArtifacts":{"testPlan":{"webApi":{"component":"webApi","bindings":[]}}}}`
+	out, err := Generate([]byte(project), Config{ModulePath: "example/app"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := out.Generated["internal/client/web/list/client_scenarios.gen_test.go"]; !ok {
+		t.Fatalf("no REST scenarios file: %v", out.Generated)
+	}
+}

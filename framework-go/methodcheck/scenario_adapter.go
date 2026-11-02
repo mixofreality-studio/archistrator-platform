@@ -2,6 +2,7 @@ package methodcheck
 
 import (
 	"sort"
+	"strings"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
@@ -113,7 +114,7 @@ func viewOf(v DynamicView) scenario.View {
 // the dynamic views address the component, and the derivation lands each call on the
 // facet that declares its op.
 func contractOf(key string, sc ServiceContract) scenario.Contract {
-	ct := scenario.Contract{Component: key}
+	ct := scenario.Contract{Component: key, Interface: sc.Interface.Name, Client: strings.EqualFold(sc.Layer, kindClient) || strings.EqualFold(sc.Interface.Layer, kindClient)}
 	if sc.Component != "" && scenario.Normalize(sc.Component) != scenario.Normalize(key) {
 		ct.FacetOf = sc.Component
 	}

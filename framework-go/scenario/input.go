@@ -64,7 +64,12 @@ type Call struct{ From, To, Mode, Label, Alt string }
 type Contract struct {
 	Component string
 	FacetOf   string
-	Ops       []Op
+	// Interface is the contract's interface name. A Manager's, without its stereotype, prefixes
+	// the operations of the machine clients over it (ClientOpName).
+	Interface string
+	// Client marks a Client's contract, whose calls can resolve through the Manager behind them.
+	Client bool
+	Ops    []Op
 }
 
 // Op is one contract operation.

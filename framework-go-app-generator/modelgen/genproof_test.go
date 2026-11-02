@@ -361,18 +361,6 @@ func TestInlineSchemasCompileThroughEveryGenerator(t *testing.T) {
 	if len(names) == 0 {
 		t.Fatal("the table proved nothing")
 	}
-	// The REST machine client's own generated proof runs: a request of every op crosses the real
-	// handlers to the Manager double, over each inline shape.
-	rel, err := filepath.Rel("..", root)
-	if err != nil {
-		t.Fatal(err)
-	}
-	cmd := exec.Command("go", "test", "-count=1", "./"+filepath.ToSlash(rel)+"/...")
-	cmd.Dir = ".."
-	cmd.Env = append(os.Environ(), "GOWORK=off")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		t.Errorf("the generated REST proof fails: %v\n%s", err, out)
-	}
 }
 
 // projectLines is the part of a build log about one project of the proof tree.

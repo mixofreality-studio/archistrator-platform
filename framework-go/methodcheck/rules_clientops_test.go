@@ -168,11 +168,11 @@ func TestClientMachineMirror(t *testing.T) {
 		return `{"` + key + `":{"component":"` + component + `","layer":"Client","interface":{"name":"M","layer":"client","operations":[` + ops + `]}}}`
 	}
 	for _, tc := range []struct{ name, contracts, want string }{
-		{"none is fine", `{}`, ""},
-		{"mirrors a generated tool", mirror("mcpServer", "mcpServer", `{"name":"ListKeep"}`), ""},
-		{"an op that is no tool", mirror("mcpServer", "mcpServer", `{"name":"Other"}`), "no generated tool"},
+		{"not yet derived", `{}`, ""},
+		{"an MCP client's op is its Manager's", mirror("mcpServer", "mcpServer", `{"name":"ListKeep"}`), ""},
+		{"a REST client's too", mirror("webApi", "webApi", `{"name":"ListKeep"}`), ""},
+		{"an op that is no Manager's", mirror("mcpServer", "mcpServer", `{"name":"Other"}`), "none of its Manager's"},
 		{"an empty one", mirror("mcpServer", "mcpServer", ""), "no operations"},
-		{"a REST client may have none", mirror("webApi", "webApi", `{"name":"ListKeep"}`), "no REST dialect"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			_, _, p := clientDesign(t)

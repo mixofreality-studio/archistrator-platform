@@ -108,7 +108,7 @@ Cross-reference `[[the-method-layers]]`:
 | ResourceAccess | Be invokable by Managers and Engines. No queued operations. No events published. |
 | Resource | Domain-specific contract. No queued operations. No events published. |
 | Utility | Invokable by anyone. |
-| Client | A Client authors no contract. A browser surface's contract is derived from its dynamic-view labels when its UI design is recorded; a machine client has none, and its generated proof holds its routes or tools to the Manager's operations. `recordServiceContract` refuses layer `client`. |
+| Client | Every Client has a contract, and nobody authors it. A browser surface's is derived from its dynamic-view labels when its UI design is recorded. A machine client's is derived from the operations of the Manager behind it when that Manager's contract is recorded: one per route or tool its views reach. Its scenarios then run through that client against the real components below it. `recordServiceContract` refuses layer `client`. |
 
 **Names are Go.** `interface.name` and each operation name are exported Go identifiers, one spelling, recorded capitalised: the plan compares operation names exactly, and a dynamic view's label still resolves because labels match ignoring case. Each param name is a Go identifier that is no keyword and no name the generated code uses (`rc` among them). `recordServiceContract` refuses anything else and lists them.
 
