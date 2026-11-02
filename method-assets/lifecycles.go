@@ -65,6 +65,11 @@ type LifecycleTask struct {
 	// ArtifactKind names what a dispatch produces (and what a review with no
 	// Reviews target judges).
 	ArtifactKind string `json:"artifactKind,omitempty"`
+	// SendsBackTo names the review gate this dispatch may report a defect in the
+	// reviewed work to: a run that names only what it found wrong re-opens that gate's
+	// judged pair, and this task holds until the gate passes again. The route names the
+	// gate rather than the task behind it, so nothing skips the review.
+	SendsBackTo string `json:"sendsBackTo,omitempty"`
 }
 
 // Lifecycle is the task DAG every activity of one type walks.
@@ -144,6 +149,7 @@ func (l Lifecycle) clone() Lifecycle {
 //   - phase ids are unique, weights are positive and sum to 100, and every
 //     phase's gate is a review task IN that phase which every other task of
 //     the phase is upstream of — so "gate passed" means "phase complete";
+//   - a dispatch's SendsBackTo is safe to re-open (checkSendBackRoutes).
 //   - a review names (Reviews) a dispatch task it transitively depends on. Only
 //     a lifecycle with no dispatch task at all may have a review that names
 //     none, and that review then carries the artifactKind itself.
@@ -153,6 +159,7 @@ func ValidateLifecycle(l Lifecycle) []string {
 	v.checkRoots()
 	v.checkPhases()
 	v.checkReviews()
+	v.checkSendBackRoutes()
 	return v.problems
 }
 
@@ -288,6 +295,35 @@ func (v *lifecycleValidator) checkReviews() {
 		}
 		if t.Reviews != "" {
 			v.addf("task %q sets reviews, but only a review task may", t.ID)
+		}
+	}
+}
+
+// checkSendBackRoutes holds every SendsBackTo to what makes a re-open safe: it sits on a
+// dispatch task and names a review with a Reviews target, that review does not wait on the
+// source (the source could then never run), and everything downstream of the review is
+// downstream of the source too, so a re-open cannot leave a stale pass standing behind it.
+func (v *lifecycleValidator) checkSendBackRoutes() {
+	for _, t := range v.l.Tasks {
+		if t.SendsBackTo == "" {
+			continue
+		}
+		if t.Kind != LifecycleTaskDispatch {
+			v.addf("task %q sets sendsBackTo, but only a dispatch task may", t.ID)
+			continue
+		}
+		target, ok := v.tasks[t.SendsBackTo]
+		if !ok || target.Kind != LifecycleTaskReview || target.Reviews == "" {
+			v.addf("task %q sends back to %q, which is not a review with a reviews target", t.ID, t.SendsBackTo)
+			continue
+		}
+		if v.ancestors[t.SendsBackTo][t.ID] {
+			v.addf("task %q sends back to %q, which waits on it", t.ID, t.SendsBackTo)
+		}
+		for _, other := range v.l.Tasks {
+			if other.ID != t.ID && v.ancestors[other.ID][t.SendsBackTo] && !v.ancestors[other.ID][t.ID] {
+				v.addf("task %q sends back to %q, but %q passes behind that review without waiting on %q", t.ID, t.SendsBackTo, other.ID, t.ID)
+			}
 		}
 	}
 }

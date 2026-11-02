@@ -343,6 +343,55 @@ func TestValidateLifecycle_AcceptsTheFixtureAndAGateOnlyLifecycle(t *testing.T) 
 	}
 }
 
+// The route from integration back to the plan exists on exactly the two lifecycles that bind
+// a plan; the integration lifecycle shares the command but has no stp to send back to.
+func TestLifecycles_OnlyPlanBindingIntegrationsSendBack(t *testing.T) {
+	for _, l := range lifecycles {
+		for _, task := range l.Tasks {
+			want := ""
+			if task.ID == "integration" && (l.Type == "service" || l.Type == "frontend") {
+				want = "stpReview"
+			}
+			if task.SendsBackTo != want {
+				t.Errorf("%s.%s sendsBackTo = %q, want %q", l.Type, task.ID, task.SendsBackTo, want)
+			}
+		}
+	}
+}
+
+func TestValidateLifecycle_ChecksSendBackRoutes(t *testing.T) {
+	route := func(mutate func(*Lifecycle)) []string {
+		l := validFixture()
+		// The legal shape: bDraft sends back to aReview, and nothing else follows aReview
+		// without following bDraft.
+		l.Tasks[2].DependsOn = []string{"aReview"}
+		l.Tasks[2].SendsBackTo = "aReview"
+		mutate(&l)
+		return ValidateLifecycle(l)
+	}
+	if got := route(func(*Lifecycle) {}); len(got) != 0 {
+		t.Errorf("a safe route was refused: %v", got)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(*Lifecycle)
+		want   string
+	}{
+		"on a review":        {func(l *Lifecycle) { l.Tasks[3].SendsBackTo = "aReview" }, "only a dispatch task"},
+		"to no review":       {func(l *Lifecycle) { l.Tasks[2].SendsBackTo = "aDraft" }, "not a review with a reviews target"},
+		"to an unknown task": {func(l *Lifecycle) { l.Tasks[2].SendsBackTo = "ghost" }, "not a review with a reviews target"},
+		"to its own review":  {func(l *Lifecycle) { l.Tasks[2].SendsBackTo = "bReview" }, "which waits on it"},
+		"leaving a stale pass": {func(l *Lifecycle) {
+			l.Tasks = append(l.Tasks, LifecycleTask{ID: "other", Kind: LifecycleTaskReview, Title: "Other", Phase: "b", DependsOn: []string{"aReview"}, Reviews: "aDraft"})
+		}, "passes behind that review"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := route(tc.mutate); !strings.Contains(strings.Join(got, "; "), tc.want) {
+				t.Errorf("got %v, want a problem naming %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestValidateLifecycle_RejectsEachDefect(t *testing.T) {
 	cases := []struct {
 		name   string

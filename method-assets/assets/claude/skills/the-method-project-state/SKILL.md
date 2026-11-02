@@ -29,7 +29,7 @@ The on-disk JSON is produced by the Go codec (`EncodeProjectJSON`/`DecodeProject
 | `.activityConstruction["<activity-id>"]` | `map[string]projectstate.ActivityConstructionStatus` (`activityconstructionstatus.go`) | READ-ONLY — Manager-owned | activityID, phase, buildStatus, `produced[]`, failure info |
 | `.constructionProgress` | `*projectstate.ConstructionProgress` (`constructionprogress.go`) | READ-ONLY — Manager-owned | Week, TotalWeeks, HandOffModel, SupervisionCap (earned-value rollup) |
 | `.testingState` | `*projectstate.TestingState` (`phaseartifacts.go`) | READ + WRITE (testing phases) | `harnessModule`, `perfHarness`, `qualityGates[]`, `qualityAuditReport`, `checkRuns[]` (recorded only by the workflow, never by an agent), `defects[]` |
-| `.phaseArtifacts` | `*projectstate.PhaseArtifacts` (`phaseartifacts.go`) | WRITE (non-contract phase artifacts) | maps of `srs`/`testPlan`/`integrationNote`/`uxRequirements`/`uiDesign`/`provisioningSpec`/`deployNote`/`docOutline`/`docNote` records, keyed by component/surface/resource/doc. `omitempty`/nil until the first artifact is produced — it may be **absent** in a fresh file. The write verb is `RecordPhaseArtifactProduced`. |
+| `.phaseArtifacts` | `*projectstate.PhaseArtifacts` (`phaseartifacts.go`) | WRITE (non-contract phase artifacts) | maps of `srs`/`testPlan`/`integrationNote`/`uxRequirements`/`uiDesign`/`provisioningSpec`/`deployNote`/`docOutline`/`docNote` records, keyed by component/surface/resource/doc (`testPlan` by contract key only). `omitempty`/nil until the first artifact is produced — it may be **absent** in a fresh file. The write verb is `RecordPhaseArtifactProduced`. |
 | `.reviewPolicy` | `projectstate.ReviewPolicy` (`reviewpolicy.go`) | READ-ONLY — Manager-owned via `UpdateReviewPolicy` | `gatedPhasesByType`: activity-type wire name → phases requiring human approval |
 | `.research` | raw research corpus (`research.go`) | READ-ONLY | source material feeding Phase-1 |
 | `.phase`, `.version`, `.id`, `.name`, `.owner`, `.updatedAt` | scalars | metadata | project-level bookkeeping |
@@ -79,6 +79,7 @@ When your phase produces an artifact that lives in state, record it through the 
 | artifact | tool | target |
 |---|---|---|
 | service contract (detailed-design) | `recordServiceContract` | `.serviceContracts["<the ambient component's contractKey>"]` (the verb resolves the key itself — you pass only the contract) |
+| allegation that a scenario's binding is wrong (integration only) | `reportPlanDefect` (contract key, scenarios, reason; the revision and plan baseline are the server's) | `.testingState.planDefects[]` |
 | UI-design concept / SRS / component test plan / integration note / provisioning spec / deploy note / doc outline·note | `recordPhaseArtifact` (set exactly one payload field, pass the `mapKey`) | `.phaseArtifacts.<field>["<mapKey>"]` |
 | testing results (harness, quality gate, test run, defect, audit report — a component's test plan is a phase artifact, above) | `recordTestingState` (set exactly one payload field) | `.testingState.<field>` |
 | code | *(files, not state)* | files in the package the contract's `goPackage` names |

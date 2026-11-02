@@ -103,6 +103,7 @@ var composedVerbModes = map[string][]string{
 	"recordServiceContract":  {modeConstruct},
 	"recordPhaseArtifact":    {modeConstruct},
 	"recordTestingState":     {modeConstruct},
+	"reportPlanDefect":       {modeConstruct},
 	// the construct-mode read of the operator's steer for this attempt
 	"getOperatorNotes": {modeConstruct},
 	// the step's own gate: every lifecycle task runs its checks. NOT answer mode
@@ -123,6 +124,27 @@ var modeImplicitVerbs = map[string][]string{
 	modeDraft:     {"run_checks"},
 	modeCritique:  {"run_checks"},
 	modeConstruct: {"getOperatorNotes", "run_checks"},
+}
+
+// commandVerbs are composed verbs ONE command is granted, whatever its charter lists: a charter
+// spans every step its agent runs, and these verbs belong to one step. reportPlanDefect is
+// integration's allegation that a named scenario's binding is wrong. It reaches the commands
+// of the lifecycles that declare the route; the shared integration lifecycle's activities are
+// refused by the verb itself.
+var commandVerbs = map[string][]string{
+	"service-integration":  {"reportPlanDefect"},
+	"frontend-integration": {"reportPlanDefect"},
+}
+
+// withCommandVerbs adds a command's own verbs to its tool list, sorted and without duplicates.
+func withCommandVerbs(tools []string, slug string) []string {
+	for _, v := range commandVerbs[slug] {
+		if name := "mcp__aiarch-state__" + v; !contains(tools, name) {
+			tools = append(tools, name)
+		}
+	}
+	sort.Strings(tools)
+	return tools
 }
 
 // withModeImplicit adds the mode-implicit verbs to an already-narrowed tool
@@ -254,7 +276,7 @@ func manifestFor(slug, body string, skillLinks map[string][]string, charters map
 	}
 
 	mode := modeFor(slug)
-	tools := withModeImplicit(allowedTools(c.tools, mode, projectDesignCommands[slug]), mode)
+	tools := withCommandVerbs(withModeImplicit(allowedTools(c.tools, mode, projectDesignCommands[slug]), mode), slug)
 
 	return methodassets.StepManifest{
 		Command: slug,

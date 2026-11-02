@@ -154,9 +154,14 @@ func TestEveryComposedVerbIsReachable(t *testing.T) {
 			implicit[v] = true
 		}
 	}
+	for _, verbs := range commandVerbs {
+		for _, v := range verbs {
+			implicit[v] = true
+		}
+	}
 	for _, verb := range composedVerbNames() {
 		if !declared[verb] && !implicit[verb] {
-			t.Errorf("composedVerbModes names %q, but no agent charter declares %s%[1]s and no mode "+
+			t.Errorf("composedVerbModes names %q, but no agent charter declares %s%[1]s and no mode or command "+
 				"implies it — the entry narrows nothing (a stale spelling, or a verb that left the charters)", verb, mcp)
 		}
 	}
@@ -170,4 +175,25 @@ func composedVerbNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+// A command's own verb reaches exactly the commands named for it: the charter spans every step
+// its agent runs, so a charter grant would hand integration's allegation to every one of them.
+func TestReportPlanDefectReachesOnlyTheIntegrationCommands(t *testing.T) {
+	const tool = mcp + "reportPlanDefect"
+	files, err := methodassets.ClaudeFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, c := range parseCharters(files) {
+		if contains(c.tools, tool) {
+			t.Errorf("a charter declares %s", tool)
+		}
+	}
+	for slug, m := range methodassets.Manifests() {
+		want := slug == "service-integration" || slug == "frontend-integration"
+		if got := contains(m.Tools, tool); got != want {
+			t.Errorf("%s: granted %s = %v, want %v", slug, tool, got, want)
+		}
+	}
 }
