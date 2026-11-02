@@ -67,7 +67,7 @@
       "kind": 5,
       "model": {
         "components": [
-          { "id": "shop-client", "name": "ShopClient", "kind": "client", "uiSurface": false, "layer": "client", "encapsulates": "", "atomicBusinessVerbs": null },
+          { "id": "shop-client", "name": "ShopClient", "kind": "client", "uiSurface": false, "machineProtocol": "mcp", "layer": "client", "encapsulates": "", "atomicBusinessVerbs": null },
           { "id": "order-manager", "name": "OrderManager", "kind": "manager", "layer": "manager", "encapsulates": "ordering", "atomicBusinessVerbs": null },
           { "id": "billing-manager", "name": "BillingManager", "kind": "manager", "layer": "manager", "encapsulates": "billing", "atomicBusinessVerbs": null }
         ],

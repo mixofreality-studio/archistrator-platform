@@ -97,6 +97,8 @@ func validateArchitecture(s System, c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, usecaseDynamicCoverage(s, c)...)
 	findings = append(findings, raOrphan(s)...)
 	findings = append(findings, clientSurfaceExplicit(s)...)
+	findings = append(findings, clientProtocolStated(s)...)
+	findings = append(findings, clientOpLabels(s, allActorIDs(c))...)
 	findings = append(findings, encapsulates(s)...)
 	findings = append(findings, relDup(s)...)
 	findings = append(findings, dynamicViewConsistency(s, c)...)

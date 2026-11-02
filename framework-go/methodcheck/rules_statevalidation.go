@@ -2,7 +2,11 @@ package methodcheck
 
 import (
 	"fmt"
+	"maps"
+	"slices"
 	"strings"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
 
 // rules_statevalidation.go holds the AUTHORITATIVE platform twins of the app-side
@@ -32,6 +36,11 @@ const (
 	// ruleSysClientSurface is not a twin: it requires every Client to state whether it is a
 	// browser surface, because that one field picks its lifecycle.
 	ruleSysClientSurface RuleID = "SYS-CLIENT-UISURFACE"
+	// ruleSysClientOpLabel requires each actor call into a browser surface to lead with the
+	// exported operation names the surface's contract is derived from.
+	ruleSysClientOpLabel RuleID = "SYS-CLIENT-OP-LABEL"
+	// ruleSysClientProtocol requires a built machine client to say which transport it is.
+	ruleSysClientProtocol RuleID = "SYS-CLIENT-PROTOCOL"
 
 	// CoreUseCases twins.
 	ruleUCActPresent   RuleID = "UC-ACT-PRESENT"
@@ -93,6 +102,71 @@ func clientSurfaceExplicit(s System) []Finding {
 		})
 	}
 	return out
+}
+
+// clientProtocolStated — SYS-CLIENT-PROTOCOL (error). uiSurface false does not tell a REST
+// client from an MCP one, and the generators emit a different thing for each. A planned or
+// external client has nothing generated yet, so it is exempt; anything but a machine client
+// has no transport to name.
+func clientProtocolStated(s System) []Finding {
+	var out []Finding
+	for i, c := range s.Components {
+		machine := c.Kind == kindClient && c.UISurface != nil && !*c.UISurface
+		built := c.BuildStatus != buildStatusPlanned && c.BuildStatus != buildStatusExternal
+		label := componentName(c, i)
+		var msg string
+		switch {
+		case c.MachineProtocol != "" && !machine:
+			msg = fmt.Sprintf("%q sets machineProtocol, which only a machine client (kind client, uiSurface false) may state", label)
+		case c.MachineProtocol != "" && c.MachineProtocol != machineProtocolREST && c.MachineProtocol != machineProtocolMCP:
+			msg = fmt.Sprintf("machine client %q has machineProtocol %q; it must be %q or %q", label, c.MachineProtocol, machineProtocolREST, machineProtocolMCP)
+		case machine && built && c.MachineProtocol == "":
+			msg = fmt.Sprintf("machine client %q does not state machineProtocol; set %q for an HTTP API, %q for an MCP server, because each generates something different", label, machineProtocolREST, machineProtocolMCP)
+		default:
+			continue
+		}
+		out = append(out, Finding{RuleID: ruleSysClientProtocol, Severity: SeverityError, Message: msg, Location: loc(i+1, "component "+label)})
+	}
+	return out
+}
+
+// clientOpLabels — SYS-CLIENT-OP-LABEL (error). A browser surface's contract is derived from
+// the labels of the actor calls into it (scenario.ClientOps), so design owns those names and a
+// prose label would leave an operation the plan cannot bind. Prose belongs after the "—".
+func clientOpLabels(s System, actors map[string]bool) []Finding {
+	idx := componentIndex(s)
+	labels := map[string][]string{}
+	var out []Finding
+	for i, dv := range s.DynamicViews {
+		for _, call := range stepCalls(dv) {
+			if to, ok := idx[call.To]; !ok || !to.isBrowserSurface() || !actors[call.From] {
+				continue
+			}
+			labels[call.To] = append(labels[call.To], call.Label)
+			if _, invalid := scenario.LeadingOpNames(call.Label); len(invalid) > 0 {
+				section := "dynamicView " + viewLabel(dv)
+				out = append(out, Finding{
+					RuleID: ruleSysClientOpLabel, Severity: SeverityError, Location: loc(i+1, section),
+					Message: fmt.Sprintf("the call %s→%s is labelled %q; a call into a browser surface must lead with the exported operations it performs, such as \"AddTodo | RewordTodo — performs one list action\", because the surface's contract is derived from these names", call.From, call.To, call.Label),
+				})
+			}
+		}
+	}
+	for _, id := range slices.Sorted(maps.Keys(labels)) {
+		if _, err := scenario.ClientOps(validLabels(labels[id])); err != nil {
+			out = append(out, Finding{RuleID: ruleSysClientOpLabel, Severity: SeverityError, Location: loc(0, "component "+id),
+				Message: fmt.Sprintf("browser surface %q: %v", id, err)})
+		}
+	}
+	return out
+}
+
+// validLabels drops the labels already reported, so a bad label is reported once.
+func validLabels(labels []string) []string {
+	return slices.DeleteFunc(slices.Clone(labels), func(l string) bool {
+		_, invalid := scenario.LeadingOpNames(l)
+		return len(invalid) > 0
+	})
 }
 
 func resourceAccessReaches(c Component, s System, idx map[string]Component) bool {

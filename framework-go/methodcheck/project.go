@@ -327,6 +327,12 @@ type Component struct {
 	// (SYS-CLIENT-UISURFACE), never a default.
 	UISurface *bool `json:"uiSurface,omitempty"`
 
+	// MachineProtocol says which generated transport a built machine client is: "rest" owns
+	// the shared generated internal/client/web and has no package of its own, "mcp" gets its
+	// tool tables in internal/client/<leaf>. Required on a built machine client and illegal
+	// anywhere else (SYS-CLIENT-PROTOCOL), because uiSurface false does not tell them apart.
+	MachineProtocol string `json:"machineProtocol,omitempty"`
+
 	// ConstructionProfile is how the component comes to exist. "generated" means no activity
 	// builds it: a generated Client appears when the Managers it fronts are integrated.
 	ConstructionProfile string `json:"constructionProfile,omitempty"`
@@ -338,12 +344,22 @@ func (c Component) isBrowserSurface() bool {
 	return c.Kind == kindClient && c.UISurface != nil && *c.UISurface
 }
 
+// isRESTClient reports a machine client whose transport is the shared generated REST server.
+func (c Component) isRESTClient() bool {
+	return c.Kind == kindClient && c.MachineProtocol == machineProtocolREST
+}
+
 // Relationship is a directed edge between two Components.
 type Relationship struct {
 	From  string `json:"from"`
 	To    string `json:"to"`
 	Mode  string `json:"mode"`
 	Label string `json:"label"`
+	// Ambient marks a dependency on a Utility no use case's flow can honestly narrate:
+	// logging, diagnostics, authentication. It is the only way a static relationship may go
+	// uncalled by every dynamic view (CC-EDGE-REALIZED), and it is legal only on a Utility
+	// target. It exempts nothing else: an operation it would reach still owes TP-OP-REACHED.
+	Ambient bool `json:"ambient,omitempty"`
 }
 
 // DynamicView is one call chain per use case, keyed by step. Each step realizes one
@@ -790,6 +806,12 @@ type ScenarioResult struct {
 // slotKindActivityList is the activity-list slot's kind ordinal (projectstate's
 // KindActivityList).
 const slotKindActivityList = 9
+
+// A built machine client's transport (Component.MachineProtocol).
+const (
+	machineProtocolREST = "rest"
+	machineProtocolMCP  = "mcp"
+)
 
 // constructionGenerated is the constructionProfile of a component no activity builds.
 const constructionGenerated = "generated"

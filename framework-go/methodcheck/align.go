@@ -239,8 +239,9 @@ func componentLayerName(layer string) string {
 // unaffected: code that exists is always held to the design.
 //
 // A browser surface (Component.UISurface) is held to its contract, not to a package: its code
-// is under webApp/src/, which this Go check cannot see, so it never owes a package. If a Go
-// package does carry its name, the ordinary reconciliation still accounts it.
+// is under webApp/src/, which this Go check cannot see, so it never owes a package. A REST
+// client is the shared generated internal/client/web, so it owes none of its own either. If a
+// Go package does carry either's name, the ordinary reconciliation still accounts it.
 func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string) string, contracts map[string]ServiceContract, pendingIDs, skippedIDs map[string]bool) []Finding {
 	if len(pkgs) == 0 {
 		return nil
@@ -263,7 +264,7 @@ func alignSystemToCode(s System, pkgs []classifiedPackage, normalize func(string
 		}
 		section := fmt.Sprintf("component %d (%s)", i+1, c.Name)
 		found := alignComponent(c, key, section, i, pkgs, contracts, layersByName, pkgByName, matched, normalize, compKeys)
-		if c.isBrowserSurface() {
+		if c.isBrowserSurface() || c.isRESTClient() {
 			found = withoutMissingPackage(found)
 		}
 		out = append(out, softenMissingPackage(found, c.ID, pendingIDs, skippedIDs)...)

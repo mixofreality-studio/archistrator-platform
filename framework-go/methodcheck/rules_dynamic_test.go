@@ -252,7 +252,7 @@ func TestDynamicViewConsistency_RelCoverage_UtilityTargetExempt(t *testing.T) {
 	logging := comp(t, "Logging", kindUtility)
 	s.Components = append(s.Components, logging)
 	mgrID := s.Components[1].ID
-	s.Relationships = append(s.Relationships, Relationship{From: mgrID, To: logging.ID, Mode: modeSync})
+	s.Relationships = append(s.Relationships, Relationship{From: mgrID, To: logging.ID, Mode: modeSync, Ambient: true})
 	out := dynamicViewConsistency(s, CoreUseCases{})
 	if hasRuleFindings(out, ruleDVRelCoverage) {
 		t.Fatalf("an unexercised relationship targeting a Utility must NOT fire DV-REL-COVERAGE, got %+v", out)

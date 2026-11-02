@@ -81,6 +81,7 @@ func comp(t *testing.T, name, kind string) Component {
 	c := Component{ID: Slug(name), Name: name, Kind: kind, Layer: layer, Encapsulates: name + " volatility"}
 	if kind == kindClient {
 		c.UISurface = boolPtr(false)
+		c.MachineProtocol = machineProtocolMCP
 	}
 	return c
 }

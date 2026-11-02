@@ -58,6 +58,9 @@ const (
 	ruleDVKeyUnique      RuleID = "DV-KEY-UNIQUE"
 	ruleDVStaticCoverage RuleID = "DV-STATIC-COVERAGE"
 	ruleDVRelCoverage    RuleID = "DV-REL-COVERAGE"
+	// ruleCCEdgeRealized refuses a static relationship no view calls that DV-REL-COVERAGE
+	// does not reach: one into a Utility, or a pub/sub one. Only ambient: true escapes it.
+	ruleCCEdgeRealized RuleID = "CC-EDGE-REALIZED"
 	// ruleDVPlannedSkipped (Info) lists the planned components DV-STATIC-COVERAGE
 	// deliberately skipped — a planned component cannot yet appear in a call chain, so
 	// it is exempt, but the exemption is surfaced (not silent) so it stays visible.
@@ -180,8 +183,8 @@ func plannedSkippedInfo(id RuleID, what string, planned []string) []Finding {
 
 // checkRelationshipCoverage emits DV-REL-COVERAGE for every static relationship
 // carrying a call mode (sync/queued) that appears in no dynamic-view call — a declared
-// call the dynamic views never exercise. Pub/sub relationships are exempt (they are not
-// call-chain edges). Gated on ≥1 dynamic view existing. Carries ccGateSeverity (see
+// call the dynamic views never exercise. A pub/sub relationship no view calls is
+// CC-EDGE-REALIZED's. Gated on ≥1 dynamic view existing. Carries ccGateSeverity (see
 // checkStaticParticipationCoverage — the two coverage rules move together).
 //
 // Deliberately matched on (from,to) and NOT on mode, unlike DV-EDGE-IN-MODEL: the
@@ -201,15 +204,19 @@ func plannedSkippedInfo(id RuleID, what string, planned []string) []Finding {
 // Exercising a utility edge stays fully legal (DV-EDGE-IN-MODEL still matches it); only
 // the coverage OBLIGATION lifts. Surfaced via DV-REL-UTILITY-EXEMPT (Info), not silent —
 // the no-silent-caps idiom shared with DV-PLANNED-SKIPPED.
+//
+// THE OBLIGATION LIFTS ONLY WHEN THE DESIGN SAYS SO (CC-EDGE-REALIZED): that edge must carry
+// ambient: true. An unmarked one is refused, because it is what let RUN-009 draw a subscribe
+// edge nothing calls and leave construction to record "Pending architect amendment".
 func checkRelationshipCoverage(s System, idx map[string]Component) []Finding {
+	out := ambientTargetFindings(s, idx)
 	if len(s.DynamicViews) == 0 {
-		return nil
+		return out
 	}
 	dynEdges := allDynEdges(s)
-	var out []Finding
 	var utilityExempt []string
 	for i, rel := range s.Relationships {
-		if !isUncoveredCallRel(rel, dynEdges) {
+		if dynEdges[relPairKey{from: rel.From, to: rel.To}] {
 			continue
 		}
 		f, exemptSection := relCoverageOutcome(rel, i, idx)
@@ -234,13 +241,18 @@ func allDynEdges(s System) map[relPairKey]bool {
 	return dynEdges
 }
 
-// isUncoveredCallRel reports whether rel is a call-mode (sync/queued) relationship
-// that no dynamic-view edge exercises — the candidate set DV-REL-COVERAGE reasons over.
-func isUncoveredCallRel(rel Relationship, dynEdges map[relPairKey]bool) bool {
-	if rel.Mode != modeSync && rel.Mode != modeQueued {
-		return false
+// ambientTargetFindings refuses ambient: true on anything but a Utility target: it says a
+// use case cannot narrate the dependency, which is never true of a component with business work.
+func ambientTargetFindings(s System, idx map[string]Component) []Finding {
+	var out []Finding
+	for i, rel := range s.Relationships {
+		if to, ok := idx[rel.To]; rel.Ambient && (!ok || to.Kind != kindUtility) {
+			section := relationshipSection(rel, idx)
+			out = append(out, Finding{RuleID: ruleCCEdgeRealized, Severity: ccGateSeverity, Location: loc(i+1, section),
+				Message: section + ": ambient: true is legal only on a relationship to a Utility"})
+		}
 	}
-	return !dynEdges[relPairKey{from: rel.From, to: rel.To}]
+	return out
 }
 
 // relCoverageOutcome classifies one unexercised call-mode relationship: when its
@@ -249,8 +261,17 @@ func isUncoveredCallRel(rel Relationship, dynEdges map[relPairKey]bool) bool {
 // DV-REL-COVERAGE finding to report and exemptSection is empty.
 func relCoverageOutcome(rel Relationship, i int, idx map[string]Component) (f Finding, exemptSection string) {
 	section := relationshipSection(rel, idx)
-	if to, ok := idx[rel.To]; ok && to.Kind == kindUtility {
+	to, known := idx[rel.To]
+	if known && to.Kind == kindUtility && rel.Ambient {
 		return Finding{}, section
+	}
+	if (known && to.Kind == kindUtility) || (rel.Mode != modeSync && rel.Mode != modeQueued) {
+		return Finding{
+			RuleID:   ruleCCEdgeRealized,
+			Severity: ccGateSeverity,
+			Message:  fmt.Sprintf("%s: no dynamic view calls this relationship; draw the call in the use case that makes it, remove the relationship, or, only for an ambient dependency on a Utility such as logging, diagnostics or authentication, set ambient: true", section),
+			Location: loc(i+1, section),
+		}, ""
 	}
 	return Finding{
 		RuleID:   ruleDVRelCoverage,

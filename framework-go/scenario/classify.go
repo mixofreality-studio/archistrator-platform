@@ -102,7 +102,8 @@ func isComponent(in Input, id string) bool {
 type opTarget struct{ to, op string }
 
 // resolveOps is Amendment A2: the label is split on " — ", "→", "/", "·" and
-// ";" (outside any bracketed argument list), each piece's leading identifier
+// ";", and on "|" in its op clause (clientops.go), all outside any bracketed
+// argument list; each piece's leading identifier
 // (the text before "(" or whitespace) is compared under Normalize with the op
 // names of the callee's contract family (family), and every piece that matches
 // resolves, in label order and without repeats, onto the first family contract
@@ -168,11 +169,14 @@ func opsByKey(fam []keyedContract) map[string]opTarget {
 }
 
 // labelPieces splits a call label on the A2 separators at bracket depth zero,
-// so a separator inside an argument list never splits it.
+// so a separator inside an argument list never splits it. "|" separates only in
+// the op clause, the text before the first "—" or "→": after that it is prose,
+// such as "→ member | refused".
 func labelPieces(label string) []string {
 	var pieces []string
 	var cur strings.Builder
 	depth := 0
+	inClause := true
 	for _, r := range label {
 		switch r {
 		case '(', '[', '{':
@@ -181,12 +185,14 @@ func labelPieces(label string) []string {
 			if depth > 0 {
 				depth--
 			}
-		case '—', '→', '/', '·', ';':
-			if depth == 0 {
-				pieces = append(pieces, cur.String())
-				cur.Reset()
-				continue
+		case '—', '→', '/', '·', ';', '|':
+			if depth != 0 || (r == '|' && !inClause) {
+				break
 			}
+			inClause = inClause && r != '—' && r != '→'
+			pieces = append(pieces, cur.String())
+			cur.Reset()
+			continue
 		}
 		cur.WriteRune(r)
 	}

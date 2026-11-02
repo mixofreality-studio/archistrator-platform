@@ -175,7 +175,7 @@
      {
       "id": "appclient",
       "name": "AppClient",
-      "kind": "client", "uiSurface": false,
+      "kind": "client", "uiSurface": false, "machineProtocol": "mcp",
       "layer": "client",
       "encapsulates": "",
       "atomicBusinessVerbs": null

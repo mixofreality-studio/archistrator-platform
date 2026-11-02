@@ -3,6 +3,7 @@ package methodcheck
 import (
 	"encoding/json"
 	"fmt"
+	"slices"
 	"sort"
 	"strings"
 
@@ -35,6 +36,12 @@ const (
 	ruleTPState     RuleID = "TP-STATE"
 	ruleTPOpReached RuleID = "TP-OP-REACHED"
 	ruleTPSkip      RuleID = "TP-SKIP"
+	// ruleTPClientOps holds a browser surface's contract family to the ops its labels derive.
+	ruleTPClientOps RuleID = "TP-CLIENT-OPS"
+	// ruleTPLabelOp refuses a "|" alternative that names no op of a contracted callee.
+	ruleTPLabelOp RuleID = "TP-LABEL-OP"
+	// ruleClientMachineMirror holds an optional machine-client contract to the generated tools.
+	ruleClientMachineMirror RuleID = "CLIENT-MACHINE-MIRROR"
 )
 
 // opLookup resolves an operation of one contract by its exact (case-sensitive) name.
@@ -46,6 +53,7 @@ type opLookup func(name string) (ContractOperation, bool)
 // derived scenario set (DeriveScenarios).
 func testPlanFindings(p Project, all []scenario.Scenario) []Finding {
 	out := opReachedFindings(p, all)
+	out = append(out, clientContractFindings(p)...)
 	if p.PhaseArtifacts == nil {
 		return out
 	}
@@ -242,6 +250,143 @@ func opReachedFindings(p Project, all []scenario.Scenario) []Finding {
 			}
 			out = append(out, tpFinding(ruleTPOpReached, loc(0, "serviceContracts."+key),
 				"%s.%s is called by no use case's dynamic view (every API has a use case): add the op's call to a use case's dynamic view, or delete the op", key, op.Name))
+		}
+	}
+	return out
+}
+
+// clientContractFindings are the rules that read a Client's contract against the design. Each
+// holds one way of keeping contracts from drifting from what is generated or derived; none
+// fires before the architecture is committed.
+func clientContractFindings(p Project) []Finding {
+	sys, ok, err := p.system()
+	if err != nil || !ok || !architectureCommitted(p) {
+		return nil
+	}
+	in, err := ScenarioInput(p)
+	if err != nil {
+		return nil
+	}
+	out := labelOpFindings(sys, in)
+	tools := generatedToolNames(p)
+	for _, c := range sys.Components {
+		switch {
+		case c.isBrowserSurface():
+			out = append(out, browserOpsFindings(sys, in, c)...)
+		case c.Kind == kindClient:
+			out = append(out, machineMirrorFindings(p, in, c, tools)...)
+		}
+	}
+	return out
+}
+
+// labelOpFindings is TP-LABEL-OP: a "|" alternative that resolves to no op would silently lose
+// its stimulus, and with it the proof of that op.
+func labelOpFindings(sys System, in scenario.Input) []Finding {
+	var out []Finding
+	for i, dv := range sys.DynamicViews {
+		for _, call := range stepCalls(dv) {
+			for _, alt := range scenario.UnresolvedAlternatives(in, call.To, call.Label) {
+				out = append(out, tpFinding(ruleTPLabelOp, loc(i+1, "dynamicView "+viewLabel(dv)),
+					"the call %s→%s is labelled %q, and its alternative %q names no operation of %s's contract; name an operation, or move outcomes after the \"—\"", call.From, call.To, call.Label, alt, call.To))
+			}
+		}
+	}
+	return out
+}
+
+// browserOpsFindings is TP-CLIENT-OPS: a browser surface's contract is derived from its labels,
+// so its family's ops must equal that set exactly. How they split across facets is free.
+func browserOpsFindings(sys System, in scenario.Input, c Component) []Finding {
+	have, ok := scenario.FamilyOps(in, c.ID)
+	if !ok {
+		return nil // written when the surface's UI design is recorded
+	}
+	want, err := scenario.ClientOps(browserLabels(sys, in.Actors, c.ID))
+	if err != nil {
+		return nil // SYS-CLIENT-OP-LABEL's to report
+	}
+	sort.Strings(want)
+	if slices.Equal(have, want) {
+		return nil
+	}
+	return []Finding{tpFinding(ruleTPClientOps, loc(0, "component "+c.ID),
+		"browser surface %q's contract has operations %v, but the labels of the actor calls into it derive %v; a browser contract is derived, so correct the design's labels and re-record the UI design", c.ID, have, want)}
+}
+
+// DerivedBrowserOps is the operations a browser surface's contract is derived to hold, from a
+// project's design: what its UI design's record writes, and what TP-CLIENT-OPS holds it to.
+func DerivedBrowserOps(raw []byte, componentID string) ([]string, error) {
+	var p Project
+	if err := json.Unmarshal(raw, &p); err != nil {
+		return nil, fmt.Errorf("decode the project: %w", err)
+	}
+	sys, ok, err := p.system()
+	if err != nil {
+		return nil, err
+	}
+	if !ok {
+		return nil, fmt.Errorf("the project has no committed System to derive %q's operations from", componentID)
+	}
+	in, err := ScenarioInput(p)
+	if err != nil {
+		return nil, err
+	}
+	return scenario.ClientOps(browserLabels(sys, in.Actors, componentID))
+}
+
+// browserLabels is the labels of the actor calls into a browser surface, in view order: the
+// input of scenario.ClientOps. Only design's own words reach the derivation.
+func browserLabels(sys System, actors map[string]bool, componentID string) []string {
+	var out []string
+	for _, dv := range sys.DynamicViews {
+		for _, call := range stepCalls(dv) {
+			if call.To == componentID && actors[call.From] {
+				out = append(out, call.Label)
+			}
+		}
+	}
+	return out
+}
+
+// generatedToolNames is every tool name the generators can give a machine client: a Manager's
+// interface name without its stereotype, then the operation.
+func generatedToolNames(p Project) map[string]bool {
+	out := map[string]bool{}
+	for _, sc := range p.ServiceContracts {
+		if !strings.EqualFold(sc.Layer, kindManager) && !strings.EqualFold(sc.Interface.Layer, kindManager) {
+			continue
+		}
+		base := strings.TrimSuffix(sc.Interface.Name, "Manager")
+		for _, op := range sc.Interface.Operations {
+			out[base+op.Name] = true
+		}
+	}
+	return out
+}
+
+// machineMirrorFindings is CLIENT-MACHINE-MIRROR. A machine client authors no contract, and
+// none is required of it. One may exist only as a mirror an app already keeps over its MCP
+// tools: non-empty, and every op a generated tool. A REST client has no dialect to mirror in.
+func machineMirrorFindings(p Project, in scenario.Input, c Component, tools map[string]bool) []Finding {
+	if c.BuildStatus == buildStatusPlanned || c.BuildStatus == buildStatusExternal {
+		return nil
+	}
+	have, ok := scenario.FamilyOps(in, c.ID)
+	if !ok {
+		return nil
+	}
+	section := "component " + c.ID
+	switch {
+	case c.MachineProtocol == machineProtocolREST:
+		return []Finding{tpFinding(ruleClientMachineMirror, loc(0, section), "REST client %q has a contract; a machine client authors none, and no REST dialect exists to mirror its routes in, so remove it", c.ID)}
+	case len(have) == 0:
+		return []Finding{tpFinding(ruleClientMachineMirror, loc(0, section), "machine client %q has a contract with no operations; remove it, because a machine client authors no contract", c.ID)}
+	}
+	var out []Finding
+	for _, op := range have {
+		if !tools[op] {
+			out = append(out, tpFinding(ruleClientMachineMirror, loc(0, section), "machine client %q has contract operation %q, which is no generated tool; a machine contract only mirrors the generated tools (the Manager's name without its stereotype, then the operation)", c.ID, op))
 		}
 	}
 	return out

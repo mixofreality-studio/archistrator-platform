@@ -362,7 +362,7 @@ func boolPtr(b bool) *bool { return &b }
 func TestAlignBrowserSurfaceOwesNoPackage(t *testing.T) {
 	sys := System{Components: []Component{
 		{ID: "web-app", Name: "WebApp", Kind: kindClient, Layer: layerClient, UISurface: boolPtr(true)},
-		{ID: "machine-api", Name: "MachineApi", Kind: kindClient, Layer: layerClient, UISurface: boolPtr(false)},
+		{ID: "machine-api", Name: "MachineApi", Kind: kindClient, Layer: layerClient, UISurface: boolPtr(false), MachineProtocol: machineProtocolMCP},
 		{ID: "list-manager", Name: "ListManager", Kind: kindManager, Layer: layerManager},
 	}}
 	pkgs := []classifiedPackage{{pkgPath: "m/internal/manager/list", leaf: "list", layer: "Manager"}}
@@ -473,7 +473,7 @@ func TestArchitectureValidationRequiresClientSurface(t *testing.T) {
 func TestClientSurfaceMustBeExplicit(t *testing.T) {
 	s := System{Components: []Component{
 		{ID: "a", Name: "A", Kind: kindClient},
-		{ID: "b", Name: "B", Kind: kindClient, UISurface: boolPtr(false)},
+		{ID: "b", Name: "B", Kind: kindClient, UISurface: boolPtr(false), MachineProtocol: machineProtocolMCP},
 		{ID: "c", Name: "C", Kind: kindManager},
 	}}
 	got := clientSurfaceExplicit(s)
