@@ -179,6 +179,28 @@ func TestGenerate_PlaywrightReporterMergesAndTimesOut(t *testing.T) {
 	}
 }
 
+// A plan's key is the contract key and nothing else: it names the generated test and its
+// results directory, so a fold to the contract would generate verdicts no check reads.
+func TestGenerate_RefusesAPlanNotKeyedByTheContract(t *testing.T) {
+	raw, err := os.ReadFile("testdata/project_tp.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	plans := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)
+	plans["shop-client"] = map[string]any{"component": "shop-client", "bindings": []any{}}
+	bad, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := Generate(bad, Config{ModulePath: "example.com/app/server"}); err == nil || !strings.Contains(err.Error(), `"shop-client"`) {
+		t.Fatalf("got %v, want a refusal naming the key", err)
+	}
+}
+
 // TestGenerate_PlaywrightSkipCarriesScenarioAnnotation pins the skipped UI
 // binding's contract: reporter.gen.ts keys results.json by the 'scenario'
 // annotation and falls back to test.title ('<id> — <title>') without one, so a

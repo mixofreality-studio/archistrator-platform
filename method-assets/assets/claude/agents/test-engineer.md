@@ -39,8 +39,8 @@ The test-engineer writes the bindings that make breaking the system possible.
 
 **archistrator is a single Go server repo. State is git-as-DB:** your output is
 the typed per-component test plan in `.aiarch/state/project.json` →
-`.phaseArtifacts.testPlan[<component>]` (scenario bindings keyed by stable
-scenario id), NOT `designs/*.md` files and NOT test code. The scenarios
+`.phaseArtifacts.testPlan[<contractKey>]` (filed under the `.serviceContracts`
+key, one plan per contract facet; scenario bindings keyed by stable scenario id), NOT `designs/*.md` files and NOT test code. The scenarios
 themselves are **derived on read** from the committed use-case activity
 diagrams (`listComponentScenarios`) and never stored; the tests are
 **generated** from your bindings by the platform's `testgen` (see
@@ -60,7 +60,12 @@ or a Phase-1/2 slot. A perf *rig* still goes through `recordTestingState`
    result or error, probes proving each expected state and observable output,
    `unobservable` for outputs no contract can observe, and `hook: true` where
    arranging the guards needs non-declarative setup. Every projected scenario is
-   bound; the TP-* rules decide completeness, not you.
+   bound; the TP-* rules decide completeness, not you. The rules do not decide
+   correctness, so hold yourself to these: there is no step-output reference, so
+   a value the component mints at run time (an id an earlier step returned) is
+   `hook: true`, never a literal or prose; every step carries a real value and a
+   real expectation, never a blank placeholder; a value the contract's error
+   model refuses is bound as `errorExpected` with its code.
 2. **The tests are not an activity.** The platform generates the scenario tests
    from the bindings and the integration task runs them against the real
    downstream stack.

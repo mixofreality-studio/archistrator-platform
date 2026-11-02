@@ -10,13 +10,17 @@
 
 **Checks.** Call `run_checks()` until it reports every check passing, and finish with one full `run_checks()` call. Do not run the checks yourself.
 
+**Sent back from integration.** If your operator notes report plan defects, integration has alleged that named scenarios' bindings contradict the contract or use case. The note is a claim to check, not evidence. Re-derive only the named bindings from the contract and the use case, and change them only where the claim holds; if a binding follows from the contract and use case, leave it exactly as it is, because integration must then fix the component. Do not add or drop scenarios, and do not change a binding the note does not name. Never copy a value from the implementation or from an observed result into a binding.
+
 ## Steps
 
 > **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a send-back, retry or re-queue note) and outrank the defaults below.
 
-1. Call `listComponentScenarios` with the component id. Each scenario has stimuli (user actions on this surface), expected outputs, expected states and hints. Do NOT invent scenarios; the set is derived from the use cases.
+1. Call `listComponentScenarios` with the contract key (once per contract facet, when the component has several). Each scenario has stimuli (user actions on this surface), expected outputs, expected states and hints. Do NOT invent scenarios; the set is derived from the use cases.
 2. For every scenario, write one binding: per stimulus, `operation`, concrete `inputs` (an `action` per user step, targeting element ids from the approved UI design in `.phaseArtifacts.uiDesign[<component_id>]`), `expect` (the observable), `probes` proving each expected state (`for` = node id) and any observable output, `unobservable` for outputs no surface can observe, and `hook: true` when arranging the guards needs non-declarative setup.
+   - **There is no step-output reference.** A value is a literal or it is a hook. A value the system mints at run time, such as an id shown after an earlier step, cannot be written as a literal: mark that step `hook: true`. Never write prose such as `id from step 2` as a value.
+   - **Every step carries a real value and a real expectation.** Never leave a blank placeholder: an empty target or a missing observable is a defect, not a default.
 3. A scenario may be skipped only with `skip: {reason, until: <activityId>}` naming an upstream activity not yet integrated.
-4. `recordPhaseArtifact` with mapKey = component id and payload `{"testPlan": {...}}`. It fails on any TP-* finding; fix and retry.
+4. `recordPhaseArtifact` with mapKey = the contract key (the `.serviceContracts` key, e.g. `listRecordAccess` for `list-record-access`) and payload `{"testPlan": {...}}` whose `component` is that same key. A plan is filed under its contract key and nothing else: the generated test, its results and the checks that read them are all named by it. A component publishing several contract facets has one plan per facet, each under its facet's key. The verb fails on any TP-* finding; fix and retry.
 5. `publishDraft`.
 6. **Stop.** Do not mark phase status (the Manager owns that) and do not merge. Leave the PR open for the gate.

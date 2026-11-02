@@ -24,6 +24,7 @@ import (
 
 // Rule ids of the TP family.
 const (
+	ruleTPKey       RuleID = "TP-KEY"
 	ruleTPBound     RuleID = "TP-BOUND"
 	ruleTPStep      RuleID = "TP-STEP"
 	ruleTPStepOp    RuleID = "TP-STEP-OP"
@@ -54,10 +55,34 @@ func testPlanFindings(p Project, all []scenario.Scenario) []Finding {
 	}
 	sort.Strings(comps)
 	for _, comp := range comps {
+		if _, ok := p.ServiceContracts[comp]; !ok {
+			out = append(out, planKeyFinding(p, comp))
+			continue
+		}
 		rec := p.PhaseArtifacts.TestPlan[comp]
 		out = append(out, componentPlanFindings(p, comp, rec, scenario.ForComponent(all, comp))...)
 	}
 	return out
+}
+
+// planKeyFinding is TP-KEY: a plan's key must be exactly a serviceContracts key, because
+// that key names the generated test, its results directory and the checks that read them.
+// A plan under any other spelling (a component's kebab slot-5 id) generates tests whose
+// verdicts no check ever finds, and one key could not hold one plan per facet anyway.
+func planKeyFinding(p Project, comp string) Finding {
+	l := loc(0, "phaseArtifacts.testPlan."+comp)
+	want := scenario.Normalize(comp)
+	var near []string
+	for key, sc := range p.ServiceContracts {
+		if scenario.Normalize(key) == want || scenario.Normalize(sc.Component) == want {
+			near = append(near, key)
+		}
+	}
+	sort.Strings(near)
+	if len(near) == 0 {
+		return tpFinding(ruleTPKey, l, "test plan key %q is not a serviceContracts key: no contract is recorded for it", comp)
+	}
+	return tpFinding(ruleTPKey, l, "test plan key %q is not a serviceContracts key: re-key it to %s", comp, strings.Join(near, " or "))
 }
 
 // componentPlanFindings is TP-BOUND over one component's plan (every projected

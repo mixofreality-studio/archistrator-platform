@@ -141,9 +141,11 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 func routePlans(out *Output, cfg Config, p methodcheck.Project, all []scenario.Scenario) (map[string][]componentPlan, error) {
 	byPackage := map[string][]componentPlan{}
 	for _, comp := range sortedKeys(p.PhaseArtifacts.TestPlan) {
-		sc, ok := contractFor(p, comp)
+		// The plan's key names the generated test, its results directory and the checks
+		// that read them, so it must be the contract key itself (methodcheck TP-KEY).
+		sc, ok := p.ServiceContracts[comp]
 		if !ok {
-			return nil, fmt.Errorf("testgen: test plan for unknown component %q", comp)
+			return nil, fmt.Errorf("testgen: test plan key %q is not a serviceContracts key", comp)
 		}
 		plan, err := planFor(out, comp, sc, scenario.ForComponent(all, comp), p.PhaseArtifacts.TestPlan[comp])
 		if err != nil {
@@ -194,22 +196,6 @@ func emitPackage(out *Output, cfg Config, goPkg string, plans []componentPlan) e
 		return emitMCP(out, cfg, goPkg, stereotype, plans)
 	}
 	return emitGo(out, cfg, goPkg, stereotype, plans)
-}
-
-// contractFor finds comp's service contract under the serviceContracts key,
-// or under scenario.Normalize when the plan is keyed by the kebab-case slot-5
-// id rather than the camelCase contract key.
-func contractFor(p methodcheck.Project, comp string) (methodcheck.ServiceContract, bool) {
-	if sc, ok := p.ServiceContracts[comp]; ok {
-		return sc, true
-	}
-	want := scenario.Normalize(comp)
-	for _, k := range sortedKeys(p.ServiceContracts) {
-		if scenario.Normalize(k) == want {
-			return p.ServiceContracts[k], true
-		}
-	}
-	return methodcheck.ServiceContract{}, false
 }
 
 // planFor pairs projected scenarios with their bindings by id, sorted by id. A

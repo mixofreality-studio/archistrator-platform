@@ -71,7 +71,7 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleCodeEdgeNotInModel, ruleModelEdgeNotInCode,
 
 		// ---- Per-component test plans (rules_testplan.go) ----
-		ruleTPBound, ruleTPStep, ruleTPStepOp, ruleTPArgName, ruleTPArgType,
+		ruleTPKey, ruleTPBound, ruleTPStep, ruleTPStepOp, ruleTPArgName, ruleTPArgType,
 		ruleTPExpect, ruleTPProbe, ruleTPState, ruleTPOpReached, ruleTPSkip,
 
 		// ---- Use-case I/O kinds (rules_usecase_io.go) ----

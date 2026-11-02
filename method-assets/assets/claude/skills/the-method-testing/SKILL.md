@@ -95,7 +95,8 @@ scenario tests from the bindings**, so neither harness is an activity.
 
 State is git-as-DB: these testing outputs are typed records in
 `.aiarch/state/project.json`, NOT `designs/*.md` files. The per-component test
-plan the test-engineer binds is `.phaseArtifacts.testPlan[<component>]`; the
+plan the test-engineer binds is `.phaseArtifacts.testPlan[<contractKey>]`
+(the `.serviceContracts` key, the only key a plan is filed under; TP-KEY); the
 job's check runs land in `.testingState.checkRuns[]`, recorded only by the workflow (never by an
 agent); the perf rig, quality gates and
 defects stay under `.testingState`. Per-activity status lives in
@@ -111,7 +112,7 @@ terminal activity feeding it directly.
 
 | Lifecycle task | Position | Owner | project.json target |
 |---|---|---|---|
-| `stp` — bind the component's derived scenarios | after `designReview`, parallel to `construction` | test-engineer | `.phaseArtifacts.testPlan[<component>]` |
+| `stp` — bind the component's derived scenarios | after `designReview`, parallel to `construction` | test-engineer | `.phaseArtifacts.testPlan[<contractKey>]` |
 | `integration` — the job generates the tests from the plan; the agent fills hooks and runs them; the job runs the checks and records the run | after `codeReview` | the workflow records the CheckRun (never the agent) | `.testingState.checkRuns[]` |
 | `testing` — review the run at the current revision | gate of the `integration` phase; joins `integration` and `stpReview` | reviewers read the run | — |
 
@@ -226,7 +227,7 @@ applies to archistrator itself and to **every system archistrator builds**.
   method" honest as both surfaces evolve.
 - **R5 — Author separation is binding.** The tests have no human (or agent)
   author: they are **generated** from the component's bound scenarios
-  (`.phaseArtifacts.testPlan[<component>]`) by the platform's `testgen`. The
+  (`.phaseArtifacts.testPlan[<contractKey>]`) by the platform's `testgen`. The
   scenarios themselves are not authored either — they derive from the committed
   use cases. What *is* authored is the **binding** — concrete values, expected
   results and probes — written by `test-engineer` on the component's test-plan

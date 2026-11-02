@@ -38,8 +38,10 @@ State is git-as-DB: everything below is read from `.aiarch/state/project.json`.
 |---|---|---|---|
 | `code` | (a) the contract author of **each inbound/outbound neighbour** of `componentId` (from `.systemDesign` relationships), reviewing from that neighbour's **contract** perspective; **and** (b) `componentId`'s **own** contract author, reviewing **code ↔ contract alignment** | (a) each neighbour's `.serviceContracts` entry; (b) `componentId`'s `.serviceContracts` entry | (b) only — may update `componentId`'s contract entry |
 | `ui-design` | founder/architect-user (approval) + `ux-reviewer` + `product-manager` + `system-architect` | the UI-design brief / Method UI conventions | no |
-| `test-plan` | `system-architect` + `product-manager` + `qa-engineer` | the core use cases (`.coreUseCases`) + the component's derived scenarios (`listComponentScenarios`) beside its bindings (`.phaseArtifacts.testPlan[component]`) | no |
+| `test-plan` | `system-architect` + `product-manager` + `qa-engineer` | the core use cases (`.coreUseCases`) + the component's derived scenarios (`listComponentScenarios`) beside its bindings (`.phaseArtifacts.testPlan[<contractKey>]`) | no |
 | `ui-code` | `ui-designer` / `ux-reviewer` | the approved UI design (`.phaseArtifacts.uiDesign`) | yes — may update the UI design |
+
+A `test-plan` reviewer also judges what the TP-* rules cannot, per scenario: an input the component mints at run time is `hook: true`, never a literal or prose such as `id from step 2`; every step carries a real value and a real expectation, never a blank placeholder; a value the contract's error model refuses is bound as `errorExpected` with its code; and each expected value follows from the contract and the use case. On a plan sent back from integration, the verdict rules on fault: if a named binding follows from the contract and use case it stands, and integration must fix the component.
 
 To find neighbours of `componentId`: read the `.systemDesign` relationships and collect every relationship where `componentId` is the source (outbound) or destination (inbound), excluding Utilities (logging/diagnostics/security) and Resource edges. The other endpoint is a neighbour whose owner must review.
 

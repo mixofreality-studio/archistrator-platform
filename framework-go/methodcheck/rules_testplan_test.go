@@ -61,6 +61,49 @@ func binding(t *testing.T, p Project, comp, scenario string) *ScenarioBinding {
 	return nil
 }
 
+// A plan is filed under the contract key and nothing else: the key names the generated
+// test and its results directory, so a kebab spelling yields verdicts no check reads.
+func TestTP_KeyMustBeAServiceContractsKey(t *testing.T) {
+	p := loadProject(t, "tp_clean.json")
+	var key string
+	for k := range p.PhaseArtifacts.TestPlan {
+		key = k
+		break
+	}
+	kebab := ""
+	for _, r := range key {
+		if r >= 'A' && r <= 'Z' {
+			kebab += "-" + strings.ToLower(string(r))
+			continue
+		}
+		kebab += string(r)
+	}
+	if kebab == key {
+		t.Fatalf("fixture key %q folds to itself; the test needs a camelCase key", key)
+	}
+	rec := p.PhaseArtifacts.TestPlan[key]
+	delete(p.PhaseArtifacts.TestPlan, key)
+	p.PhaseArtifacts.TestPlan[kebab] = rec
+
+	fs := runTP(t, p)
+	wantRules(t, fs, ruleTPKey, 1)
+	for _, f := range fs {
+		if f.RuleID == ruleTPKey {
+			if f.Severity != SeverityError {
+				t.Errorf("TP-KEY must be an Error, got %s", severityLabel(f.Severity))
+			}
+			if !strings.Contains(f.Message, "re-key it to "+key) {
+				t.Errorf("TP-KEY must name the contract key %q: %s", key, f.Message)
+			}
+		}
+	}
+
+	delete(p.PhaseArtifacts.TestPlan, kebab)
+	p.PhaseArtifacts.TestPlan["ghost"] = rec
+	fs = runTP(t, p)
+	wantRules(t, fs, ruleTPKey, 1)
+}
+
 func TestTP_CleanFixtureIsClean(t *testing.T) {
 	p := loadProject(t, "tp_clean.json")
 	if fs := runTP(t, p); len(fs) != 0 {
