@@ -10,7 +10,7 @@
 
 **Checks.** Call `run_checks()` until it reports every check passing, and finish with one full `run_checks()` call. Do not run the checks yourself.
 
-**Sent back from integration.** If your operator notes report plan defects, integration has alleged that named scenarios' bindings contradict the contract or use case. The note is a claim to check, not evidence. Re-derive only the named bindings from the contract and the use case, and change them only where the claim holds; if a binding follows from the contract and use case, leave it exactly as it is, because integration must then fix the component. Do not add or drop scenarios, and do not change a binding the note does not name. Never copy a value from the implementation or from an observed result into a binding.
+**Sent back from integration.** If your operator notes report plan defects, integration has alleged that named scenarios' bindings contradict the contract or use case. The note is a claim to check, not evidence. Re-derive only the named bindings from the contract and the use case, and change them only where the claim holds; if a binding follows from the contract and use case, leave it exactly as it is, because integration must then fix the component. Do not add or drop scenarios, and do not change a binding the note does not name. Never copy a value from the implementation or from an observed result into a binding. To let a binding stand, still re-record the plan unchanged with `recordPhaseArtifact`, then `publishDraft`: the job fails a run that does not advance the branch, and an unchanged plan publishes a re-affirm commit.
 
 ## Steps
 
