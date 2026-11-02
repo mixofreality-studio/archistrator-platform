@@ -53,12 +53,9 @@ func ValidateContract(key string, raw []byte) error {
 	var doc struct {
 		contractMeta
 		Interface struct {
-			Name       string `json:"name"`
-			Layer      string `json:"layer"`
-			Operations []struct {
-				Name  string `json:"name"`
-				Error bool   `json:"error"`
-			} `json:"operations"`
+			Name       string            `json:"name"`
+			Layer      string            `json:"layer"`
+			Operations []contractOpShape `json:"operations"`
 		} `json:"interface"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -67,15 +64,8 @@ func ValidateContract(key string, raw []byte) error {
 	if _, ok := layerContext[doc.Interface.Layer]; !ok {
 		return fmt.Errorf("contract %q: interface.layer %q is not one of %s", key, doc.Interface.Layer, strings.Join(layerNames(), ", "))
 	}
-	if want := layerIfaceSuffix[doc.Interface.Layer]; want != "" && !strings.HasSuffix(doc.Interface.Name, want) {
-		return fmt.Errorf("contract %q: interface.name %q must end in %s, because a %s's port is found by that suffix; rename the interface", key, doc.Interface.Name, want, doc.Interface.Layer)
-	}
-	if layerOpsReturnError[doc.Interface.Layer] {
-		for _, op := range doc.Interface.Operations {
-			if !op.Error {
-				return fmt.Errorf("contract %q: operation %s must declare error:true, because every %s operation returns an error as its last result and the construction gate refuses one that does not; a total operation keeps the declaration and simply returns nil", key, op.Name, doc.Interface.Layer)
-			}
-		}
+	if err := validateLayerRules(key, doc.Interface.Name, doc.Interface.Layer, doc.Interface.Operations); err != nil {
+		return err
 	}
 	if err := validateInfra(key, doc.Infra); err != nil {
 		return err
@@ -84,6 +74,28 @@ func ValidateContract(key string, raw []byte) error {
 		return fmt.Errorf("contract %q: a ResourceAccess must bind the infrastructure it fronts, or nothing can construct it; set infra from %s", key, strings.Join(ApprovedInfra(), ", "))
 	}
 	return validateGoPackage(key, doc.GoPackage, doc.Interface.Layer)
+}
+
+// contractOpShape is what the layer rules read of an operation.
+type contractOpShape struct {
+	Name  string `json:"name"`
+	Error bool   `json:"error"`
+}
+
+// validateLayerRules is the part of the construction arch gate a contract already decides.
+func validateLayerRules(key, name, layer string, ops []contractOpShape) error {
+	if want := layerIfaceSuffix[layer]; want != "" && !strings.HasSuffix(name, want) {
+		return fmt.Errorf("contract %q: interface.name %q must end in %s, because a %s's port is found by that suffix; rename the interface", key, name, want, layer)
+	}
+	if !layerOpsReturnError[layer] {
+		return nil
+	}
+	for _, op := range ops {
+		if !op.Error {
+			return fmt.Errorf("contract %q: operation %s must declare error:true, because every %s operation returns an error as its last result and the construction gate refuses one that does not; a total operation keeps the declaration and simply returns nil", key, op.Name, layer)
+		}
+	}
+	return nil
 }
 
 func validateInfra(key string, infra []string) error {
