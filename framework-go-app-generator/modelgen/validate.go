@@ -35,15 +35,30 @@ func CanonicalLayer(layer string) (string, bool) {
 	return l, ok
 }
 
+// layerIfaceSuffix is the interface-name suffix a layer's port must carry, and
+// layerOpsReturnError the layers whose every operation returns an error. The construction
+// arch gate enforces both on the generated code, where the contract is already frozen, so
+// they are refused here instead. A Utility and a Client are free. TestContractLayerRulesMatchArch
+// pins these tables to arch.MethodSpec.
+var (
+	layerIfaceSuffix    = map[string]string{"engine": "Engine", "resourceaccess": "Access"}
+	layerOpsReturnError = map[string]bool{"engine": true, "resourceaccess": true, "manager": true}
+)
+
 // ValidateContract refuses a contract document modelgen could not turn into a working
-// component package, naming what to change. It is what recordServiceContract runs, so the
-// refusal reaches the agent that can fix it rather than aborting generation later.
+// component package, or the construction arch gate would refuse, naming what to change.
+// It is what recordServiceContract runs, so the refusal reaches the agent that can fix it
+// rather than aborting generation or construction later.
 func ValidateContract(key string, raw []byte) error {
 	var doc struct {
 		contractMeta
 		Interface struct {
-			Name  string `json:"name"`
-			Layer string `json:"layer"`
+			Name       string `json:"name"`
+			Layer      string `json:"layer"`
+			Operations []struct {
+				Name  string `json:"name"`
+				Error bool   `json:"error"`
+			} `json:"operations"`
 		} `json:"interface"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
@@ -51,6 +66,16 @@ func ValidateContract(key string, raw []byte) error {
 	}
 	if _, ok := layerContext[doc.Interface.Layer]; !ok {
 		return fmt.Errorf("contract %q: interface.layer %q is not one of %s", key, doc.Interface.Layer, strings.Join(layerNames(), ", "))
+	}
+	if want := layerIfaceSuffix[doc.Interface.Layer]; want != "" && !strings.HasSuffix(doc.Interface.Name, want) {
+		return fmt.Errorf("contract %q: interface.name %q must end in %s, because a %s's port is found by that suffix; rename the interface", key, doc.Interface.Name, want, doc.Interface.Layer)
+	}
+	if layerOpsReturnError[doc.Interface.Layer] {
+		for _, op := range doc.Interface.Operations {
+			if !op.Error {
+				return fmt.Errorf("contract %q: operation %s must declare error:true, because every %s operation returns an error as its last result and the construction gate refuses one that does not; a total operation keeps the declaration and simply returns nil", key, op.Name, doc.Interface.Layer)
+			}
+		}
 	}
 	if err := validateInfra(key, doc.Infra); err != nil {
 		return err

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/modelgen"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 )
 
 func TestValidateContract(t *testing.T) {
@@ -19,6 +20,15 @@ func TestValidateContract(t *testing.T) {
 		{"an unapproved infra names the menu", `{"goPackage":"internal/resourceaccess/caller","infra":["IdentityProvider"],"interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, "ExternalHTTP"},
 		{"an RA with no infra", `{"goPackage":"internal/resourceaccess/caller","interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, "must bind"},
 		{"a package outside its layer", `{"goPackage":"internal/domain/caller","infra":["Postgres"],"interface":{"name":"CallerAccess","layer":"resourceaccess"}}`, "internal/resourceaccess/"},
+		{"an engine op returning an error", `{"goPackage":"internal/engine/a","interface":{"name":"AEngine","layer":"engine","operations":[{"name":"Do","error":true}]}}`, ""},
+		{"a total engine op with no error", `{"goPackage":"internal/engine/a","interface":{"name":"AEngine","layer":"engine","operations":[{"name":"Do","error":false}]}}`, "operation Do must declare error:true"},
+		{"an engine op omitting error", `{"goPackage":"internal/engine/a","interface":{"name":"AEngine","layer":"engine","operations":[{"name":"Do"}]}}`, "operation Do must declare error:true"},
+		{"an RA op with no error", `{"goPackage":"internal/resourceaccess/a","infra":["Postgres"],"interface":{"name":"AAccess","layer":"resourceaccess","operations":[{"name":"Do"}]}}`, "operation Do must declare error:true"},
+		{"a manager op with no error", `{"goPackage":"internal/manager/a","interface":{"name":"AManager","layer":"manager","operations":[{"name":"Do"}]}}`, "operation Do must declare error:true"},
+		{"an engine named without its suffix", `{"goPackage":"internal/engine/a","interface":{"name":"Resolver","layer":"engine"}}`, "must end in Engine"},
+		{"an RA named without its suffix", `{"goPackage":"internal/resourceaccess/a","infra":["Postgres"],"interface":{"name":"Store","layer":"resourceaccess"}}`, "must end in Access"},
+		{"a utility op may be total", `{"goPackage":"internal/utility/a","interface":{"name":"Clock","layer":"utility","operations":[{"name":"Now"}]}}`, ""},
+		{"a client op may be total", `{"interface":{"name":"Web","layer":"client","operations":[{"name":"Open"}]}}`, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			err := modelgen.ValidateContract("k", []byte(tc.doc))
@@ -32,6 +42,51 @@ func TestValidateContract(t *testing.T) {
 				t.Fatalf("got %v, want an error naming %q", err, tc.want)
 			}
 		})
+	}
+}
+
+// The contract's layer rules and the gate that refuses their generated code must not
+// drift: a layer the gate holds to an interface suffix (and so to the error-last rule,
+// arch.go checkInterfaceMethodReturns) must be refused at record time, under exactly the
+// suffix the gate matches, and a layer the gate leaves free stays free of the suffix rule.
+func TestContractLayerRulesMatchArch(t *testing.T) {
+	contract := func(layer, name, op string) string {
+		return `{"infra":["Postgres"],"interface":{"name":"` + name + `","layer":"` + layer + `","operations":[` + op + `]}}`
+	}
+	validate := func(layer, name, op string) error {
+		return modelgen.ValidateContract("k", []byte(contract(layer, name, op)))
+	}
+	const total, returnsError = `{"name":"Do"}`, `{"name":"Do","error":true}`
+	layers := arch.MethodSpec(t.TempDir()).Layers
+	if len(layers) == 0 {
+		t.Fatal("arch.MethodSpec has no layers")
+	}
+	for _, l := range layers {
+		wire := strings.ToLower(l.Name)
+		t.Run(wire, func(t *testing.T) {
+			if l.IfaceSuffix == nil {
+				if err := validate(wire, "AnyName", returnsError); err != nil {
+					t.Errorf("the gate has no name rule for %s, so the contract must have none: %v", wire, err)
+				}
+				return
+			}
+			named := "A" + strings.TrimSuffix(l.IfaceSuffix.String(), "$")
+			if !l.IfaceSuffix.MatchString(named) {
+				t.Fatalf("test could not spell a name matching %s", l.IfaceSuffix)
+			}
+			if err := validate(wire, named, returnsError); err != nil {
+				t.Errorf("a name and op the gate accepts was refused: %v", err)
+			}
+			if err := validate(wire, "Other", returnsError); err == nil {
+				t.Errorf("the gate requires %s, the contract must refuse a name without it", l.IfaceSuffix)
+			}
+			if err := validate(wire, named, total); err == nil {
+				t.Errorf("the gate requires error last on %s, the contract must refuse an op without it", wire)
+			}
+		})
+	}
+	if err := validate("utility", "Clock", total); err != nil {
+		t.Errorf("the gate has no return rule on a Utility: %v", err)
 	}
 }
 

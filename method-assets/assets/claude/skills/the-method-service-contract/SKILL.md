@@ -207,6 +207,8 @@ What facet of the service this contract represents. Written in business language
 | `op1(a, b)` | `a: TypeA, b: TypeB` | `ResultC` | Pre-condition, post-condition, side-effects. For ResourceAccess: declare idempotency + error-retryability (transient vs terminal) + advisory orchestration guidance (recommended timeout). For Engines: declare determinism guarantees. |
 | `op2(x)` | `x: TypeX` | `void` | ... |
 
+**Layer rules the record verb enforces.** An Engine's interface name ends in `Engine`, a ResourceAccess's in `Access`. Every Engine, ResourceAccess and Manager operation declares `error: true`, even a total one, whose implementation simply returns nil: never reason "total, so no error". The arch gate refuses anything else at construction, when the contract is frozen, so `recordServiceContract` refuses it at record time. A Utility or Client operation may declare `error: false`.
+
 ### Layer interaction notes
 - Callers: <list of Manager / Client names from the committed architecture artifact>
 - Sync or queued: <per the committed operational-concepts artifact sync/queued map>
