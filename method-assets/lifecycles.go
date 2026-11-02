@@ -305,25 +305,28 @@ func (v *lifecycleValidator) checkReviews() {
 // downstream of the source too, so a re-open cannot leave a stale pass standing behind it.
 func (v *lifecycleValidator) checkSendBackRoutes() {
 	for _, t := range v.l.Tasks {
-		if t.SendsBackTo == "" {
-			continue
+		if t.SendsBackTo != "" {
+			v.checkSendBackRoute(t)
 		}
-		if t.Kind != LifecycleTaskDispatch {
-			v.addf("task %q sets sendsBackTo, but only a dispatch task may", t.ID)
-			continue
-		}
-		target, ok := v.tasks[t.SendsBackTo]
-		if !ok || target.Kind != LifecycleTaskReview || target.Reviews == "" {
-			v.addf("task %q sends back to %q, which is not a review with a reviews target", t.ID, t.SendsBackTo)
-			continue
-		}
-		if v.ancestors[t.SendsBackTo][t.ID] {
-			v.addf("task %q sends back to %q, which waits on it", t.ID, t.SendsBackTo)
-		}
-		for _, other := range v.l.Tasks {
-			if other.ID != t.ID && v.ancestors[other.ID][t.SendsBackTo] && !v.ancestors[other.ID][t.ID] {
-				v.addf("task %q sends back to %q, but %q passes behind that review without waiting on %q", t.ID, t.SendsBackTo, other.ID, t.ID)
-			}
+	}
+}
+
+func (v *lifecycleValidator) checkSendBackRoute(t LifecycleTask) {
+	if t.Kind != LifecycleTaskDispatch {
+		v.addf("task %q sets sendsBackTo, but only a dispatch task may", t.ID)
+		return
+	}
+	target, ok := v.tasks[t.SendsBackTo]
+	if !ok || target.Kind != LifecycleTaskReview || target.Reviews == "" {
+		v.addf("task %q sends back to %q, which is not a review with a reviews target", t.ID, t.SendsBackTo)
+		return
+	}
+	if v.ancestors[t.SendsBackTo][t.ID] {
+		v.addf("task %q sends back to %q, which waits on it", t.ID, t.SendsBackTo)
+	}
+	for _, other := range v.l.Tasks {
+		if other.ID != t.ID && v.ancestors[other.ID][t.SendsBackTo] && !v.ancestors[other.ID][t.ID] {
+			v.addf("task %q sends back to %q, but %q passes behind that review without waiting on %q", t.ID, t.SendsBackTo, other.ID, t.ID)
 		}
 	}
 }
