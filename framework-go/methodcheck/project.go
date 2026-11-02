@@ -344,6 +344,16 @@ func (c Component) isBrowserSurface() bool {
 	return c.Kind == kindClient && c.UISurface != nil && *c.UISurface
 }
 
+// isMachineClient reports a Client that states it is no browser surface.
+func (c Component) isMachineClient() bool {
+	return c.Kind == kindClient && c.UISurface != nil && !*c.UISurface
+}
+
+// isBuilt reports a component expected to have code: neither planned nor external.
+func (c Component) isBuilt() bool {
+	return c.BuildStatus != buildStatusPlanned && c.BuildStatus != buildStatusExternal
+}
+
 // isRESTClient reports a machine client whose transport is the shared generated REST server.
 func (c Component) isRESTClient() bool {
 	return c.Kind == kindClient && c.MachineProtocol == machineProtocolREST

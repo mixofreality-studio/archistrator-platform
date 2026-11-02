@@ -121,14 +121,13 @@ func clientProtocolStated(s System) []Finding {
 
 // clientProtocolDefect is what is wrong with one component's machineProtocol, or "".
 func clientProtocolDefect(c Component, label string) string {
-	machine := c.Kind == kindClient && c.UISurface != nil && !*c.UISurface
-	built := c.BuildStatus != buildStatusPlanned && c.BuildStatus != buildStatusExternal
+	machine := c.isMachineClient()
 	switch {
 	case c.MachineProtocol != "" && !machine:
 		return fmt.Sprintf("%q sets machineProtocol, which only a machine client (kind client, uiSurface false) may state", label)
-	case c.MachineProtocol != "" && c.MachineProtocol != machineProtocolREST && c.MachineProtocol != machineProtocolMCP:
+	case c.MachineProtocol != "" && !slices.Contains([]string{machineProtocolREST, machineProtocolMCP}, c.MachineProtocol):
 		return fmt.Sprintf("machine client %q has machineProtocol %q; it must be %q or %q", label, c.MachineProtocol, machineProtocolREST, machineProtocolMCP)
-	case machine && built && c.MachineProtocol == "":
+	case machine && c.isBuilt() && c.MachineProtocol == "":
 		return fmt.Sprintf("machine client %q does not state machineProtocol; set %q for an HTTP API, %q for an MCP server, because each generates something different", label, machineProtocolREST, machineProtocolMCP)
 	}
 	return ""

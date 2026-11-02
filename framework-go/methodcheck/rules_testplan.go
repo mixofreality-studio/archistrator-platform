@@ -274,7 +274,7 @@ func clientContractFindings(p Project) []Finding {
 		case c.isBrowserSurface():
 			out = append(out, browserOpsFindings(sys, in, c)...)
 		case c.Kind == kindClient:
-			out = append(out, machineMirrorFindings(p, in, c, tools)...)
+			out = append(out, machineMirrorFindings(in, c, tools)...)
 		}
 	}
 	return out
@@ -347,8 +347,8 @@ func generatedToolNames(p Project) map[string]bool {
 // machineMirrorFindings is CLIENT-MACHINE-MIRROR. A machine client authors no contract, and
 // none is required of it. One may exist only as a mirror an app already keeps over its MCP
 // tools: non-empty, and every op a generated tool. A REST client has no dialect to mirror in.
-func machineMirrorFindings(p Project, in scenario.Input, c Component, tools map[string]bool) []Finding {
-	if c.BuildStatus == buildStatusPlanned || c.BuildStatus == buildStatusExternal {
+func machineMirrorFindings(in scenario.Input, c Component, tools map[string]bool) []Finding {
+	if !c.isBuilt() {
 		return nil
 	}
 	have, ok := scenario.FamilyOps(in, c.ID)
