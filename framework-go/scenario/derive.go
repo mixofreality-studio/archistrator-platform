@@ -262,10 +262,7 @@ func groupStimuli(in Input, d Diagram, n Node, guard string, g *callGroup, step 
 		}
 	}
 	call := fmt.Sprintf("%s/%s/%d", d.UseCaseID, n.ID, g.idx)
-	ops := groupOps(in, g.calls)
-	if len(ops) == 0 {
-		ops = throughManagerOps(in, first.To, step)
-	}
+	ops := groupOpsOrThrough(in, g.calls, first.To, step)
 	if len(ops) == 0 {
 		base.Call = call
 		return []InputEv{base}
@@ -283,6 +280,14 @@ func groupStimuli(in Input, d Diagram, n Node, guard string, g *callGroup, step 
 		out = append(out, ev)
 	}
 	return out
+}
+
+// groupOpsOrThrough is groupOps, or, when the labels name none, what the callee's own calls do.
+func groupOpsOrThrough(in Input, calls []Call, callee string, step []Call) []opTarget {
+	if ops := groupOps(in, calls); len(ops) > 0 {
+		return ops
+	}
+	return throughManagerOps(in, callee, step)
 }
 
 // groupOps is the union, in call then label order and without repeats, of the

@@ -206,16 +206,11 @@ func (g *goEmit) toolsFile(plan componentPlan, routes map[string]restRoute) ([]b
 	fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %s) }\n\n", strconv.Quote(plan.Key))
 	b.Write(g.body.Bytes())
 	if g.subject {
-		if rest {
-			table, err := restRouteTable(plan, routes)
-			if err != nil {
-				return nil, err
-			}
-			b.WriteString(table)
-			b.WriteString(restHelpers)
-		} else {
-			b.WriteString(toolsHelpers)
+		transport, err := transportHelpers(plan, rest, routes)
+		if err != nil {
+			return nil, err
 		}
+		b.WriteString(transport)
 		fmt.Fprintf(&b, expectHelpers, "`")
 		b.WriteString(toolsErrorHasCode)
 		b.WriteString(matchHelpers)
