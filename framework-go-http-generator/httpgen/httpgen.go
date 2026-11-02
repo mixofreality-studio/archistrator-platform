@@ -272,12 +272,7 @@ func writeScalarBind(b *strings.Builder, doc *projectmodel.Doc, alias string, pa
 	case "integer":
 		fmt.Fprintf(b, "\t%sInt, err := strconv.Atoi(%s)\n", name, rawExpr)
 		b.WriteString(badRequest(name))
-		// An inline integer is int64 in the contract, and Atoi gives an int.
-		src := name + "Int"
-		if ref == "" {
-			src = "int64(" + src + ")"
-		}
-		writeConv(b, name, src, ref, alias, param.Pointer)
+		writeConv(b, name, integerSource(name, ref), ref, alias, param.Pointer)
 	case "number":
 		fmt.Fprintf(b, "\t%sFloat, err := strconv.ParseFloat(%s, 64)\n", name, rawExpr)
 		b.WriteString(badRequest(name))
@@ -298,6 +293,15 @@ func writeScalarBind(b *strings.Builder, doc *projectmodel.Doc, alias string, pa
 			fmt.Fprintf(b, "\t%s := %s\n", name, valExpr)
 		}
 	}
+}
+
+// integerSource is the expression holding a parsed integer: an inline integer is int64 in the
+// contract, and Atoi gives an int.
+func integerSource(name, ref string) string {
+	if ref == "" {
+		return "int64(" + name + "Int)"
+	}
+	return name + "Int"
 }
 
 // writeConv binds `name` to the parsed src value, applying a named-type conversion

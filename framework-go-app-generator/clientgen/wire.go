@@ -180,6 +180,7 @@ func TestWire%[1]s(t *testing.T) {
 	return g.writeWire(files, path.Join(dir, wireFile), b.String())
 }
 
+// #nosec G101 -- generated test source, and the sample uuid is no credential.
 const mcpWireHelpers = `
 // mcpCall lists the tools of a server over the double and calls one, with arguments its own
 // advertised input schema admits.

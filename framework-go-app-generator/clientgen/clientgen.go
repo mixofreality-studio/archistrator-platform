@@ -122,13 +122,7 @@ func generateManager(p Project, cfg Config, key string, ops []string, files map[
 		return contractOAS{}, err
 	}
 	for _, c := range machineClients(p, cfg, key) {
-		if err := g.mcpTools(files, c); err != nil {
-			return contractOAS{}, err
-		}
-		if hasMirrorContract(p, c) {
-			continue
-		}
-		if err := g.mcpWire(files, c); err != nil {
+		if err := g.mcpClient(files, c, !hasMirrorContract(p, c)); err != nil {
 			return contractOAS{}, err
 		}
 	}
@@ -238,6 +232,14 @@ func machineClients(p Project, cfg Config, key string) []projectmodel.SystemComp
 		}
 	}
 	return out
+}
+
+// mcpClient writes one MCP client's tool table and, unless a plan owns its scenarios, its proof.
+func (g *contractGen) mcpClient(files map[string][]byte, c projectmodel.SystemComponent, proof bool) error {
+	if err := g.mcpTools(files, c); err != nil || !proof {
+		return err
+	}
+	return g.mcpWire(files, c)
 }
 
 // frontedByREST reports a REST machine client over the Manager key.

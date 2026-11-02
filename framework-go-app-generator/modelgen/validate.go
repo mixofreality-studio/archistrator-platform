@@ -1,6 +1,7 @@
 package modelgen
 
 import (
+	"cmp"
 	"encoding/json"
 	"fmt"
 	"go/token"
@@ -68,13 +69,7 @@ func ValidateContract(key string, raw []byte) error {
 	if _, ok := layerContext[doc.Interface.Layer]; !ok {
 		return fmt.Errorf("contract %q: interface.layer %q is not one of %s", key, doc.Interface.Layer, strings.Join(layerNames(), ", "))
 	}
-	if err := validateIdentifiers(key, doc.Interface.Name, doc.Interface.Operations); err != nil {
-		return err
-	}
-	if err := validateDefs(key, doc.GoPackage, doc.Interface.Name, doc.Defs, raw); err != nil {
-		return err
-	}
-	if err := validateLayerRules(key, doc.Interface.Name, doc.Interface.Layer, doc.Interface.Operations); err != nil {
+	if err := validateNames(key, doc.GoPackage, doc.Interface.Name, doc.Interface.Layer, doc.Interface.Operations, doc.Defs, raw); err != nil {
 		return err
 	}
 	if err := validateInfra(key, doc.Infra); err != nil {
@@ -84,6 +79,17 @@ func ValidateContract(key string, raw []byte) error {
 		return fmt.Errorf("contract %q: a ResourceAccess must bind the infrastructure it fronts, or nothing can construct it; set infra from %s", key, strings.Join(ApprovedInfra(), ", "))
 	}
 	return validateGoPackage(key, doc.GoPackage, doc.Interface.Layer)
+}
+
+// validateNames holds what the contract names to the generators and to the layer rules.
+func validateNames(key, goPackage, name, layer string, ops []contractOpShape, defs map[string]json.RawMessage, raw []byte) error {
+	if err := validateIdentifiers(key, name, ops); err != nil {
+		return err
+	}
+	if err := validateDefs(key, goPackage, name, defs, raw); err != nil {
+		return err
+	}
+	return validateLayerRules(key, name, layer, ops)
 }
 
 // contractOpShape is what the layer rules read of an operation.
@@ -122,13 +128,8 @@ func validateDefs(key, goPackage, ifaceName string, defs map[string]json.RawMess
 	if goPackage != "" && len(defs) == 0 {
 		return fmt.Errorf("contract %q: $defs is empty, and a built contract declares its model types there, because they are the component's public type surface; name at least the types its operations use", key)
 	}
-	for _, name := range slices.Sorted(maps.Keys(defs)) {
-		if !token.IsIdentifier(name) || name == ifaceName {
-			return fmt.Errorf("contract %q: $defs name %q must be a Go identifier other than the interface's own name, because it becomes a Go type in the component's package; rename it", key, name)
-		}
-		if err := validateDefFields(key, name, defs[name]); err != nil {
-			return err
-		}
+	if err := validateDefNames(key, ifaceName, defs); err != nil {
+		return err
 	}
 	if err := validateRefs(key, defs, raw); err != nil {
 		return err
@@ -143,6 +144,18 @@ func validateDefs(key, goPackage, ifaceName string, defs map[string]json.RawMess
 	return validateExportedRefs(key, iface)
 }
 
+func validateDefNames(key, ifaceName string, defs map[string]json.RawMessage) error {
+	for _, name := range slices.Sorted(maps.Keys(defs)) {
+		if !token.IsIdentifier(name) || name == ifaceName {
+			return fmt.Errorf("contract %q: $defs name %q must be a Go identifier other than the interface's own name, because it becomes a Go type in the component's package; rename it", key, name)
+		}
+		if err := validateDefFields(key, name, defs[name]); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func validateDefFields(key, def string, raw json.RawMessage) error {
 	var shape struct {
 		Properties map[string]struct {
@@ -155,10 +168,7 @@ func validateDefFields(key, def string, raw json.RawMessage) error {
 	}
 	seen := make(map[string]string, len(shape.Properties))
 	for _, prop := range slices.Sorted(maps.Keys(shape.Properties)) {
-		field := shape.Properties[prop].GoName
-		if field == "" {
-			field = exportName(prop)
-		}
+		field := cmp.Or(shape.Properties[prop].GoName, exportName(prop))
 		if !token.IsIdentifier(field) {
 			return fmt.Errorf("contract %q: $defs %s: property %q becomes the Go field %q, which is no identifier; rename it (letters, digits and underscores)", key, def, prop, field)
 		}
@@ -182,30 +192,31 @@ func validateRefs(key string, defs map[string]json.RawMessage, raw []byte) error
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return fmt.Errorf("contract %q: %w", key, err)
 	}
-	var walk func(node any) error
-	walk = func(node any) error {
-		switch n := node.(type) {
-		case map[string]any:
-			if ref, ok := n["$ref"].(string); ok {
-				if _, known := defs[refName(ref)]; !known {
-					return fmt.Errorf("contract %q: $ref %q names no type in this contract's $defs; declare it there or correct the reference", key, ref)
-				}
-			}
-			for _, v := range n {
-				if err := walk(v); err != nil {
-					return err
-				}
-			}
-		case []any:
-			for _, v := range n {
-				if err := walk(v); err != nil {
-					return err
-				}
-			}
+	for _, ref := range refsIn(doc) {
+		if _, known := defs[refName(ref)]; !known {
+			return fmt.Errorf("contract %q: $ref %q names no type in this contract's $defs; declare it there or correct the reference", key, ref)
 		}
-		return nil
 	}
-	return walk(doc)
+	return nil
+}
+
+// refsIn is every "$ref" string anywhere in a decoded JSON document.
+func refsIn(node any) []string {
+	var out []string
+	switch n := node.(type) {
+	case map[string]any:
+		if ref, ok := n["$ref"].(string); ok {
+			out = append(out, ref)
+		}
+		for _, v := range n {
+			out = append(out, refsIn(v)...)
+		}
+	case []any:
+		for _, v := range n {
+			out = append(out, refsIn(v)...)
+		}
+	}
+	return out
 }
 
 // validateIdentifiers holds every name the contract hands to the generators to Go's rules.

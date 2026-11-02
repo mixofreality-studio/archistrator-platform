@@ -80,21 +80,28 @@ func LeadingOpNames(label string) (ops, invalid []string) {
 // same name are refused, because a label resolves its op ignoring case and could not tell them
 // apart.
 func ClientOps(labels []string) ([]string, error) {
-	var ops []string
-	seen := map[string]string{}
+	var names []string
 	for _, label := range labels {
-		names, invalid := LeadingOpNames(label)
+		leading, invalid := LeadingOpNames(label)
 		if len(invalid) > 0 {
 			return nil, fmt.Errorf("the label %q must lead with exported operation names, such as \"AddTodo | RewordTodo — performs one list action\", and %q is not one", label, invalid[0])
 		}
-		for _, name := range names {
-			key := Normalize(name)
-			if other, dup := seen[key]; dup {
-				if other != name {
-					return nil, fmt.Errorf("the labels spell one operation two ways, %q and %q; use one spelling", other, name)
-				}
-				continue
-			}
+		names = append(names, leading...)
+	}
+	return distinctOps(names)
+}
+
+// distinctOps keeps each name once, in first-seen order, and refuses two spellings of one.
+func distinctOps(names []string) ([]string, error) {
+	var ops []string
+	seen := map[string]string{}
+	for _, name := range names {
+		key := Normalize(name)
+		other, dup := seen[key]
+		if dup && other != name {
+			return nil, fmt.Errorf("the labels spell one operation two ways, %q and %q; use one spelling", other, name)
+		}
+		if !dup {
 			seen[key] = name
 			ops = append(ops, name)
 		}

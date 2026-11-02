@@ -111,42 +111,41 @@ func clientSurfaceExplicit(s System) []Finding {
 func clientProtocolStated(s System) []Finding {
 	var out []Finding
 	for i, c := range s.Components {
-		machine := c.Kind == kindClient && c.UISurface != nil && !*c.UISurface
-		built := c.BuildStatus != buildStatusPlanned && c.BuildStatus != buildStatusExternal
 		label := componentName(c, i)
-		var msg string
-		switch {
-		case c.MachineProtocol != "" && !machine:
-			msg = fmt.Sprintf("%q sets machineProtocol, which only a machine client (kind client, uiSurface false) may state", label)
-		case c.MachineProtocol != "" && c.MachineProtocol != machineProtocolREST && c.MachineProtocol != machineProtocolMCP:
-			msg = fmt.Sprintf("machine client %q has machineProtocol %q; it must be %q or %q", label, c.MachineProtocol, machineProtocolREST, machineProtocolMCP)
-		case machine && built && c.MachineProtocol == "":
-			msg = fmt.Sprintf("machine client %q does not state machineProtocol; set %q for an HTTP API, %q for an MCP server, because each generates something different", label, machineProtocolREST, machineProtocolMCP)
-		default:
-			continue
+		if msg := clientProtocolDefect(c, label); msg != "" {
+			out = append(out, Finding{RuleID: ruleSysClientProtocol, Severity: SeverityError, Message: msg, Location: loc(i+1, "component "+label)})
 		}
-		out = append(out, Finding{RuleID: ruleSysClientProtocol, Severity: SeverityError, Message: msg, Location: loc(i+1, "component "+label)})
 	}
 	return out
+}
+
+// clientProtocolDefect is what is wrong with one component's machineProtocol, or "".
+func clientProtocolDefect(c Component, label string) string {
+	machine := c.Kind == kindClient && c.UISurface != nil && !*c.UISurface
+	built := c.BuildStatus != buildStatusPlanned && c.BuildStatus != buildStatusExternal
+	switch {
+	case c.MachineProtocol != "" && !machine:
+		return fmt.Sprintf("%q sets machineProtocol, which only a machine client (kind client, uiSurface false) may state", label)
+	case c.MachineProtocol != "" && c.MachineProtocol != machineProtocolREST && c.MachineProtocol != machineProtocolMCP:
+		return fmt.Sprintf("machine client %q has machineProtocol %q; it must be %q or %q", label, c.MachineProtocol, machineProtocolREST, machineProtocolMCP)
+	case machine && built && c.MachineProtocol == "":
+		return fmt.Sprintf("machine client %q does not state machineProtocol; set %q for an HTTP API, %q for an MCP server, because each generates something different", label, machineProtocolREST, machineProtocolMCP)
+	}
+	return ""
 }
 
 // clientOpLabels — SYS-CLIENT-OP-LABEL (error). A browser surface's contract is derived from
 // the labels of the actor calls into it (scenario.ClientOps), so design owns those names and a
 // prose label would leave an operation the plan cannot bind. Prose belongs after the "—".
 func clientOpLabels(s System, actors map[string]bool) []Finding {
-	idx := componentIndex(s)
 	labels := map[string][]string{}
 	var out []Finding
 	for i, dv := range s.DynamicViews {
-		for _, call := range stepCalls(dv) {
-			if to, ok := idx[call.To]; !ok || !to.isBrowserSurface() || !actors[call.From] {
-				continue
-			}
+		for _, call := range browserActorCalls(s, dv, actors) {
 			labels[call.To] = append(labels[call.To], call.Label)
 			if _, invalid := scenario.LeadingOpNames(call.Label); len(invalid) > 0 {
-				section := "dynamicView " + viewLabel(dv)
 				out = append(out, Finding{
-					RuleID: ruleSysClientOpLabel, Severity: SeverityError, Location: loc(i+1, section),
+					RuleID: ruleSysClientOpLabel, Severity: SeverityError, Location: loc(i+1, "dynamicView "+viewLabel(dv)),
 					Message: fmt.Sprintf("the call %s→%s is labelled %q; a call into a browser surface must lead with the exported operations it performs, such as \"AddTodo | RewordTodo — performs one list action\", because the surface's contract is derived from these names", call.From, call.To, call.Label),
 				})
 			}
@@ -159,6 +158,15 @@ func clientOpLabels(s System, actors map[string]bool) []Finding {
 		}
 	}
 	return out
+}
+
+// browserActorCalls is a view's calls from an actor into a browser surface.
+func browserActorCalls(s System, dv DynamicView, actors map[string]bool) []Relationship {
+	idx := componentIndex(s)
+	return slices.DeleteFunc(slices.Clone(stepCalls(dv)), func(call Relationship) bool {
+		to, ok := idx[call.To]
+		return !ok || !to.isBrowserSurface() || !actors[call.From]
+	})
 }
 
 // validLabels drops the labels already reported, so a bad label is reported once.

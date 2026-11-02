@@ -178,17 +178,8 @@ func labelPieces(label string) []string {
 	depth := 0
 	inClause := true
 	for _, r := range label {
-		switch r {
-		case '(', '[', '{':
-			depth++
-		case ')', ']', '}':
-			if depth > 0 {
-				depth--
-			}
-		case '—', '→', '/', '·', ';', '|':
-			if depth != 0 || (r == '|' && !inClause) {
-				break
-			}
+		depth = bracketDepth(depth, r)
+		if isPieceSeparator(r, depth, inClause) {
 			inClause = inClause && r != '—' && r != '→'
 			pieces = append(pieces, cur.String())
 			cur.Reset()
@@ -197,6 +188,33 @@ func labelPieces(label string) []string {
 		cur.WriteRune(r)
 	}
 	return append(pieces, cur.String())
+}
+
+// bracketDepth is depth after r.
+func bracketDepth(depth int, r rune) int {
+	switch r {
+	case '(', '[', '{':
+		return depth + 1
+	case ')', ']', '}':
+		if depth > 0 {
+			return depth - 1
+		}
+	}
+	return depth
+}
+
+// isPieceSeparator reports an A2 separator at depth zero; "|" only in the op clause.
+func isPieceSeparator(r rune, depth int, inClause bool) bool {
+	if depth != 0 {
+		return false
+	}
+	switch r {
+	case '—', '→', '/', '·', ';':
+		return true
+	case '|':
+		return inClause
+	}
+	return false
 }
 
 // leadingIdent is the piece's text before its first "(" or whitespace, after
