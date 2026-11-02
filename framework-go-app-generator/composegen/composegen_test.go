@@ -667,3 +667,81 @@ func checkGolden(t *testing.T, path string, got []byte) {
 		t.Errorf("output mismatch for %s (run with -update to refresh)", path)
 	}
 }
+
+// composeProject is a Manager with the three deps a fresh design gives it: an Engine, a
+// ResourceAccess and a Utility, with extra further contracts.
+func composeProject(utilityInfra, utilityBinding, extra string) string {
+	return `{"serviceContracts":{
+	"pubSub":{"component":"pubSub","layer":"Utility","goPackage":"internal/utility/pubsub",` + utilityInfra + `"$defs":{"T":{"type":"string"}},
+	  "interface":{"name":"PubSub","layer":"utility","operations":[{"name":"Publish","params":[{"name":"topic","schema":{"type":"string"}}]}]}},
+	"priceEngine":{"component":"priceEngine","layer":"Engine","goPackage":"internal/engine/price","$defs":{"T":{"type":"string"}},
+	  "interface":{"name":"PriceEngine","layer":"engine","operations":[]}},
+	"todoAccess":{"component":"todoAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"$defs":{"T":{"type":"string"}},
+	  "interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[]}},
+	"listManager":{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list","$defs":{"T":{"type":"string"}},
+	  "deps":[{"name":"price","component":"priceEngine"},{"name":"todos","component":"todoAccess"},{"name":"bus","component":"pubSub"}],
+	  "interface":{"name":"ListManager","layer":"manager","operations":[]}}` + extra + `},
+	"slots":{"6":{"kind":6,"model":{"deployment":{"deliveryStyle":"cloud","containers":[{"key":"server","name":"server","components":["listManager"]}],
+	  "infrastructure":[{"key":"db","substrate":"postgres","profiles":["local"],"presence":"required"},{"key":"bus","substrate":"temporal","profiles":["local"],"presence":"required"}],
+	  "environments":[{"title":"Local","profile":"local"}],
+	  "bindings":[{"component":"todoAccess","presence":"required","perProfile":{"local":{"variant":"Postgres","infra":["db"]}}}` + utilityBinding + `]}}}}}`
+}
+
+// A Manager's infra-free Utility dep is built by its generated pure constructor, before the
+// Manager takes it. RUN-009's design publishes through PubSub, and the composition root stopped
+// the whole Manager's integration with "component dep has no constructed value".
+func TestInfraFreeUtilityIsConstructedPure(t *testing.T) {
+	src := composeMain(t, composeProject("", "", ""))
+	for _, want := range []string{"pubSub := pubsub.NewPubSub()", "priceEngine := price.NewPriceEngine()", "list.NewListManager(priceEngine, todoAccess, pubSub)"} {
+		if !strings.Contains(src, want) {
+			t.Errorf("main.gen.go has no %q:\n%s", want, src)
+		}
+	}
+	if strings.Index(src, "pubsub.NewPubSub()") > strings.Index(src, "list.NewListManager(") {
+		t.Error("the Utility must be constructed before the Manager that takes it")
+	}
+}
+
+// A Utility that binds infrastructure keeps the binding path: it is not constructed twice,
+// and a design with no binding for it still stops, naming the gap.
+func TestInfraBoundUtilityTakesItsBinding(t *testing.T) {
+	const infra = `"infra":["Temporal"],`
+	src := composeMain(t, composeProject(infra, `,{"component":"pubSub","presence":"required","perProfile":{"local":{"variant":"Temporal","infra":["bus"]}}}`, ""))
+	if strings.Contains(src, "pubsub.NewPubSub()") || !strings.Contains(src, "pubsub.NewTemporalPubSub(") {
+		t.Errorf("the binding must construct the Utility:\n%s", src)
+	}
+	m, err := projectmodel.Load([]byte(composeProject(infra, "", "")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = composegen.Generate(m, composegen.Config{ContainerKey: "server", ModulePath: "example/server", PackageName: "main", EnvPrefix: "APP"})
+	if err == nil || !strings.Contains(err.Error(), `component dep "pubSub"`) {
+		t.Errorf("an unbound infra Utility must stop composition, naming it: %v", err)
+	}
+}
+
+// A pure component no built Manager takes yet is not constructed: the unused local would stop
+// the root compiling while its Manager is still ahead in the plan.
+func TestPureComponentNoManagerTakesIsLeftOut(t *testing.T) {
+	src := composeMain(t, composeProject("", "", `,
+	"auditEngine":{"component":"auditEngine","layer":"Engine","goPackage":"internal/engine/audit","$defs":{"T":{"type":"string"}},"interface":{"name":"AuditEngine","layer":"engine","operations":[]}},
+	"clock":{"component":"clock","layer":"Utility","goPackage":"internal/utility/clock","$defs":{"T":{"type":"string"}},"interface":{"name":"Clock","layer":"utility","operations":[]}}`))
+	for _, absent := range []string{"audit", "clock"} {
+		if strings.Contains(src, absent) {
+			t.Errorf("main.gen.go constructs %s, which nothing takes:\n%s", absent, src)
+		}
+	}
+}
+
+func composeMain(t *testing.T, project string) string {
+	t.Helper()
+	m, err := projectmodel.Load([]byte(project))
+	if err != nil {
+		t.Fatal(err)
+	}
+	got, err := composegen.Generate(m, composegen.Config{ContainerKey: "server", ModulePath: "example/server", PackageName: "main", EnvPrefix: "APP"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(got["main.gen.go"])
+}

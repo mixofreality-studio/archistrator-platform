@@ -260,9 +260,17 @@ func aliasImportPkgs(m *projectmodel.Model) []string {
 }
 
 // importsAsComponent reports whether a contract is emitted (and so imported) as a
-// constructed component: every engine, and every manager that declares deps.
+// constructed component: every engine, every Utility that binds no infrastructure, and every
+// manager that declares deps.
 func importsAsComponent(c *projectmodel.Contract) bool {
-	return strings.EqualFold(c.Layer, "engine") || (strings.EqualFold(c.Layer, "manager") && len(c.Deps) > 0)
+	return constructedPure(c) || (strings.EqualFold(c.Layer, "manager") && len(c.Deps) > 0)
+}
+
+// constructedPure reports a contract built by its generated zero-argument New<Interface>():
+// an Engine, or a Utility that binds no infrastructure and so has nothing to be handed. A
+// Utility that does bind infrastructure is constructed by its deployment binding instead.
+func constructedPure(c *projectmodel.Contract) bool {
+	return strings.EqualFold(c.Layer, "engine") || (strings.EqualFold(c.Layer, "utility") && len(c.Infra) == 0)
 }
 
 // uniqueAlias returns the import alias for goPackage: its plain last segment when
@@ -479,13 +487,18 @@ func (r *resolved) hookExtraCtorArgs(infraKeys []string) []string {
 	return args
 }
 
-// resolveEngines constructs every engine-layer contract via its pure
-// New<Interface>() DI constructor, in contract-key order.
+// resolveEngines constructs every Engine and infrastructure-free Utility via its pure
+// New<Interface>() DI constructor, in contract-key order. A binding, resolved earlier, wins:
+// a component the deployment constructs is not constructed twice.
 func (r *resolved) resolveEngines(m *projectmodel.Model) {
+	wanted := componentsWanted(m)
 	for _, key := range sortedKeys(m.Contracts) {
 		c := m.Contracts[key]
-		if !strings.EqualFold(c.Layer, "engine") || c.Doc == nil || c.GoPackage == "" {
-			continue // G2: skip a design-only engine contract with no built package.
+		if !constructedPure(c) || c.Doc == nil || c.GoPackage == "" {
+			continue // G2: skip a design-only contract with no built package.
+		}
+		if _, bound := r.localVar[key]; bound || !wanted[key] {
+			continue
 		}
 		e := engineComp{
 			varName:    projectmodel.LowerFirst(key),
@@ -497,6 +510,24 @@ func (r *resolved) resolveEngines(m *projectmodel.Model) {
 		r.engines = append(r.engines, e)
 		r.localVar[key] = e.varName
 	}
+}
+
+// componentsWanted is the component deps of the built Managers. A pure component no built
+// Manager takes yet is not constructed: the local would be unused, and the root would not
+// compile while its Manager is still ahead in the plan.
+func componentsWanted(m *projectmodel.Model) map[string]bool {
+	wanted := map[string]bool{}
+	for _, c := range m.Contracts {
+		if c == nil || !strings.EqualFold(c.Layer, "manager") || c.Doc == nil || c.GoPackage == "" {
+			continue
+		}
+		for _, dep := range c.Deps {
+			if dep.Component != "" {
+				wanted[dep.Component] = true
+			}
+		}
+	}
+	return wanted
 }
 
 // resolveManagers constructs every manager-layer contract that declares deps
