@@ -3,6 +3,7 @@ package temporalgen
 import (
 	"fmt"
 	"go/format"
+	"slices"
 	"strings"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
@@ -57,9 +58,9 @@ func emitActivities(ec emitContext) ([]byte, error) {
 func activityImports(deps []raDep) string {
 	stdlib := []string{importLine("context"), importLine("fmt")}
 	sdk := []string{importLine("go.temporal.io/sdk/activity")}
-	framework := []string{
-		"fwmanager " + importLine(fwManagerPath),
-		"fwra " + importLine(fwRAPath),
+	framework := []string{"fwra " + importLine(fwRAPath)}
+	if anyOpMapsAnError(deps) {
+		framework = append(framework, "fwmanager "+importLine(fwManagerPath))
 	}
 	var module []string
 	for _, rd := range deps {
@@ -73,6 +74,17 @@ func activityImports(deps []raDep) string {
 		}
 	}
 	return joinImportGroups([][]string{stdlib, sdk, framework, module})
+}
+
+// anyOpMapsAnError reports whether a generated activity calls fwmanager.MapError: a Manager with
+// no activity-bearing dep, or only total Utility operations, must not import it.
+func anyOpMapsAnError(deps []raDep) bool {
+	for _, rd := range deps {
+		if slices.ContainsFunc(rd.ops, func(op projectmodel.Operation) bool { return op.Error }) {
+			return true
+		}
+	}
+	return false
 }
 
 // activityStruct emits the genActivities struct: one interface-typed field per
@@ -148,7 +160,12 @@ func activityBody(rd raDep, op projectmodel.Operation, keyed bool) string {
 		args = append(args, p.Name)
 	}
 	call := "a." + rd.field + "." + op.Name + "(" + strings.Join(args, ", ") + ")"
-	if op.Result == nil {
+	switch {
+	case !op.Error && op.Result == nil:
+		return "\t" + call + "\n\treturn nil\n" // a Utility's total operation returns nothing to map
+	case !op.Error:
+		return "\treturn " + call + ", nil\n"
+	case op.Result == nil:
 		return "\terr := " + call + "\n\treturn fwmanager.MapError(err)\n"
 	}
 	return "\tv, err := " + call + "\n\treturn v, fwmanager.MapError(err)\n"

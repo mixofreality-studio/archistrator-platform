@@ -39,8 +39,16 @@ func proofDep(layer, iface, op, params string) string {
 	"interface":{"name":%q,"layer":%q,"operations":[
 	  {"name":%q,"params":[%s],"result":{"type":"string"},"error":true},
 	  {"name":"ZCount","params":[%s],"result":{"type":"integer"},"error":true},
-	  {"name":"ZDrop","params":[%s],"error":true}]}}`,
-		layer, strings.ToLower(layer), iface, strings.ToLower(layer), op, params, params, params)
+	  {"name":"ZDrop","params":[%s],"error":true}%s]}}`,
+		layer, strings.ToLower(layer), iface, strings.ToLower(layer), op, params, params, params, totalOps(layer, params))
+}
+
+// totalOps are a Utility's operations that declare no error, which only a Utility may.
+func totalOps(layer, params string) string {
+	if layer != "Utility" {
+		return ""
+	}
+	return fmt.Sprintf(`,{"name":"ZNow","params":[%s],"result":{"type":"integer"},"error":false},{"name":"ZTick","params":[%s],"error":false}`, params, params)
 }
 
 // proofManager is a Manager over the dependency, with a read and a write operation over one

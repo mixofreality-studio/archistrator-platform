@@ -360,3 +360,29 @@ func TestGenerateUtilityDepBecomesActivity(t *testing.T) {
 		}
 	}
 }
+
+// A Manager whose only dep is an Engine has no activity to map an error in, and neither has one
+// whose Utility's operations are all total: neither may import what it does not use.
+func TestActivitiesImportOnlyWhatTheyUse(t *testing.T) {
+	const project = `{"serviceContracts":{
+	"m":{"component":"m","layer":"Manager","goPackage":"internal/manager/m","$defs":{"T":{"type":"string"}},"deps":[{"name":"dep","component":"d"}],
+	  "interface":{"name":"MManager","layer":"manager","operations":[]}},
+	"d":{"component":"d","layer":"LAYER","goPackage":"internal/x/d","$defs":{"T":{"type":"string"}},
+	  "interface":{"name":"D","layer":"x","operations":[{"name":"Now","params":[],"result":{"type":"integer"},"error":false}]}}}}`
+	for _, layer := range []string{"Engine", "Utility"} {
+		m, err := projectmodel.Load([]byte(strings.ReplaceAll(project, "LAYER", layer)))
+		if err != nil {
+			t.Fatal(err)
+		}
+		out, err := temporalgen.Generate(m, temporalgen.Config{ModulePath: "example/app", ManagerKey: "m"})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if strings.Contains(string(out["activities.gen.go"]), "fwmanager") {
+			t.Errorf("%s: activities.gen.go imports fwmanager with nothing to map:\n%s", layer, out["activities.gen.go"])
+		}
+		if layer == "Utility" && !strings.Contains(string(out["activities.gen.go"]), "return a.Dep.Now(") {
+			t.Errorf("a total operation has no error to take:\n%s", out["activities.gen.go"])
+		}
+	}
+}
