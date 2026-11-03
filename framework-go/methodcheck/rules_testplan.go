@@ -280,19 +280,29 @@ func clientContractFindings(p Project) []Finding {
 	return out
 }
 
-// labelOpFindings is TP-LABEL-OP: a "|" alternative that resolves to no op would silently lose
-// its stimulus, and with it the proof of that op.
+// labelOpFindings is TP-LABEL-OP: an op name in a label (a "|" alternative, or a label's one
+// leading operation) that resolves to no op would silently lose its stimulus, and with it the proof
+// of that op. A bare name that is an operation of several Managers one machine client fronts is
+// ambiguous, and must be named as the client exposes it.
 func labelOpFindings(sys System, in scenario.Input) []Finding {
 	var out []Finding
 	for i, dv := range sys.DynamicViews {
 		for _, call := range stepCalls(dv) {
-			for _, alt := range scenario.UnresolvedAlternatives(in, call.To, call.Label) {
-				out = append(out, tpFinding(ruleTPLabelOp, loc(i+1, "dynamicView "+viewLabel(dv)),
-					"the call %s→%s is labelled %q, and its alternative %q names no operation of %s's contract; name an operation, or move outcomes after the \"—\"", call.From, call.To, call.Label, alt, call.To))
+			for _, u := range scenario.UnresolvedOps(in, call.To, call.Label) {
+				out = append(out, labelOpFinding(loc(i+1, "dynamicView "+viewLabel(dv)), call, u))
 			}
 		}
 	}
 	return out
+}
+
+func labelOpFinding(at *Location, call Relationship, u scenario.Unresolved) Finding {
+	if len(u.Candidates) > 0 {
+		return tpFinding(ruleTPLabelOp, at,
+			"the call %s→%s is labelled %q, and %q is an operation of more than one Manager %s fronts; name the one meant as %s exposes it, one of %v", call.From, call.To, call.Label, u.Alt, call.To, call.To, u.Candidates)
+	}
+	return tpFinding(ruleTPLabelOp, at,
+		"the call %s→%s is labelled %q, and %q names no operation of %s's contract; name an operation, or move outcomes after the \"—\"", call.From, call.To, call.Label, u.Alt, call.To)
 }
 
 // browserOpsFindings is TP-CLIENT-OPS: a browser surface's contract is derived from its labels,

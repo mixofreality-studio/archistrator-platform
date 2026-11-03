@@ -2,6 +2,8 @@ package methodcheck
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -282,5 +284,81 @@ func TestRESTClientOwesNoPackage(t *testing.T) {
 	}
 	if !strings.Contains(got, "McpServer") {
 		t.Errorf("an MCP client owes its own package: %q", got)
+	}
+}
+
+// run010Project is RUN-010's real design (testdata/fresh/run010.design.json: its core use cases,
+// its System and the contracts it had recorded) with its Manager's contract recorded, and the two
+// machine clients' contracts as the recorder derives them from it.
+func run010Project(t *testing.T, managerOps ...string) Project {
+	t.Helper()
+	raw, err := os.ReadFile(filepath.Join("testdata", "fresh", "run010.design.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var p Project
+	if err := json.Unmarshal(raw, &p); err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := p.ServiceContracts["listAccess"]; !ok {
+		t.Fatal("the fixture lost RUN-010's own contract")
+	}
+	op := func(names []string, prefix string) string {
+		parts := make([]string, len(names))
+		for i, n := range names {
+			parts[i] = `{"name":"` + prefix + n + `"}`
+		}
+		return strings.Join(parts, ",")
+	}
+	return withContracts(t, p, `{
+	"listManager":{"component":"listManager","layer":"Manager","interface":{"name":"ListManager","layer":"manager","operations":[`+op(managerOps, "")+`]}},
+	"listApi":{"component":"listApi","layer":"Client","interface":{"name":"ListApiList","layer":"client","operations":[`+op(managerOps, "List")+`]}},
+	"listMcpServer":{"component":"listMcpServer","layer":"Client","interface":{"name":"ListMcpServerList","layer":"client","operations":[`+op(managerOps, "List")+`]}}}`)
+}
+
+// RUN-010's "|" labels into list-api and list-mcp-server name the Manager's operations; once its
+// contract is recorded they resolve through it onto the clients' derived ones, so TP-LABEL-OP has
+// nothing to say. Before, it raised 24 errors and every later task's arch gate went red.
+func TestTPLabelOpRun010(t *testing.T) {
+	ops := []string{"AddTodo", "RewordTodo", "DiscardTodo", "SetTodoDone", "ToggleAll", "ClearCompleted", "ReviewList"}
+	p := run010Project(t, ops...)
+	if msg := ruleMessages(clientContractFindings(p), ruleTPLabelOp); msg != "" {
+		t.Errorf("RUN-010's labels resolve through the Manager the clients front:\n%s", msg)
+	}
+	p = run010Project(t, ops[:6]...)
+	msg := ruleMessages(clientContractFindings(p), ruleTPLabelOp)
+	for _, client := range []string{"list-api", "list-mcp-server"} {
+		if !strings.Contains(msg, `agent-tooling→`+client) {
+			t.Errorf("a single-op label naming no op into %s is refused, got:\n%s", client, msg)
+		}
+	}
+	if !strings.Contains(msg, `"ReviewList"`) {
+		t.Errorf("the unresolved name is named: %s", msg)
+	}
+}
+
+// A bare operation of two Managers one client fronts is refused as ambiguous, naming the prefixed
+// forms.
+func TestTPLabelOpAmbiguous(t *testing.T) {
+	_, _, p := clientDesign(t)
+	p = withContracts(t, p, `{
+	"tagManager":{"component":"tagManager","layer":"Manager","interface":{"name":"TagManager","layer":"manager","operations":[{"name":"Keep"}]}},
+	"mcpServer":{"component":"mcpServer","layer":"Client","interface":{"name":"McpServerList","layer":"client","operations":[{"name":"ListKeep"},{"name":"TagKeep"}]}}}`)
+	sys, _, _ := p.system()
+	sys.Components = append(sys.Components, Component{ID: "tag-manager", Name: "TagManager", Kind: kindManager})
+	sys.DynamicViews[0].Steps[0].Calls = append(sys.DynamicViews[0].Steps[0].Calls,
+		TraceCall{From: "user", To: "mcp-server", Mode: "sync", Label: "Keep — keeps one"},
+		TraceCall{From: "mcp-server", To: "list-manager", Mode: "sync", Label: "keep(owner)"},
+		TraceCall{From: "mcp-server", To: "tag-manager", Mode: "sync", Label: "keep(owner)"})
+	raw, err := json.Marshal(sys)
+	if err != nil {
+		t.Fatal(err)
+	}
+	slot := p.Slots["5"]
+	slot.Model = raw
+	p.Slots["5"] = slot
+	msg := ruleMessages(clientContractFindings(p), ruleTPLabelOp)
+	if !strings.Contains(msg, "more than one Manager") || !strings.Contains(msg, "[ListKeep TagKeep]") {
+		t.Errorf("ambiguous bare op, got %q", msg)
 	}
 }

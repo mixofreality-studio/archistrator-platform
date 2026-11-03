@@ -108,13 +108,14 @@ type opTarget struct{ to, op string }
 // names of the callee's contract family (family), and every piece that matches
 // resolves, in label order and without repeats, onto the first family contract
 // that declares it. nil when the callee has no contract or no piece names one of
-// its family's ops.
+// its family's ops. Into a machine client a piece also resolves through the
+// Managers it fronts (resolverFor).
 func resolveOps(in Input, component, label string) []opTarget {
-	byKey := opsByKey(family(in, component))
+	r := resolverFor(in, component)
 	var out []opTarget
 	seen := map[opTarget]bool{}
 	for _, piece := range labelPieces(label) {
-		ot, ok := byKey[Normalize(leadingIdent(piece))]
+		ot, _, ok := r.resolve(leadingIdent(piece))
 		if !ok || seen[ot] {
 			continue
 		}

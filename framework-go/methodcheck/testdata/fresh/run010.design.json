@@ -1,0 +1,3361 @@
+{
+ "id": "todomvc-run-20261103T054839Z-628d2823",
+ "version": 149,
+ "slots": {
+  "4": {
+   "status": 2,
+   "kind": 4,
+   "model": {
+    "decisions": [
+     {
+      "useCase": {
+       "id": "work-a-list",
+       "name": "Work a list",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        },
+        {
+         "id": "agent-tooling",
+         "role": "Agent tooling"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "core",
+       "variationOf": null,
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Ask to change the list from the web app or an embedded host workspace",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "s2",
+          "kind": "start",
+          "label": "Ask to change the list through the web API or the agent (MCP) surface",
+          "roleName": "Agent tooling",
+          "linkedActorId": "agent-tooling"
+         },
+         {
+          "id": "m0",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "d1",
+          "kind": "decision",
+          "label": "Which change is asked for?",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "d2",
+          "kind": "decision",
+          "label": "Is the new wording meaningful?",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Append a new active todo with that wording to the end of the kept list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "x2",
+          "kind": "note",
+          "label": "Blank wording captures nothing; the list is unchanged",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "m2",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "d3",
+          "kind": "decision",
+          "label": "Is the revised wording meaningful?",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a3",
+          "kind": "action",
+          "label": "Revise that todo's wording on the kept list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a3b",
+          "kind": "action",
+          "label": "Withdraw that todo from the kept list instead of keeping blank wording",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "m3",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a4",
+          "kind": "action",
+          "label": "Withdraw that one todo from the kept list, whatever its done state",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a5",
+          "kind": "action",
+          "label": "Settle that one todo as done or not done on the kept list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "d6",
+          "kind": "decision",
+          "label": "Is every todo on the list already done?",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a6",
+          "kind": "action",
+          "label": "Settle every todo on the kept list as not done",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a6b",
+          "kind": "action",
+          "label": "Settle every todo on the kept list as done",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "m6",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "d7",
+          "kind": "decision",
+          "label": "Is any todo on the list completed?",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a7",
+          "kind": "action",
+          "label": "Sweep every completed todo off the kept list, leaving active todos untouched",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "x7",
+          "kind": "note",
+          "label": "Nothing is completed; clear completed has no effect",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "m7",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "m1",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a8",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "f1",
+          "kind": "fork",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a9",
+          "kind": "action",
+          "label": "Make the change visible on every other open surface showing this list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "x9",
+          "kind": "note",
+          "label": "The asking surface shows the changed list and its items-left count",
+          "roleName": "Team member",
+          "linkedActorId": null
+         },
+         {
+          "id": "j1",
+          "kind": "join",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "x0",
+          "kind": "note",
+          "label": "Abandoning a reword (e.g. Escape) restores the original wording in the surface; the kept list is never touched",
+          "roleName": "Team member",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "m0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "s2",
+          "to": "m0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m0",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "d1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "d1",
+          "to": "d2",
+          "kind": "guardedFlow",
+          "guard": "[capture]"
+         },
+         {
+          "from": "d2",
+          "to": "a2",
+          "kind": "guardedFlow",
+          "guard": "[meaningful]"
+         },
+         {
+          "from": "d2",
+          "to": "x2",
+          "kind": "guardedFlow",
+          "guard": "[else]"
+         },
+         {
+          "from": "a2",
+          "to": "m2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "x2",
+          "to": "m2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m2",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "d1",
+          "to": "d3",
+          "kind": "guardedFlow",
+          "guard": "[reword]"
+         },
+         {
+          "from": "d3",
+          "to": "a3",
+          "kind": "guardedFlow",
+          "guard": "[meaningful]"
+         },
+         {
+          "from": "d3",
+          "to": "a3b",
+          "kind": "guardedFlow",
+          "guard": "[else]"
+         },
+         {
+          "from": "a3",
+          "to": "m3",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a3b",
+          "to": "m3",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m3",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "d1",
+          "to": "a4",
+          "kind": "guardedFlow",
+          "guard": "[discard]"
+         },
+         {
+          "from": "a4",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "d1",
+          "to": "a5",
+          "kind": "guardedFlow",
+          "guard": "[complete or reopen]"
+         },
+         {
+          "from": "a5",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "d1",
+          "to": "d6",
+          "kind": "guardedFlow",
+          "guard": "[toggle all]"
+         },
+         {
+          "from": "d6",
+          "to": "a6",
+          "kind": "guardedFlow",
+          "guard": "[all done]"
+         },
+         {
+          "from": "d6",
+          "to": "a6b",
+          "kind": "guardedFlow",
+          "guard": "[else]"
+         },
+         {
+          "from": "a6",
+          "to": "m6",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a6b",
+          "to": "m6",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m6",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "d1",
+          "to": "d7",
+          "kind": "guardedFlow",
+          "guard": "[else]"
+         },
+         {
+          "from": "d7",
+          "to": "a7",
+          "kind": "guardedFlow",
+          "guard": "[some completed]"
+         },
+         {
+          "from": "d7",
+          "to": "x7",
+          "kind": "guardedFlow",
+          "guard": "[else]"
+         },
+         {
+          "from": "a7",
+          "to": "m7",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "x7",
+          "to": "m7",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m7",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m1",
+          "to": "a8",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a8",
+          "to": "f1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "f1",
+          "to": "a9",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "f1",
+          "to": "x9",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a9",
+          "to": "j1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "x9",
+          "to": "j1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "j1",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "",
+      "essenceRationale": "Working a list (capture, reword, discard, complete/reopen, toggle all, clear completed) is the one thing every team member and every agent acting for them comes to this product to do. It is the fixed reference behavior the mission commits to and will not grow. It stays the same whether the caller is a person in the web app, a person in a host workspace, or agent tooling, and whatever store keeps the list. The product's differentiator is not the verbs themselves. It is that one kept, team-side list behaves identically to every party and every surface, with each change landing once and showing everywhere. That abstraction, a new name not in the founder's list, subsumes six raw requests and the agent-tooling request."
+     },
+     {
+      "useCase": {
+       "id": "review-a-list",
+       "name": "Review a list",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        },
+        {
+         "id": "agent-tooling",
+         "role": "Agent tooling"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "core",
+       "variationOf": null,
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Open the list or choose a view (All, Active, Completed) in the web app or an embedded host workspace",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "s2",
+          "kind": "start",
+          "label": "Ask for the list in a view through the web API or the agent (MCP) surface",
+          "roleName": "Agent tooling",
+          "linkedActorId": "agent-tooling"
+         },
+         {
+          "id": "m0",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Recall the kept list as it was last left and select the todos the chosen view shows",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list, independent of the view",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "x1",
+          "kind": "note",
+          "label": "The surface shows the chosen view, marks it as the current view, and shows items left; reviewing changes no todo",
+          "roleName": "Team member",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "m0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "s2",
+          "to": "m0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m0",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "a1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "x1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "x1",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "",
+      "essenceRationale": "Every party that comes back to a list first needs that same list recalled exactly as it was left: the same wording, order and done states, whatever tab, device, host or agent they come from. They then look at it through a view, with a true count of what remains. The guarantee that the list is kept and recalled on the team's side and seen identically everywhere is why the founder wants a real service rather than a browser toy. It does not change over time and is shared by every member and agent. It subsumes three raw requests (switch views, see items left, find my list next time) and the embedded-host request under one abstraction that reads but never changes the list."
+     },
+     {
+      "useCase": {
+       "id": "type-a-new-todo-and-add-it-to-my-list",
+       "name": "Type a new todo and add it to my list",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "work-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Submit new wording",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "d1",
+          "kind": "decision",
+          "label": "Is the wording meaningful?",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Append a new active todo with that wording to the end of the kept list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "b1",
+          "kind": "note",
+          "label": "Blank wording captures nothing",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "m1",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "d1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "d1",
+          "to": "a1",
+          "kind": "guardedFlow",
+          "guard": "[meaningful]"
+         },
+         {
+          "from": "d1",
+          "to": "b1",
+          "kind": "guardedFlow",
+          "guard": "[else]"
+         },
+         {
+          "from": "a1",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "b1",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "Capture is the capture branch of Work a list, a permutation of the same kept-list change. It differs only in the wording check, which is a variable, not a volatility."
+     },
+     {
+      "useCase": {
+       "id": "fix-a-todo-s-wording",
+       "name": "Fix a todo's wording",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "work-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Commit revised wording for an existing todo",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "d1",
+          "kind": "decision",
+          "label": "Is the revised wording meaningful?",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Revise that todo's wording on the kept list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "b1",
+          "kind": "action",
+          "label": "Withdraw that todo from the kept list instead of keeping blank wording",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "m1",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "x0",
+          "kind": "note",
+          "label": "Abandoning the edit (e.g. Escape) restores the original wording in the surface; nothing reaches the kept list",
+          "roleName": "Team member",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "d1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "d1",
+          "to": "a1",
+          "kind": "guardedFlow",
+          "guard": "[meaningful]"
+         },
+         {
+          "from": "d1",
+          "to": "b1",
+          "kind": "guardedFlow",
+          "guard": "[else]"
+         },
+         {
+          "from": "a1",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "b1",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "Reword is the reword branch of Work a list. Abandoning the edit is surface-local, and blank wording falls into discard, so it adds no new essence."
+     },
+     {
+      "useCase": {
+       "id": "remove-a-todo-i-don-t-want",
+       "name": "Remove a todo I don't want",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "work-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Ask to remove one todo",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Withdraw that one todo from the kept list, whatever its done state",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "a1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "Discard is a single-todo permutation of Work a list. It is CRUD-shaped mechanics, not essence."
+     },
+     {
+      "useCase": {
+       "id": "mark-a-todo-done-or-unmark-it",
+       "name": "Mark a todo done, or unmark it",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "work-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Ask to complete or reopen one todo",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Settle that one todo as done or not done on the kept list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "a1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "Complete/reopen is a single-todo permutation of Work a list's settle-completion change."
+     },
+     {
+      "useCase": {
+       "id": "mark-everything-done-at-once-or-undo-that",
+       "name": "Mark everything done at once, or undo that",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "work-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Ask to toggle all",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "d1",
+          "kind": "decision",
+          "label": "Is every todo on the list already done?",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Settle every todo on the kept list as not done",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "b1",
+          "kind": "action",
+          "label": "Settle every todo on the kept list as done",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "m1",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "d1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "d1",
+          "to": "a1",
+          "kind": "guardedFlow",
+          "guard": "[all done]"
+         },
+         {
+          "from": "d1",
+          "to": "b1",
+          "kind": "guardedFlow",
+          "guard": "[else]"
+         },
+         {
+          "from": "a1",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "b1",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "Toggle all is the bulk form of complete/reopen within Work a list. Its direction is one aggregate conditional (a variable)."
+     },
+     {
+      "useCase": {
+       "id": "sweep-away-everything-i-ve-already-finished",
+       "name": "Sweep away everything I've already finished",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "work-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Ask to clear completed",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "d1",
+          "kind": "decision",
+          "label": "Is any todo on the list completed?",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Sweep every completed todo off the kept list, leaving active todos untouched",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "b1",
+          "kind": "note",
+          "label": "Nothing is completed; clear completed has no effect",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "m1",
+          "kind": "merge",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "d1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "d1",
+          "to": "a1",
+          "kind": "guardedFlow",
+          "guard": "[some completed]"
+         },
+         {
+          "from": "d1",
+          "to": "b1",
+          "kind": "guardedFlow",
+          "guard": "[else]"
+         },
+         {
+          "from": "a1",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "b1",
+          "to": "m1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "m1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "Clear completed is the bulk form of discard within Work a list, a permutation of the same kept-list change."
+     },
+     {
+      "useCase": {
+       "id": "let-our-agent-tooling-drive-the-list",
+       "name": "Let our agent tooling drive the list",
+       "actors": [
+        {
+         "id": "agent-tooling",
+         "role": "Agent tooling"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "work-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Ask through the web API or the agent (MCP) surface to change a team member's list",
+          "roleName": "Agent tooling",
+          "linkedActorId": "agent-tooling"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Apply the asked-for change to the kept list exactly as for a person",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a3",
+          "kind": "action",
+          "label": "Make the change visible on every surface the team member has open on this list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "a1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "a3",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a3",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "Agent tooling is a second caller of Work a list, not a second business. The behavior must be identical by mission, and only the caller protocol and the acting-party identity differ. Those are volatilities the architecture encapsulates, not use cases."
+     },
+     {
+      "useCase": {
+       "id": "switch-between-everything-what-s-left-and-what-s-done",
+       "name": "Switch between everything, what's left, and what's done",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "review-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Choose a view: All, Active, or Completed",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Recall the kept list and select the todos the chosen view shows",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list, independent of the view",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "x1",
+          "kind": "note",
+          "label": "The surface marks the chosen view as current; no todo changes",
+          "roleName": "Team member",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "a1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "x1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "x1",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "Filtering is Review a list with a different view predicate. The view set is a variable on the done flag."
+     },
+     {
+      "useCase": {
+       "id": "see-at-a-glance-how-many-todos-i-have-left",
+       "name": "See at a glance how many todos I have left",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "review-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Look at the list",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list, independent of the view",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "x1",
+          "kind": "note",
+          "label": "The surface shows the items-left count at all times and refreshes it after every change",
+          "roleName": "Team member",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "a1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a1",
+          "to": "x1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "x1",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "Items left is one output of Review a list (and of every Work a list change). It is a single count, a variable, not a separate business pillar."
+     },
+     {
+      "useCase": {
+       "id": "find-my-list-still-there-when-i-come-back",
+       "name": "Find my list still there when I come back",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "review-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Come back to the app after closing the tab, restarting, or switching device",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Recall the kept list exactly as it was last left: same wording, order and done states",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "x0",
+          "kind": "note",
+          "label": "The list is kept on the team's side; nothing depends on the browser, the tab, or a service restart",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "a1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "Persistence is the recall guarantee inside Review a list, backed by team-side list keeping. The technology behind it is a volatility, not a use case."
+     },
+     {
+      "useCase": {
+       "id": "use-the-list-embedded-in-a-host-workspace",
+       "name": "Use the list embedded in a host workspace",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        }
+       ],
+       "trigger": "clientAction",
+       "classification": "nonCore",
+       "variationOf": "review-a-list",
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "start",
+          "label": "Open the list inside a host workspace",
+          "roleName": "Team member",
+          "linkedActorId": "team-member"
+         },
+         {
+          "id": "a0",
+          "kind": "action",
+          "label": "Establish whose list is being worked and who is working it",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a1",
+          "kind": "action",
+          "label": "Recall the kept list and select the todos the chosen view shows",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "a2",
+          "kind": "action",
+          "label": "Count the active todos left across the whole list",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         },
+         {
+          "id": "x1",
+          "kind": "note",
+          "label": "The host workspace renders the same views, current-view mark, items left and edit gestures as the web app",
+          "roleName": "Team member",
+          "linkedActorId": null
+         },
+         {
+          "id": "e1",
+          "kind": "end",
+          "label": "",
+          "roleName": "List keeping",
+          "linkedActorId": null
+         }
+        ],
+        "edges": [
+         {
+          "from": "s1",
+          "to": "a0",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a0",
+          "to": "a1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a1",
+          "to": "a2",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "a2",
+          "to": "x1",
+          "kind": "controlFlow",
+          "guard": ""
+         },
+         {
+          "from": "x1",
+          "to": "e1",
+          "kind": "controlFlow",
+          "guard": ""
+         }
+        ]
+       }
+      },
+      "rejectionReason": "The embedded host is another presentation host for Review a list and Work a list. Presentation-host volatility is encapsulated by the architecture, so the behavior does not change."
+     }
+    ]
+   },
+   "revisions": 2,
+   "provenance": {
+    "committedAt": "2026-11-03T06:04:00Z",
+    "approvedBy": "operator",
+    "draftedBy": "delivery:agentic-design"
+   }
+  },
+  "5": {
+   "status": 2,
+   "kind": 5,
+   "model": {
+    "components": [
+     {
+      "id": "list-app",
+      "name": "ListApp",
+      "kind": "client",
+      "layer": "client",
+      "encapsulates": "Presentation-host volatility. Browser list experience, standalone or embedded in a host workspace. Routes to ListManager.",
+      "encapsulatesVolatilities": [
+       "Presentation-host volatility"
+      ],
+      "atomicBusinessVerbs": null,
+      "contractKey": "listApp",
+      "uiSurface": true
+     },
+     {
+      "id": "list-api",
+      "name": "ListApi",
+      "kind": "client",
+      "layer": "client",
+      "encapsulates": "Caller-protocol volatility. Web API for the team's apps and agent tooling. Routes to ListManager.",
+      "encapsulatesVolatilities": [
+       "Caller-protocol volatility"
+      ],
+      "atomicBusinessVerbs": null,
+      "contractKey": "listApi",
+      "uiSurface": false,
+      "machineProtocol": "rest"
+     },
+     {
+      "id": "list-mcp-server",
+      "name": "ListMcpServer",
+      "kind": "client",
+      "layer": "client",
+      "encapsulates": "Caller-protocol volatility. MCP tool surface for agent tooling. Routes to ListManager.",
+      "encapsulatesVolatilities": [
+       "Caller-protocol volatility"
+      ],
+      "atomicBusinessVerbs": null,
+      "contractKey": "listMcpServer",
+      "uiSurface": false,
+      "machineProtocol": "mcp"
+     },
+     {
+      "id": "list-manager",
+      "name": "ListManager",
+      "kind": "manager",
+      "layer": "manager",
+      "encapsulates": "Encapsulates Cross-surface consistency volatility. Sequences each list change, its items-left count and its propagation.",
+      "encapsulatesVolatilities": [
+       "Cross-surface consistency volatility"
+      ],
+      "atomicBusinessVerbs": null,
+      "contractKey": "listManager"
+     },
+     {
+      "id": "identity-access",
+      "name": "IdentityAccess",
+      "kind": "resourceAccess",
+      "layer": "resourceAccess",
+      "encapsulates": "Encapsulates Acting-party identity volatility. Recognizes whose list is worked and who is working it.",
+      "encapsulatesVolatilities": [
+       "Acting-party identity volatility"
+      ],
+      "atomicBusinessVerbs": [
+       "recognizeActingParty"
+      ],
+      "contractKey": "identityAccess"
+     },
+     {
+      "id": "list-access",
+      "name": "ListAccess",
+      "kind": "resourceAccess",
+      "layer": "resourceAccess",
+      "encapsulates": "Encapsulates List-keeping technology volatility; Hosting-environment volatility at the store binding (rest: ops concept). Atomic kept-list verbs.",
+      "encapsulatesVolatilities": [
+       "List-keeping technology volatility",
+       "Hosting-environment volatility"
+      ],
+      "atomicBusinessVerbs": [
+       "appendTodo",
+       "reviseWording",
+       "withdrawTodo",
+       "settleCompletion",
+       "settleAll",
+       "sweepCompleted",
+       "recallList",
+       "countItemsLeft"
+      ],
+      "contractKey": "listAccess"
+     },
+     {
+      "id": "team-identity-provider",
+      "name": "TeamIdentityProvider",
+      "kind": "resource",
+      "layer": "resource",
+      "encapsulates": "",
+      "atomicBusinessVerbs": null
+     },
+     {
+      "id": "list-store",
+      "name": "ListStore",
+      "kind": "resource",
+      "layer": "resource",
+      "encapsulates": "",
+      "atomicBusinessVerbs": null
+     },
+     {
+      "id": "message-bus",
+      "name": "MessageBus",
+      "kind": "utility",
+      "layer": "utility",
+      "encapsulates": "",
+      "atomicBusinessVerbs": null,
+      "contractKey": "messageBus"
+     }
+    ],
+    "relationships": [
+     {
+      "from": "list-app",
+      "to": "list-manager",
+      "mode": "sync",
+      "label": "addTodo | rewordTodo | discardTodo | setTodoDone | toggleAll | clearCompleted | reviewList"
+     },
+     {
+      "from": "list-api",
+      "to": "list-manager",
+      "mode": "sync",
+      "label": "addTodo | rewordTodo | discardTodo | setTodoDone | toggleAll | clearCompleted | reviewList"
+     },
+     {
+      "from": "list-mcp-server",
+      "to": "list-manager",
+      "mode": "sync",
+      "label": "addTodo | rewordTodo | discardTodo | setTodoDone | toggleAll | clearCompleted | reviewList"
+     },
+     {
+      "from": "list-manager",
+      "to": "identity-access",
+      "mode": "sync",
+      "label": "recognizeActingParty(callerProof) → member, actingParty"
+     },
+     {
+      "from": "identity-access",
+      "to": "team-identity-provider",
+      "mode": "sync",
+      "label": "verify caller proof and resolve the member it acts for"
+     },
+     {
+      "from": "list-manager",
+      "to": "list-access",
+      "mode": "sync",
+      "label": "appendTodo / reviseWording / withdrawTodo / settleCompletion / settleAll / sweepCompleted / recallList / countItemsLeft"
+     },
+     {
+      "from": "list-access",
+      "to": "list-store",
+      "mode": "sync",
+      "label": "append / revise / withdraw / settle / sweep / read member's list entries (idempotency: todo id)"
+     },
+     {
+      "from": "list-manager",
+      "to": "message-bus",
+      "mode": "sync",
+      "label": "publish(ListChanged)"
+     }
+    ],
+    "dynamicViews": [
+     {
+      "useCaseId": "work-a-list",
+      "key": "uc1-work-a-list",
+      "title": "Work a list",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "AddTodo | RewordTodo | DiscardTodo | SetTodoDone | ToggleAll | ClearCompleted — performs one list change",
+          "alt": "s1"
+         },
+         {
+          "from": "agent-tooling",
+          "to": "list-api",
+          "mode": "sync",
+          "label": "AddTodo | RewordTodo | DiscardTodo | SetTodoDone | ToggleAll | ClearCompleted — performs one list change",
+          "alt": "s1"
+         },
+         {
+          "from": "agent-tooling",
+          "to": "list-mcp-server",
+          "mode": "sync",
+          "label": "AddTodo | RewordTodo | DiscardTodo | SetTodoDone | ToggleAll | ClearCompleted — performs one list change",
+          "alt": "s1"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "addTodo | rewordTodo | discardTodo | setTodoDone | toggleAll | clearCompleted",
+          "alt": "s2"
+         },
+         {
+          "from": "list-api",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "addTodo | rewordTodo | discardTodo | setTodoDone | toggleAll | clearCompleted",
+          "alt": "s2"
+         },
+         {
+          "from": "list-mcp-server",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "addTodo | rewordTodo | discardTodo | setTodoDone | toggleAll | clearCompleted",
+          "alt": "s2"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "appendTodo(member, wording)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "append an active entry at the end of the member's list (idempotency: todo id)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a3",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "reviseWording(member, todoId, wording)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "overwrite one entry's wording (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a3b",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "withdrawTodo(member, todoId)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "remove one entry (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a4",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "withdrawTodo(member, todoId)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "remove one entry (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a5",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "settleCompletion(member, todoId, done)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "set one entry's done flag (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "d6",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "recallList(member) → todos"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "read the member's list entries in capture order"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a6",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "settleAll(member, notDone)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "set every entry's done flag to not done (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a6b",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "settleAll(member, done)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "set every entry's done flag to done (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "d7",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "recallList(member) → todos"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "read the member's list entries in capture order"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a7",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "sweepCompleted(member)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "remove every done entry, leave active entries (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a8",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a9",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "message-bus",
+          "mode": "sync",
+          "label": "publish(ListChanged(member, itemsLeft))"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "review-a-list",
+      "key": "uc2-review-a-list",
+      "title": "Review a list",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "ReviewList — opens the list in a chosen view",
+          "alt": "s1"
+         },
+         {
+          "from": "agent-tooling",
+          "to": "list-api",
+          "mode": "sync",
+          "label": "ReviewList — opens the list in a chosen view",
+          "alt": "s1"
+         },
+         {
+          "from": "agent-tooling",
+          "to": "list-mcp-server",
+          "mode": "sync",
+          "label": "ReviewList — opens the list in a chosen view",
+          "alt": "s1"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "reviewList",
+          "alt": "s2"
+         },
+         {
+          "from": "list-api",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "reviewList",
+          "alt": "s2"
+         },
+         {
+          "from": "list-mcp-server",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "reviewList",
+          "alt": "s2"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "recallList(member) → todos"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "read the member's list entries in capture order"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "type-a-new-todo-and-add-it-to-my-list",
+      "key": "uc3-type-a-new-todo-and-add-it-to-my-list",
+      "title": "Type a new todo and add it to my list",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "AddTodo — submits new wording"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "addTodo"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "appendTodo(member, wording)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "append an active entry at the end of the member's list (idempotency: todo id)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "fix-a-todo-s-wording",
+      "key": "uc4-fix-a-todo-s-wording",
+      "title": "Fix a todo's wording",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "RewordTodo — commits revised wording"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "rewordTodo"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "reviseWording(member, todoId, wording)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "overwrite one entry's wording (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "b1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "withdrawTodo(member, todoId)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "remove one entry (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "remove-a-todo-i-don-t-want",
+      "key": "uc5-remove-a-todo-i-don-t-want",
+      "title": "Remove a todo I don't want",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "DiscardTodo — removes one todo"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "discardTodo"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "withdrawTodo(member, todoId)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "remove one entry (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "mark-a-todo-done-or-unmark-it",
+      "key": "uc6-mark-a-todo-done-or-unmark-it",
+      "title": "Mark a todo done, or unmark it",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "SetTodoDone — completes or reopens one todo"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "setTodoDone"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "settleCompletion(member, todoId, done)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "set one entry's done flag (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "mark-everything-done-at-once-or-undo-that",
+      "key": "uc7-mark-everything-done-at-once-or-undo-that",
+      "title": "Mark everything done at once, or undo that",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "ToggleAll — toggles every todo"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "toggleAll"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "d1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "recallList(member) → todos"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "read the member's list entries in capture order"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "settleAll(member, notDone)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "set every entry's done flag to not done (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "b1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "settleAll(member, done)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "set every entry's done flag to done (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "sweep-away-everything-i-ve-already-finished",
+      "key": "uc8-sweep-away-everything-i-ve-already-finished",
+      "title": "Sweep away everything I've already finished",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "ClearCompleted — clears completed todos"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "clearCompleted"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "d1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "recallList(member) → todos"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "read the member's list entries in capture order"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "sweepCompleted(member)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "remove every done entry, leave active entries (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "let-our-agent-tooling-drive-the-list",
+      "key": "uc9-let-our-agent-tooling-drive-the-list",
+      "title": "Let our agent tooling drive the list",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "agent-tooling",
+          "to": "list-api",
+          "mode": "sync",
+          "label": "AddTodo | RewordTodo | DiscardTodo | SetTodoDone | ToggleAll | ClearCompleted — performs one list change for a team member",
+          "alt": "s1"
+         },
+         {
+          "from": "agent-tooling",
+          "to": "list-mcp-server",
+          "mode": "sync",
+          "label": "AddTodo | RewordTodo | DiscardTodo | SetTodoDone | ToggleAll | ClearCompleted — performs one list change for a team member",
+          "alt": "s1"
+         },
+         {
+          "from": "list-api",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "addTodo | rewordTodo | discardTodo | setTodoDone | toggleAll | clearCompleted",
+          "alt": "s2"
+         },
+         {
+          "from": "list-mcp-server",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "addTodo | rewordTodo | discardTodo | setTodoDone | toggleAll | clearCompleted",
+          "alt": "s2"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "appendTodo / reviseWording / withdrawTodo / settleCompletion / settleAll / sweepCompleted (the asked-for change)"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "apply the matching change to the member's list entries (idempotent)"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a3",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "message-bus",
+          "mode": "sync",
+          "label": "publish(ListChanged(member, itemsLeft))"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "switch-between-everything-what-s-left-and-what-s-done",
+      "key": "uc10-switch-between-everything-what-s-left-and-what-s-done",
+      "title": "Switch between everything, what's left, and what's done",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "ReviewList — chooses a view"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "reviewList"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "recallList(member) → todos"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "read the member's list entries in capture order"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "see-at-a-glance-how-many-todos-i-have-left",
+      "key": "uc11-see-at-a-glance-how-many-todos-i-have-left",
+      "title": "See at a glance how many todos I have left",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "ReviewList — looks at the list"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "reviewList"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "find-my-list-still-there-when-i-come-back",
+      "key": "uc12-find-my-list-still-there-when-i-come-back",
+      "title": "Find my list still there when I come back",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "ReviewList — comes back to the list"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "reviewList"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "recallList(member) → todos"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "read the member's list entries in capture order"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "use-the-list-embedded-in-a-host-workspace",
+      "key": "uc13-use-the-list-embedded-in-a-host-workspace",
+      "title": "Use the list embedded in a host workspace",
+      "steps": [
+       {
+        "activityNodeId": "a0",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "list-app",
+          "mode": "sync",
+          "label": "ReviewList — opens the list inside a host workspace"
+         },
+         {
+          "from": "list-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "reviewList"
+         },
+         {
+          "from": "list-manager",
+          "to": "identity-access",
+          "mode": "sync",
+          "label": "recognizeActingParty(callerProof) → member, actingParty"
+         },
+         {
+          "from": "identity-access",
+          "to": "team-identity-provider",
+          "mode": "sync",
+          "label": "verify caller proof and resolve the member it acts for"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a1",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "recallList(member) → todos"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "read the member's list entries in capture order"
+         }
+        ]
+       },
+       {
+        "activityNodeId": "a2",
+        "calls": [
+         {
+          "from": "list-manager",
+          "to": "list-access",
+          "mode": "sync",
+          "label": "countItemsLeft(member) → itemsLeft"
+         },
+         {
+          "from": "list-access",
+          "to": "list-store",
+          "mode": "sync",
+          "label": "count active entries across the member's list"
+         }
+        ]
+       }
+      ]
+     }
+    ]
+   },
+   "revisions": 2,
+   "provenance": {
+    "committedAt": "2026-11-03T06:14:05Z",
+    "approvedBy": "operator",
+    "draftedBy": "delivery:agentic-design"
+   }
+  }
+ },
+ "serviceContracts": {
+  "listAccess": {
+   "component": "list-access",
+   "layer": "resourceaccess",
+   "goPackage": "internal/resourceaccess/todolist",
+   "infra": [
+    "Postgres"
+   ],
+   "title": "ListAccess — atomic kept-list verbs over one member's durable todo list (ResourceAccess, Postgres binding). Callers: ListManager only, sync. Every op is scoped to exactly one member; nothing reaches across members. No events, no queued ops, no Temporal. Durability: an acknowledged change is committed before the op returns; reads see every acknowledged change (read-your-writes). Bulk ops (SettleAll, SweepCompleted) are applied in one store transaction, never half-applied. Store technology and its binding (connection, credentials from hosting configuration/secrets) are hidden behind this contract.",
+   "$defs": {
+    "ListFault": {
+     "description": "Error model. Every op returns a Go error whose kind is one of these values; store-specific errors never leak. todoNotFound (terminal): ReviseWording/SettleCompletion named a todoId absent from the member's list — ListManager decides how to reconcile (e.g. another surface removed it). todoIdConflict (terminal): AppendTodo retried a todoId already kept with different wording. invalidRequest (terminal): empty memberId or todoId. storeUnavailable (transient, retry-safe): the store could not be reached or the transaction aborted; nothing was applied. Idempotency: AppendTodo is idempotent on todoId (same id + same wording returns the kept todo); ReviseWording, SettleCompletion, SettleAll, SweepCompleted are idempotent by nature; WithdrawTodo of an absent todo succeeds. Orchestration guidance (non-normative): 5s per-call timeout, retry storeUnavailable only.",
+     "enum": [
+      "todoNotFound",
+      "todoIdConflict",
+      "invalidRequest",
+      "storeUnavailable"
+     ],
+     "type": "string"
+    },
+    "Member": {
+     "description": "The team member whose list is worked, as resolved by IdentityAccess.recognizeActingParty and passed through by ListManager. memberId is an opaque, stable identifier; ListAccess keys every list on it and never interprets it. An empty memberId is rejected (ListFault invalidRequest, terminal).",
+     "properties": {
+      "memberId": {
+       "description": "Opaque stable member identifier from IdentityAccess.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "memberId"
+     ],
+     "type": "object"
+    },
+    "Todo": {
+     "description": "One kept todo: its id, wording and done flag. The shape is fixed (no dates, priority, tags, ordering, sharing). Lists are returned in capture order (the order AppendTodo first accepted each todoId).",
+     "properties": {
+      "done": {
+       "description": "true when the todo is done (completed), false when active.",
+       "type": "boolean"
+      },
+      "todoId": {
+       "description": "Caller-minted id (ListManager mints it, e.g. a UUID, before the first AppendTodo attempt so retries are recognisable). Unique within a member's list.",
+       "type": "string"
+      },
+      "wording": {
+       "description": "The todo's wording, stored verbatim. ListAccess applies no blank-wording or trimming rule; that is ListManager's.",
+       "type": "string"
+      }
+     },
+     "required": [
+      "todoId",
+      "wording",
+      "done"
+     ],
+     "type": "object"
+    }
+   },
+   "interface": {
+    "name": "ListAccess",
+    "layer": "resourceaccess",
+    "operations": [
+     {
+      "name": "AppendTodo",
+      "params": [
+       {
+        "name": "member",
+        "schema": {
+         "$ref": "#/$defs/Member"
+        }
+       },
+       {
+        "name": "todoId",
+        "schema": {
+         "type": "string"
+        }
+       },
+       {
+        "name": "wording",
+        "schema": {
+         "type": "string"
+        }
+       }
+      ],
+      "result": {
+       "$ref": "#/$defs/Todo"
+      },
+      "error": true
+     },
+     {
+      "name": "ReviseWording",
+      "params": [
+       {
+        "name": "member",
+        "schema": {
+         "$ref": "#/$defs/Member"
+        }
+       },
+       {
+        "name": "todoId",
+        "schema": {
+         "type": "string"
+        }
+       },
+       {
+        "name": "wording",
+        "schema": {
+         "type": "string"
+        }
+       }
+      ],
+      "error": true
+     },
+     {
+      "name": "WithdrawTodo",
+      "params": [
+       {
+        "name": "member",
+        "schema": {
+         "$ref": "#/$defs/Member"
+        }
+       },
+       {
+        "name": "todoId",
+        "schema": {
+         "type": "string"
+        }
+       }
+      ],
+      "error": true
+     },
+     {
+      "name": "SettleCompletion",
+      "params": [
+       {
+        "name": "member",
+        "schema": {
+         "$ref": "#/$defs/Member"
+        }
+       },
+       {
+        "name": "todoId",
+        "schema": {
+         "type": "string"
+        }
+       },
+       {
+        "name": "done",
+        "schema": {
+         "type": "boolean"
+        }
+       }
+      ],
+      "error": true
+     },
+     {
+      "name": "SettleAll",
+      "params": [
+       {
+        "name": "member",
+        "schema": {
+         "$ref": "#/$defs/Member"
+        }
+       },
+       {
+        "name": "done",
+        "schema": {
+         "type": "boolean"
+        }
+       }
+      ],
+      "error": true
+     },
+     {
+      "name": "SweepCompleted",
+      "params": [
+       {
+        "name": "member",
+        "schema": {
+         "$ref": "#/$defs/Member"
+        }
+       }
+      ],
+      "error": true
+     },
+     {
+      "name": "RecallList",
+      "params": [
+       {
+        "name": "member",
+        "schema": {
+         "$ref": "#/$defs/Member"
+        }
+       }
+      ],
+      "result": {
+       "items": {
+        "$ref": "#/$defs/Todo"
+       },
+       "type": "array"
+      },
+      "error": true
+     },
+     {
+      "name": "CountItemsLeft",
+      "params": [
+       {
+        "name": "member",
+        "schema": {
+         "$ref": "#/$defs/Member"
+        }
+       }
+      ],
+      "result": {
+       "minimum": 0,
+       "type": "integer"
+      },
+      "error": true
+     }
+    ]
+   }
+  }
+ }
+}

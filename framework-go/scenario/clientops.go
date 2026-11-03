@@ -3,6 +3,7 @@ package scenario
 import (
 	"fmt"
 	"go/token"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -109,24 +110,113 @@ func distinctOps(names []string) ([]string, error) {
 	return ops, nil
 }
 
-// UnresolvedAlternatives is the "|" alternatives of a label's op clause that name no operation
-// of the callee, once the callee has a contract. A label with no "|" is not its business: a
-// prose label into a contracted component is legal and carries no op. Without this, an
-// alternative that fails to resolve would silently lose its stimulus.
-func UnresolvedAlternatives(in Input, component, label string) []string {
+// Unresolved is one op name in a call label that resolves to no operation of the callee. Candidates
+// is set when the name is ambiguous instead: a bare operation of several Managers one machine client
+// fronts, each spelled as the client exposes it.
+type Unresolved struct {
+	Alt        string
+	Candidates []string
+}
+
+// UnresolvedOps is the op names of a label's op clause that resolve to no operation of the callee,
+// once the callee has a contract: every "|" alternative, or the clause's one leading operation name
+// when it has a single one ("ReviewList — opens the list"). Prose ("requests one list action") is not
+// its business: a prose label into a contracted component is legal and carries no op. Without this,
+// a name that fails to resolve would silently lose its stimulus. It resolves exactly as stimuli do
+// (resolverFor), so the gate and the derivation cannot disagree.
+func UnresolvedOps(in Input, component, label string) []Unresolved {
 	alts := clauseAlternatives(opClause(label))
 	if len(alts) < 2 {
+		ops, invalid := LeadingOpNames(label)
+		if len(ops) != 1 || len(invalid) > 0 {
+			return nil
+		}
+	}
+	r := resolverFor(in, component)
+	if !r.contracted {
 		return nil
 	}
-	fam := family(in, component)
-	if len(fam) == 0 {
-		return nil
-	}
-	byKey := opsByKey(fam)
-	var out []string
+	var out []Unresolved
 	for _, alt := range alts {
-		if _, ok := byKey[Normalize(leadingIdent(alt))]; !ok {
-			out = append(out, strings.TrimSpace(alt))
+		if _, cands, ok := r.resolve(leadingIdent(alt)); !ok {
+			out = append(out, Unresolved{Alt: strings.TrimSpace(alt), Candidates: cands})
+		}
+	}
+	return out
+}
+
+// labelResolver resolves the op names of the labels of calls into one callee. A name resolves by
+// the callee family's own operations, under Normalize. A machine client's operations are its
+// Managers' under ClientOpName ("ListAddTodo"), while the design's labels, authored before any
+// Manager contract exists, name the Manager's ("AddTodo"): so into a machine client a name also
+// resolves through every Manager the client fronts, landing on that Manager's ClientOpName.
+type labelResolver struct {
+	contracted bool
+	own        map[string]opTarget
+	// fronted is, by Normalize of a Manager operation, the client operation it is exposed as, one
+	// per fronted Manager that declares it.
+	fronted map[string][]string
+}
+
+func resolverFor(in Input, component string) labelResolver {
+	fam := family(in, component)
+	r := labelResolver{contracted: len(fam) > 0, own: opsByKey(fam)}
+	if len(fam) == 0 || !fam[0].contract.Client {
+		return r
+	}
+	r.fronted = map[string][]string{}
+	for _, key := range frontedContracts(in, component) {
+		m := in.Contracts[key]
+		for _, op := range m.Ops {
+			k, name := Normalize(op.Name), ClientOpName(m.Interface, op.Name)
+			if k != "" && !slices.Contains(r.fronted[k], name) {
+				r.fronted[k] = append(r.fronted[k], name)
+			}
+		}
+	}
+	return r
+}
+
+// resolve is the operation ident lands on. A name matching several fronted Managers' operations resolves
+// to none and returns them, to be named in their prefixed form.
+func (r labelResolver) resolve(ident string) (opTarget, []string, bool) {
+	k := Normalize(ident)
+	if ot, ok := r.own[k]; ok {
+		return ot, nil, true
+	}
+	switch cands := r.fronted[k]; len(cands) {
+	case 0:
+		return opTarget{}, nil, false
+	case 1:
+		ot, ok := r.own[Normalize(cands[0])]
+		return ot, nil, ok
+	default:
+		return opTarget{}, cands, false
+	}
+}
+
+// frontedContracts is the keys, sorted, of the contracts a client calls in any view: the Managers it
+// fronts, each with its facets. A call into another client is not fronting it.
+func frontedContracts(in Input, client string) []string {
+	want := Normalize(client)
+	seen := map[string]bool{}
+	for _, c := range allCalls(in) {
+		if Normalize(c.From) != want || isClientContract(in, c.To) {
+			continue
+		}
+		for _, kc := range family(in, c.To) {
+			seen[kc.key] = true
+		}
+	}
+	return slices.Sorted(maps.Keys(seen))
+}
+
+// allCalls is every call of every view, in view then step order.
+func allCalls(in Input) []Call {
+	var out []Call
+	for _, v := range in.Views {
+		for _, st := range v.Steps {
+			out = append(out, st.Calls...)
 		}
 	}
 	return out
