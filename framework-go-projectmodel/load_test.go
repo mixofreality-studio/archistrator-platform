@@ -77,3 +77,21 @@ func TestLoadToleratesEmptySlotsMap(t *testing.T) {
 		t.Fatalf("System: got %+v, want nil", m.System)
 	}
 }
+
+// A writer holds a contract's layer to the spelling Load accepts through CanonicalLayer.
+func TestCanonicalLayer(t *testing.T) {
+	for in, want := range map[string]string{"resourceaccess": "ResourceAccess", "ResourceAccess": "ResourceAccess", "MANAGER": "Manager", "utility": "Utility", "client": "Client", "engine": "Engine"} {
+		got, ok := CanonicalLayer(in)
+		if !ok || got != want {
+			t.Errorf("CanonicalLayer(%q) = %q, %v; want %q", in, got, ok, want)
+		}
+		if _, err := Load([]byte(`{"serviceContracts":{"x":{"layer":"` + got + `","goPackage":"internal/x","interface":{"name":"X","operations":[]}}}}`)); err != nil {
+			t.Errorf("Load refuses the canonical %q: %v", got, err)
+		}
+	}
+	for _, in := range []string{"", "resource-access", "Resource"} {
+		if got, ok := CanonicalLayer(in); ok {
+			t.Errorf("CanonicalLayer(%q) = %q, want no layer", in, got)
+		}
+	}
+}

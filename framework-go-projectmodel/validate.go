@@ -3,6 +3,7 @@ package projectmodel
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 // knownLayers enumerates all valid contract layer values.
@@ -12,6 +13,19 @@ var knownLayers = map[string]bool{
 	"Engine":         true,
 	"ResourceAccess": true,
 	"Utility":        true,
+}
+
+// CanonicalLayer is layer spelled as projectmodel spells it (Client, Manager, Engine,
+// ResourceAccess, Utility), matched ignoring case, and whether it is a layer at all. Load
+// refuses any other spelling, and every generator loads through Load, so a writer that
+// stores a contract's layer through this stores one every generator can read.
+func CanonicalLayer(layer string) (string, bool) {
+	for known := range knownLayers {
+		if strings.EqualFold(known, layer) {
+			return known, true
+		}
+	}
+	return "", false
 }
 
 // legalDepTargets is the Method's downward-only call legality for COMPONENT
