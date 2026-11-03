@@ -8,17 +8,20 @@
 //   - TestGeneratedOnlyPublic: only the generated contract is exported;
 //   - TestMethodLayering: downward-only imports, Temporal isolation, interface naming,
 //     the dependency menu, no hand-duplicated contract, and a go.mod every clone resolves;
-//   - TestMethod: the committed design rules, and design-to-code alignment.
+//   - TestMethod: the committed design rules, and design-to-code alignment;
+//   - TestProjectModel: the committed state loads as every generator loads it.
 //
 // A package outside the layer directories fails these, including when it is the only
 // code in the tree: the gate never passes by having found nothing to classify.
 package internal_test
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 // moduleRoot is the app's Go module, relative to this package.
@@ -45,4 +48,13 @@ func TestMethod(t *testing.T) {
 		Arch:           arch.MethodSpec(moduleRoot),
 		NameNormalizer: methodcheck.StereotypeSuffixNormalizer,
 	})
+}
+
+// TestProjectModel loads the committed state through projectmodel.Load, the load every
+// generator makes first. A state no generator can read is red here, in the task that
+// recorded it, rather than in the next one to generate code, which cannot change it.
+func TestProjectModel(t *testing.T) {
+	if _, err := projectmodel.LoadFile(filepath.Join(moduleRoot, ".aiarch", "state", "project.json")); err != nil {
+		t.Fatal(err)
+	}
 }
