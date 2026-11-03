@@ -387,7 +387,7 @@ func TestActivitiesImportOnlyWhatTheyUse(t *testing.T) {
 		if layer == "Utility" && !strings.Contains(string(out["activities.gen.go"]), "a.Dep.Tick(") {
 			t.Errorf("a total operation with no result calls the dep and returns nil:\n%s", out["activities.gen.go"])
 		}
-		if layer == "Utility" && strings.Contains(string(out["activities.gen.go"]), ":= a.Dep.Tick(") {
+		if layer == "Utility" && strings.Contains(string(out["activities.gen.go"]), "return a.Dep.Tick(") {
 			t.Errorf("a total operation with no result returns nothing to take:\n%s", out["activities.gen.go"])
 		}
 		if strings.Contains(string(out["invokers.gen.go"]), "internal/x/d") {
