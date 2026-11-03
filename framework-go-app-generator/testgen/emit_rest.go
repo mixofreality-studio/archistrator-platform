@@ -44,12 +44,15 @@ func managerRoutes(projectJSON []byte) (map[string]restRoute, error) {
 // addManagerRoutes adds one contract's routes, when it is a Manager's.
 func addManagerRoutes(routes map[string]restRoute, raw json.RawMessage) error {
 	var meta struct {
-		Layer string `json:"layer"`
+		Layer     string `json:"layer"`
+		Interface struct {
+			Layer string `json:"layer"`
+		} `json:"interface"`
 	}
 	if err := json.Unmarshal(raw, &meta); err != nil {
 		return err
 	}
-	if !strings.EqualFold(meta.Layer, "manager") {
+	if !strings.EqualFold(meta.Layer, "manager") && !strings.EqualFold(meta.Interface.Layer, "manager") {
 		return nil
 	}
 	parsed, err := projectmodel.Parse(raw)
@@ -76,6 +79,14 @@ func transportHelpers(plan componentPlan, rest bool, routes map[string]restRoute
 		return "", err
 	}
 	return table + restHelpers, nil
+}
+
+// errorHasCodeHelper is the transport's code match.
+func errorHasCodeHelper(rest bool) string {
+	if rest {
+		return restErrorHasCode
+	}
+	return toolsErrorHasCode
 }
 
 func isRESTPlan(plan componentPlan) (bool, error) {
@@ -214,6 +225,28 @@ func restRequest(ctx context.Context, verb, target, args string) (*http.Request,
 		body = bytes.NewReader(raw)
 	}
 	return http.NewRequestWithContext(ctx, verb, target, body)
+}
+
+`
+
+// restErrorHasCode is the REST dialect's code match. A response carries the wire code of the
+// Manager's error kind (not_found for NotFound), and a plan names the refusal as the contract's
+// error model does, the same on both transports. The table mirrors httpgen's codeForKind; a
+// scenario in archistrator's fresh-project tests holds the two together.
+const restErrorHasCode = `// restWireCodes is the code a generated handler answers each Manager error kind with.
+var restWireCodes = map[string]string{
+	"ContractMisuse":     "contract_misuse",
+	"NotFound":           "not_found",
+	"Unauthorized":       "forbidden",
+	"FailedPrecondition": "failed_precondition",
+	"Infrastructure":     "infrastructure",
+}
+
+// errorHasCode matches the code, or the wire code of that error kind, in the error text.
+func errorHasCode(err error, code string) bool {
+	text := err.Error()
+	wire, known := restWireCodes[code]
+	return strings.Contains(text, code) || (known && strings.Contains(text, wire))
 }
 
 `

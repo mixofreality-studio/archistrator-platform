@@ -180,3 +180,21 @@ func TestValidateContractAcceptsTheGreenfieldProject(t *testing.T) {
 		}
 	}
 }
+
+// A Manager's params become its machine clients' params, and one param named action is the shape
+// of a browser operation, which would misroute those clients' tests and stop generation.
+func TestValidateContractRefusesAManagerActionOp(t *testing.T) {
+	contract := func(layer, name, params string) []byte {
+		return []byte(`{"component":"c","layer":"` + layer + `","title":"t","interface":{"name":"` + name + `","layer":"` + layer + `","operations":[{"name":"Apply","params":[` + params + `],"error":true}]}}`)
+	}
+	action := `{"name":"action","schema":{"type":"string"}}`
+	if err := modelgen.ValidateContract("listManager", contract("manager", "ListManager", action)); err == nil || !strings.Contains(err.Error(), "browser action") {
+		t.Errorf("a Manager op whose one param is action: %v", err)
+	}
+	if err := modelgen.ValidateContract("listManager", contract("manager", "ListManager", action+`,{"name":"proof","schema":{"type":"string"}}`)); err != nil {
+		t.Errorf("action beside another param is no browser op: %v", err)
+	}
+	if err := modelgen.ValidateContract("rulesEngine", contract("engine", "RulesEngine", action)); err != nil {
+		t.Errorf("only a Manager's params reach a machine client: %v", err)
+	}
+}

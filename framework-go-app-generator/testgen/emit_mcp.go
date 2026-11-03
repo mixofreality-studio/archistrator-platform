@@ -212,7 +212,7 @@ func (g *goEmit) toolsFile(plan componentPlan, routes map[string]restRoute) ([]b
 		}
 		b.WriteString(transport)
 		fmt.Fprintf(&b, expectHelpers, "`")
-		b.WriteString(toolsErrorHasCode)
+		b.WriteString(errorHasCodeHelper(rest))
 		b.WriteString(matchHelpers)
 	}
 	src, err := format.Source(b.Bytes())

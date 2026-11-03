@@ -280,12 +280,30 @@ func validateLayerRules(key, name, layer string, ops []contractOpShape) error {
 	if want := layerIfaceSuffix[layer]; want != "" && !strings.HasSuffix(name, want) {
 		return fmt.Errorf("contract %q: interface.name %q must end in %s, because a %s's port is found by that suffix; rename the interface", key, name, want, layer)
 	}
+	if err := validateManagerActionParam(key, layer, ops); err != nil {
+		return err
+	}
 	if !layerOpsReturnError[layer] {
 		return nil
 	}
 	for _, op := range ops {
 		if !op.Error {
 			return fmt.Errorf("contract %q: operation %s must declare error:true, because every %s operation returns an error as its last result and the construction gate refuses one that does not; a total operation keeps the declaration and simply returns nil", key, op.Name, layer)
+		}
+	}
+	return nil
+}
+
+// validateManagerActionParam refuses a Manager operation whose one param is named action: that is
+// the shape of a browser operation, and a machine client's contract carries the Manager's params,
+// so its generated tests would be classified as browser tests and stop generation for the project.
+func validateManagerActionParam(key, layer string, ops []contractOpShape) error {
+	if layer != "manager" {
+		return nil
+	}
+	for _, op := range ops {
+		if len(op.Params) == 1 && op.Params[0].Name == "action" {
+			return fmt.Errorf("contract %q: operation %s: a Manager operation whose only param is named action reads as a browser action in its machine clients' tests; rename the param", key, op.Name)
 		}
 	}
 	return nil
