@@ -199,7 +199,9 @@ func (s *toolSession) Call(ctx context.Context, name, args string) (any, error) 
 // restRequest spells args onto the route.
 func restRequest(ctx context.Context, verb, target, args string) (*http.Request, error) {
 	fields := map[string]any{}
-	if err := json.Unmarshal([]byte(args), &fields); err != nil {
+	dec := json.NewDecoder(strings.NewReader(args))
+	dec.UseNumber() // a large integer stays an integer on the query, not 1e+06
+	if err := dec.Decode(&fields); err != nil {
 		return nil, err
 	}
 	for name, value := range fields {
