@@ -165,7 +165,7 @@ func TestGenerate_PlaywrightReporterMergesAndTimesOut(t *testing.T) {
 	read := strings.Index(rep, "readFileSync(")
 	write := strings.Index(rep, "writeFileSync(")
 	exists := strings.Index(rep, "existsSync(")
-	if exists < 0 || read < 0 || write < 0 || !(exists < write && read < write) {
+	if exists < 0 || read < 0 || write < 0 || exists >= write || read >= write {
 		t.Errorf("reporter must read the prior results.json before writing:\n%s", rep)
 	}
 	for _, want := range []string{"'timedOut' ? 'timeout'", "'pass' | 'fail' | 'skip' | 'timeout'"} {

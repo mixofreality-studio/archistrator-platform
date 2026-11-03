@@ -178,19 +178,29 @@ func clientMachineCalls(s System) []Finding {
 	var out []Finding
 	for i, dv := range s.DynamicViews {
 		for _, step := range dv.Steps {
-			for _, call := range step.Calls {
-				c := call.relationship()
-				if to, ok := idx[c.To]; !ok || !to.isMachineClient() || !to.isBuilt() || stepCallsManager(step.Calls, c.To, idx) {
-					continue
-				}
-				if ops, invalid := scenario.LeadingOpNames(c.Label); len(ops) > 0 && len(invalid) == 0 {
-					continue
-				}
+			for _, c := range underivableMachineCalls(step.Calls, idx) {
 				out = append(out, Finding{
 					RuleID: ruleSysClientMachineCall, Severity: SeverityError, Location: loc(i+1, "dynamicView "+viewLabel(dv)),
 					Message: fmt.Sprintf("the call %s→%s is labelled %q, and %s calls no Manager in that step; draw its call into the Manager in the same step, naming the operation, because a machine client's contract and scenarios are derived from exactly that", c.From, c.To, c.Label, c.To),
 				})
 			}
+		}
+	}
+	return out
+}
+
+// underivableMachineCalls is a step's calls into a built machine client that nothing derives an
+// operation from.
+func underivableMachineCalls(calls []TraceCall, idx map[string]Component) []Relationship {
+	var out []Relationship
+	for _, call := range calls {
+		c := call.relationship()
+		to, ok := idx[c.To]
+		if !ok || !to.isMachineClient() || !to.isBuilt() || stepCallsManager(calls, c.To, idx) {
+			continue
+		}
+		if ops, invalid := scenario.LeadingOpNames(c.Label); len(ops) == 0 || len(invalid) > 0 {
+			out = append(out, c)
 		}
 	}
 	return out
