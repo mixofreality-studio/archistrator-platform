@@ -16,3 +16,20 @@
 @@ -329,1 +329,1 @@
 -// gen-ops.mjs deriving both from the same source, not by this cast).
 +// webgen deriving both from the same source, not by this cast).
+@@ -332,0 +332,10 @@
++// One OP_BINDINGS entry as a transport reads it. Both transports annotate their
++// lookup with it: at the table's literal type, a project where every op has an
++// MCP tool (or none has) narrows `binding.tool === null` to never.
++interface OpBinding {
++  readonly method: keyof RestMethodMap;
++  readonly path: string;
++  readonly tool: string | null;
++  readonly composition?: true;
++}
++
+@@ -334,1 +344,1 @@
+-    const binding = OP_BINDINGS[op];
++    const binding: OpBinding = OP_BINDINGS[op];
+@@ -441,1 +451,1 @@
+-    const binding = OP_BINDINGS[op];
++    const binding: OpBinding = OP_BINDINGS[op];

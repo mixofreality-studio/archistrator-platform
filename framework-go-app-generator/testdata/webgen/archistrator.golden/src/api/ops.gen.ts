@@ -329,9 +329,19 @@ type RestFn = (
 // webgen deriving both from the same source, not by this cast).
 type RestMethodMap = Record<'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE', RestFn>;
 
+// One OP_BINDINGS entry as a transport reads it. Both transports annotate their
+// lookup with it: at the table's literal type, a project where every op has an
+// MCP tool (or none has) narrows `binding.tool === null` to never.
+interface OpBinding {
+  readonly method: keyof RestMethodMap;
+  readonly path: string;
+  readonly tool: string | null;
+  readonly composition?: true;
+}
+
 export function restOpsClient(client: ReturnType<typeof createClient<paths>>): OpsClient {
   const send = (op: OpId, params: OpParams): Promise<RestResult> => {
-    const binding = OP_BINDINGS[op];
+    const binding: OpBinding = OP_BINDINGS[op];
     const methods = client as unknown as RestMethodMap;
     const fn = methods[binding.method];
     return fn(binding.path, {
@@ -438,7 +448,7 @@ function assertNoArgCollision(
 
 export function mcpOpsClient(app: App): OpsClient {
   const call = async <R = unknown>(op: OpId, params: OpParams = {}): Promise<R> => {
-    const binding = OP_BINDINGS[op];
+    const binding: OpBinding = OP_BINDINGS[op];
     if (binding.tool === null) {
       // No MCP tool answers this op: a composition route (mounted by the Go
       // composition root), or an OAS op the server registers no tool for. Fail

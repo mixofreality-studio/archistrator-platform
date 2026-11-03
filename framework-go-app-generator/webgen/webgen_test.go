@@ -152,7 +152,9 @@ func writeTestFile(t *testing.T, p string, content []byte) {
 }
 
 // The ops.gen.ts diff is exactly the six comment lines that named the retired
-// JS generator, and nothing else. It is spelled out here, not read back from the
+// JS generator, and the widened binding type both transports read (FIX-030: at
+// the table's literal type, a project whose ops all have an MCP tool, or none
+// has, does not typecheck), and nothing else. It is spelled out here, not read back from the
 // pinned file alone, because `-update` rewrites the pinned file: a code change
 // that -update pinned would otherwise pass as long as it looked like a comment.
 const wantOpsDiff = `@@ -1,1 +1,1 @@
@@ -173,6 +175,23 @@ const wantOpsDiff = `@@ -1,1 +1,1 @@
 @@ -329,1 +329,1 @@
 -// gen-ops.mjs deriving both from the same source, not by this cast).
 +// webgen deriving both from the same source, not by this cast).
+@@ -332,0 +332,10 @@
++// One OP_BINDINGS entry as a transport reads it. Both transports annotate their
++// lookup with it: at the table's literal type, a project where every op has an
++// MCP tool (or none has) narrows ` + "`binding.tool === null`" + ` to never.
++interface OpBinding {
++  readonly method: keyof RestMethodMap;
++  readonly path: string;
++  readonly tool: string | null;
++  readonly composition?: true;
++}
++
+@@ -334,1 +344,1 @@
+-    const binding = OP_BINDINGS[op];
++    const binding: OpBinding = OP_BINDINGS[op];
+@@ -441,1 +451,1 @@
+-    const binding = OP_BINDINGS[op];
++    const binding: OpBinding = OP_BINDINGS[op];
 `
 
 // The fixture-schema diff is exactly the one description string that named the
