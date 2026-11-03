@@ -99,3 +99,29 @@ func TestProseCallResolvesThroughTheManager(t *testing.T) {
 		t.Errorf("no contract, no op: %v", ops)
 	}
 }
+
+// A prose request into a machine client resolves through what the client does in the same step, and
+// only there; a call of another client in that step is not its operation.
+func TestProseRequestResolvesThroughTheManagerCall(t *testing.T) {
+	in := Input{Contracts: map[string]Contract{
+		"webApi":      {Component: "webApi", Client: true, Interface: "WebApiList", Ops: []Op{{Name: "ListAddTodo"}, {Name: "ListDrop"}}},
+		"mcpServer":   {Component: "mcpServer", Client: true, Interface: "McpServerList", Ops: []Op{{Name: "ListDrop"}}},
+		"listManager": {Component: "listManager", Interface: "ListManager", Ops: []Op{{Name: "AddTodo"}, {Name: "Drop"}}},
+	}}
+	step := []Call{
+		{From: "agent", To: "web-api", Label: "submits a title"},
+		{From: "agent", To: "mcp-server", Label: "drops one"},
+		{From: "web-api", To: "list-manager", Label: "addTodo(proof) → todos"},
+		{From: "mcp-server", To: "list-manager", Label: "drop(proof)"},
+	}
+	got := groupOpsOrThrough(in, step[:1], "web-api", step)
+	if len(got) != 1 || got[0].op != "ListAddTodo" || got[0].to != "webapi" {
+		t.Errorf("through the Manager: %+v", got)
+	}
+	if got := groupOpsOrThrough(in, step[:1], "web-api", step[:1]); len(got) != 0 {
+		t.Errorf("no call beside it derives nothing: %+v", got)
+	}
+	if got := groupOpsOrThrough(in, []Call{{From: "agent", To: "list-manager", Label: "prose"}}, "list-manager", step); len(got) != 0 {
+		t.Errorf("only a Client resolves through its own calls: %+v", got)
+	}
+}

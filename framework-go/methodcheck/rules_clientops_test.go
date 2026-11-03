@@ -76,6 +76,28 @@ func TestSysClientMachineCall(t *testing.T) {
 	}
 }
 
+// The rule reaches the design gate, not only its own test: putDraftModel runs validateArchitecture.
+func TestSysClientMachineCallIsInTheDesignGate(t *testing.T) {
+	sys, cu, _ := clientDesign(t)
+	sys.DynamicViews[0].Steps[0].Calls = []TraceCall{{From: "user", To: "web-api", Mode: "sync", Label: "requests one list action"}}
+	result, err := validateArchitecture(sys, cu)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(ruleMessages(result.Findings, ruleSysClientMachineCall), "calls no Manager") {
+		t.Errorf("validateArchitecture does not run the rule: %+v", result.Findings)
+	}
+}
+
+// An app has one shared generated REST server, so a second REST client has nothing to be.
+func TestSysClientProtocolRefusesASecondREST(t *testing.T) {
+	sys, _, _ := clientDesign(t)
+	sys.Components[2].MachineProtocol = machineProtocolREST
+	if msg := ruleMessages(clientProtocolStated(sys), ruleSysClientProtocol); !strings.Contains(msg, "second REST client") {
+		t.Errorf("got %q", msg)
+	}
+}
+
 func TestSysClientOpLabel(t *testing.T) {
 	sys, cu, _ := clientDesign(t)
 	if got := clientOpLabels(sys, allActorIDs(cu)); len(got) != 0 {
@@ -243,9 +265,22 @@ func TestCCEdgeRealized(t *testing.T) {
 
 // A REST client is the shared transport, so finishing it owes no package; an MCP one owes its own.
 func TestRESTClientOwesNoPackage(t *testing.T) {
-	rest := Component{Kind: kindClient, MachineProtocol: machineProtocolREST}
-	mcp := Component{Kind: kindClient, MachineProtocol: machineProtocolMCP}
-	if !rest.isRESTClient() || mcp.isRESTClient() {
-		t.Error("only machineProtocol rest is the shared transport")
+	surface := false
+	s := System{Components: []Component{
+		comp(t, "OrderManager", kindManager),
+		{ID: "web-api", Name: "WebApi", Kind: kindClient, UISurface: &surface, MachineProtocol: machineProtocolREST},
+		{ID: "mcp-server", Name: "McpServer", Kind: kindClient, UISurface: &surface, MachineProtocol: machineProtocolMCP},
+	}}
+	pkgs := []classifiedPackage{cpkg("ex/manager/order", "order", "Manager")}
+	var missing []string
+	for _, f := range alignSystemToCode(s, pkgs, StereotypeSuffixNormalizer, nil, nil, nil) {
+		missing = append(missing, f.Message)
+	}
+	got := strings.Join(missing, "\n")
+	if strings.Contains(got, "WebApi") {
+		t.Errorf("the REST client owes no package: %s", got)
+	}
+	if !strings.Contains(got, "McpServer") {
+		t.Errorf("an MCP client owes its own package: %q", got)
 	}
 }

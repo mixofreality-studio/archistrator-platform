@@ -368,7 +368,7 @@ func TestActivitiesImportOnlyWhatTheyUse(t *testing.T) {
 	"m":{"component":"m","layer":"Manager","goPackage":"internal/manager/m","$defs":{"T":{"type":"string"}},"deps":[{"name":"dep","component":"d"}],
 	  "interface":{"name":"MManager","layer":"manager","operations":[]}},
 	"d":{"component":"d","layer":"LAYER","goPackage":"internal/x/d","$defs":{"T":{"type":"string"}},
-	  "interface":{"name":"D","layer":"x","operations":[{"name":"Now","params":[],"result":{"type":"integer"},"error":false}]}}}}`
+	  "interface":{"name":"D","layer":"x","operations":[{"name":"Now","params":[],"result":{"type":"integer"},"error":false},{"name":"Tick","params":[],"error":false}]}}}}`
 	for _, layer := range []string{"Engine", "Utility"} {
 		m, err := projectmodel.Load([]byte(strings.ReplaceAll(project, "LAYER", layer)))
 		if err != nil {
@@ -383,6 +383,15 @@ func TestActivitiesImportOnlyWhatTheyUse(t *testing.T) {
 		}
 		if layer == "Utility" && !strings.Contains(string(out["activities.gen.go"]), "return a.Dep.Now(") {
 			t.Errorf("a total operation has no error to take:\n%s", out["activities.gen.go"])
+		}
+		if layer == "Utility" && !strings.Contains(string(out["activities.gen.go"]), "a.Dep.Tick(") {
+			t.Errorf("a total operation with no result calls the dep and returns nil:\n%s", out["activities.gen.go"])
+		}
+		if layer == "Utility" && strings.Contains(string(out["activities.gen.go"]), ":= a.Dep.Tick(") {
+			t.Errorf("a total operation with no result returns nothing to take:\n%s", out["activities.gen.go"])
+		}
+		if strings.Contains(string(out["invokers.gen.go"]), "internal/x/d") {
+			t.Errorf("%s: an invoker names a dep's package only through a contract type, and these are inline:\n%s", layer, out["invokers.gen.go"])
 		}
 	}
 }

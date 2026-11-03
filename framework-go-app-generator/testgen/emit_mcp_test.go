@@ -279,6 +279,7 @@ func TestClientDialect(t *testing.T) {
 		{"tool with no params", "internal/client/mcp", []any{map[string]any{"name": "OrderList", "params": []any{}}}, dialectMCP},
 		{"tool taking action among others", "internal/client/mcp", []any{map[string]any{"name": "Steer", "params": []any{action, arg}}}, dialectMCP},
 		{"no ops, a package", "internal/client/mcp", nil, dialectMCP},
+		{"routes", "internal/client/web/list", []any{map[string]any{"name": "ListAddTodo", "params": []any{arg}}}, dialectREST},
 		{"no ops, no package", "", nil, dialectWeb},
 	} {
 		raw, err := json.Marshal(map[string]any{"component": "c", "layer": "Client", "goPackage": tc.goPackage, "interface": map[string]any{"name": "C", "layer": "client", "operations": tc.ops}})
@@ -378,5 +379,38 @@ func TestGenerate_RESTClientRequestsItsRoutes(t *testing.T) {
 	}
 	if _, ok := out.Generated["internal/client/web/list/client_scenarios.gen_test.go"]; !ok {
 		t.Fatalf("no REST scenarios file: %v", out.Generated)
+	}
+}
+
+// The REST dialect's generated code names the routes the planner gives the handlers, carries no MCP
+// SDK, and matches a refusal by the Manager's error kind, which a response spells as its wire code.
+func TestRESTTransportHelpers(t *testing.T) {
+	routes, err := managerRoutes([]byte(`{"serviceContracts":{"listManager":{"component":"listManager","interface":{"name":"ListManager","layer":"manager","operations":[{"name":"AddTodo","params":[],"error":true},{"name":"GetLeft","params":[],"error":true}]}}}}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if routes["ListAddTodo"].Verb != "POST" || routes["ListGetLeft"].Verb != "GET" {
+		t.Fatalf("routes (layer on the interface only): %+v", routes)
+	}
+	var plan componentPlan
+	plan.Key = "webApi"
+	plan.Contract.GoPackage = "internal/client/web/list"
+	plan.Contract.Interface.Operations = []methodcheck.ContractOperation{{Name: "ListAddTodo"}}
+	helpers, err := transportHelpers(plan, true, routes)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(helpers, routes["ListAddTodo"].Path) || !strings.Contains(helpers, `"listAddTodo"`) {
+		t.Errorf("no route for the operation:\n%s", helpers)
+	}
+	if slices.Contains(transportImports(true), mcpSDKImport) {
+		t.Error("the REST dialect must not import the MCP SDK")
+	}
+	if got := errorHasCodeHelper(true); !strings.Contains(got, `"NotFound":           "not_found"`) {
+		t.Errorf("the REST dialect must match a Manager's error kind by its wire code:\n%s", got)
+	}
+	plan.Contract.Interface.Operations = []methodcheck.ContractOperation{{Name: "ListGone"}}
+	if _, err := transportHelpers(plan, true, routes); err == nil {
+		t.Error("an operation no handler mounts must be refused")
 	}
 }
