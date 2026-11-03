@@ -239,14 +239,14 @@ func (g *goEmit) toolsHooksFile(plan componentPlan) ([]byte, error) {
 // host's stack, and Context when they need an identity (the principal they read
 // from it).
 // Operations: %s.
-// FILL: construct the handlers.
+// FILL: construct the handlers.%s
 func %s(t *testing.T, h *scenariohost.Host) toolServer {
 	t.Helper()
 	t.Fatal("FILL %s")
 	return toolServer{}
 }
 
-`, subject, strings.Join(boundTools(plan), ", "), subject, subject)
+`, subject, strings.Join(boundTools(plan), ", "), restHookNote(plan), subject, subject)
 	for _, bs := range plan.Scenarios {
 		if bs.Binding.Skip != nil {
 			continue

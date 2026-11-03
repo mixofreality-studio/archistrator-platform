@@ -396,6 +396,9 @@ func TestRESTTransportHelpers(t *testing.T) {
 	plan.Key = "webApi"
 	plan.Contract.GoPackage = "internal/client/web/list"
 	plan.Contract.Interface.Operations = []methodcheck.ContractOperation{{Name: "ListAddTodo"}}
+	if note := restHookNote(plan); !strings.Contains(note, "permitAll{}") {
+		t.Errorf("a REST hook must say what its Handler's Security is: %q", note)
+	}
 	helpers, err := transportHelpers(plan, true, routes)
 	if err != nil {
 		t.Fatal(err)
