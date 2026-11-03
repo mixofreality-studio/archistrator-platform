@@ -41,6 +41,9 @@ const (
 	ruleSysClientOpLabel RuleID = "SYS-CLIENT-OP-LABEL"
 	// ruleSysClientProtocol requires a built machine client to say which transport it is.
 	ruleSysClientProtocol RuleID = "SYS-CLIENT-PROTOCOL"
+	// ruleSysClientMachineCall requires an actor's prose call into a built machine client to
+	// draw, in the same step, the client's call into a Manager: its contract is derived from that.
+	ruleSysClientMachineCall RuleID = "SYS-CLIENT-MACHINE-CALL"
 
 	// CoreUseCases twins.
 	ruleUCActPresent   RuleID = "UC-ACT-PRESENT"
@@ -164,6 +167,42 @@ func clientOpLabels(s System, actors map[string]bool) []Finding {
 		}
 	}
 	return out
+}
+
+// clientMachineCalls — SYS-CLIENT-MACHINE-CALL (error). A machine client's operations and scenarios
+// are derived from what it calls in the step someone calls it in (scenario.ClientManagerOps), so a
+// prose request with no call beside it derives nothing, and the client would reach construction
+// with no contract to test. A label that itself leads with exported operations resolves on its own.
+func clientMachineCalls(s System) []Finding {
+	idx := componentIndex(s)
+	var out []Finding
+	for i, dv := range s.DynamicViews {
+		for _, step := range dv.Steps {
+			for _, call := range step.Calls {
+				c := call.relationship()
+				if to, ok := idx[c.To]; !ok || !to.isMachineClient() || !to.isBuilt() || stepCallsManager(step.Calls, c.To, idx) {
+					continue
+				}
+				if ops, invalid := scenario.LeadingOpNames(c.Label); len(ops) > 0 && len(invalid) == 0 {
+					continue
+				}
+				out = append(out, Finding{
+					RuleID: ruleSysClientMachineCall, Severity: SeverityError, Location: loc(i+1, "dynamicView "+viewLabel(dv)),
+					Message: fmt.Sprintf("the call %s→%s is labelled %q, and %s calls no Manager in that step; draw its call into the Manager in the same step, naming the operation, because a machine client's contract and scenarios are derived from exactly that", c.From, c.To, c.Label, c.To),
+				})
+			}
+		}
+	}
+	return out
+}
+
+// stepCallsManager reports whether a step has client's call into a Manager.
+func stepCallsManager(calls []TraceCall, client string, idx map[string]Component) bool {
+	return slices.ContainsFunc(calls, func(call TraceCall) bool {
+		c := call.relationship()
+		to, ok := idx[c.To]
+		return c.From == client && ok && to.Kind == kindManager
+	})
 }
 
 // browserActorCalls is a view's calls from an actor into a browser surface.

@@ -49,6 +49,33 @@ func ruleMessages(out []Finding, id RuleID) string {
 	return strings.Join(msgs, "\n")
 }
 
+// A machine client's contract is derived from what it calls in the step an actor calls it in, so a
+// prose request with no such call would reach construction with nothing to test. A label that names
+// its own exported operation resolves without one.
+func TestSysClientMachineCall(t *testing.T) {
+	sys, _, _ := clientDesign(t)
+	step := func(calls ...TraceCall) {
+		sys.DynamicViews[0].Steps[0].Calls = calls
+	}
+	step(TraceCall{From: "user", To: "web-api", Mode: "sync", Label: "requests one list action"})
+	if msg := ruleMessages(clientMachineCalls(sys), ruleSysClientMachineCall); !strings.Contains(msg, "calls no Manager in that step") {
+		t.Errorf("a prose request with no call beside it must be refused: %q", msg)
+	}
+	step(TraceCall{From: "user", To: "web-api", Mode: "sync", Label: "requests one list action"},
+		TraceCall{From: "web-api", To: "list-manager", Mode: "sync", Label: "keep(owner)"})
+	if msg := ruleMessages(clientMachineCalls(sys), ruleSysClientMachineCall); msg != "" {
+		t.Errorf("the call in the same step derives the contract: %q", msg)
+	}
+	step(TraceCall{From: "user", To: "web-api", Mode: "sync", Label: "ListKeep(owner) — opens the list"})
+	if msg := ruleMessages(clientMachineCalls(sys), ruleSysClientMachineCall); msg != "" {
+		t.Errorf("a label naming its operation resolves on its own: %q", msg)
+	}
+	step(TraceCall{From: "user", To: "web-app", Mode: "sync", Label: "requests one list action"})
+	if msg := ruleMessages(clientMachineCalls(sys), ruleSysClientMachineCall); msg != "" {
+		t.Errorf("a browser surface is another rule's: %q", msg)
+	}
+}
+
 func TestSysClientOpLabel(t *testing.T) {
 	sys, cu, _ := clientDesign(t)
 	if got := clientOpLabels(sys, allActorIDs(cu)); len(got) != 0 {
