@@ -395,3 +395,38 @@ func TestActivitiesImportOnlyWhatTheyUse(t *testing.T) {
 		}
 	}
 }
+
+// A Manager with no activity-bearing dep — one whose deps are only Engines, or none at all —
+// registers no activity, so its worker.gen.go must neither import the activity package nor bind
+// the manifest's activities: either one is a compile error in generated code no agent may edit
+// (RUN-011's vet: `"go.temporal.io/sdk/activity" imported and not used`, `declared and not used: acts`).
+func TestWorkerWithNoActivityImportsNoActivityPackage(t *testing.T) {
+	const engineOnly = `{"serviceContracts":{
+	"m":{"component":"m","layer":"Manager","goPackage":"internal/manager/m","$defs":{"T":{"type":"string"}},"deps":[{"name":"rules","component":"e"}],
+	  "interface":{"name":"MManager","layer":"manager","operations":[]}},
+	"e":{"component":"e","layer":"Engine","goPackage":"internal/engine/e","$defs":{"T":{"type":"string"}},
+	  "interface":{"name":"E","layer":"engine","operations":[{"name":"Judge","params":[],"result":{"type":"string"},"error":true}]}}}}`
+	const noDeps = `{"serviceContracts":{
+	"m":{"component":"m","layer":"Manager","goPackage":"internal/manager/m","$defs":{"T":{"type":"string"}},
+	  "interface":{"name":"MManager","layer":"manager","operations":[]}}}}`
+	for name, project := range map[string]string{"engine-only": engineOnly, "no deps": noDeps} {
+		m, err := projectmodel.Load([]byte(project))
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		out, err := temporalgen.Generate(m, temporalgen.Config{ModulePath: "example/app", ManagerKey: "m"})
+		if err != nil {
+			t.Fatalf("%s: %v", name, err)
+		}
+		w := string(out["worker.gen.go"])
+		if strings.Contains(w, `"go.temporal.io/sdk/activity"`) {
+			t.Errorf("%s: worker.gen.go imports the activity package with nothing to register:\n%s", name, w)
+		}
+		if strings.Contains(w, "acts :=") {
+			t.Errorf("%s: worker.gen.go binds activities it never registers:\n%s", name, w)
+		}
+		if _, err := parser.ParseFile(token.NewFileSet(), "worker.gen.go", w, parser.AllErrors); err != nil {
+			t.Errorf("%s: worker.gen.go does not parse: %v", name, err)
+		}
+	}
+}

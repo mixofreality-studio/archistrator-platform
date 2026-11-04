@@ -60,11 +60,11 @@ func emitWorker(ec emitContext) ([]byte, error) {
 	var b strings.Builder
 	b.WriteString(genHeader)
 	b.WriteString("\npackage " + ec.pkgName + "\n\n")
-	b.WriteString(joinImportGroups([][]string{{
-		importLine("go.temporal.io/sdk/activity"),
-		importLine("go.temporal.io/sdk/worker"),
-		importLine("go.temporal.io/sdk/workflow"),
-	}}))
+	sdk := []string{importLine("go.temporal.io/sdk/worker"), importLine("go.temporal.io/sdk/workflow")}
+	if len(acts) > 0 {
+		sdk = append(sdk, importLine("go.temporal.io/sdk/activity"))
+	}
+	b.WriteString(joinImportGroups([][]string{sdk}))
 	fmt.Fprintf(&b, "// TaskQueue is the manager's Temporal task queue (derived from the contract\n"+
 		"// interface name).\nconst TaskQueue = %q\n\n", taskQueue)
 	b.WriteString(workerManifestBlock)
@@ -101,7 +101,8 @@ func RegisterManagerWorker(w worker.Worker, m %[1]s) {
 }
 
 // registerWorkerFunc emits RegisterWorker: workflows first, then each generated
-// activity bound off a *genActivities and registered by its Temporal name.
+// activity bound off a *genActivities and registered by its Temporal name. With no
+// activity to register it binds nothing.
 func registerWorkerFunc(acts []workerActivity) string {
 	var b strings.Builder
 	b.WriteString("// RegisterWorker registers every workflow + generated activity on w.\n")
@@ -111,6 +112,12 @@ func registerWorkerFunc(acts []workerActivity) string {
 	b.WriteString("\tfor _, wf := range mf.Workflows {\n")
 	b.WriteString("\t\tw.RegisterWorkflowWithOptions(wf.Fn, workflow.RegisterOptions{Name: wf.Name})\n")
 	b.WriteString("\t}\n")
+	if len(acts) == 0 {
+		// A Manager with no activity-bearing dep (only Engines, or none) registers no activity:
+		// binding mf.Activities, or importing the activity package, would not compile.
+		b.WriteString("}\n")
+		return b.String()
+	}
 	b.WriteString("\tacts := &mf.Activities\n")
 	for _, a := range acts {
 		fmt.Fprintf(&b, "\tw.RegisterActivityWithOptions(acts.%s, activity.RegisterOptions{Name: %q})\n",
