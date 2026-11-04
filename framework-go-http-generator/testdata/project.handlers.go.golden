@@ -68,7 +68,7 @@ func (h *Handler) handleGetProject(w http.ResponseWriter, r *http.Request) {
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "get-project"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "projectCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return

@@ -23,15 +23,14 @@ type paramPlan struct {
 
 // opPlan is a fully resolved HTTP binding for one operation.
 type opPlan struct {
-	op           projectmodel.Operation
-	method       string // "GET" or "POST"
-	path         string // /api/v1/<manager>/<op>[/{param}...]
-	pathParams   []paramPlan
-	bodyParams   []paramPlan
-	queryParams  []paramPlan
-	verb         string // kebab(opName), the authz Action.Verb
-	resourceKind string // authz ResourceRef.Kind
-	catalog      bool   // true when there is no ID path param (owner-scoped)
+	op          projectmodel.Operation
+	method      string // "GET" or "POST"
+	path        string // /api/v1/<manager>/<op>[/{param}...]
+	pathParams  []paramPlan
+	bodyParams  []paramPlan
+	queryParams []paramPlan
+	verb        string // kebab(opName), the authz Action.Verb
+	scope       string // the owner scope's authz ResourceRef.Kind: <manager>Catalog
 }
 
 // planOps resolves the HTTP binding for every operation per the archistrator
@@ -54,10 +53,13 @@ type opPlan struct {
 //     (a wrapper object with one field per non-path param, scalar or not).
 //   - path: /api/v1/<manager-kebab>/<op-kebab> then /{param} per ID path param
 //     in declared order.
-//   - authz: Verb = kebab(opName); when there is >=1 ID path param the resource
-//     is Kind=<identity minus trailing ID, lowercased>, ID=<that value>;
-//     otherwise it is the owner-scoped catalog (Kind=<manager>Catalog,
-//     ID=principal.Subject).
+//   - authz: Verb = kebab(opName), and EVERY request is owner-scoped: the
+//     resource is the principal's own catalog (Kind=<manager>Catalog,
+//     ID=principal.Subject), whatever params the op carries. Who owns a resource
+//     the op names (a todo, a project) is business data the Manager resolves
+//     through owner-scoped ResourceAccess verbs; the edge never guesses a
+//     resource kind from a parameter's name, so the policy's vocabulary is
+//     exactly (verb, own scope) and nothing a hand-written policy must guess.
 func planOps(doc *projectmodel.Doc) []opPlan {
 	mgrKebab := projectmodel.Kebab(doc.ManagerBase())
 	plans := make([]opPlan, 0, len(doc.Interface.Operations))
@@ -77,7 +79,7 @@ func planOp(doc *projectmodel.Doc, op projectmodel.Operation, mgrKebab string) o
 		method = "GET"
 	}
 
-	p := opPlan{op: op, method: method, verb: projectmodel.Kebab(op.Name)}
+	p := opPlan{op: op, method: method, verb: projectmodel.Kebab(op.Name), scope: OwnerScopeKind(doc)}
 	path := "/api/v1/" + mgrKebab + "/" + projectmodel.Kebab(op.Name)
 	for _, param := range pathParams {
 		p.pathParams = append(p.pathParams, paramPlan{param, placePath})
@@ -85,13 +87,15 @@ func planOp(doc *projectmodel.Doc, op projectmodel.Operation, mgrKebab string) o
 	}
 	assignRest(&p, rest, method)
 	p.path = path
-	if len(p.pathParams) > 0 {
-		p.resourceKind = resourceKindFor(p.pathParams[0].param)
-	} else {
-		p.catalog = true
-		p.resourceKind = projectmodel.LowerFirst(doc.ManagerBase()) + "Catalog"
-	}
 	return p
+}
+
+// OwnerScopeKind is the authz ResourceRef.Kind every generated request of doc's
+// Manager names: the principal's own catalog, <manager>Catalog (e.g.
+// "listCatalog" for ListManager). The ResourceRef.ID is always the principal's
+// subject.
+func OwnerScopeKind(doc *projectmodel.Doc) string {
+	return projectmodel.LowerFirst(doc.ManagerBase()) + "Catalog"
 }
 
 // splitParams partitions an op's params into ID path params and the rest, in
@@ -147,14 +151,4 @@ func isIDPathParam(doc *projectmodel.Doc, p projectmodel.Param) bool {
 		return projectmodel.EndsWithID(p.Name)
 	}
 	return false
-}
-
-// resourceKindFor derives the authz resource Kind from the first path param: the
-// $def type name for a named scalar, else the param name for an inline uuid, with
-// the trailing "ID" stripped and lowercased.
-func resourceKindFor(p projectmodel.Param) string {
-	if name := p.Schema.RefName(); name != "" {
-		return strings.ToLower(projectmodel.TrimIDSuffix(name))
-	}
-	return strings.ToLower(projectmodel.TrimIDSuffix(p.Name))
 }

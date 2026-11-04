@@ -49,6 +49,15 @@ type OpPlan struct {
 	// HasResult reports whether the op returns a result (bare-JSON 200 body)
 	// or is void (204 No Content).
 	HasResult bool
+	// AuthzVerb is the security.Action.Verb the generated handler authorizes
+	// this op with: kebab(Name), e.g. "get-project". Every machine-client
+	// transport over the op (REST, MCP) authorizes with this same verb.
+	AuthzVerb string
+	// AuthzScope is the security.ResourceRef.Kind of that decision: the
+	// principal's own catalog, <manager>Catalog (OwnerScopeKind). The decision's
+	// ResourceRef.ID is always the principal's subject; ownership of a resource
+	// the op names is the Manager's to resolve, never the edge's.
+	AuthzScope string
 }
 
 // PlanOps resolves the HTTP binding for every operation in doc — the single
@@ -78,6 +87,8 @@ func exportOpPlan(doc *projectmodel.Doc, p opPlan) OpPlan {
 		QueryParams:  exportParamPlans(doc, p.queryParams),
 		BodyParams:   exportParamPlans(doc, p.bodyParams),
 		HasResult:    p.op.Result != nil,
+		AuthzVerb:    p.verb,
+		AuthzScope:   p.scope,
 	}
 }
 

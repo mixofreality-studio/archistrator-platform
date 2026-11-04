@@ -55,7 +55,7 @@ func (h *Handler) handleAdvancePhase(w http.ResponseWriter, r *http.Request) {
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "advance-phase"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "systemDesignCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return
@@ -85,7 +85,7 @@ func (h *Handler) handleGetSessionState(w http.ResponseWriter, r *http.Request) 
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "get-session-state"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "systemDesignCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return
@@ -113,7 +113,7 @@ func (h *Handler) handleRequestArtifactDraft(w http.ResponseWriter, r *http.Requ
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "request-artifact-draft"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "systemDesignCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return
@@ -141,7 +141,7 @@ func (h *Handler) handleSetResearchInput(w http.ResponseWriter, r *http.Request)
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "set-research-input"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "systemDesignCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return
@@ -165,7 +165,7 @@ func (h *Handler) handleStartSystemDesign(w http.ResponseWriter, r *http.Request
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "start-system-design"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "systemDesignCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return
@@ -193,7 +193,7 @@ func (h *Handler) handleSubmitReviewDecision(w http.ResponseWriter, r *http.Requ
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "submit-review-decision"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "systemDesignCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return

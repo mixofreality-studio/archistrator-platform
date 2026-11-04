@@ -222,13 +222,9 @@ func writeHandler(b *strings.Builder, doc *projectmodel.Doc, p opPlan, opts Opti
 	// Authorize (fail-closed).
 	b.WriteString("\tprincipal, ok := security.PrincipalFrom(r.Context())\n")
 	b.WriteString("\tif !ok {\n\t\twriteError(w, http.StatusUnauthorized, \"unauthenticated\", \"authentication required\")\n\t\treturn\n\t}\n")
-	idExpr := "principal.Subject"
-	if !p.catalog {
-		idExpr = resourceIDExpr(doc, p.pathParams[0].param)
-	}
 	b.WriteString("\tdecision, err := h.Security.Authorize(r.Context(), principal,\n")
 	fmt.Fprintf(b, "\t\tsecurity.Action{Verb: %q},\n", p.verb)
-	fmt.Fprintf(b, "\t\tsecurity.ResourceRef{Kind: %q, ID: %s})\n", p.resourceKind, idExpr)
+	fmt.Fprintf(b, "\t\tsecurity.ResourceRef{Kind: %q, ID: principal.Subject})\n", p.scope)
 	b.WriteString("\tif err != nil || !decision.Permit {\n\t\twriteError(w, http.StatusForbidden, \"forbidden\", \"not permitted\")\n\t\treturn\n\t}\n")
 
 	// Call the manager.
@@ -323,22 +319,6 @@ func writeConv(b *strings.Builder, name, src, ref, alias string, ptr bool) {
 func badRequest(name string) string {
 	return "\tif err != nil {\n\t\twriteError(w, http.StatusBadRequest, \"bad_request\", \"invalid " +
 		name + ": \"+err.Error())\n\t\treturn\n\t}\n"
-}
-
-// resourceIDExpr renders the authz ResourceRef.ID expression for the first path
-// param: uuid -> .String(); a named string scalar -> string(...).
-func resourceIDExpr(doc *projectmodel.Doc, fp projectmodel.Param) string {
-	kind, _ := doc.ScalarKind(fp.Schema)
-	if kind == "uuid" {
-		if fp.Pointer {
-			return "(*" + fp.Name + ").String()"
-		}
-		return fp.Name + ".String()"
-	}
-	if fp.Pointer {
-		return "string(*" + fp.Name + ")"
-	}
-	return "string(" + fp.Name + ")"
 }
 
 // handlerExtraImports collects the sorted, de-duplicated x-go-import paths the

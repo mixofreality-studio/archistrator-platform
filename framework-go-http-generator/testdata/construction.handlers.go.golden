@@ -58,7 +58,7 @@ func (h *Handler) handleExecuteNextActivity(w http.ResponseWriter, r *http.Reque
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "execute-next-activity"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "constructionCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return
@@ -84,7 +84,7 @@ func (h *Handler) handleGetSessionState(w http.ResponseWriter, r *http.Request) 
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "get-session-state"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "constructionCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return
@@ -113,7 +113,7 @@ func (h *Handler) handleOverrideActivity(w http.ResponseWriter, r *http.Request)
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "override-activity"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "constructionCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return
@@ -140,7 +140,7 @@ func (h *Handler) handlePauseProject(w http.ResponseWriter, r *http.Request) {
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "pause-project"},
-		security.ResourceRef{Kind: "project", ID: string(projectID)})
+		security.ResourceRef{Kind: "constructionCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return
@@ -168,7 +168,7 @@ func (h *Handler) handleRunReplanSweep(w http.ResponseWriter, r *http.Request) {
 	}
 	decision, err := h.Security.Authorize(r.Context(), principal,
 		security.Action{Verb: "run-replan-sweep"},
-		security.ResourceRef{Kind: "project", ID: string(*projectID)})
+		security.ResourceRef{Kind: "constructionCatalog", ID: principal.Subject})
 	if err != nil || !decision.Permit {
 		writeError(w, http.StatusForbidden, "forbidden", "not permitted")
 		return

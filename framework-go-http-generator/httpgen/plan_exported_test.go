@@ -126,4 +126,28 @@ func TestPlanOps(t *testing.T) {
 			t.Errorf("Generate does not mount PlanOps route %q for op %q", route, p.Name)
 		}
 	}
+	requireOwnerScopedAuthz(t, plans, handlers)
+}
+
+// requireOwnerScopedAuthz holds PlanOps' authz binding to what Generate emits: every op is
+// authorized with its own verb on the principal's own catalog, an ID path param included, and
+// the handlers name no other resource. A per-resource Kind guessed from a param's name is the
+// vocabulary a hand-written policy can never be sure it matches (RUN-015's 403s).
+func requireOwnerScopedAuthz(t *testing.T, plans []httpgen.OpPlan, handlers string) {
+	t.Helper()
+	for _, p := range plans {
+		if p.AuthzVerb != projectmodel.Kebab(p.Name) {
+			t.Errorf("%s: AuthzVerb = %q, want %q", p.Name, p.AuthzVerb, projectmodel.Kebab(p.Name))
+		}
+		if p.AuthzScope != "operationsCatalog" {
+			t.Errorf("%s: AuthzScope = %q, want operationsCatalog (owner-scoped, ID path param or not)", p.Name, p.AuthzScope)
+		}
+		want := "security.Action{Verb: \"" + p.AuthzVerb + "\"},\n\t\tsecurity.ResourceRef{Kind: \"" + p.AuthzScope + "\", ID: principal.Subject})"
+		if !strings.Contains(handlers, want) {
+			t.Errorf("%s: Generate does not authorize as PlanOps says: want %q", p.Name, want)
+		}
+	}
+	if got, want := strings.Count(handlers, "security.ResourceRef{"), len(plans); got != want {
+		t.Errorf("the handlers name %d resources, want exactly one owner-scoped decision per op (%d)", got, want)
+	}
 }
