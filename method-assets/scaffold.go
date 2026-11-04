@@ -25,8 +25,8 @@ const (
 	// toolchain directive / setup-go.
 	GoVersion            = "1.26.0"
 	FrameworkGoVersion   = "v0.20.0"
-	AppGeneratorVersion  = "v0.19.0"
-	HTTPGeneratorVersion = "v0.4.1"
+	AppGeneratorVersion  = "v0.20.0"
+	HTTPGeneratorVersion = "v0.5.0"
 	MCPGeneratorVersion  = "v0.3.0"
 	ProjectModelVersion  = "v0.2.6"
 
