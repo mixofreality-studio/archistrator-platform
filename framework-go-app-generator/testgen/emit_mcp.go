@@ -246,7 +246,7 @@ func %s(t *testing.T, h *scenariohost.Host) toolServer {
 	return toolServer{}
 }
 
-`, subject, strings.Join(boundTools(plan), ", "), restHookNote(plan), subject, subject)
+`, subject, strings.Join(boundTools(plan), ", "), hookNote(plan), subject, subject)
 	for _, bs := range plan.Scenarios {
 		if bs.Binding.Skip != nil {
 			continue
@@ -340,9 +340,20 @@ type toolRegistrar interface {
 	Register(srv *mcp.Server)
 }
 
+// permitAll is the Security a newSubject hands the handler. These scenarios prove the transport
+// over the real Manager; the app's own authorization policy is its composition root's hooks.
+type permitAll struct{ security.Security }
+
+// Authorize permits every call.
+func (permitAll) Authorize(context.Context, security.Principal, security.Action, security.ResourceRef) (security.Decision, error) {
+	return security.Decision{Permit: true}, nil
+}
+
 // toolServer is what newSubject builds: the handlers whose tools the
 // scenarios call, and the context the in-process server serves them under
-// (nil: the host's) — the one place a principal the tools read is set.
+// (nil: the host's) — the one place a principal the tools read is set. A
+// context with no principal is served as one scenario principal, as the
+// server's auth middleware authenticates every call.
 type toolServer struct {
 	Handlers []toolRegistrar
 	Context  context.Context
@@ -361,6 +372,9 @@ func serveTools(t *testing.T, h *scenariohost.Host, srv toolServer) *toolSession
 	ctx := srv.Context
 	if ctx == nil {
 		ctx = h.Context(t)
+	}
+	if _, ok := security.PrincipalFrom(ctx); !ok {
+		ctx = security.WithPrincipal(ctx, security.Principal{Subject: "scenario"})
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "scenario-tools", Version: "testgen"}, nil)
 	for _, r := range srv.Handlers {

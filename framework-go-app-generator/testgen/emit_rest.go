@@ -94,11 +94,9 @@ func isRESTPlan(plan componentPlan) (bool, error) {
 	return d == dialectREST, err
 }
 
-// restHookNote tells the REST hook what its Handler takes beyond the Manager.
-func restHookNote(plan componentPlan) string {
-	if rest, err := isRESTPlan(plan); err != nil || !rest {
-		return ""
-	}
+// hookNote tells the hook what its Handler takes beyond the Manager. A REST handler and an MCP
+// tool both authorize through their Security (FIX-047).
+func hookNote(componentPlan) string {
 	return "\n// A Handler authorizes through its Security: hand it permitAll{}, generated beside these\n// scenarios, which prove the transport over the real Manager."
 }
 
@@ -106,7 +104,7 @@ func transportImports(rest bool) []string {
 	if rest {
 		return []string{securityImport, "bytes", "context", "encoding/json", "errors", "fmt", "io", "net", "net/http", "net/http/httptest", "net/url", "reflect", "strings"}
 	}
-	return []string{"context", "encoding/json", "errors", "reflect", "strings", mcpSDKImport}
+	return []string{securityImport, "context", "encoding/json", "errors", "reflect", "strings", mcpSDKImport}
 }
 
 // restRouteTable is the generated map from tool name to route, over the plan's contract.

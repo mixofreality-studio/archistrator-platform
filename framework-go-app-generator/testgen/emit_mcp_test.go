@@ -135,6 +135,10 @@ func TestGenerate_MCPClientCallsToolsInProcess(t *testing.T) {
 		"mcp.NewInMemoryTransports()",
 		"res.IsError",
 		"res.StructuredContent",
+		// FIX-047: the generated tools authorize, so the scenarios hand them a Security and
+		// serve every call as an authenticated principal, as the server's middleware does.
+		"type permitAll struct{ security.Security }",
+		"ctx = security.WithPrincipal(ctx, security.Principal{Subject: \"scenario\"})",
 	} {
 		if !strings.Contains(string(src), want) {
 			t.Errorf("missing %q in\n%s", want, src)
@@ -183,6 +187,7 @@ func TestGenerate_MCPClientHooksNeedNoSDK(t *testing.T) {
 		"func stepTrackOrderP1S1(t *testing.T, h *scenariohost.Host, subject *toolSession, args string) (any, error) {",
 		"func probeTrackOrderP1S1N2(t *testing.T, h *scenariohost.Host, subject *toolSession) (any, error) {",
 		"orderGetOrder",
+		"hand it permitAll{}",
 	} {
 		if !strings.Contains(string(hooks), want) {
 			t.Errorf("hooks stub missing %q in\n%s", want, hooks)
@@ -396,7 +401,7 @@ func TestRESTTransportHelpers(t *testing.T) {
 	plan.Key = "webApi"
 	plan.Contract.GoPackage = "internal/client/web/list"
 	plan.Contract.Interface.Operations = []methodcheck.ContractOperation{{Name: "ListAddTodo"}}
-	if note := restHookNote(plan); !strings.Contains(note, "permitAll{}") {
+	if note := hookNote(plan); !strings.Contains(note, "permitAll{}") {
 		t.Errorf("a REST hook must say what its Handler's Security is: %q", note)
 	}
 	helpers, err := transportHelpers(plan, true, routes)
