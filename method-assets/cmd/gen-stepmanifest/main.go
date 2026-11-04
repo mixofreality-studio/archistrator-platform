@@ -104,6 +104,7 @@ var composedVerbModes = map[string][]string{
 	"recordPhaseArtifact":    {modeConstruct},
 	"recordTestingState":     {modeConstruct},
 	"reportPlanDefect":       {modeConstruct},
+	"reportUpstreamDefect":   {modeDraft},
 	// the construct-mode read of the operator's steer for this attempt
 	"getOperatorNotes": {modeConstruct},
 	// the step's own gate: every lifecycle task runs its checks. NOT answer mode
@@ -130,10 +131,12 @@ var modeImplicitVerbs = map[string][]string{
 // spans every step its agent runs, and these verbs belong to one step. reportPlanDefect is
 // integration's allegation that a named scenario's binding is wrong. It reaches the commands
 // of the lifecycles that declare the route; the shared integration lifecycle's activities are
-// refused by the verb itself.
+// refused by the verb itself. reportUpstreamDefect is the architecture draft's report that a
+// core-use-case node has no call to make (its lifecycle task declares sendsUpstreamTo).
 var commandVerbs = map[string][]string{
 	"service-integration":  {"reportPlanDefect"},
 	"frontend-integration": {"reportPlanDefect"},
+	"system-draft":         {"reportUpstreamDefect"},
 }
 
 // withCommandVerbs adds a command's own verbs to its tool list, sorted and without duplicates.

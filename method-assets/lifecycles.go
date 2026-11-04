@@ -70,6 +70,21 @@ type LifecycleTask struct {
 	// judged pair, and this task holds until the gate passes again. The route names the
 	// gate rather than the task behind it, so nothing skips the review.
 	SendsBackTo string `json:"sendsBackTo,omitempty"`
+	// SendsUpstreamTo names the review gates of OTHER activity types this dispatch may report
+	// a defect in: a draft that cannot honestly be made against what an upstream artifact
+	// says reports the defect, and the upstream gate's judged pair re-opens, so the amendment
+	// goes through that gate's critique and human commit again. Like SendsBackTo it names the
+	// gate rather than the task behind it, so nothing skips review. ValidateLifecycles holds
+	// each entry to a lifecycle type and a review gate that exist.
+	SendsUpstreamTo []UpstreamRoute `json:"sendsUpstreamTo,omitempty"`
+}
+
+// UpstreamRoute is one gate of another activity type a dispatch may report a defect in.
+type UpstreamRoute struct {
+	// ActivityType is the upstream lifecycle's type key.
+	ActivityType string `json:"activityType"`
+	// Gate is the review task in that lifecycle whose judged pair the report re-opens.
+	Gate string `json:"gate"`
 }
 
 // Lifecycle is the task DAG every activity of one type walks.
@@ -130,6 +145,7 @@ func (l Lifecycle) clone() Lifecycle {
 	c := Lifecycle{Type: l.Type, Phases: slices.Clone(l.Phases), Tasks: make([]LifecycleTask, len(l.Tasks))}
 	for i, t := range l.Tasks {
 		t.DependsOn = slices.Clone(t.DependsOn)
+		t.SendsUpstreamTo = slices.Clone(t.SendsUpstreamTo)
 		c.Tasks[i] = t
 	}
 	return c
@@ -150,6 +166,8 @@ func (l Lifecycle) clone() Lifecycle {
 //     phase's gate is a review task IN that phase which every other task of
 //     the phase is upstream of — so "gate passed" means "phase complete";
 //   - a dispatch's SendsBackTo is safe to re-open (checkSendBackRoutes).
+//   - only a dispatch carries SendsUpstreamTo, and each entry names another type and a
+//     gate (what those name is checked against the whole catalog: ValidateLifecycles).
 //   - a review names (Reviews) a dispatch task it transitively depends on. Only
 //     a lifecycle with no dispatch task at all may have a review that names
 //     none, and that review then carries the artifactKind itself.
@@ -160,7 +178,72 @@ func ValidateLifecycle(l Lifecycle) []string {
 	v.checkPhases()
 	v.checkReviews()
 	v.checkSendBackRoutes()
+	v.checkUpstreamRouteShapes()
 	return v.problems
+}
+
+// ValidateLifecycles validates a whole catalog: every lifecycle on its own
+// (ValidateLifecycle), its type keys unique, and every SendsUpstreamTo entry naming a
+// lifecycle type of the catalog and, in it, a review gate with a reviews target — the
+// judged pair the report re-opens. An empty result means the catalog is valid.
+func ValidateLifecycles(ls []Lifecycle) []string {
+	var problems []string
+	byType := map[string]Lifecycle{}
+	for _, l := range ls {
+		problems = append(problems, ValidateLifecycle(l)...)
+		if _, dup := byType[l.Type]; dup {
+			problems = append(problems, fmt.Sprintf("lifecycle type %q is not unique", l.Type))
+		}
+		byType[l.Type] = l
+	}
+	for _, l := range ls {
+		for _, t := range l.Tasks {
+			for _, r := range t.SendsUpstreamTo {
+				problems = append(problems, upstreamRouteProblem(l, t, r, byType)...)
+			}
+		}
+	}
+	return problems
+}
+
+// upstreamRouteProblem is what is wrong with one route against the catalog, if anything.
+func upstreamRouteProblem(l Lifecycle, t LifecycleTask, r UpstreamRoute, byType map[string]Lifecycle) []string {
+	target, ok := byType[r.ActivityType]
+	if !ok {
+		return []string{fmt.Sprintf("%s: task %q sends upstream to type %q, which no lifecycle has", l.Type, t.ID, r.ActivityType)}
+	}
+	for _, g := range target.Tasks {
+		if g.ID == r.Gate && g.Kind == LifecycleTaskReview && g.Reviews != "" {
+			return nil
+		}
+	}
+	return []string{fmt.Sprintf("%s: task %q sends upstream to %s.%s, which is not a review with a reviews target", l.Type, t.ID, r.ActivityType, r.Gate)}
+}
+
+// checkUpstreamRouteShapes holds what one lifecycle alone can say about its upstream routes:
+// they sit on a dispatch, name another type and a gate, and do not repeat.
+func (v *lifecycleValidator) checkUpstreamRouteShapes() {
+	for _, t := range v.l.Tasks {
+		if len(t.SendsUpstreamTo) == 0 {
+			continue
+		}
+		if t.Kind != LifecycleTaskDispatch {
+			v.addf("task %q sets sendsUpstreamTo, but only a dispatch task may", t.ID)
+			continue
+		}
+		seen := map[UpstreamRoute]bool{}
+		for _, r := range t.SendsUpstreamTo {
+			switch {
+			case r.ActivityType == "" || r.Gate == "":
+				v.addf("task %q has an upstream route with no activityType or gate", t.ID)
+			case r.ActivityType == v.l.Type:
+				v.addf("task %q sends upstream to its own type %q; a route inside one lifecycle is sendsBackTo", t.ID, r.ActivityType)
+			case seen[r]:
+				v.addf("task %q names the upstream route %s.%s twice", t.ID, r.ActivityType, r.Gate)
+			}
+			seen[r] = true
+		}
+	}
 }
 
 type lifecycleValidator struct {

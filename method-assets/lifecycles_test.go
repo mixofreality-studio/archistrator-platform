@@ -46,10 +46,67 @@ func TestLifecycles_ClosedOrderedTypeSet(t *testing.T) {
 }
 
 func TestLifecycles_EveryShippedLifecycleIsValid(t *testing.T) {
-	for _, l := range Lifecycles() {
-		for _, problem := range ValidateLifecycle(l) {
-			t.Error(problem)
+	for _, problem := range ValidateLifecycles(Lifecycles()) {
+		t.Error(problem)
+	}
+}
+
+// The architecture draft is the one task that may report a defect in another activity's
+// artifact, and only in the core use cases: if a chain will not draw because a node has no
+// call to make, the use-case model is what is wrong. A decomposition that will not draw is
+// the draft's own to fix, so nothing else is a route (system-architect ruling on FIX-044).
+func TestLifecycles_OnlyTheArchitectureDraftSendsUpstream(t *testing.T) {
+	for _, l := range lifecycles {
+		for _, task := range l.Tasks {
+			var want []UpstreamRoute
+			if l.Type == "architecture" && task.ID == "architectureDraft" {
+				want = []UpstreamRoute{{ActivityType: "requirements", Gate: "coreUseCasesReview"}}
+			}
+			if !slices.Equal(task.SendsUpstreamTo, want) {
+				t.Errorf("%s.%s sendsUpstreamTo = %+v, want %+v", l.Type, task.ID, task.SendsUpstreamTo, want)
+			}
 		}
+	}
+}
+
+func TestValidateLifecycles_ChecksUpstreamRoutes(t *testing.T) {
+	catalog := func(mutate func(up, down *Lifecycle)) []string {
+		up := validFixture()
+		down := Lifecycle{
+			Type:   "downstream",
+			Phases: []LifecyclePhase{{ID: "d", Label: "D", Weight: 100, Gate: "dReview", ExitCriterion: "D passes review"}},
+			Tasks: []LifecycleTask{
+				{ID: "dDraft", Kind: LifecycleTaskDispatch, Title: "Draft D", Phase: "d", DependsOn: []string{}, Command: "system-draft", WorkerClass: "system-architect", ArtifactKind: "D",
+					SendsUpstreamTo: []UpstreamRoute{{ActivityType: "fixture", Gate: "bReview"}}},
+				{ID: "dReview", Kind: LifecycleTaskReview, Title: "Review D", Phase: "d", DependsOn: []string{"dDraft"}, Reviews: "dDraft"},
+			},
+		}
+		mutate(&up, &down)
+		return ValidateLifecycles([]Lifecycle{up, down})
+	}
+	if got := catalog(func(*Lifecycle, *Lifecycle) {}); len(got) != 0 {
+		t.Errorf("a sound upstream route was refused: %v", got)
+	}
+	for name, tc := range map[string]struct {
+		mutate func(up, down *Lifecycle)
+		want   string
+	}{
+		"to an unknown type": {func(_, d *Lifecycle) { d.Tasks[0].SendsUpstreamTo[0].ActivityType = "ghost" }, "which no lifecycle has"},
+		"to a dispatch task": {func(_, d *Lifecycle) { d.Tasks[0].SendsUpstreamTo[0].Gate = "bDraft" }, "not a review with a reviews target"},
+		"to an unknown gate": {func(_, d *Lifecycle) { d.Tasks[0].SendsUpstreamTo[0].Gate = "ghost" }, "not a review with a reviews target"},
+		"to its own type":    {func(_, d *Lifecycle) { d.Tasks[0].SendsUpstreamTo[0].ActivityType = "downstream" }, "its own type"},
+		"with no gate":       {func(_, d *Lifecycle) { d.Tasks[0].SendsUpstreamTo[0].Gate = "" }, "no activityType or gate"},
+		"named twice": {func(_, d *Lifecycle) {
+			d.Tasks[0].SendsUpstreamTo = append(d.Tasks[0].SendsUpstreamTo, d.Tasks[0].SendsUpstreamTo[0])
+		}, "twice"},
+		"on a review":          {func(_, d *Lifecycle) { d.Tasks[1].SendsUpstreamTo = d.Tasks[0].SendsUpstreamTo }, "only a dispatch task may"},
+		"a duplicate type key": {func(u, d *Lifecycle) { d.Type = u.Type; d.Tasks[0].SendsUpstreamTo = nil }, "not unique"},
+	} {
+		t.Run(name, func(t *testing.T) {
+			if got := catalog(tc.mutate); !strings.Contains(strings.Join(got, "; "), tc.want) {
+				t.Errorf("got %v, want a problem naming %q", got, tc.want)
+			}
+		})
 	}
 }
 
@@ -304,6 +361,11 @@ func TestLifecycles_ResultsAreCopies(t *testing.T) {
 	b, _ := LifecycleFor("service")
 	if b.Phases[0].Weight != 15 || b.Tasks[1].DependsOn[0] != "srs" {
 		t.Errorf("a caller's mutation leaked into the package data: %+v", b)
+	}
+	c, _ := LifecycleFor("architecture")
+	c.Tasks[0].SendsUpstreamTo[0].Gate = "mutated"
+	if d, _ := LifecycleFor("architecture"); d.Tasks[0].SendsUpstreamTo[0].Gate != "coreUseCasesReview" {
+		t.Errorf("a caller's mutation of an upstream route leaked into the package data: %+v", d.Tasks[0])
 	}
 }
 

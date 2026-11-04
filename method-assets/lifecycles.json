@@ -25,7 +25,7 @@
         {"id": "architecture", "label": "Architecture", "weight": 100, "gate": "architectureReview", "exitCriterion": "The architecture and its call chains are drawn and pass review"}
       ],
       "tasks": [
-        {"id": "architectureDraft", "kind": "dispatch", "title": "Draft Architecture & Call Chains", "phase": "architecture", "dependsOn": [], "command": "system-draft", "workerClass": "system-architect", "artifactKind": "System"},
+        {"id": "architectureDraft", "kind": "dispatch", "title": "Draft Architecture & Call Chains", "phase": "architecture", "dependsOn": [], "command": "system-draft", "workerClass": "system-architect", "artifactKind": "System", "sendsUpstreamTo": [{"activityType": "requirements", "gate": "coreUseCasesReview"}]},
         {"id": "architectureReview", "kind": "review", "title": "Review Architecture", "phase": "architecture", "dependsOn": ["architectureDraft"], "reviews": "architectureDraft", "command": "system-critique", "workerClass": "system-architect"}
       ]
     },

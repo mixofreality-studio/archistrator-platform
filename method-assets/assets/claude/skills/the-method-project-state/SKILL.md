@@ -80,6 +80,7 @@ When your phase produces an artifact that lives in state, record it through the 
 |---|---|---|
 | service contract (detailed-design) | `recordServiceContract` | `.serviceContracts["<the ambient component's contractKey>"]` (the verb resolves the key itself — you pass only the contract) |
 | allegation that a scenario's binding is wrong (integration only) | `reportPlanDefect` (contract key, scenarios, reason; the revision and plan baseline are the server's) | `.testingState.planDefects[]` |
+| report that committed core-use-case nodes have no call to make (architecture draft only) | `reportUpstreamDefect` (gate, nodeRefs, rationale; the revision is the server's) | `.upstreamDefects[]` |
 | UI-design concept / SRS / component test plan / integration note / provisioning spec / deploy note / doc outline·note | `recordPhaseArtifact` (set exactly one payload field, pass the `mapKey`) | `.phaseArtifacts.<field>["<mapKey>"]` |
 | testing results (harness, quality gate, test run, defect, audit report — a component's test plan is a phase artifact, above) | `recordTestingState` (set exactly one payload field) | `.testingState.<field>` |
 | code | *(files, not state)* | files in the package the contract's `goPackage` names |
