@@ -133,6 +133,83 @@ func main() {
 	}
 }
 
+// TestDevPrincipalIsLocalOnly (FIX-039): the local-profile edge principal is a framework
+// convention every app reads through one generated rule (architect ruling invariants a-c).
+// Both SPAs of the todomvc run hand-wrote it into cmd/server/hooks.go, one of them ungated.
+// The generated rule runs here against the real environment: honoured only under local,
+// denied when unset, and refused by name under any other profile.
+func TestDevPrincipalIsLocalOnly(t *testing.T) {
+	m := loadGreenfield(t)
+	out, err := configgen.Generate(m, greenfieldCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	probe := `package config
+
+import "testing"
+
+func TestLocalDevPrincipal(t *testing.T) {
+	for _, c := range []struct {
+		env, profile, want string
+		refused             bool
+	}{
+		{"", "local", "", false},
+		{"", "cloud", "", false},
+		{"dev-user", "local", "dev-user", false},
+		{"dev-user", "cloud", "", true},
+	} {
+		t.Setenv("ORDERAPP_DEV_PRINCIPAL", c.env)
+		t.Setenv("ORDER_TEMPORAL_ADDR", "localhost:7233")
+		cfg, err := LoadConfig()
+		if err != nil {
+			t.Fatal(err)
+		}
+		got, err := cfg.LocalDevPrincipal(c.profile)
+		if got != c.want || (err != nil) != c.refused {
+			t.Errorf("env %q under %q: got %q, %v", c.env, c.profile, got, err)
+		}
+		if c.refused && (err == nil || !contains(err.Error(), "ORDERAPP_DEV_PRINCIPAL")) {
+			t.Errorf("the refusal must name the variable: %v", err)
+		}
+	}
+}
+
+func contains(s, sub string) bool {
+	for i := 0; i+len(sub) <= len(s); i++ {
+		if s[i:i+len(sub)] == sub {
+			return true
+		}
+	}
+	return false
+}
+`
+	for name, body := range map[string][]byte{
+		"go.mod":               []byte("module configsandbox\n\ngo 1.25\n"),
+		"config.gen.go":        out["config.gen.go"],
+		"devprincipal_test.go": []byte(probe),
+	} {
+		if err := os.WriteFile(filepath.Join(dir, name), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cmd := exec.Command("go", "test", "-count=1", "./...")
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
+	if o, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("the generated dev-principal rule failed: %v\n%s", err, o)
+	}
+}
+
+// TestDevPrincipalNameIsReserved: a deployment cannot declare the framework's own field.
+func TestDevPrincipalNameIsReserved(t *testing.T) {
+	m := loadGreenfield(t)
+	m.Deployment.Settings = append(m.Deployment.Settings, projectmodel.Setting{Name: "devPrincipal", Type: "string"})
+	if _, err := configgen.Generate(m, greenfieldCfg); err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Fatalf("want the reserved-name refusal, got %v", err)
+	}
+}
+
 // TestConfigErrors asserts the required-parameter and resolution guards.
 func TestConfigErrors(t *testing.T) {
 	m := loadGreenfield(t)

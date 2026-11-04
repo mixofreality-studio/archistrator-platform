@@ -33,7 +33,11 @@ func HooksSeed(m *projectmodel.Model, cfg Config) ([]byte, error) {
 		if stmt == "" {
 			stmt = `panic("FILL: ` + name + `")`
 		}
-		body.WriteString("\nfunc (appHooks) " + h.line + " {\n\t" + stmt + "\n}\n")
+		recv := "appHooks"
+		if h.seedRecv != "" {
+			recv = h.seedRecv + " appHooks"
+		}
+		body.WriteString("\nfunc (" + recv + ") " + h.line + " {\n\t" + stmt + "\n}\n")
 	}
 	src := body.String()
 	out := "package " + cfg.PackageName + "\n\n" + seedImports(r, src).render() + src

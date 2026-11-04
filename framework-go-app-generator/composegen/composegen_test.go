@@ -745,3 +745,35 @@ func composeMain(t *testing.T, project string) string {
 	}
 	return string(got["main.gen.go"])
 }
+
+// TestDevPrincipalIsTheFrameworksHook (FIX-039, architect invariants a-d): the composition
+// root refuses a dev principal set outside the local profile before it builds the edge, and
+// the seeded DevConfig injects the configured subject only under the local profile and
+// denies otherwise — so no browser surface ever has to write cmd/server/hooks.go.
+func TestDevPrincipalIsTheFrameworksHook(t *testing.T) {
+	m := loadGreenfield(t)
+	got, err := composegen.Generate(m, greenfieldCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	main := string(got["main.gen.go"])
+	refuse := "if _, err := cfg.LocalDevPrincipal(hooks.ResolveProfile(cfg)); err != nil {\n\t\treturn err\n\t}"
+	i, j := strings.Index(main, refuse), strings.Index(main, "dev := hooks.DevConfig(cfg)")
+	if i < 0 || j < 0 || i > j {
+		t.Fatalf("the composition root must refuse a non-local dev principal before it builds the edge:\n%s", main)
+	}
+	seed, err := composegen.HooksSeed(m, greenfieldCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		"func (h appHooks) DevConfig(cfg *Config) web.DevConfig {",
+		"subject, err := cfg.LocalDevPrincipal(h.ResolveProfile(cfg))",
+		"if err != nil || subject == \"\" {\n\t\treturn web.DevConfig{}\n\t}",
+		"return web.DevConfig{Enabled: true, Principal: security.Principal{Subject: subject}}",
+	} {
+		if !strings.Contains(string(seed), want) {
+			t.Errorf("the seeded DevConfig lacks %q:\n%s", want, seed)
+		}
+	}
+}

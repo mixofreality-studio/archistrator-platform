@@ -86,12 +86,31 @@ func Generate(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err := refuseReservedNames(infra, settings); err != nil {
+		return nil, err
+	}
 
 	src, err := emitFile(m.Deployment, cfg, infra, settings)
 	if err != nil {
 		return nil, err
 	}
 	return map[string][]byte{"config.gen.go": src}, nil
+}
+
+// refuseReservedNames refuses a declared input or setting whose field would be one the
+// framework emits itself (the local-profile dev principal).
+func refuseReservedNames(infra []infraField, settings []settingField) error {
+	for _, f := range infra {
+		if f.GoName == devPrincipalField {
+			return fmt.Errorf("configgen: infra input %s: the name is reserved for the framework's local-profile dev principal", f.GoName)
+		}
+	}
+	for _, f := range settings {
+		if f.GoName == devPrincipalField {
+			return fmt.Errorf("configgen: setting %q: the name is reserved for the framework's local-profile dev principal (%s_DEV_PRINCIPAL)", f.GoName, "<prefix>")
+		}
+	}
+	return nil
 }
 
 // hasContainer reports whether the deployment declares a container with key.

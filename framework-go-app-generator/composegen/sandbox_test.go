@@ -39,6 +39,22 @@ func TestCompileSandbox(t *testing.T) {
 	files["config.gen.go"] = string(cfgFile["config.gen.go"])
 	writeTree(t, dir, files)
 
+	buildSandbox(t, dir)
+
+	// The once-seeded hooks.go is the composition root's other half: it too must compile
+	// against the generated files from the first generation (FIX-039's DevConfig seed reads
+	// the generated config's LocalDevPrincipal).
+	seed, err := composegen.HooksSeed(m, greenfieldCfg)
+	if err != nil {
+		t.Fatalf("hooks seed: %v", err)
+	}
+	writeTree(t, dir, map[string]string{"main.go": string(seed)})
+	buildSandbox(t, dir)
+}
+
+// buildSandbox builds and vets the sandbox module under GOWORK=off.
+func buildSandbox(t *testing.T, dir string) {
+	t.Helper()
 	for _, args := range [][]string{{"build", "./..."}, {"vet", "./..."}} {
 		cmd := exec.Command("go", args...)
 		cmd.Dir = dir
@@ -321,7 +337,10 @@ import (
 	security "github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 )
 
-type DevConfig struct{}
+type DevConfig struct {
+	Enabled   bool
+	Principal security.Principal
+}
 
 type Registrar interface {
 	Register(mux *http.ServeMux)

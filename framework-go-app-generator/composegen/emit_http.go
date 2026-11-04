@@ -31,6 +31,9 @@ func writeSecurity(b *strings.Builder) {
 	b.WriteString("\tsec := security.New(security.WithPolicyDecisionPoint(hooks.PolicyDecisionPoint()))\n")
 	b.WriteString("\tvalidator, err := hooks.TokenValidator(ctx, cfg)\n")
 	b.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n")
+	// FIX-039: a dev principal configured under any profile but local is refused by name
+	// before the edge is built — it would authenticate every request.
+	b.WriteString("\tif _, err := cfg.LocalDevPrincipal(hooks.ResolveProfile(cfg)); err != nil {\n\t\treturn err\n\t}\n")
 	b.WriteString("\tdev := hooks.DevConfig(cfg)\n\n")
 }
 

@@ -42,6 +42,10 @@ type Config struct {
 	AuthDevMode     bool
 	MaxRetries      int
 	ShutdownTimeout time.Duration
+
+	// DevPrincipal is the framework's local-profile edge principal (devPrincipalEnv):
+	// read it through LocalDevPrincipal, never directly.
+	DevPrincipal string
 }
 
 // LoadConfig reads the environment into a Config, returning a single error
@@ -63,6 +67,7 @@ func LoadConfig() (*Config, error) {
 		AuthDevMode:             getenvBool("ORDERAPP_AUTH_DEV_MODE", "false"),
 		MaxRetries:              getenvInt("ORDERAPP_MAX_RETRIES", "3"),
 		ShutdownTimeout:         getenvDuration("ORDERAPP_SHUTDOWN_TIMEOUT", "20s"),
+		DevPrincipal:            getenv(devPrincipalEnv),
 	}
 
 	var missing []string
@@ -98,6 +103,22 @@ func (c *Config) DormantWarnings() []string {
 		w = append(w, "infrastructure \"github-app\" (optional-dormant) is unconfigured; set ORDERAPP_GITHUB_APP_APP_ID, ORDERAPP_GITHUB_APP_PRIVATE_KEY_PEM, ORDERAPP_GITHUB_APP_ACCOUNT, ORDERAPP_GITHUB_APP_APP_SLUG, ORDERAPP_GITHUB_APP_INSTALLATION_ID, ORDERAPP_GITHUB_APP_API_BASE_URL to enable")
 	}
 	return w
+}
+
+// devPrincipalEnv names the variable Config.DevPrincipal is read from.
+const devPrincipalEnv = "ORDERAPP_DEV_PRINCIPAL"
+
+// LocalDevPrincipal is the subject the auth edge may inject under profile: the
+// configured one under the "local" profile, "" (deny) when unset. Set under any other
+// profile it is an error naming the variable: the app must refuse to boot.
+func (c *Config) LocalDevPrincipal(profile string) (string, error) {
+	if c.DevPrincipal == "" {
+		return "", nil
+	}
+	if profile != "local" {
+		return "", fmt.Errorf("%s is set under the %q profile: the dev principal authenticates every request and is honoured only under the local profile; unset it", devPrincipalEnv, profile)
+	}
+	return c.DevPrincipal, nil
 }
 
 // getenv reads and trims an environment variable.

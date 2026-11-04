@@ -14,12 +14,17 @@ type ContextPropagator interface{}
 `
 	files["_stubs/temporal/log/log.go"] = `package log
 
+import "log/slog"
+
 type Logger interface {
 	Debug(msg string, kv ...any)
 	Info(msg string, kv ...any)
 	Warn(msg string, kv ...any)
 	Error(msg string, kv ...any)
 }
+
+// NewStructuredLogger is what the seeded TemporalLogger hook calls.
+func NewStructuredLogger(l *slog.Logger) Logger { return nil }
 `
 	files["_stubs/temporal/client/client.go"] = `package client
 
@@ -141,6 +146,8 @@ func addFrameworkGoStub(files map[string]string) {
 	files["_stubs/framework-go/utilities/security/security.go"] = `package security
 
 type PolicyDecisionPoint interface{}
+
+type Principal struct{ Subject string }
 
 type Validator interface{}
 

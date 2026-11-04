@@ -26,6 +26,7 @@ func emitFile(d *projectmodel.Deployment, cfg Config, infra []infraField, settin
 	writeLoadConfig(&b, cfg, infra, settings)
 	writeMissingFor(&b, d, infra)
 	writeDormantWarnings(&b, infra)
+	writeDevPrincipal(&b, cfg)
 	writeHelpers(&b, infra, settings)
 
 	src, err := format.Source(b.Bytes())
@@ -100,6 +101,9 @@ func writeStruct(b *bytes.Buffer, infra []infraField, settings []settingField) {
 			fmt.Fprintf(b, "\t%s %s\n", f.GoName, f.GoType)
 		}
 	}
+	b.WriteString("\n\t// DevPrincipal is the framework's local-profile edge principal (devPrincipalEnv):\n")
+	b.WriteString("\t// read it through LocalDevPrincipal, never directly.\n")
+	fmt.Fprintf(b, "\t%s string\n", devPrincipalField)
 	b.WriteString("}\n\n")
 }
 
@@ -119,6 +123,7 @@ func writeLoadConfig(b *bytes.Buffer, cfg Config, infra []infraField, settings [
 	for _, f := range settings {
 		fmt.Fprintf(b, "\t\t%s: %s(%q, %q),\n", f.GoName, loaderFor(f.Kind), f.Env, f.Default)
 	}
+	fmt.Fprintf(b, "\t\t%s: getenv(devPrincipalEnv),\n", devPrincipalField)
 	b.WriteString("\t}\n\n")
 	b.WriteString("\tvar missing []string\n")
 	for _, f := range infra {
@@ -187,6 +192,36 @@ func writeDormantWarnings(b *bytes.Buffer, infra []infraField) {
 		b.WriteString("\t}\n")
 	}
 	b.WriteString("\treturn w\n}\n\n")
+}
+
+// devPrincipalField is the Config field every app's local-profile edge principal is read
+// into (FIX-039). It is a framework convention, not a declared setting, so a deployment may
+// not declare a setting of the same name (Generate refuses it).
+const devPrincipalField = "DevPrincipal"
+
+// devPrincipalProfile is the one profile under which the dev principal is honoured.
+const devPrincipalProfile = "local"
+
+// writeDevPrincipal emits the dev principal's env name and its one reader. The rule is the
+// framework's, so every app answers it the same way (architect ruling, FIX-039):
+//   - under the local profile, a configured subject is the principal the auth edge injects
+//     for every request that carries no token — how a local stack and the UI harness
+//     authenticate with no IdP;
+//   - unset, it is "" and the edge denies, under every profile;
+//   - set under any other profile, it is REFUSED by name: a dev principal that
+//     authenticates every request must never be silently ignored, nor honoured, there.
+func writeDevPrincipal(b *bytes.Buffer, cfg Config) {
+	b.WriteString("// devPrincipalEnv names the variable Config.DevPrincipal is read from.\n")
+	fmt.Fprintf(b, "const devPrincipalEnv = %q\n\n", cfg.EnvPrefix+"_DEV_PRINCIPAL")
+	b.WriteString("// LocalDevPrincipal is the subject the auth edge may inject under profile: the\n")
+	fmt.Fprintf(b, "// configured one under the %q profile, \"\" (deny) when unset. Set under any other\n", devPrincipalProfile)
+	b.WriteString("// profile it is an error naming the variable: the app must refuse to boot.\n")
+	b.WriteString("func (c *Config) LocalDevPrincipal(profile string) (string, error) {\n")
+	fmt.Fprintf(b, "\tif c.%s == \"\" {\n\t\treturn \"\", nil\n\t}\n", devPrincipalField)
+	fmt.Fprintf(b, "\tif profile != %q {\n", devPrincipalProfile)
+	fmt.Fprintf(b, "\t\treturn \"\", fmt.Errorf(\"%%s is set under the %%q profile: the dev principal authenticates every request and is honoured only under the %s profile; unset it\", devPrincipalEnv, profile)\n", devPrincipalProfile)
+	b.WriteString("\t}\n")
+	fmt.Fprintf(b, "\treturn c.%s, nil\n}\n\n", devPrincipalField)
 }
 
 // writeHelpers emits the env-reading helpers actually used.

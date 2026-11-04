@@ -10,6 +10,8 @@ type hookMethod struct {
 	// seed is the method's body in the once-seeded hooks.go: a value that is always safe
 	// where there is one, or a FILL panic where only the app can answer ("" means FILL).
 	seed string
+	// seedRecv names the seeded method's receiver when its body calls another hook ("h").
+	seedRecv string
 }
 
 // deriveHooks computes the container's Hooks method set from the resolved plan.
@@ -196,6 +198,13 @@ func hookTokenValidator() hookMethod {
 	}
 }
 
+// hookDevConfig is the auth edge's dev mode. Its SEED is the framework's local-profile dev
+// principal (FIX-039): the one subject <PREFIX>_DEV_PRINCIPAL names, injected only under the
+// local profile, and the deny-by-default edge otherwise. Every browser surface's local work and
+// every UI harness authenticate through that setting, so no surface writes this hook: both
+// SPAs of the todomvc run had hand-written it, one ungated, and the composition root was
+// outside either one's edit scope. A principal set under another profile never reaches here:
+// RunGenerated refuses to boot first (writeSecurity).
 func hookDevConfig() hookMethod {
 	return hookMethod{
 		doc: []string{
@@ -203,7 +212,10 @@ func hookDevConfig() hookMethod {
 			"middleware (the config_adapter seam).",
 		},
 		line: "DevConfig(cfg *Config) web.DevConfig",
-		seed: "return web.DevConfig{}",
+		seed: "subject, err := cfg.LocalDevPrincipal(h.ResolveProfile(cfg))\n" +
+			"\tif err != nil || subject == \"\" {\n\t\treturn web.DevConfig{}\n\t}\n" +
+			"\treturn web.DevConfig{Enabled: true, Principal: security.Principal{Subject: subject}}",
+		seedRecv: "h",
 	}
 }
 
