@@ -98,7 +98,7 @@ func writeShutdown(b *strings.Builder) {
 
 // writeEdgeSecurity emits the one constructor of the security Utility every generated
 // transport authorizes against. RunGenerated builds sec here, and so does the generated
-// TestPolicyAdmitsEveryGeneratedRequest (authz_gen_test.go), so the policy the test holds to
+// TestPolicyAdmitsEveryGeneratedRequest (authz.gen_test.go), so the policy the test holds to
 // the generated requests is the one the server really serves with.
 func writeEdgeSecurity(b *strings.Builder, r *resolved) {
 	if len(r.webMgrs) == 0 {

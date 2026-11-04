@@ -40,7 +40,7 @@ func authzRows(r *resolved) ([]authzRow, error) {
 	return rows, nil
 }
 
-// emitAuthz renders authz.gen.go (the table) and authz_gen_test.go (the test that holds the
+// emitAuthz renders authz.gen.go (the table) and authz.gen_test.go (the test that holds the
 // composition root's policy to it). The test is the framework's, not the app's: it reaches the
 // policy through the generated edgeSecurity and the principal through the DevConfig hook, so no
 // app writes a probe of its own, and an app's policy that refuses a request its own generated
