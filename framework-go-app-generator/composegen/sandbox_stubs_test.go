@@ -143,21 +143,51 @@ func NewPrincipalPropagator() any { return propagator{} }
 
 func addFrameworkGoStub(files map[string]string) {
 	files["_stubs/framework-go/go.mod"] = "module github.com/mixofreality-studio/archistrator-platform/framework-go\n\ngo 1.25\n"
+	// The security stub decides through the PDP it is built with, as the real Utility does, so
+	// the generated TestPolicyAdmitsEveryGeneratedRequest really runs in the sandbox.
 	files["_stubs/framework-go/utilities/security/security.go"] = `package security
 
-type PolicyDecisionPoint interface{}
+import "context"
 
 type Principal struct{ Subject string }
 
+type Action struct{ Verb string }
+
+type ResourceRef struct{ Kind, ID string }
+
+type Decision struct{ Permit bool }
+
+type PolicyDecisionPoint interface {
+	Decide(ctx context.Context, principal Principal, action Action, resource ResourceRef) (bool, error)
+}
+
 type Validator interface{}
 
-type Security interface{}
+type Security interface {
+	Authorize(ctx context.Context, principal Principal, action Action, resource ResourceRef) (Decision, error)
+}
 
-type Option func()
+type service struct{ pdp PolicyDecisionPoint }
 
-func WithPolicyDecisionPoint(p PolicyDecisionPoint) Option { return func() {} }
+type Option func(*service)
 
-func New(opts ...Option) Security { return nil }
+func WithPolicyDecisionPoint(p PolicyDecisionPoint) Option { return func(s *service) { s.pdp = p } }
+
+func New(opts ...Option) Security {
+	s := &service{}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
+}
+
+func (s *service) Authorize(ctx context.Context, p Principal, a Action, r ResourceRef) (Decision, error) {
+	if s.pdp == nil {
+		return Decision{}, nil
+	}
+	permit, err := s.pdp.Decide(ctx, p, a, r)
+	return Decision{Permit: permit && err == nil}, err
+}
 `
 	files["_stubs/framework-go/utilities/telemetry/telemetry.go"] = `package telemetry
 

@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
@@ -35,11 +36,14 @@ func TestCompileSandbox(t *testing.T) {
 
 	dir := t.TempDir()
 	files := sandboxFiles()
-	files["main.gen.go"] = string(main["main.gen.go"])
+	for name, src := range main {
+		files[name] = string(src)
+	}
 	files["config.gen.go"] = string(cfgFile["config.gen.go"])
 	writeTree(t, dir, files)
 
 	buildSandbox(t, dir)
+	requirePolicyTest(t, dir, files["main.go"], main)
 
 	// The once-seeded hooks.go is the composition root's other half: it too must compile
 	// against the generated files from the first generation (FIX-039's DevConfig seed reads
@@ -50,6 +54,41 @@ func TestCompileSandbox(t *testing.T) {
 	}
 	writeTree(t, dir, map[string]string{"main.go": string(seed)})
 	buildSandbox(t, dir)
+}
+
+// requirePolicyTest runs the generated TestPolicyAdmitsEveryGeneratedRequest in the sandbox: a
+// policy admitting every verb on the principal's own scope passes it, and the same policy
+// refusing one generated verb fails it, naming the request (FIX-046).
+func requirePolicyTest(t *testing.T, dir, handMain string, generated map[string][]byte) {
+	t.Helper()
+	if out, err := sandboxGo(dir, "test", "-run", "TestPolicyAdmitsEveryGeneratedRequest", "."); err != nil {
+		t.Fatalf("the generated policy test refuses an own-scope policy: %v\n%s", err, out)
+	}
+	verb := firstGeneratedVerb(t, generated[composegen.AuthzTableFile])
+	writeTree(t, dir, map[string]string{"main.go": strings.Replace(handMain, `const deniedVerb = ""`, `const deniedVerb = "`+verb+`"`, 1)})
+	out, err := sandboxGo(dir, "test", "-run", "TestPolicyAdmitsEveryGeneratedRequest", ".")
+	if err == nil || !strings.Contains(out, `verb "`+verb+`"`) {
+		t.Fatalf("the generated policy test passed a policy refusing the generated verb %q: %v\n%s", verb, err, out)
+	}
+	writeTree(t, dir, map[string]string{"main.go": handMain})
+}
+
+func firstGeneratedVerb(t *testing.T, table []byte) string {
+	t.Helper()
+	_, rest, ok := strings.Cut(string(table), `Verb: "`)
+	verb, _, _ := strings.Cut(rest, `"`)
+	if !ok || verb == "" {
+		t.Fatalf("no generated verb in the table:\n%s", table)
+	}
+	return verb
+}
+
+func sandboxGo(dir string, args ...string) (string, error) {
+	cmd := exec.Command("go", args...)
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
+	out, err := cmd.CombinedOutput()
+	return string(out), err
 }
 
 // buildSandbox builds and vets the sandbox module under GOWORK=off.
@@ -138,13 +177,25 @@ type appHooks struct{}
 
 func (appHooks) ResolveProfile(cfg *Config) string                   { return "local" }
 func (appHooks) TemporalLogger(logger *slog.Logger) tlog.Logger      { return nil }
-func (appHooks) PolicyDecisionPoint() security.PolicyDecisionPoint    { return nil }
-func (appHooks) DevConfig(cfg *Config) web.DevConfig                  { return web.DevConfig{} }
+func (appHooks) PolicyDecisionPoint() security.PolicyDecisionPoint    { return ownScopePolicy{} }
+func (appHooks) DevConfig(cfg *Config) web.DevConfig {
+	return web.DevConfig{Enabled: true, Principal: security.Principal{Subject: cfg.DevPrincipal}}
+}
+
+// ownScopePolicy admits an authenticated principal every verb on its own scope, but the verb
+// deniedVerb names (the sandbox's mutation seam).
+type ownScopePolicy struct{}
+
+const deniedVerb = ""
+
+func (ownScopePolicy) Decide(_ context.Context, p security.Principal, a security.Action, r security.ResourceRef) (bool, error) {
+	return p.Subject != "" && r.ID == p.Subject && a.Verb != deniedVerb, nil
+}
 func (appHooks) WrapManagers(m WebManagers) WebManagers               { return m }
 func (appHooks) TokenValidator(ctx context.Context, cfg *Config) (security.Validator, error) {
 	return nil, nil
 }
-func (appHooks) ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, m WebManagers) {
+func (appHooks) ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, sec security.Security, m WebManagers) {
 }
 func (appHooks) OrderManagerRepo() func(orderID string) (repolookup.RepoRef, bool) {
 	return func(orderID string) (repolookup.RepoRef, bool) { return repolookup.RepoRef{}, false }

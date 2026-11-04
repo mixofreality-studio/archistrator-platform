@@ -140,6 +140,9 @@ type managerComp struct {
 	webExposed bool
 	webAlias   string
 	webImport  string
+	// doc is the manager's contract document: the source of the generated
+	// authorization table's rows (authz.gen.go, via httpgen.PlanOps).
+	doc *projectmodel.Doc
 	// gated marks a manager whose Worker registration is guarded by a
 	// Register<Iface>Worker(cfg) bool hook (G6b) — it has ≥1 optional-dormant
 	// component dep, so whether its Worker runs is composition-root policy.
@@ -568,6 +571,7 @@ func (r *resolved) resolveManager(m *projectmodel.Model, key string, c *projectm
 		iface:      c.Doc.Interface.Name,
 		alias:      r.aliasFor(c.GoPackage),
 		importPath: r.cfg.ModulePath + "/" + c.GoPackage,
+		doc:        c.Doc,
 	}
 	mc.ctor = mc.alias + ".New" + mc.iface
 	for _, dep := range c.Deps {

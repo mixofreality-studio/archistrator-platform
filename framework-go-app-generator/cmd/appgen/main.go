@@ -3,7 +3,8 @@
 //
 //	go tool appgen temporal [-check]   per-Manager activities, invokers and worker
 //	go tool appgen config   [-check]   cmd/server/config.gen.go
-//	go tool appgen compose  [-check]   cmd/server/main.gen.go, and hooks.go if absent
+//	go tool appgen compose  [-check]   cmd/server/main.gen.go, the generated authorization table
+//	                                   and its policy test, and hooks.go if absent
 //	go tool appgen clients  [-check]   internal/client/** and api/openapi.yaml
 //
 // A contract is wired only once its package holds code, so the generated composition
@@ -271,7 +272,7 @@ func composeConfig(m, effective *projectmodel.Model, cfg config, module string) 
 	}
 	return composegen.Config{
 		ContainerKey: containerOf(m, cfg), ModulePath: module, PackageName: "main", EnvPrefix: cfg.EnvPrefix,
-		WebExposedManagers: cfg.WebExposedManagers, VariantHookArgs: hooks,
+		WebExposedManagers: cfg.WebExposedManagers, ExposedOps: cfg.Clients.Exposed, VariantHookArgs: hooks,
 		VariantConstructorNoError: cfg.VariantConstructorNoError, VariantConstructorReturnsError: returnsError,
 		ScheduleRegistrarComponent: cfg.ScheduleRegistrarComponent,
 	}

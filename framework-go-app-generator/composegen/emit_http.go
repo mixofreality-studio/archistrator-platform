@@ -28,7 +28,7 @@ func writeWorkerOnlyWait(b *strings.Builder) {
 // writeSecurity builds the security Utility + validator + dev config.
 func writeSecurity(b *strings.Builder) {
 	b.WriteString("\t// Security Utility + auth boundary.\n")
-	b.WriteString("\tsec := security.New(security.WithPolicyDecisionPoint(hooks.PolicyDecisionPoint()))\n")
+	b.WriteString("\tsec := edgeSecurity(hooks)\n")
 	b.WriteString("\tvalidator, err := hooks.TokenValidator(ctx, cfg)\n")
 	b.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n")
 	// FIX-039: a dev principal configured under any profile but local is refused by name
@@ -58,7 +58,7 @@ func writeServer(b *strings.Builder, r *resolved) {
 	b.WriteString("\t)\n")
 	b.WriteString("\troot := http.NewServeMux()\n")
 	b.WriteString("\troot.Handle(\"/\", genServer)\n")
-	b.WriteString("\thooks.ExtraMounts(root, cfg, dev, validator, webManagers)\n")
+	b.WriteString("\thooks.ExtraMounts(root, cfg, dev, validator, sec, webManagers)\n")
 	b.WriteString("\thandler := otelhttp.NewHandler(root, serviceName)\n")
 	b.WriteString("\tsrv := &http.Server{\n")
 	b.WriteString("\t\tAddr:              cfg.ListenAddr,\n")
@@ -94,4 +94,20 @@ func writeShutdown(b *strings.Builder) {
 	b.WriteString("\t}\n")
 	b.WriteString("\tlogger.Info(\"http server stopped cleanly\")\n")
 	b.WriteString("\treturn nil\n")
+}
+
+// writeEdgeSecurity emits the one constructor of the security Utility every generated
+// transport authorizes against. RunGenerated builds sec here, and so does the generated
+// TestPolicyAdmitsEveryGeneratedRequest (authz_gen_test.go), so the policy the test holds to
+// the generated requests is the one the server really serves with.
+func writeEdgeSecurity(b *strings.Builder, r *resolved) {
+	if len(r.webMgrs) == 0 {
+		return
+	}
+	b.WriteString("// edgeSecurity is the security Utility every generated transport (the REST handlers,\n")
+	b.WriteString("// and the MCP tools ExtraMounts serves) authorizes against, built from the composition\n")
+	b.WriteString("// root's policy. TestPolicyAdmitsEveryGeneratedRequest builds it the same way.\n")
+	b.WriteString("func edgeSecurity(hooks Hooks) security.Security {\n")
+	b.WriteString("\treturn security.New(security.WithPolicyDecisionPoint(hooks.PolicyDecisionPoint()))\n")
+	b.WriteString("}\n\n")
 }

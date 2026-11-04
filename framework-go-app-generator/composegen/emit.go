@@ -16,6 +16,7 @@ func emitMain(r *resolved) ([]byte, error) {
 	b.WriteString("const serviceName = \"" + r.serviceName + "\"\n\n")
 	writeWebManagersType(&b, r)
 	writeHooksInterface(&b, r)
+	writeEdgeSecurity(&b, r)
 	writeRunGenerated(&b, r)
 
 	src, err := format.Source([]byte(b.String()))

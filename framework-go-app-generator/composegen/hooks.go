@@ -181,7 +181,13 @@ func hookPDP() hookMethod {
 	return hookMethod{
 		doc: []string{
 			"PolicyDecisionPoint is the authorization PDP the security Utility is built",
-			"with (application policy — not model-derivable).",
+			"with (application policy — not model-derivable). It decides verbs for the",
+			"authenticated principal's own scope: every generated REST handler and MCP",
+			"tool asks it one row of generatedAuthorizations (authz.gen.go), a verb on",
+			"ResourceRef{Kind: <manager>Catalog, ID: principal.Subject}, and it must",
+			"permit the local dev principal every row (TestPolicyAdmitsEveryGeneratedRequest",
+			"holds it, through a zero appHooks). Ownership of a data-held resource an",
+			"operation names is the Manager's to enforce, never this policy's.",
 		},
 		line: "PolicyDecisionPoint() security.PolicyDecisionPoint",
 	}
@@ -236,9 +242,13 @@ func hookExtraMounts() hookMethod {
 		doc: []string{
 			"ExtraMounts contributes composition-root-only routes (e.g. /api/userinfo,",
 			"/mcp) onto the root mux, behind the same auth boundary. The wrapped",
-			"managers are supplied for transports the generated server does not mount.",
+			"managers are supplied for transports the generated server does not mount,",
+			"and sec is the security Utility the generated web handlers hold: a machine",
+			"client's generated MCP tools take the same one, e.g.",
+			"(&<client pkg>.Handler{Manager: managers.<Manager>, Security: sec}).Register(server),",
+			"so both transports authorize every call alike.",
 		},
-		line: "ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, managers WebManagers)",
+		line: "ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, sec security.Security, managers WebManagers)",
 		seed: "// No composition-root routes yet.",
 	}
 }
