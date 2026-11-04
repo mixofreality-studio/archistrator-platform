@@ -1,6 +1,7 @@
 package webgen
 
 import (
+	"bytes"
 	"encoding/json"
 	"flag"
 	"os"
@@ -581,6 +582,57 @@ func TestBootstrapSeatsAProjectAndASurface(t *testing.T) {
 	}
 	if !slices.Equal(wrote, []string{"workspace-embed.html", "src/workspace-embed/main.tsx", "src/workspace-embed/routes/App.tsx"}) {
 		t.Fatalf("second surface wrote %v", wrote)
+	}
+}
+
+// TestBootstrapSharedSeatsAreSurfaceNeutral (FIX-036): two SPAs bootstrapped in parallel on
+// separate branches wrote webgen.json files that differed only in "surface", and the second
+// merge met an add/add conflict on it. Every seat the surfaces share must render byte for
+// byte the same whichever surface bootstraps it, and the shared config parses with no
+// surface because only the preview shell reads one.
+func TestBootstrapSharedSeatsAreSurfaceNeutral(t *testing.T) {
+	a, err := Bootstrap("todomvc", "todo-mcp-app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	b, err := Bootstrap("todomvc", "todo-web-app")
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPath := map[string][]byte{}
+	for _, f := range b {
+		byPath[f.Path] = f.Content
+	}
+	shared := 0
+	for _, f := range a {
+		other, ok := byPath[f.Path]
+		if !ok {
+			continue // a surface's own file
+		}
+		shared++
+		if !bytes.Equal(f.Content, other) {
+			t.Errorf("shared seat %s differs between surfaces", f.Path)
+		}
+	}
+	if shared == 0 {
+		t.Fatal("the two surfaces share no seat")
+	}
+	cfg, ok := byPath[ConfigFile]
+	if !ok {
+		t.Fatalf("bootstrap wrote no %s", ConfigFile)
+	}
+	c, err := ParseConfig(cfg)
+	if err != nil {
+		t.Fatalf("the bootstrap %s does not parse: %v", ConfigFile, err)
+	}
+	if c.Preview || c.Surface != "" {
+		t.Errorf("the bootstrap config is preview=%v surface=%q, want no preview and no surface", c.Preview, c.Surface)
+	}
+	if _, err := ParseConfig([]byte(`{"app":"a","oas":"a","mcpTools":"b","fixturesEnv":"X"}`)); err == nil {
+		t.Error("a preview config (the default) still needs its surface")
+	}
+	if _, err := Bootstrap("todomvc", "Not-Kebab"); err == nil {
+		t.Error("Bootstrap must still refuse a surface its file paths cannot carry")
 	}
 }
 

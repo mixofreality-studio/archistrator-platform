@@ -1,6 +1,9 @@
 package webgen
 
-import "strings"
+import (
+	"fmt"
+	"strings"
+)
 
 // Bootstrap renders the web project a fresh app's first frontend job starts from, and the
 // browser surface it is building. It is written through WriteScaffold, so what exists stays:
@@ -14,7 +17,15 @@ import "strings"
 //
 // The preview shell is left out for now (webgen.json preview: false): it imports
 // framework-web's preview entry points, which the published package does not carry yet.
+//
+// EVERY SHARED SEAT IS SURFACE-NEUTRAL (FIX-036): two surfaces bootstrapped in parallel on
+// separate branches must write byte-identical shared files, or their merges conflict
+// (webgen.json did, add/add, while it carried "surface"). Only the surface's own three files
+// are rendered from the surface name.
 func Bootstrap(app, surface string) ([]File, error) {
+	if !validSurface(surface) {
+		return nil, fmt.Errorf("webgen: bootstrap: surface %q must be kebab-case, at most %d characters", surface, maxSurface)
+	}
 	c := Config{App: app, Surface: surface, OAS: "-", MCPTools: "-", FixturesEnv: DefaultFixturesEnv(app)}
 	if err := c.Validate(); err != nil {
 		return nil, err

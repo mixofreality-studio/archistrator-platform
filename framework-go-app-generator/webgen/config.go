@@ -19,6 +19,9 @@ type Config struct {
 	App string
 	// Surface is the slot-5 UI surface the fixtures belong to (the client id,
 	// e.g. "web-client"); fixtures live at <root>/<surface>/<screen>/<state>.json.
+	// Only the preview shell reads it, so a config without the preview carries none:
+	// the bootstrap config is the one every browser surface of a project shares, and
+	// a per-surface stamp in it made two surfaces built in parallel conflict on it.
 	Surface string
 	// OAS is the server's generated OpenAPI document (httpgen).
 	OAS string
@@ -136,8 +139,8 @@ func (c Config) Validate() error {
 	switch {
 	case !appRE.MatchString(c.App):
 		return fmt.Errorf("webgen: config: app %q must be 1-40 lower-case letters, digits or '-'", c.App)
-	case !kebabRE.MatchString(c.Surface) || len(c.Surface) > maxSurface:
-		return fmt.Errorf("webgen: config: surface %q must be kebab-case, at most %d characters", c.Surface, maxSurface)
+	case (c.Preview || c.Surface != "") && !validSurface(c.Surface):
+		return fmt.Errorf("webgen: config: surface %q must be kebab-case, at most %d characters (the preview shell needs one)", c.Surface, maxSurface)
 	case c.OAS == "":
 		return fmt.Errorf("webgen: config: oas is required")
 	case c.MCPTools == "":
@@ -146,6 +149,12 @@ func (c Config) Validate() error {
 		return fmt.Errorf("webgen: config: fixturesEnv %q must be an UPPER_SNAKE environment variable of at most 60 characters", c.FixturesEnv)
 	}
 	return nil
+}
+
+// validSurface reports whether s can name a surface: its file paths and the preview's
+// fixture root are built from it.
+func validSurface(s string) bool {
+	return kebabRE.MatchString(s) && len(s) <= maxSurface
 }
 
 func compositionRoutes(o *Object) ([]CompositionRoute, error) {
