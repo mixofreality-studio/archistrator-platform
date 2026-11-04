@@ -137,6 +137,13 @@ func isMapNode(s *jsonschema.Schema) bool {
 	return isObject && ap != nil && ap.Not == nil
 }
 
+// errUnauthenticated and errForbidden are the tool errors an unauthenticated or denied call
+// gets, worded as the REST surface's wire codes; the Manager is never reached.
+var (
+	errUnauthenticated = errors.New("unauthenticated: authentication required")
+	errForbidden       = errors.New("forbidden: not permitted")
+)
+
 func mapManagerError(err error) error {
 	var me *fwmanager.Error
 	if errors.As(err, &me) {

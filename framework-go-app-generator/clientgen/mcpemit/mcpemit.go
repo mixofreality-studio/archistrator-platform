@@ -12,6 +12,12 @@
 //     required iff it is a non-pointer param (pointer params — the nil-meaningful
 //     ones — are optional and nullable, exactly as the http generator treats
 //     them and as the OpenAPI requestBody `required` list shows).
+//  4. AUTHORIZATION that matches the REST surface (FIX-047): every tool takes the
+//     principal from the context and asks Security.Authorize the same (verb, own
+//     scope) question the generated REST handler asks for that operation, read
+//     from the one derivation (httpgen.PlanOps). An unauthenticated call or a
+//     denial is a tool error and never reaches the Manager. One Manager op exposed
+//     over two machine-client transports is authorized once, the same way.
 //
 // It reuses the published mcp `contract` package for PARSING and Go-type
 // resolution (so the emitted input/output structs bind the exact manager
@@ -29,6 +35,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/httpgen"
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
@@ -85,7 +92,15 @@ func Generate(entry json.RawMessage, opts Options) (Result, error) {
 	if err != nil {
 		return Result{}, err
 	}
-	src, err := genTools(doc, enums, descs, opts)
+	plans, err := httpgen.PlanOps(doc)
+	if err != nil {
+		return Result{}, fmt.Errorf("mcpemit: plan the authorization: %w", err)
+	}
+	authz := make(map[string]httpgen.OpPlan, len(plans))
+	for _, p := range plans {
+		authz[p.Name] = p
+	}
+	src, err := genTools(doc, enums, descs, authz, opts)
 	if err != nil {
 		return Result{}, err
 	}
@@ -130,7 +145,7 @@ func parseEnumDef(raw json.RawMessage) (enumDef, bool) {
 	return enumDef{baseType: def.Type, values: vals, varnames: def.Varnames}, true
 }
 
-func genTools(doc *projectmodel.Doc, enums map[string]enumDef, descs fieldDescriptions, opts Options) ([]byte, error) {
+func genTools(doc *projectmodel.Doc, enums map[string]enumDef, descs fieldDescriptions, authz map[string]httpgen.OpPlan, opts Options) ([]byte, error) {
 	if opts.OpDoc == nil {
 		return nil, fmt.Errorf("mcpemit: Options.OpDoc is required")
 	}
@@ -154,7 +169,7 @@ func genTools(doc *projectmodel.Doc, enums map[string]enumDef, descs fieldDescri
 
 	emitInputOutputTypes(&b, doc)
 
-	writeSchemasAndHandlers(&b, doc, enums, descs, enumNames, described)
+	writeSchemasAndHandlers(&b, doc, enums, descs, authz, enumNames, described)
 	writeHelpers(&b)
 
 	src := []byte(b.String())
@@ -167,7 +182,7 @@ func genTools(doc *projectmodel.Doc, enums map[string]enumDef, descs fieldDescri
 
 // writeSchemasAndHandlers writes the per-op schema builders, the shared enum helpers and the
 // per-op handlers.
-func writeSchemasAndHandlers(b *strings.Builder, doc *projectmodel.Doc, enums map[string]enumDef, descs fieldDescriptions, enumNames []string, described bool) {
+func writeSchemasAndHandlers(b *strings.Builder, doc *projectmodel.Doc, enums map[string]enumDef, descs fieldDescriptions, authz map[string]httpgen.OpPlan, enumNames []string, described bool) {
 	for _, op := range doc.Interface.Operations {
 		writeInputSchema(b, op, enums)
 	}
@@ -181,7 +196,7 @@ func writeSchemasAndHandlers(b *strings.Builder, doc *projectmodel.Doc, enums ma
 		writeEnumSchema(b, name, enums[name])
 	}
 	for _, op := range doc.Interface.Operations {
-		writeToolHandler(b, op)
+		writeToolHandler(b, op, authz[op.Name])
 	}
 }
 
@@ -256,6 +271,9 @@ func emitHandlerAndRegister(b *strings.Builder, doc *projectmodel.Doc, opts Opti
 	fmt.Fprintf(b, "// Handler binds the %s manager to MCP tools.\n", iface)
 	b.WriteString("type Handler struct {\n")
 	fmt.Fprintf(b, "\tManager %s.%s\n", managerAlias, iface)
+	b.WriteString("\t// Security is the edge policy every tool call is authorized against, the same\n")
+	b.WriteString("\t// one the generated REST handlers hold (the composition root's sec).\n")
+	b.WriteString("\tSecurity security.Security\n")
 	b.WriteString("}\n\n")
 
 	// --- Register ---
@@ -405,13 +423,21 @@ func enumDescription(name string, e enumDef) string {
 	return fmt.Sprintf("%s. Allowed values: %s.", name, strings.Join(pairs, ", "))
 }
 
-func writeToolHandler(b *strings.Builder, op projectmodel.Operation) {
+// writeToolHandler emits one tool's handler: authorize exactly as the REST handler for the op
+// does (plan is httpgen's binding for it), then call the Manager. A returned error is a tool
+// error (IsError) to the MCP client, never a protocol error.
+func writeToolHandler(b *strings.Builder, op projectmodel.Operation, plan httpgen.OpPlan) {
 	lower := projectmodel.LowerFirst(op.Name)
 	fmt.Fprintf(b, "// handle%s is the MCP tool handler for the %s operation.\n", op.Name, op.Name)
 	fmt.Fprintf(b, "func (h *Handler) handle%s(ctx context.Context, _ *mcp.CallToolRequest, in %sInput) (*mcp.CallToolResult, %sOutput, error) {\n",
 		op.Name, lower, lower)
 	fmt.Fprintf(b, "\tvar out %sOutput\n", lower)
-	b.WriteString("\tprincipal, _ := security.PrincipalFrom(ctx)\n")
+	b.WriteString("\tprincipal, ok := security.PrincipalFrom(ctx)\n")
+	b.WriteString("\tif !ok {\n\t\treturn nil, out, errUnauthenticated\n\t}\n")
+	b.WriteString("\tdecision, err := h.Security.Authorize(ctx, principal,\n")
+	fmt.Fprintf(b, "\t\tsecurity.Action{Verb: %q},\n", plan.AuthzVerb)
+	fmt.Fprintf(b, "\t\tsecurity.ResourceRef{Kind: %q, ID: principal.Subject})\n", plan.AuthzScope)
+	b.WriteString("\tif err != nil || !decision.Permit {\n\t\treturn nil, out, errForbidden\n\t}\n")
 	b.WriteString("\trc := fwmanager.Context{Context: ctx, Principal: principal}\n")
 
 	args := []string{"rc"}

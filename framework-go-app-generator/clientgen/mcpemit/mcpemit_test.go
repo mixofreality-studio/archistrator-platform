@@ -200,3 +200,31 @@ func TestGenerate_MissingDocIsAnError(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+// FIX-047: a tool is authorized exactly as the REST handler for its op is — the same verb, the
+// principal's own scope, from httpgen.PlanOps — and an unauthenticated or denied call is a tool
+// error that never reaches the Manager. RUN-015's MCP tools never called the PDP, so the MCP
+// client's integration passed a policy that 403'd every per-todo web call.
+func TestGenerate_AuthorizesAsTheRESTHandlerDoes(t *testing.T) {
+	src := generate(t, func(string) string { return "doc" })
+	if !strings.Contains(src, "\tSecurity security.Security\n") {
+		t.Errorf("the Handler holds no Security:\n%s", src)
+	}
+	idx := strings.Index(src, "func (h *Handler) handleRequestArtifactDraft(")
+	if idx < 0 {
+		t.Fatalf("no tool handler:\n%s", src)
+	}
+	body := src[idx:]
+	want := "if !ok {\n\t\treturn nil, out, errUnauthenticated\n\t}\n" +
+		"\tdecision, err := h.Security.Authorize(ctx, principal,\n" +
+		"\t\tsecurity.Action{Verb: \"request-artifact-draft\"},\n" +
+		"\t\tsecurity.ResourceRef{Kind: \"sampleCatalog\", ID: principal.Subject})\n" +
+		"\tif err != nil || !decision.Permit {\n\t\treturn nil, out, errForbidden\n\t}\n"
+	at := strings.Index(body, want)
+	if at < 0 {
+		t.Fatalf("the tool does not authorize as the REST handler does; want\n%s\nin\n%s", want, body)
+	}
+	if call := strings.Index(body, "h.Manager.RequestArtifactDraft("); call < at {
+		t.Errorf("the Manager is called before the decision")
+	}
+}
