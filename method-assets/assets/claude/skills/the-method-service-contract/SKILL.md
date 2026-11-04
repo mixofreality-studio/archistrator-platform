@@ -114,7 +114,9 @@ Cross-reference `[[the-method-layers]]`:
 
 If the contract violates a layer rule (e.g., an Engine contract that publishes events), the violation is **in the decomposition**, not in the contract. Return to `[[the-method-architecture]]` and fix it there.
 
-### Step 5b — Classify Manager operations by Temporal primitive (when Manager infrastructure is Temporal)
+### Step 5b — Classify Manager operations by Temporal primitive
+
+**Every Manager is Temporal-hosted.** Durable execution is mandatory for every Manager (`[[platform-runtime-doctrine]]`), and generation always emits the Manager's Temporal layer: its worker, its Activities and their workflow-side invokers. There is no plain synchronous Manager, so do not design one, and do not write a contract note that calls the Manager synchronous, in-process or Temporal-free.
 
 **Temporal is a Manager-layer concern only.** The Manager layer owns workflow/sequencing and is the *only* layer that imports or references Temporal. Engine, ResourceAccess, Resource, and Utility code MUST NOT import Temporal or carry any Temporal classification on their contracts. When a Manager workflow needs to make a call that does I/O (a ResourceAccess op), the Manager wraps that call in a Temporal **Activity it defines and registers itself** — the Activity body delegates to the plain ResourceAccess method. Pure, deterministic Engine ops are called directly from workflow code (no Activity wrapper, because replay re-derives the same result).
 
@@ -132,12 +134,9 @@ A Manager contract lacking the Temporal classification (on its public ops *and* 
 
 ### Step 5c — Walk the `[[the-method-layers]]` Temporal mapping (Manager contracts only)
 
-If this contract is a **Manager**, walk the mapping in `[[the-method-layers]]` "Temporal mapping" for every public op and every Activity the Manager registers. If a public op falls outside that table (e.g., a Manager op invoked via direct method call rather than `StartWorkflow`), either:
+If this contract is a **Manager**, walk the mapping in `[[the-method-layers]]` "Temporal mapping" for every public op and every Activity the Manager registers. If a public op falls outside that table (e.g., a Manager op invoked via direct method call rather than `StartWorkflow`), revise the op's classification. Every Manager is Temporal-hosted (Step 5b), so hosting is not a choice to revise.
 
-1. revise the infrastructure decision in `[[the-method-operational-concepts]]` (some Managers might be Temporal-hosted, others not), or
-2. revise the op's classification.
-
-Do not allow a public op on a "Temporal Manager" contract that bypasses Temporal.
+Do not allow a public op on a Manager contract that bypasses Temporal.
 
 If this contract is an **Engine, ResourceAccess, Resource, or Utility**, skip this step entirely — these layers do not participate in Temporal and their contracts carry no Temporal classification (per Step 5b).
 
