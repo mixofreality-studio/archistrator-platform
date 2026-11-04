@@ -224,25 +224,29 @@ func upstreamRouteProblem(l Lifecycle, t LifecycleTask, r UpstreamRoute, byType 
 // they sit on a dispatch, name another type and a gate, and do not repeat.
 func (v *lifecycleValidator) checkUpstreamRouteShapes() {
 	for _, t := range v.l.Tasks {
-		if len(t.SendsUpstreamTo) == 0 {
-			continue
-		}
-		if t.Kind != LifecycleTaskDispatch {
+		switch {
+		case len(t.SendsUpstreamTo) == 0:
+		case t.Kind != LifecycleTaskDispatch:
 			v.addf("task %q sets sendsUpstreamTo, but only a dispatch task may", t.ID)
-			continue
+		default:
+			v.checkUpstreamRoutesOf(t)
 		}
-		seen := map[UpstreamRoute]bool{}
-		for _, r := range t.SendsUpstreamTo {
-			switch {
-			case r.ActivityType == "" || r.Gate == "":
-				v.addf("task %q has an upstream route with no activityType or gate", t.ID)
-			case r.ActivityType == v.l.Type:
-				v.addf("task %q sends upstream to its own type %q; a route inside one lifecycle is sendsBackTo", t.ID, r.ActivityType)
-			case seen[r]:
-				v.addf("task %q names the upstream route %s.%s twice", t.ID, r.ActivityType, r.Gate)
-			}
-			seen[r] = true
+	}
+}
+
+// checkUpstreamRoutesOf holds one dispatch's routes to naming another type and a gate, once each.
+func (v *lifecycleValidator) checkUpstreamRoutesOf(t LifecycleTask) {
+	seen := map[UpstreamRoute]bool{}
+	for _, r := range t.SendsUpstreamTo {
+		switch {
+		case r.ActivityType == "" || r.Gate == "":
+			v.addf("task %q has an upstream route with no activityType or gate", t.ID)
+		case r.ActivityType == v.l.Type:
+			v.addf("task %q sends upstream to its own type %q; a route inside one lifecycle is sendsBackTo", t.ID, r.ActivityType)
+		case seen[r]:
+			v.addf("task %q names the upstream route %s.%s twice", t.ID, r.ActivityType, r.Gate)
 		}
+		seen[r] = true
 	}
 }
 
