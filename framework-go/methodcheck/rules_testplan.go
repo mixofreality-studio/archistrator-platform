@@ -175,6 +175,7 @@ func (sc tpScope) stepFindings(stim scenario.Stimulus, st StepBinding) []Finding
 	}
 	out = append(out, argFindings(st.Inputs, cop, sc.contract, ruleTPArgName, ruleTPArgType, section, sc.l)...)
 	out = append(out, expectFindings(st.Expect, cop, sc.contract, ruleTPExpect, section, sc.l)...)
+	out = append(out, uiDialectFindings(st, cop, section, sc.l)...)
 	proved, pf := sc.probeFindings(section, st.Probes)
 	out = append(out, pf...)
 	return append(out, sc.stateFindings(section, stim, st, proved)...)
@@ -751,4 +752,35 @@ func jsonValueKind(value string) kindClass {
 	default:
 		return kindClassUnknown
 	}
+}
+
+// ---- browser dialect (uidialect.go) ----
+
+// uiDialectFindings holds a browser operation's step to the dialect: each input bound
+// to a UIAction parameter is a known action kind with the fields that kind requires
+// (TP-ARG-TYPE), and an expected UIObservation states exactly one thing per
+// observable (TP-EXPECT). An unknown kind is refused here, when the plan is written,
+// so testgen never meets one.
+func uiDialectFindings(st StepBinding, op ContractOperation, section string, l *Location) []Finding {
+	actionParams := map[string]bool{}
+	for _, p := range op.Params {
+		if tail, ok := schemaRefTail(p.Schema); ok && tail == "UIAction" {
+			actionParams[p.Name] = true
+		}
+	}
+	var out []Finding
+	for _, in := range st.Inputs {
+		if !actionParams[in.Name] {
+			continue
+		}
+		if _, err := ParseUIAction(in.Value); err != nil {
+			out = append(out, tpFinding(ruleTPArgType, l, "%s: input %q: %v", section, in.Name, err))
+		}
+	}
+	if tail, ok := schemaRefTail(op.Result); ok && tail == "UIObservation" && !st.Expect.ErrorExpected && st.Expect.Result != "" {
+		if _, err := ParseUIObservation(st.Expect.Result); err != nil {
+			out = append(out, tpFinding(ruleTPExpect, l, "%s: the expected observation: %v", section, err))
+		}
+	}
+	return out
 }
