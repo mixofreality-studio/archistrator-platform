@@ -184,3 +184,48 @@ func TestTemporalPrecedesTheManagersCode(t *testing.T) {
 		t.Fatal("compose wired a Manager with only generated files")
 	}
 }
+
+// compose emits the app's local run contract beside its composition root (FIX-049), and
+// -check holds it to the model like every other generated file.
+func TestComposeEmitsTheLocalRunContract(t *testing.T) {
+	root, base := appFixture(t, "internal/resourceaccess/todo", "internal/resourceaccess/caller", "internal/manager/list")
+	if err := run(append([]string{"compose"}, base...), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	src, err := os.ReadFile(filepath.Join(root, "cmd/devstack/main.gen.go"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{`{Env: "APP_POSTGRES_URL", From: "postgres.url"}`, `Required: []string{"APP_CALLER_ACCESS_URL"}`} {
+		if !strings.Contains(string(src), want) {
+			t.Errorf("the launcher lacks %q:\n%s", want, src)
+		}
+	}
+	if err := run(append([]string{"compose", "-check"}, base...), io.Discard); err != nil {
+		t.Errorf("compose -check after compose: %v", err)
+	}
+}
+
+// A hand hook reading an env var the deployment does not declare stops compose, naming it
+// (FIX-049): RUN-017's hooks.go read APP_IDENTITY_PROVIDER_URL.
+func TestComposeRefusesAnUndeclaredEnvRead(t *testing.T) {
+	root, base := appFixture(t, "internal/resourceaccess/caller")
+	if err := run(append([]string{"compose"}, base...), io.Discard); err != nil {
+		t.Fatal(err)
+	}
+	hooks := filepath.Join(root, "cmd/server/hooks.go")
+	seed, err := os.ReadFile(hooks)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(seed), "return cfg.CallerAccessURL,") {
+		t.Errorf("the seeded ExternalHTTP hook must read the declared endpoint:\n%s", seed)
+	}
+	if err := os.WriteFile(hooks, append(seed, []byte("\nconst providerEnv = \"APP_IDENTITY_PROVIDER_URL\"\n")...), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	err = run(append([]string{"compose", "-check"}, base...), io.Discard)
+	if err == nil || !strings.Contains(err.Error(), "cmd/server/hooks.go: APP_IDENTITY_PROVIDER_URL") {
+		t.Fatalf("want a refusal naming the undeclared read, got %v", err)
+	}
+}

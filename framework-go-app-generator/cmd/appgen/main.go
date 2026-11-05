@@ -4,7 +4,9 @@
 //	go tool appgen temporal [-check]   per-Manager activities, invokers and worker
 //	go tool appgen config   [-check]   cmd/server/config.gen.go
 //	go tool appgen compose  [-check]   cmd/server/main.gen.go, the generated authorization table
-//	                                   and its policy test, and hooks.go if absent
+//	                                   and its policy test, the browser surfaces' static handler,
+//	                                   hooks.go if absent, and cmd/devstack/main.gen.go, the
+//	                                   app's local run contract (go run ./cmd/devstack)
 //	go tool appgen clients  [-check]   internal/client/** and api/openapi.yaml
 //
 // A contract is wired only once its package holds code, so the generated composition
@@ -32,6 +34,7 @@ import (
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/clientgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/configgen"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/rungen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/temporalgen"
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
@@ -56,6 +59,7 @@ type config struct {
 	VariantHookArgs            map[string][]composegen.HookArgType `json:"variantHookArgs"`
 	VariantConstructorNoError  map[string]bool                     `json:"variantConstructorNoError"`
 	ScheduleRegistrarComponent string                              `json:"scheduleRegistrarComponent"`
+	WebDir                     string                              `json:"webDir"`
 	Clients                    clientsConfig                       `json:"clients"`
 }
 
@@ -247,7 +251,57 @@ func genCompose(m *projectmodel.Model, cfg config, module string, o options) (ma
 			return nil, err
 		}
 	}
-	return prefixed(generated), nil
+	if err := refuseUndeclaredEnv(effective, cfg, o.root); err != nil {
+		return nil, err
+	}
+	launcher, err := rungen.Generate(effective, rungen.Config{ContainerKey: cc.ContainerKey, EnvPrefix: cfg.EnvPrefix, WebDir: cfg.WebDir})
+	if err != nil {
+		return nil, err
+	}
+	out := prefixed(generated)
+	for name, content := range launcher {
+		out[filepath.Join(rungen.Dir, name)] = content
+	}
+	return out, nil
+}
+
+// refuseUndeclaredEnv is the gate on the composition root's hand half (FIX-049): a hand file
+// in cmd/server may read only the <PREFIX>_* variables the generated Config declares. Any
+// other is configuration no launcher, operator or gate can see; it belongs in the deployment
+// model, read through the Config.
+func refuseUndeclaredEnv(m *projectmodel.Model, cfg config, root string) error {
+	inputs, err := configgen.Inputs(m, configgen.Config{ContainerKey: containerOf(m, cfg), EnvPrefix: cfg.EnvPrefix, PackageName: "main"})
+	if err != nil {
+		return fmt.Errorf("configgen: %w", err)
+	}
+	dir := filepath.Join(root, serverDir)
+	entries, err := os.ReadDir(dir)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	srcs := map[string][]byte{}
+	for _, e := range entries {
+		n := e.Name()
+		if e.IsDir() || !strings.HasSuffix(n, ".go") || strings.HasSuffix(n, "_test.go") || strings.HasSuffix(n, ".gen.go") {
+			continue
+		}
+		src, err := os.ReadFile(filepath.Join(dir, n)) // #nosec G304 -- the app's own composition root
+		if err != nil {
+			return err
+		}
+		srcs[filepath.Join(serverDir, n)] = src
+	}
+	bad, err := configgen.UndeclaredEnvReads(inputs, cfg.EnvPrefix, srcs)
+	if err != nil {
+		return err
+	}
+	if len(bad) > 0 {
+		return fmt.Errorf("appgen: the composition root reads environment variables the deployment does not declare (declare each in the deployment model and read it from the generated Config):\n  %s", strings.Join(bad, "\n  "))
+	}
+	return nil
 }
 
 func composeConfig(m, effective *projectmodel.Model, cfg config, module string) composegen.Config {
