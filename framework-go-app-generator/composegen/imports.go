@@ -122,6 +122,7 @@ func (r *resolved) computeImports() *importSet {
 	if len(r.webMgrs) > 0 {
 		r.addWebImports(s)
 	}
+	r.addSurfaceImports(s)
 	return s
 }
 

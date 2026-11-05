@@ -1,6 +1,10 @@
 package composegen
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
+)
 
 // hookMethod is one emitted Hooks interface method: its Go signature line and a
 // doc comment. The set is DERIVED from the model (see deriveHooks).
@@ -70,7 +74,7 @@ func variantHookName(component, variant string) string {
 // arm, but must emit exactly ONE Hooks-interface method — a second call for
 // the same (component, variant) is a silent no-op, not a duplicate interface
 // method (which would fail to compile).
-func (r *resolved) addVariantHook(rb raBinding, variant string, specs []HookArgType) {
+func (r *resolved) addVariantHook(rb raBinding, variant string, specs []HookArgType, seed string) {
 	name := variantHookName(rb.key, variant)
 	if r.variantHookSeen == nil {
 		r.variantHookSeen = map[string]bool{}
@@ -95,7 +99,24 @@ func (r *resolved) addVariantHook(rb raBinding, variant string, specs []HookArgT
 			"generated variant constructor call.",
 		},
 		line: name + "(cfg *Config) (" + strings.Join(types, ", ") + ")",
+		seed: seed,
 	})
+}
+
+// externalHTTPSeed is the seeded body of an ExternalHTTP variant's args hook, (baseURL string,
+// client *http.Client): the endpoint URL the deployment declares for the binding, read from the
+// generated Config, so a hand hook never invents an env var for it (FIX-049). "" (a FILL panic)
+// for any other hook shape.
+func (r *resolved) externalHTTPSeed(infraKeys []string, specs []HookArgType) string {
+	if len(specs) != 2 || specs[0].GoType != "string" || specs[1].GoType != "*http.Client" {
+		return ""
+	}
+	for _, ik := range infraKeys {
+		if r.infra[ik].Substrate == projectmodel.SubstrateExternalHTTP {
+			return "return cfg." + infraFieldName(ik, "URL") + ", &http.Client{Timeout: 30 * time.Second}"
+		}
+	}
+	return ""
 }
 
 // workerGateHook is the conditional-worker-registration gate (G6b) for a manager
@@ -240,13 +261,12 @@ func hookWrapManagers() hookMethod {
 func hookExtraMounts() hookMethod {
 	return hookMethod{
 		doc: []string{
-			"ExtraMounts contributes composition-root-only routes (e.g. /api/userinfo,",
-			"/mcp) onto the root mux, behind the same auth boundary. The wrapped",
-			"managers are supplied for transports the generated server does not mount,",
-			"and sec is the security Utility the generated web handlers hold: a machine",
-			"client's generated MCP tools take the same one, e.g.",
-			"(&<client pkg>.Handler{Manager: managers.<Manager>, Security: sec}).Register(server),",
-			"so both transports authorize every call alike.",
+			"ExtraMounts contributes the routes only the app can write (e.g.",
+			"/api/userinfo) onto the root mux, behind the same auth boundary. Every",
+			"Client surface the design declares is already mounted by generated code:",
+			"the REST handlers, the MCP tool tables at /mcp, and the browser surfaces.",
+			"sec is the security Utility those transports hold; a hand route authorizes",
+			"against the same one.",
 		},
 		line: "ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, sec security.Security, managers WebManagers)",
 		seed: "// No composition-root routes yet.",

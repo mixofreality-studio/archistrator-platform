@@ -53,7 +53,9 @@ var SubstrateCatalog = map[string][]SubstrateInput{
 	"postgres":   {{Name: "URL"}},
 	"github-app": {{Name: "APP_ID"}, {Name: "PRIVATE_KEY_PEM"}, {Name: "ACCOUNT"}, {Name: "APP_SLUG"}, {Name: "INSTALLATION_ID"}, {Name: "API_BASE_URL"}},
 	"keycloak":   {{Name: "JWKS_URL"}, {Name: "ISSUER"}},
-	"otel":       {}, // env-driven by the OTEL_* SDK convention; no declared inputs
+	// external-http is an external HTTP endpoint an ExternalHTTP binding calls (FIX-049).
+	"external-http": {{Name: "URL"}},
+	"otel":          {}, // env-driven by the OTEL_* SDK convention; no declared inputs
 }
 
 // Initialisms are the input/key tokens rendered all-caps in a derived Go

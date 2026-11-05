@@ -82,13 +82,12 @@ type Hooks interface {
 	// Return the argument unchanged for no wrapping.
 	WrapManagers(managers WebManagers) WebManagers
 
-	// ExtraMounts contributes composition-root-only routes (e.g. /api/userinfo,
-	// /mcp) onto the root mux, behind the same auth boundary. The wrapped
-	// managers are supplied for transports the generated server does not mount,
-	// and sec is the security Utility the generated web handlers hold: a machine
-	// client's generated MCP tools take the same one, e.g.
-	// (&<client pkg>.Handler{Manager: managers.<Manager>, Security: sec}).Register(server),
-	// so both transports authorize every call alike.
+	// ExtraMounts contributes the routes only the app can write (e.g.
+	// /api/userinfo) onto the root mux, behind the same auth boundary. Every
+	// Client surface the design declares is already mounted by generated code:
+	// the REST handlers, the MCP tool tables at /mcp, and the browser surfaces.
+	// sec is the security Utility those transports hold; a hand route authorizes
+	// against the same one.
 	ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, sec security.Security, managers WebManagers)
 
 	// FinalizeLedgerStateAccess is called immediately after ledgerStateAccess's construction
@@ -128,8 +127,8 @@ type Hooks interface {
 	OrderManagerRepoBase() string
 }
 
-// edgeSecurity is the security Utility every generated transport (the REST handlers,
-// and the MCP tools ExtraMounts serves) authorizes against, built from the composition
+// edgeSecurity is the security Utility every generated transport (the REST handlers
+// and the MCP tool tables at /mcp) authorizes against, built from the composition
 // root's policy. TestPolicyAdmitsEveryGeneratedRequest builds it the same way.
 func edgeSecurity(hooks Hooks) security.Security {
 	return security.New(security.WithPolicyDecisionPoint(hooks.PolicyDecisionPoint()))

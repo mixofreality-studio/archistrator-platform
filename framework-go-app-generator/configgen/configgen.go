@@ -46,6 +46,8 @@ type infraField struct {
 	GoName        string   // exported Go field name
 	Env           string   // resolved env-var name
 	InfraKey      string   // owning infra decl key
+	Substrate     string   // owning decl's catalog substrate
+	Input         string   // the catalog input name (e.g. URL, HOSTPORT)
 	RequiredAll   bool     // required across ALL declared profiles ⇒ hard-required
 	RequiredClass bool     // owning decl presence == "required" (neither optional nor optional-dormant)
 	Profiles      []string // profiles the owning decl is provisioned for
@@ -55,6 +57,7 @@ type infraField struct {
 
 // settingField is one emitted setting field.
 type settingField struct {
+	Name    string // the declared setting name
 	GoName  string
 	GoType  string // "string" | "bool" | "int" | "time.Duration"
 	Env     string
@@ -65,36 +68,44 @@ type settingField struct {
 // Generate emits {"config.gen.go": src} for cfg.ContainerKey against m's
 // deployment model.
 func Generate(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
-	if cfg.PackageName == "" {
-		return nil, fmt.Errorf("configgen: PackageName is required")
-	}
-	if cfg.EnvPrefix == "" {
-		return nil, fmt.Errorf("configgen: EnvPrefix is required")
-	}
-	if m.Deployment == nil {
-		return nil, fmt.Errorf("configgen: model has no deployment")
-	}
-	if cfg.ContainerKey != "" && !hasContainer(m.Deployment, cfg.ContainerKey) {
-		return nil, fmt.Errorf("configgen: container %q: not found in deployment", cfg.ContainerKey)
-	}
-
-	infra, err := collectInfra(m.Deployment, cfg.EnvPrefix)
+	infra, settings, err := collect(m, cfg)
 	if err != nil {
 		return nil, err
 	}
-	settings, err := collectSettings(m.Deployment, cfg.EnvPrefix)
-	if err != nil {
-		return nil, err
-	}
-	if err := refuseReservedNames(infra, settings); err != nil {
-		return nil, err
-	}
-
 	src, err := emitFile(m.Deployment, cfg, infra, settings)
 	if err != nil {
 		return nil, err
 	}
 	return map[string][]byte{"config.gen.go": src}, nil
+}
+
+// collect validates cfg against m and flattens the deployment into the fields the Config holds.
+func collect(m *projectmodel.Model, cfg Config) ([]infraField, []settingField, error) {
+	if cfg.PackageName == "" {
+		return nil, nil, fmt.Errorf("configgen: PackageName is required")
+	}
+	if cfg.EnvPrefix == "" {
+		return nil, nil, fmt.Errorf("configgen: EnvPrefix is required")
+	}
+	if m.Deployment == nil {
+		return nil, nil, fmt.Errorf("configgen: model has no deployment")
+	}
+	if cfg.ContainerKey != "" && !hasContainer(m.Deployment, cfg.ContainerKey) {
+		return nil, nil, fmt.Errorf("configgen: container %q: not found in deployment", cfg.ContainerKey)
+	}
+
+	infra, err := collectInfra(m.Deployment, cfg.EnvPrefix)
+	if err != nil {
+		return nil, nil, err
+	}
+	settings, err := collectSettings(m.Deployment, cfg.EnvPrefix)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := refuseReservedNames(infra, settings); err != nil {
+		return nil, nil, err
+	}
+	return infra, settings, nil
 }
 
 // refuseReservedNames refuses a declared input or setting whose field would be one the
@@ -155,6 +166,8 @@ func collectInfra(d *projectmodel.Deployment, prefix string) ([]infraField, erro
 				GoName:        pascalToken(decl.Key) + pascalToken(in.Name),
 				Env:           env,
 				InfraKey:      decl.Key,
+				Substrate:     decl.Substrate,
+				Input:         in.Name,
 				RequiredAll:   requiredClass && coversAll(decl.Profiles, allProfiles) && in.Default == "",
 				RequiredClass: requiredClass,
 				Profiles:      decl.Profiles,
@@ -180,6 +193,7 @@ func collectSettings(d *projectmodel.Deployment, prefix string) ([]settingField,
 			env = prefix + "_" + upperSnakeFromCamel(s.Name)
 		}
 		out = append(out, settingField{
+			Name:    s.Name,
 			GoName:  upperFirst(s.Name),
 			GoType:  goType,
 			Env:     env,

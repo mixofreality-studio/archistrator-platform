@@ -53,7 +53,9 @@ func seedImports(r *resolved, src string) *importSet {
 	imports := newImportSet()
 	imports.add("log/slog", "")
 	imports.add("os", "")
-	for p, alias := range r.computeImports().byPath {
+	candidates := r.computeImports().byPath
+	candidates["time"] = ""
+	for p, alias := range candidates {
 		name := alias
 		if name == "" {
 			name = path.Base(p)

@@ -56,8 +56,7 @@ func writeServer(b *strings.Builder, r *resolved) {
 		b.WriteString("\t\t&" + mc.webAlias + ".Handler{Manager: webManagers." + mc.iface + ", Security: sec},\n")
 	}
 	b.WriteString("\t)\n")
-	b.WriteString("\troot := http.NewServeMux()\n")
-	b.WriteString("\troot.Handle(\"/\", genServer)\n")
+	writeRootMounts(b, r)
 	b.WriteString("\thooks.ExtraMounts(root, cfg, dev, validator, sec, webManagers)\n")
 	b.WriteString("\thandler := otelhttp.NewHandler(root, serviceName)\n")
 	b.WriteString("\tsrv := &http.Server{\n")
@@ -104,8 +103,8 @@ func writeEdgeSecurity(b *strings.Builder, r *resolved) {
 	if len(r.webMgrs) == 0 {
 		return
 	}
-	b.WriteString("// edgeSecurity is the security Utility every generated transport (the REST handlers,\n")
-	b.WriteString("// and the MCP tools ExtraMounts serves) authorizes against, built from the composition\n")
+	b.WriteString("// edgeSecurity is the security Utility every generated transport (the REST handlers\n")
+	b.WriteString("// and the MCP tool tables at /mcp) authorizes against, built from the composition\n")
 	b.WriteString("// root's policy. TestPolicyAdmitsEveryGeneratedRequest builds it the same way.\n")
 	b.WriteString("func edgeSecurity(hooks Hooks) security.Security {\n")
 	b.WriteString("\treturn security.New(security.WithPolicyDecisionPoint(hooks.PolicyDecisionPoint()))\n")

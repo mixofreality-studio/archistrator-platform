@@ -212,7 +212,7 @@ const devPrincipalProfile = "local"
 //     authenticates every request must never be silently ignored, nor honoured, there.
 func writeDevPrincipal(b *bytes.Buffer, cfg Config) {
 	b.WriteString("// devPrincipalEnv names the variable Config.DevPrincipal is read from.\n")
-	fmt.Fprintf(b, "const devPrincipalEnv = %q\n\n", cfg.EnvPrefix+"_DEV_PRINCIPAL")
+	fmt.Fprintf(b, "const devPrincipalEnv = %q\n\n", DevPrincipalEnv(cfg.EnvPrefix))
 	b.WriteString("// LocalDevPrincipal is the subject the auth edge may inject under profile: the\n")
 	fmt.Fprintf(b, "// configured one under the %q profile, \"\" (deny) when unset. Set under any other\n", devPrincipalProfile)
 	b.WriteString("// profile it is an error naming the variable: the app must refuse to boot.\n")

@@ -35,6 +35,11 @@ type resolved struct {
 	managers []managerComp
 	webMgrs  []managerComp
 
+	// mcpMounts are the MCP tool tables mounted at /mcp; serveWeb reports that the built
+	// browser surfaces are served on the API's origin (surfaces.go).
+	mcpMounts []mcpMount
+	serveWeb  bool
+
 	hooks []hookMethod
 
 	// variantHooks are the per-variant args hooks (G3) — <Comp><Variant>Args —
@@ -186,6 +191,9 @@ func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
 		return nil, err
 	}
 	if err := r.validateScheduleRegistrar(); err != nil {
+		return nil, err
+	}
+	if err := r.resolveSurfaces(m); err != nil {
 		return nil, err
 	}
 	r.hooks = deriveHooks(r)
@@ -442,7 +450,7 @@ func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.Bind
 	specs, hooked := r.cfg.VariantHookArgs[key]
 	if hooked {
 		extraCtorArgs := r.hookExtraCtorArgs(pv.Infra)
-		r.addVariantHook(rb, pv.Variant, specs)
+		r.addVariantHook(rb, pv.Variant, specs, r.externalHTTPSeed(pv.Infra, specs))
 		args := append(extraCtorArgs, "hooks."+variantHookName(rb.key, pv.Variant)+"(cfg)")
 		return variantArm{
 			profile:      profile,

@@ -154,6 +154,9 @@ func Generate(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
 		return nil, err
 	}
 	out := map[string][]byte{MainFile: src}
+	if r.serveWeb {
+		out[SurfacesFile] = emitSurfaces(r.pkgName)
+	}
 	if len(r.webMgrs) == 0 {
 		return out, nil
 	}
