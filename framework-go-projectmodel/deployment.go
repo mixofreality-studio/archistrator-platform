@@ -3,6 +3,7 @@ package projectmodel
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"strings"
 )
@@ -287,6 +288,7 @@ func DefaultDeployment(contracts map[string]*Contract, containerKey string) *Dep
 	if usesPostgres {
 		d.Infrastructure = append(d.Infrastructure, InfraDecl{Key: "postgres", Substrate: "postgres", Profiles: profiles, Presence: "required"})
 	}
+	d.Infrastructure = append(d.Infrastructure, externalEndpoints(d.Bindings)...)
 	d.Containers = []DeployContainer{{Key: containerKey, Name: containerKey, Components: components}}
 	d.Settings = defaultServerSettings()
 	return d
@@ -316,7 +318,34 @@ func defaultBindings(key string, infra, profiles []string) []Binding {
 		case infraPostgres:
 			out = append(out, defaultBinding(key, name, []string{"postgres"}, profiles))
 		case infraExternalHTTP:
-			out = append(out, defaultBinding(key, name, nil, profiles))
+			out = append(out, defaultBinding(key, name, []string{ExternalEndpointKey(key)}, profiles))
+		}
+	}
+	return out
+}
+
+// SubstrateExternalHTTP is the substrate of an external HTTP endpoint a binding calls: its one
+// input is the endpoint's base URL.
+const SubstrateExternalHTTP = "external-http"
+
+// ExternalEndpointKey is the infra key a component's external HTTP endpoint is declared under,
+// so its URL surfaces as <PREFIX>_<COMPONENT>_URL (identityAccess -> APP_IDENTITY_ACCESS_URL).
+func ExternalEndpointKey(component string) string { return Kebab(component) }
+
+// externalEndpoints declares one external-http input per ExternalHTTP binding, required in each
+// profile that binds it. Without it the endpoint is configuration nothing declares: a hand hook
+// would read an env var of its own invention, and no launcher could tell what the app needs.
+func externalEndpoints(bindings []Binding) []InfraDecl {
+	var out []InfraDecl
+	for _, b := range bindings {
+		var profiles []string
+		for _, p := range slices.Sorted(maps.Keys(b.PerProfile)) {
+			if b.PerProfile[p].Variant == infraExternalHTTP {
+				profiles = append(profiles, p)
+			}
+		}
+		if len(profiles) > 0 {
+			out = append(out, InfraDecl{Key: ExternalEndpointKey(b.Component), Substrate: SubstrateExternalHTTP, Profiles: profiles, Presence: "required"})
 		}
 	}
 	return out
@@ -337,5 +366,13 @@ func (m *Model) EffectiveDeployment(containerKey string) *Deployment {
 	if m.Deployment != nil && len(m.Deployment.Containers) > 0 {
 		return m.Deployment
 	}
-	return DefaultDeployment(m.Contracts, containerKey)
+	d := DefaultDeployment(m.Contracts, containerKey)
+	if m.System.HasBrowserSurface() {
+		d.Settings = append(d.Settings, Setting{Name: WebDistDirSetting, Type: "string", Description: "The built browser surfaces' directory, served on the API's origin; empty serves none."})
+	}
+	return d
 }
+
+// WebDistDirSetting is the setting naming the directory of the built browser surfaces the
+// composed server serves on its own origin, beside /api and /mcp. Empty serves none.
+const WebDistDirSetting = "webDistDir"

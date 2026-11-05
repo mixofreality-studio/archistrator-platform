@@ -43,6 +43,29 @@ func (c SystemComponent) IsBrowserSurface() bool {
 	return c.UISurface != nil && *c.UISurface
 }
 
+// BuiltBrowserSurfaces is the System's built browser-surface Clients (not planned, not
+// external), in declaration order. A nil System has none.
+func (s *System) BuiltBrowserSurfaces() []SystemComponent {
+	if s == nil {
+		return nil
+	}
+	var out []SystemComponent
+	for _, c := range s.Components {
+		if c.IsBrowserSurface() && c.IsBuilt() {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// HasBrowserSurface reports whether the System has a built browser surface.
+func (s *System) HasBrowserSurface() bool { return len(s.BuiltBrowserSurfaces()) > 0 }
+
+// IsBuilt reports a component the project builds: neither planned nor external.
+func (c SystemComponent) IsBuilt() bool {
+	return c.BuildStatus != "planned" && c.BuildStatus != "external"
+}
+
 // Relationship is one systemDesign edge between two components.
 type Relationship struct {
 	From  string `json:"from"` // kebab component id

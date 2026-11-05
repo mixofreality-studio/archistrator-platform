@@ -177,3 +177,55 @@ func TestEffectiveDeploymentPrefersTheAuthoredOne(t *testing.T) {
 		t.Errorf("no authored deployment must fall back to the default, got %+v", got)
 	}
 }
+
+// An ExternalHTTP binding's endpoint is declared configuration (FIX-049): one external-http
+// input per binding, keyed by the component, required in each profile that binds it, and the
+// binding consumes it. A hand hook then reads the URL from the generated Config instead of an
+// env var of its own invention.
+func TestDefaultDeploymentDeclaresEachExternalEndpoint(t *testing.T) {
+	contracts := map[string]*Contract{
+		"list":           {Key: "list", Layer: "Manager", GoPackage: "internal/manager/list"},
+		"identityAccess": {Key: "identityAccess", Layer: "ResourceAccess", GoPackage: "internal/resourceaccess/identity", Infra: []string{"ExternalHTTP"}},
+	}
+	d := DefaultDeployment(contracts, "server")
+	var decl *InfraDecl
+	for i := range d.Infrastructure {
+		if d.Infrastructure[i].Substrate == SubstrateExternalHTTP {
+			decl = &d.Infrastructure[i]
+		}
+	}
+	if decl == nil || decl.Key != "identity-access" || decl.Presence != "required" || strings.Join(decl.Profiles, ",") != "cloud,local" {
+		t.Fatalf("external endpoint decl = %+v in %+v", decl, d.Infrastructure)
+	}
+	for profile, v := range d.Bindings[0].PerProfile {
+		if len(v.Infra) != 1 || v.Infra[0] != "identity-access" {
+			t.Errorf("profile %s: the ExternalHTTP binding must consume its endpoint, got %+v", profile, v)
+		}
+	}
+	if err := (&Model{Contracts: contracts, Deployment: d}).validateDeployment(); err != nil {
+		t.Errorf("the default deployment must validate: %v", err)
+	}
+}
+
+// A System with a built browser surface gets the webDistDir setting in its effective default
+// deployment (FIX-051), and one without gets none.
+func TestEffectiveDeploymentDeclaresWebDistDirForABrowserSurface(t *testing.T) {
+	yes := true
+	withSurface := &Model{System: &System{Components: []SystemComponent{{ID: "web", Kind: "client", UISurface: &yes}}}}
+	if !hasSetting(withSurface.EffectiveDeployment("server"), WebDistDirSetting) {
+		t.Error("a browser surface must declare webDistDir")
+	}
+	planned := &Model{System: &System{Components: []SystemComponent{{ID: "web", Kind: "client", UISurface: &yes, BuildStatus: "planned"}}}}
+	if hasSetting(planned.EffectiveDeployment("server"), WebDistDirSetting) || hasSetting((&Model{}).EffectiveDeployment("server"), WebDistDirSetting) {
+		t.Error("no built browser surface must declare no webDistDir")
+	}
+}
+
+func hasSetting(d *Deployment, name string) bool {
+	for _, s := range d.Settings {
+		if s.Name == name {
+			return true
+		}
+	}
+	return false
+}
