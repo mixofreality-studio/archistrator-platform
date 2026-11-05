@@ -115,18 +115,26 @@ func Derive(m *projectmodel.Model, cfg Config) (Plan, error) {
 	if p.ListenEnv == "" {
 		return Plan{}, fmt.Errorf("rungen: the deployment declares no %q setting, so the server has no HTTP address to run on", "listenAddr")
 	}
-	if m.System.HasBrowserSurface() {
-		if p.WebDistEnv == "" {
-			return Plan{}, fmt.Errorf("rungen: the System has a browser surface but the deployment declares no %q setting to serve it by", projectmodel.WebDistDirSetting)
-		}
-		p.WebDir = cfg.WebDir
-		if p.WebDir == "" {
-			p.WebDir = defaultWebDir
-		}
-	} else {
-		p.WebDistEnv = ""
+	if err := p.web(m.System.HasBrowserSurface(), cfg.WebDir); err != nil {
+		return Plan{}, err
 	}
 	return p, nil
+}
+
+// web builds and serves the web project only when the System has a browser surface.
+func (p *Plan) web(hasSurface bool, dir string) error {
+	if !hasSurface {
+		p.WebDistEnv = ""
+		return nil
+	}
+	if p.WebDistEnv == "" {
+		return fmt.Errorf("rungen: the System has a browser surface but the deployment declares no %q setting to serve it by", projectmodel.WebDistDirSetting)
+	}
+	p.WebDir = dir
+	if p.WebDir == "" {
+		p.WebDir = defaultWebDir
+	}
+	return nil
 }
 
 // take files one Config input into the plan.

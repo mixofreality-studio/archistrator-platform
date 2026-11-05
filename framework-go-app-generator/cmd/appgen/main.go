@@ -265,22 +265,16 @@ func genCompose(m *projectmodel.Model, cfg config, module string, o options) (ma
 	return out, nil
 }
 
-// refuseUndeclaredEnv is the gate on the composition root's hand half (FIX-049): a hand file
-// in cmd/server may read only the <PREFIX>_* variables the generated Config declares. Any
-// other is configuration no launcher, operator or gate can see; it belongs in the deployment
-// model, read through the Config.
-func refuseUndeclaredEnv(m *projectmodel.Model, cfg config, root string) error {
-	inputs, err := configgen.Inputs(m, configgen.Config{ContainerKey: containerOf(m, cfg), EnvPrefix: cfg.EnvPrefix, PackageName: "main"})
-	if err != nil {
-		return fmt.Errorf("configgen: %w", err)
-	}
+// handServerSources is the composition root's hand-written Go files (no tests, nothing
+// generated), keyed by their module-root-relative path.
+func handServerSources(root string) (map[string][]byte, error) {
 	dir := filepath.Join(root, serverDir)
 	entries, err := os.ReadDir(dir)
 	if errors.Is(err, os.ErrNotExist) {
-		return nil
+		return nil, nil
 	}
 	if err != nil {
-		return err
+		return nil, err
 	}
 	srcs := map[string][]byte{}
 	for _, e := range entries {
@@ -290,9 +284,25 @@ func refuseUndeclaredEnv(m *projectmodel.Model, cfg config, root string) error {
 		}
 		src, err := os.ReadFile(filepath.Join(dir, n)) // #nosec G304 -- the app's own composition root
 		if err != nil {
-			return err
+			return nil, err
 		}
 		srcs[filepath.Join(serverDir, n)] = src
+	}
+	return srcs, nil
+}
+
+// refuseUndeclaredEnv is the gate on the composition root's hand half (FIX-049): a hand file
+// in cmd/server may read only the <PREFIX>_* variables the generated Config declares. Any
+// other is configuration no launcher, operator or gate can see; it belongs in the deployment
+// model, read through the Config.
+func refuseUndeclaredEnv(m *projectmodel.Model, cfg config, root string) error {
+	inputs, err := configgen.Inputs(m, configgen.Config{ContainerKey: containerOf(m, cfg), EnvPrefix: cfg.EnvPrefix, PackageName: "main"})
+	if err != nil {
+		return fmt.Errorf("configgen: %w", err)
+	}
+	srcs, err := handServerSources(root)
+	if err != nil {
+		return err
 	}
 	bad, err := configgen.UndeclaredEnvReads(inputs, cfg.EnvPrefix, srcs)
 	if err != nil {
