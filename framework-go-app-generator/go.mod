@@ -6,7 +6,7 @@ require (
 	github.com/google/jsonschema-go v0.4.3
 	github.com/mixofreality-studio/archistrator-platform/framework-go v0.20.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator v0.5.0
-	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.2.6
+	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.3.0
 	go.temporal.io/sdk v1.44.0
 	gopkg.in/yaml.v3 v3.0.1
 )
