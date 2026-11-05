@@ -25,10 +25,10 @@ const (
 	// toolchain directive / setup-go.
 	GoVersion            = "1.26.0"
 	FrameworkGoVersion   = "v0.20.0"
-	AppGeneratorVersion  = "v0.20.2"
+	AppGeneratorVersion  = "v0.21.0"
 	HTTPGeneratorVersion = "v0.5.0"
 	MCPGeneratorVersion  = "v0.3.0"
-	ProjectModelVersion  = "v0.2.6"
+	ProjectModelVersion  = "v0.3.0"
 
 	// The composition root's own dependencies; see compositionPins.
 	InfraOtelVersion     = "v0.1.0"
