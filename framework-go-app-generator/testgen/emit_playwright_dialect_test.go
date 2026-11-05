@@ -60,7 +60,7 @@ func TestPlaywrightDialect_CheckboxStepGolden(t *testing.T) {
 		`{"kind":"fill","target":"order-edit","value":"rename"}`,
 		`{"kind":"press","target":"order-edit","value":"Enter"}`,
 		`{"kind":"hover","target":"order-row"}`,
-	}, `[{"checked":"order-done"},{"unchecked":"order-flag"},{"text":"1 item left","target":"order-count"}]`)
+	}, `[{"checked":"order-done"},{"unchecked":"order-flag"},{"text":"1 item left","target":"order-count"},{"text":"","target":"order-edit"}]`)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,6 +79,7 @@ func TestPlaywrightDialect_CheckboxStepGolden(t *testing.T) {
   await expect(page.getByTestId('order-done')).toBeChecked();
   await expect(page.getByTestId('order-flag')).not.toBeChecked();
   await expect(page.getByTestId('order-count')).toHaveText('1 item left');
+  await expect(page.getByTestId('order-edit')).toHaveText('');
 `
 	if !strings.Contains(spec, golden) {
 		t.Errorf("spec does not carry the golden step:\n%s\nwant:\n%s", spec, golden)

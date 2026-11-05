@@ -57,6 +57,8 @@ func TestUIDialect_ParseUIObservation(t *testing.T) {
 		`{"text":"1 item left","target":"todo-count"}`,
 		`{"url":"/active"}`,
 		`[{"checked":"todo-toggle"},{"text":"0 items left","target":"todo-count"}]`,
+		// The field holds no text: presence states the kind (RUN-021's fresh todomvc plan wrote it).
+		`[{"visible":"new-todo-input"},{"target":"new-todo-input","text":""}]`,
 	} {
 		if _, err := ParseUIObservation(ok); err != nil {
 			t.Errorf("%s: %v", ok, err)
@@ -68,6 +70,8 @@ func TestUIDialect_ParseUIObservation(t *testing.T) {
 		`[{"visible":"a"},{"url":"/","checked":"b"}]`: "observable 1",
 		`{"visible":"a","target":"b"}`:                "target goes with text",
 		`{"text":"x"}`:                                "target goes with text",
+		`{"text":""}`:                                 "target goes with text",
+		`{"visible":"","target":"a"}`:                 "exactly one",
 		`{"enabled":"a"}`:                             "not a UI observation",
 	} {
 		if _, err := ParseUIObservation(raw); err == nil || !strings.Contains(err.Error(), want) {

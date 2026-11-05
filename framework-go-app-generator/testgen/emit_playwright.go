@@ -109,7 +109,7 @@ var playwrightActions = map[string]func(a methodcheck.UIAction) string{
 var playwrightObservables = map[string]func(o methodcheck.UIObservable) string{
 	methodcheck.UIObservableVisible: func(o methodcheck.UIObservable) string { return "expect(" + byTestID(o.Visible) + ").toBeVisible()" },
 	methodcheck.UIObservableText: func(o methodcheck.UIObservable) string {
-		return "expect(" + byTestID(o.Target) + ").toHaveText(" + tsStr(o.Text) + ")"
+		return "expect(" + byTestID(o.Target) + ").toHaveText(" + tsStr(*o.Text) + ")"
 	},
 	methodcheck.UIObservableURL:     func(o methodcheck.UIObservable) string { return "expect(page).toHaveURL(" + urlMatcher(o.URL) + ")" },
 	methodcheck.UIObservableChecked: func(o methodcheck.UIObservable) string { return "expect(" + byTestID(o.Checked) + ").toBeChecked()" },

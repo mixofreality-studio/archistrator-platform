@@ -129,20 +129,26 @@ var uiFieldMeaning = map[string]string{
 
 // UIObservable is one observation. It states exactly one thing: the data-testid that is
 // visible, checked or unchecked; the text a data-testid (target) holds; or the URL.
+// Text is a pointer because its presence, not its value, states the kind: "the field
+// holds no text" ({"target": "new-todo", "text": ""}) is an observation a fresh
+// project's plan writes, and the contract schema (presence-based oneOf) admits it.
 type UIObservable struct {
-	Visible   string `json:"visible,omitempty"`
-	Text      string `json:"text,omitempty"`
-	Target    string `json:"target,omitempty"`
-	URL       string `json:"url,omitempty"`
-	Checked   string `json:"checked,omitempty"`
-	Unchecked string `json:"unchecked,omitempty"`
+	Visible   string  `json:"visible,omitempty"`
+	Text      *string `json:"text,omitempty"`
+	Target    string  `json:"target,omitempty"`
+	URL       string  `json:"url,omitempty"`
+	Checked   string  `json:"checked,omitempty"`
+	Unchecked string  `json:"unchecked,omitempty"`
 }
 
 // Kind is the one kind the observable states ("" when it states none or several).
 func (o UIObservable) Kind() string {
 	var kinds []string
+	if o.Text != nil {
+		kinds = append(kinds, UIObservableText)
+	}
 	for k, v := range map[string]string{
-		UIObservableVisible: o.Visible, UIObservableText: o.Text, UIObservableURL: o.URL,
+		UIObservableVisible: o.Visible, UIObservableURL: o.URL,
 		UIObservableChecked: o.Checked, UIObservableUnchecked: o.Unchecked,
 	} {
 		if v != "" {
