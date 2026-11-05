@@ -7,6 +7,7 @@ import (
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/httpgen"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 // TestAuthzTableNamesEveryGeneratedRequest (FIX-046): the composition root carries one row per
@@ -58,20 +59,29 @@ func TestAuthzTableNamesEveryGeneratedRequest(t *testing.T) {
 		}
 	}
 
-	// Narrowed like clientgen's Exposed, the table follows what the transports really serve.
-	plans, err := httpgen.PlanOps(m.Contracts["orderManager"].Doc)
+	// Narrowed like clientgen's Exposed, the table follows what the transports really serve: a
+	// narrowed Manager (one with several operations, so the narrowing is observable) keeps only
+	// its served operation, and a nil entry keeps the whole interface.
+	fulfillment := m.Contracts["fulfillmentManager"].Doc
+	plans, err := httpgen.PlanOps(fulfillment)
 	if err != nil {
 		t.Fatal(err)
 	}
+	if len(plans) < 2 {
+		t.Fatalf("the narrowing check needs a Manager with several operations, fulfillmentManager has %d", len(plans))
+	}
 	narrowed := greenfieldCfg
-	narrowed.ExposedOps = map[string][]string{"orderManager": {plans[0].Name}, "fulfillmentManager": nil}
+	narrowed.ExposedOps = map[string][]string{"fulfillmentManager": {plans[0].Name}, "orderManager": nil}
 	got, err = composegen.Generate(m, narrowed)
 	if err != nil {
 		t.Fatal(err)
 	}
 	table = string(got[composegen.AuthzTableFile])
-	if n := strings.Count(table, `{Manager: "OrderManager"`); n != 1 {
-		t.Errorf("a narrowed Manager keeps only its served operations, got %d OrderManager rows:\n%s", n, table)
+	if n := strings.Count(table, fmt.Sprintf("{Manager: %q", fulfillment.Interface.Name)); n != 1 {
+		t.Errorf("a narrowed Manager keeps only its served operations, got %d %s rows:\n%s", n, fulfillment.Interface.Name, table)
+	}
+	if n := strings.Count(table, `{Manager: "OrderManager"`); n != len(mustPlan(t, m.Contracts["orderManager"].Doc)) {
+		t.Errorf("a nil entry keeps the whole interface, got %d OrderManager rows:\n%s", n, table)
 	}
 
 	// A container with no web-exposed Manager serves no request and gets neither file.
@@ -87,4 +97,13 @@ func TestAuthzTableNamesEveryGeneratedRequest(t *testing.T) {
 	if _, ok := got[composegen.AuthzTestFile]; ok {
 		t.Error("a worker-only container got a policy test")
 	}
+}
+
+func mustPlan(t *testing.T, doc *projectmodel.Doc) []httpgen.OpPlan {
+	t.Helper()
+	plans, err := httpgen.PlanOps(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return plans
 }
