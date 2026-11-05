@@ -22,18 +22,29 @@ type authzRow struct {
 func authzRows(r *resolved) ([]authzRow, error) {
 	var rows []authzRow
 	for _, mc := range r.webMgrs {
-		if mc.doc == nil {
-			return nil, fmt.Errorf("composegen: manager %q: no contract document to plan its authorization", mc.key)
-		}
-		plans, err := httpgen.PlanOps(mc.doc)
+		mgrRows, err := managerAuthzRows(mc, r.cfg.ExposedOps)
 		if err != nil {
-			return nil, fmt.Errorf("composegen: manager %q: %w", mc.key, err)
+			return nil, err
 		}
-		served, narrowed := r.cfg.ExposedOps[mc.key]
-		for _, p := range plans {
-			if narrowed && served != nil && !slices.Contains(served, p.Name) {
-				continue
-			}
+		rows = append(rows, mgrRows...)
+	}
+	return rows, nil
+}
+
+// managerAuthzRows is one Manager's rows: every operation its transports serve, narrowed by
+// exposed as clientgen narrows them (a nil entry or no entry is the whole interface).
+func managerAuthzRows(mc managerComp, exposed map[string][]string) ([]authzRow, error) {
+	if mc.doc == nil {
+		return nil, fmt.Errorf("composegen: manager %q: no contract document to plan its authorization", mc.key)
+	}
+	plans, err := httpgen.PlanOps(mc.doc)
+	if err != nil {
+		return nil, fmt.Errorf("composegen: manager %q: %w", mc.key, err)
+	}
+	served := exposed[mc.key]
+	var rows []authzRow
+	for _, p := range plans {
+		if served == nil || slices.Contains(served, p.Name) {
 			rows = append(rows, authzRow{manager: mc.iface, op: p.Name, verb: p.AuthzVerb, scope: p.AuthzScope})
 		}
 	}
