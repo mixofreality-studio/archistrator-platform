@@ -762,12 +762,7 @@ func jsonValueKind(value string) kindClass {
 // observable (TP-EXPECT). An unknown kind is refused here, when the plan is written,
 // so testgen never meets one.
 func uiDialectFindings(st StepBinding, op ContractOperation, section string, l *Location) []Finding {
-	actionParams := map[string]bool{}
-	for _, p := range op.Params {
-		if tail, ok := schemaRefTail(p.Schema); ok && tail == "UIAction" {
-			actionParams[p.Name] = true
-		}
-	}
+	actionParams := refParams(op, "UIAction")
 	var out []Finding
 	for _, in := range st.Inputs {
 		if !actionParams[in.Name] {
@@ -777,10 +772,28 @@ func uiDialectFindings(st StepBinding, op ContractOperation, section string, l *
 			out = append(out, tpFinding(ruleTPArgType, l, "%s: input %q: %v", section, in.Name, err))
 		}
 	}
-	if tail, ok := schemaRefTail(op.Result); ok && tail == "UIObservation" && !st.Expect.ErrorExpected && st.Expect.Result != "" {
-		if _, err := ParseUIObservation(st.Expect.Result); err != nil {
-			out = append(out, tpFinding(ruleTPExpect, l, "%s: the expected observation: %v", section, err))
+	if !observesUI(op, st.Expect) {
+		return out
+	}
+	if _, err := ParseUIObservation(st.Expect.Result); err != nil {
+		out = append(out, tpFinding(ruleTPExpect, l, "%s: the expected observation: %v", section, err))
+	}
+	return out
+}
+
+// refParams is the names of the operation's params typed by the $def named def.
+func refParams(op ContractOperation, def string) map[string]bool {
+	out := map[string]bool{}
+	for _, p := range op.Params {
+		if tail, ok := schemaRefTail(p.Schema); ok && tail == def {
+			out[p.Name] = true
 		}
 	}
 	return out
+}
+
+// observesUI reports whether the step asserts a UIObservation result.
+func observesUI(op ContractOperation, e TestExpect) bool {
+	tail, ok := schemaRefTail(op.Result)
+	return ok && tail == "UIObservation" && !e.ErrorExpected && e.Result != ""
 }
