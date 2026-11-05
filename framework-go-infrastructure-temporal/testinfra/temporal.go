@@ -92,12 +92,44 @@ func StartDevServer(ctx context.Context) (*DevServer, error) {
 	if bin := resolveTemporalCLI(); bin != "" {
 		opts.ExistingPath = bin
 	}
+	opts.ExtraArgs = append(opts.ExtraArgs, dynamicConfigArgs(os.Getenv(DynamicConfigEnv))...)
 
 	srv, err := testsuite.StartDevServer(ctx, opts)
 	if err != nil {
 		return nil, fmt.Errorf("testinfra.StartDevServer: %w", err)
 	}
 	return &DevServer{srv: srv, moduleRoot: moduleRoot}, nil
+}
+
+// DynamicConfigEnv names the OPT-IN that hands the dev server dynamic-config
+// overrides. It exists so a test can drive a workflow through a server-side
+// limit it would never reach with the defaults: the history budgets behind
+// ContinueAsNewSuggested (limit.historyCount.suggestContinueAsNew defaults to
+// 4Ki events) are never crossed inside a scenario, so a defect that only shows
+// at a continue-as-new boundary is otherwise visible only in production.
+//
+// The value is one or more KEY=VALUE pairs separated by ';', each passed as a
+// `--dynamic-config-value KEY=VALUE` flag (VALUE is JSON, as the CLI reads it):
+//
+//	AIARCH_TEST_TEMPORAL_DYNAMIC_CONFIG='limit.historyCount.suggestContinueAsNew=40'
+//
+// Unset or blank, the server runs with its defaults and no flag is added.
+const DynamicConfigEnv = "AIARCH_TEST_TEMPORAL_DYNAMIC_CONFIG"
+
+// dynamicConfigArgs renders the DynamicConfigEnv value as dev-server flags. A
+// pair with no '=' or an empty key is not silently dropped: it is passed
+// through, so the CLI rejects it at boot instead of the test running against
+// defaults it believes it overrode.
+func dynamicConfigArgs(raw string) []string {
+	var args []string
+	for pair := range strings.SplitSeq(raw, ";") {
+		pair = strings.TrimSpace(pair)
+		if pair == "" {
+			continue
+		}
+		args = append(args, "--dynamic-config-value", pair)
+	}
+	return args
 }
 
 // resolveTemporalCLI returns a path to a local Temporal CLI binary, or "" if none
