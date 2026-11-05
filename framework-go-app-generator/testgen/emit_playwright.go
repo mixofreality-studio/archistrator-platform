@@ -1,10 +1,11 @@
 package testgen
 
 import (
-	"encoding/json"
 	"fmt"
+	"maps"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
@@ -15,14 +16,19 @@ import (
 // results reporter, and the once-emitted hooks.ts. The emitter is a function
 // over the projected scenario + binding JSON only; nothing of the Go emitter
 // is needed here.
-func emitPlaywright(out *Output, cfg Config, plan componentPlan) {
+func emitPlaywright(out *Output, cfg Config, plan componentPlan) error {
 	dir := path.Join(cfg.UITestsDir, plan.Key)
 	for _, bs := range plan.Scenarios {
-		out.Generated[path.Join(dir, bs.Scenario.ID+".spec.gen.ts")] = []byte(playwrightSpec(plan, bs))
+		spec, err := playwrightSpec(plan, bs)
+		if err != nil {
+			return fmt.Errorf("testgen: %s %s: %w", plan.Key, bs.Scenario.ID, err)
+		}
+		out.Generated[path.Join(dir, bs.Scenario.ID+".spec.gen.ts")] = []byte(spec)
 	}
 	out.Generated[path.Join(dir, "playwright.config.gen.ts")] = []byte(playwrightConfig(playwrightResultsDir(plan.Key)))
 	out.Generated[path.Join(dir, "reporter.gen.ts")] = []byte(playwrightReporter)
 	out.HooksOnce[path.Join(dir, "hooks.ts")] = []byte(playwrightHooks(plan))
+	return nil
 }
 
 // playwrightSpec is one scenario's spec: the hooks' before, then per step the
@@ -33,7 +39,7 @@ func emitPlaywright(out *Output, cfg Config, plan componentPlan) {
 // live test pushes it first thing in the body (so a failing step keeps it),
 // the skipped test declares it statically through test.skip's details
 // argument (Playwright ≥1.42 TestDetails), since a skipped body never runs.
-func playwrightSpec(plan componentPlan, bs boundScenario) string {
+func playwrightSpec(plan componentPlan, bs boundScenario) (string, error) {
 	id := bs.Scenario.ID
 	var b strings.Builder
 	b.WriteString(genHeader + "\n")
@@ -43,106 +49,119 @@ func playwrightSpec(plan componentPlan, bs boundScenario) string {
 	annotation := fmt.Sprintf("{ type: 'scenario', description: %s }", tsStr(id))
 	if sk := bs.Binding.Skip; sk != nil {
 		fmt.Fprintf(&b, "// skipped: %s (until %s)\ntest.skip(%s, { annotation: %s }, async () => {});\n", sk.Reason, sk.Until, title, annotation)
-		return b.String()
+		return b.String(), nil
 	}
 	fmt.Fprintf(&b, "test(%s, async ({ page }, testInfo) => {\n", title)
 	fmt.Fprintf(&b, "  testInfo.annotations.push(%s);\n", annotation)
 	fmt.Fprintf(&b, "  await hooks.before(%s, page);\n", tsStr(id))
 	for _, st := range bs.Steps {
-		writePlaywrightStep(&b, id, st)
+		if err := writePlaywrightStep(&b, id, st); err != nil {
+			return "", fmt.Errorf("step %d: %w", st.Bind.Seq, err)
+		}
 	}
 	b.WriteString("});\n")
-	return b.String()
+	return b.String(), nil
 }
 
-func writePlaywrightStep(b *strings.Builder, id string, st boundStep) {
+func writePlaywrightStep(b *strings.Builder, id string, st boundStep) error {
 	seq := st.Bind.Seq
 	fmt.Fprintf(b, "  // step %d: %s (node %s)\n", seq, st.Op.Name, st.Stim.Node)
 	for _, in := range st.Bind.Inputs {
-		b.WriteString(playwrightAction(in))
+		line, err := playwrightAction(in)
+		if err != nil {
+			return err
+		}
+		b.WriteString(line)
 	}
 	if st.Bind.Hook {
 		fmt.Fprintf(b, "  await hooks.step(%s, %d, page);\n", tsStr(id), seq)
 	}
-	b.WriteString(playwrightExpect(st.Bind.Expect))
+	expect, err := playwrightExpect(st.Bind.Expect)
+	if err != nil {
+		return err
+	}
+	b.WriteString(expect)
 	for _, pr := range st.Bind.Probes {
 		fmt.Fprintf(b, "  // probe for %s: %s.%s %s\n", pr.For, pr.Component, pr.Operation, compactJSON(pr))
 	}
 	if len(st.Bind.Unobservable) > 0 {
 		fmt.Fprintf(b, "  // unobservable: %s\n", strings.Join(st.Bind.Unobservable, ", "))
 	}
+	return nil
 }
 
-// uiAction is a UI binding input: {Name:"action", Value: {kind, target, value}}.
-type uiAction struct {
-	Kind   string `json:"kind"`
-	Target string `json:"target"`
-	Value  string `json:"value"`
+// playwrightActions spells each browser action kind (methodcheck's dialect) as a page
+// action on the element carrying data-testid target. check/uncheck use Playwright's
+// check()/uncheck(), which fail unless the control flips on the click itself: a UI
+// that only reflects the change once the server answers does not pass them.
+var playwrightActions = map[string]func(a methodcheck.UIAction) string{
+	methodcheck.UIActionClick:    func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".click()" },
+	methodcheck.UIActionFill:     func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".fill(" + tsStr(a.Value) + ")" },
+	methodcheck.UIActionNavigate: func(a methodcheck.UIAction) string { return "page.goto(" + tsStr(a.Value) + ")" },
+	methodcheck.UIActionCheck:    func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".check()" },
+	methodcheck.UIActionUncheck:  func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".uncheck()" },
+	methodcheck.UIActionDblclick: func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".dblclick()" },
+	methodcheck.UIActionHover:    func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".hover()" },
+	methodcheck.UIActionPress:    func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".press(" + tsStr(a.Value) + ")" },
 }
 
-// playwrightAction spells one bound input as a page action by data-testid;
-// an input that is not a recognised action stays visible as a comment.
-func playwrightAction(in methodcheck.TestArg) string {
-	var a uiAction
-	if in.Name != webActionParam || json.Unmarshal([]byte(in.Value), &a) != nil {
-		return fmt.Sprintf("  // input %s: %s\n", in.Name, in.Value)
+// playwrightObservables spells each observable kind as an assertion.
+var playwrightObservables = map[string]func(o methodcheck.UIObservable) string{
+	methodcheck.UIObservableVisible: func(o methodcheck.UIObservable) string { return "expect(" + byTestID(o.Visible) + ").toBeVisible()" },
+	methodcheck.UIObservableText: func(o methodcheck.UIObservable) string {
+		return "expect(" + byTestID(o.Target) + ").toHaveText(" + tsStr(o.Text) + ")"
+	},
+	methodcheck.UIObservableURL:     func(o methodcheck.UIObservable) string { return "expect(page).toHaveURL(" + urlMatcher(o.URL) + ")" },
+	methodcheck.UIObservableChecked: func(o methodcheck.UIObservable) string { return "expect(" + byTestID(o.Checked) + ").toBeChecked()" },
+	methodcheck.UIObservableUnchecked: func(o methodcheck.UIObservable) string {
+		return "expect(" + byTestID(o.Unchecked) + ").not.toBeChecked()"
+	},
+}
+
+// UIActionKinds is the sorted set of browser action kinds testgen emits. It equals
+// methodcheck.UIActionKinds (gated): the one dialect the contract schema enumerates.
+func UIActionKinds() []string { return slices.Sorted(maps.Keys(playwrightActions)) }
+
+// UIObservableKinds is the sorted set of browser observable kinds testgen asserts. It
+// equals methodcheck.UIObservableKinds (gated).
+func UIObservableKinds() []string { return slices.Sorted(maps.Keys(playwrightObservables)) }
+
+func byTestID(id string) string { return "page.getByTestId(" + tsStr(id) + ")" }
+
+// playwrightAction spells one bound input as a page action. An input that is not the
+// web operation's action parameter stays visible as a comment; an action outside the
+// dialect is a generation error, never a silent comment.
+func playwrightAction(in methodcheck.TestArg) (string, error) {
+	if in.Name != webActionParam {
+		return fmt.Sprintf("  // input %s: %s\n", in.Name, in.Value), nil
 	}
-	switch a.Kind {
-	case "click":
-		return fmt.Sprintf("  await page.getByTestId(%s).click();\n", tsStr(a.Target))
-	case "fill":
-		return fmt.Sprintf("  await page.getByTestId(%s).fill(%s);\n", tsStr(a.Target), tsStr(a.Value))
-	case "navigate":
-		return fmt.Sprintf("  await page.goto(%s);\n", tsStr(a.Value))
-	default:
-		return fmt.Sprintf("  // unknown action kind %q: %s\n", a.Kind, in.Value)
+	a, err := methodcheck.ParseUIAction(in.Value)
+	if err != nil {
+		return "", fmt.Errorf("input %s %s: %w", in.Name, in.Value, err)
 	}
-}
-
-// uiObservable is a UI binding expectation: one of visible / text (+target) / url.
-type uiObservable struct {
-	Visible string `json:"visible"`
-	Text    string `json:"text"`
-	Target  string `json:"target"`
-	URL     string `json:"url"`
+	return "  await " + playwrightActions[a.Kind](a) + ";\n", nil
 }
 
 // playwrightExpect spells the expectation's observables as assertions: one
 // object, or an array of them; an expected error is a comment (a UI step
-// observes, it does not return).
-func playwrightExpect(e methodcheck.TestExpect) string {
+// observes, it does not return). An observation outside the dialect is a
+// generation error.
+func playwrightExpect(e methodcheck.TestExpect) (string, error) {
 	if e.ErrorExpected {
-		return fmt.Sprintf("  // expected error: %s\n", e.ErrorCode)
+		return fmt.Sprintf("  // expected error: %s\n", e.ErrorCode), nil
 	}
 	if e.Result == "" {
-		return ""
+		return "", nil
 	}
-	var many []uiObservable
-	if err := json.Unmarshal([]byte(e.Result), &many); err != nil {
-		var one uiObservable
-		if json.Unmarshal([]byte(e.Result), &one) != nil {
-			return fmt.Sprintf("  // expected result: %s\n", e.Result)
-		}
-		many = []uiObservable{one}
+	many, err := methodcheck.ParseUIObservation(e.Result)
+	if err != nil {
+		return "", fmt.Errorf("expected result %s: %w", e.Result, err)
 	}
 	var b strings.Builder
 	for _, o := range many {
-		b.WriteString(playwrightAssertion(o, e.Result))
+		b.WriteString("  await " + playwrightObservables[o.Kind()](o) + ";\n")
 	}
-	return b.String()
-}
-
-func playwrightAssertion(o uiObservable, raw string) string {
-	switch {
-	case o.Visible != "":
-		return fmt.Sprintf("  await expect(page.getByTestId(%s)).toBeVisible();\n", tsStr(o.Visible))
-	case o.Text != "" && o.Target != "":
-		return fmt.Sprintf("  await expect(page.getByTestId(%s)).toHaveText(%s);\n", tsStr(o.Target), tsStr(o.Text))
-	case o.URL != "":
-		return fmt.Sprintf("  await expect(page).toHaveURL(%s);\n", urlMatcher(o.URL))
-	default:
-		return fmt.Sprintf("  // expected result: %s\n", raw)
-	}
+	return b.String(), nil
 }
 
 // urlMatcher is the toHaveURL argument for a `url` observable. The observable

@@ -177,8 +177,7 @@ func routePlan(out *Output, cfg Config, plan componentPlan) (string, error) {
 			return "", err
 		}
 		if d == dialectWeb {
-			emitPlaywright(out, cfg, plan)
-			return "", nil
+			return "", emitPlaywright(out, cfg, plan)
 		}
 		what = plan.Key + " is an MCP client with"
 	}
