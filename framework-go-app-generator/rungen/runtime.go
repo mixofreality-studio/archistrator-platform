@@ -228,7 +228,7 @@ func startPostgres(ctx context.Context, stack *cleanups) (string, error) {
 		return "", fmt.Errorf("start %s: %w", postgresImage, err)
 	}
 	id := strings.TrimSpace(string(out))
-	stack.add(func() { _ = exec.Command("docker", "rm", "-f", id).Run() }) // #nosec G204 -- the container started above
+	stack.add(func() { _ = exec.Command("docker", "rm", "-f", "-v", id).Run() }) // #nosec G204 -- the container started above, with its anonymous data volume
 	mapped, err := exec.CommandContext(ctx, "docker", "port", id, "5432/tcp").Output() // #nosec G204 -- the container started above
 	if err != nil {
 		return "", fmt.Errorf("read the Postgres port: %w", err)

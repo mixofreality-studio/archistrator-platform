@@ -110,6 +110,19 @@ func TestLauncherProvisionsOnlyWhatTheModelDeclares(t *testing.T) {
 	}
 }
 
+// Stopping the throwaway Postgres container also removes its anonymous data volume (FIX-063):
+// the explicit `docker rm -f` takes over from `--rm`, and without -v every devstack boot orphaned
+// the image's /var/lib/postgresql/data volume (570 of them, ~30GB, filled the bench host).
+func TestLauncherRemovesThePostgresVolume(t *testing.T) {
+	src := generate(t, freshModel(t, freshProject))
+	if !strings.Contains(src, `exec.Command("docker", "rm", "-f", "-v", id)`) {
+		t.Errorf("the launcher must remove the Postgres container with its volume (docker rm -f -v):\n%s", src)
+	}
+	if strings.Contains(src, `exec.Command("docker", "rm", "-f", id)`) {
+		t.Errorf("the launcher still removes a container without its volume")
+	}
+}
+
 // The generated launcher is a stdlib-only command that builds and vets on its own.
 func TestLauncherBuilds(t *testing.T) {
 	if testing.Short() {
