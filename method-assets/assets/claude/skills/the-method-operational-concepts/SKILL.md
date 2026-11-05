@@ -20,7 +20,7 @@ Every per-project surface is TIERED: a **customer summary** (ratifiable, plain l
 - Ch. 3 §6 "Open and Closed Architectures" — layering style (now platform doctrine; see the asset)
 - Ch. 3 §5 "Subsystems and Services" — subsystem boundaries
 
-**Platform doctrine (referenced, not re-derived):** [[platform-runtime-doctrine]] — the nine pure-doctrine decisions + the doctrine halves of the five hybrids. When you need to state how the runtime works, LINK there; do not restate it as a per-project decision.
+**Platform doctrine (referenced, not re-derived):** [[platform-runtime-doctrine]] — the ten pure-doctrine decisions + the doctrine halves of the five hybrids. When you need to state how the runtime works, LINK there; do not restate it as a per-project decision.
 
 ## Input
 

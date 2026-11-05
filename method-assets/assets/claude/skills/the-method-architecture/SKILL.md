@@ -125,6 +125,7 @@ Before building the model, scan the candidate set for these smells. Any hit mean
 | Chained services | A→B→C where B presumes A or C |
 | Speculative encapsulation | Component for a future need with no current volatility |
 | Reflex components | `Logging`/`Reporting` declared by reflex with no specific volatility behind it |
+| Designed authentication | An identity provider drawn as a Resource, a ResourceAccess that verifies who the caller is, a token/proof/session/"actor" field in a request, or a sign-in route a Client invents. The platform owns who is acting (see below) |
 
 ### Step 5 — Read the render conventions
 
@@ -330,6 +331,7 @@ Move to `the-method-operational-concepts`.
 
 ## Anti-patterns to reject
 
+- **Designed authentication.** The platform owns who is acting, not the design ([[platform-runtime-doctrine]] entry 10). The framework edge authenticates the caller (OIDC token validation in the cloud, the generated `<PREFIX>_DEV_PRINCIPAL` under `local`), every Manager op receives that caller as `rc.Principal`, and the composition root's `PolicyDecisionPoint` authorizes (verb, resource). So never draw an identity provider as a Resource (it is a deployment node in `.operationalConcepts`, never in `.systemDesign`), never build a ResourceAccess that verifies who the caller is, and put no field that authenticates or identifies the caller in any operation. Ownership and any authorization that depends on business state are the Manager's (or an Engine's), keyed on `rc.Principal.Subject`. The one exception: if authentication *is* the customer's business, it goes through ordinary volatility analysis.
 - **Missing dynamic view for any use case (core or non-core variation)** — incomplete validation; rejected by `USECASE-DYNAMIC-MISSING` (founder extension).
 - **An unrealized use case** — a view with no steps, or an `action`/`timeEvent`/`acceptEvent` node with no fragment (`CC-COVERAGE`). There is no "no-call" escape hatch.
 - **A note conversion made to clear a finding** — the gate becoming the reason the requirements artifact changed. Convert only on the merits (the system does no work there), and say so in the label.

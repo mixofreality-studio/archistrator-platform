@@ -156,7 +156,7 @@ Extract the system's ubiquitous-language terms, each categorised by the classifi
 
 ### Required behaviors
 
-Scrub every solution out of the requirements and emit the underlying behaviors only. A behavior states what the business requires; a solution states how to build it — strip the how. "Users log in with OAuth" is a solution; "the system authenticates users" is the behavior. Emit each survivor as a typed `Requirement`:
+Scrub every solution out of the requirements and emit the underlying behaviors only. A behavior states what the business requires; a solution states how to build it — strip the how. "Users log in with OAuth" is a solution; "each member sees and changes only their own records" is the behavior. The platform owns who is acting ([[platform-runtime-doctrine]] entry 10): its front door already authenticates every caller, so "users must sign in" is a solution masquerading as a requirement, and no behavior asks the system to authenticate, sign in or verify anyone. Emit each survivor as a typed `Requirement`:
 
 - `id` — contiguous `B-01..B-NN`, NO gaps. When you consolidate several stated asks into one behavior, or retire an ask, renumber so the ids stay hole-free.
 - `behavior` — one solution-free imperative sentence in business language, traceable to the mission.

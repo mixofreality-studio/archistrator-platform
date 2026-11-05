@@ -97,7 +97,8 @@ Per ch. 2: *"You should be on the lookout for the kind of changes or risks that 
 
 Examples:
 - "Currency formats per locale" → variable (handled by a formatter)
-- "How users are authenticated" → volatile (OAuth, SSO, password, biometric all require structural support)
+- "How payments are collected" → volatile (card, invoice, wallet, bank transfer all require structural support)
+- "How users are authenticated" → neither: the platform encapsulates it (Step 5)
 
 ### Step 4 — Apply heuristics (ch. 2 §3.7–3.9)
 
@@ -115,6 +116,7 @@ Strip from the list:
 
 - **Speculative encapsulation** — any volatility for which: (a) change is rare AND (b) any encapsulation would be poor. Per ch. 2, this is over-design.
 - **Nature-of-the-business entries** — things every competitor does identically. Even if "could conceivably change," the entire industry would have to change. App C: *"Do not encapsulate changes to the nature of the business."*
+- **Who is acting.** The platform owns who is acting, not the design ([[platform-runtime-doctrine]] entry 10). How users authenticate (sign-in, SSO, tokens, sessions, identity providers) is already encapsulated by the platform's Security utility and the front door every web app inherits, and every Manager op receives the caller as `rc.Principal`. So it is never a project volatility: record any such candidate in `rejected` as speculative encapsulation that duplicates a utility. Who may see or change which records is business work and may be a volatility, keyed on the principal the platform supplies. The one exception is a system whose business IS authentication (the customer is building the identity provider).
 - **Siren-song habits (§3.6)** — a "Logging block" or "Reporting block" you'd add by reflex without a real business volatility behind it. Per ch. 2: *"just because you always have had a reporting block, or even because you have an existing reporting block, does not mean you need a reporting block."*
 
 ### Step 6 — Format the Volatilities List (ch. 2 §3.4)
@@ -127,7 +129,7 @@ Render the typed `Volatilities` committed to `.volatilities` matching the format
 ## Axis 1 — Same customer over time
 
 **User volatility**
-Customers will add new user types as the business expands (currently 2; expected 5+ within 3 years). User authentication providers will change as identity standards evolve. Encapsulating user concept and authentication independently insulates the system from these shifts.
+Customers will add new user types as the business expands (currently 2; expected 5+ within 3 years), each with its own permitted actions. Encapsulating the user concept insulates the workflows from these shifts.
 
 **Notification volatility**
 Customers will adopt new notification channels (email today; SMS, push, in-app, webhook expected). Transport selection must be replaceable without touching workflow code.
@@ -139,8 +141,8 @@ Customers will adopt new notification channels (email today; SMS, push, in-app, 
 **Storage volatility**
 Different customers use different databases (Postgres for SaaS tier; SQL Server for enterprise; SQLite for offline customers). Persistence access must be technology-neutral at the seam.
 
-**Security volatility**
-Enterprise customers require SAML; consumer tier uses OAuth; some regulated customers require client certs. Authentication scheme must be swappable per deployment.
+**Payment volatility**
+Enterprise customers pay by invoice; consumer tier pays by card; some regions require local wallets. Payment collection must be swappable per customer.
 
 ...
 ```

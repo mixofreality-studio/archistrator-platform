@@ -1,7 +1,7 @@
 ---
 name: platform-runtime-doctrine
 kind: doctrine-asset
-description: How systems built here run — the platform's fixed, opinionated SDLC runtime doctrine. READ-ONLY, platform-owned, never per-project state. The nine pure-doctrine decisions plus the doctrine halves of the five hybrid decisions, each tiered as a customer one-liner over engineer detail. Referenced (not re-authored) by [[the-method-operational-concepts]]; rendered read-only in the Deployment & Operations Model screen's "How systems built here run" section.
+description: How systems built here run — the platform's fixed, opinionated SDLC runtime doctrine. READ-ONLY, platform-owned, never per-project state. The ten pure-doctrine decisions plus the doctrine halves of the five hybrid decisions, each tiered as a customer one-liner over engineer detail. Referenced (not re-authored) by [[the-method-operational-concepts]]; rendered read-only in the Deployment & Operations Model screen's "How systems built here run" section.
 ---
 
 # Platform Runtime Doctrine — "How systems built here run"
@@ -14,7 +14,7 @@ Because archistrator IS the platform, archistrator's own project references this
 
 ---
 
-## Pure doctrine (9)
+## Pure doctrine (10)
 
 ### 1. Communication topology
 
@@ -70,37 +70,50 @@ Because archistrator IS the platform, archistrator's own project references this
 
 **Engineer detail:** A single storage-volatility axis may be fronted by multiple ResourceAccess CONTRACTS only when they are facets of one substrate, each converting one verb family for one Manager audience. Ratified facet groups: Source Control Target → `projectStateAccess` (ONE component, four contract facets: project-state, construction-transition, git-activity-status, design-session) + `sourceControlAccess` + `artifactAccess`; Operational State Store → `operatedSystemStateAccess` + `billingStateAccess` + `usageAccess`. A facet never adds a component, and every facet op must be live — dead ops are pruned at amendment.
 
+### 10. Who is acting is the platform's, not the design's
+
+**How systems built here run:** you never build sign-in into your system — the platform's front door already knows who every request is from, and your system works with that person directly. Run locally, it opens straight onto your own data with no sign-in step.
+
+**Engineer detail:** The platform owns who is acting, not the design.
+
+- **Authentication is the framework edge's.** In the cloud the edge validates the caller's token (the Security utility's token `Validator`, OIDC against the platform identity provider); under the `local` profile the generated edge injects the one dev principal named by `<PREFIX>_DEV_PRINCIPAL`. Every Manager op already receives that caller as `rc.Principal` (`framework-go/manager.Context`), and it travels with the Manager's workflow; the composition root's `PolicyDecisionPoint` (`cmd/server/hooks.go`, checked against `authz.gen.go`) authorizes each (verb, resource) for the principal's own scope.
+- **Nothing in the System authenticates or identifies the caller.** Never draw an identity provider as a Resource, never build a ResourceAccess that verifies who the caller is (a credential, a token, a proof, a session), put no field that authenticates or identifies the caller in any contract (no token, proof, session or "actor" material in a request body), and invent no sign-in route, redirect or cookie in a Client or the SPA. "How users authenticate" is already encapsulated by the platform's Security utility and the front door lifted from [[webapp-deployment-prototype]], so it is never a project volatility: deriving it again is speculative encapsulation that duplicates a utility. A customer who names an identity system ("use our corporate Okta") is federated at the front door as deployment configuration, never designed into the app.
+- **The identity provider is a deployment node, never in `.systemDesign`.** The prototype names an identity provider because the Deployment & Operations Model draws the front door: that node lives there, and only there. It is not a Resource, and no ResourceAccess fronts it.
+- **Ownership stays in the business layers.** Which records belong to whom, and any authorization that depends on business state, is the Manager's (with an Engine where the rule is volatile), keyed on `rc.Principal.Subject`. Do not copy the principal into a workflow input or a request: the Manager already has it.
+- **Locally there is no sign-in step.** Opening the app's URL under the `local` profile gives a working app for the dev principal, with nothing for the operator to configure.
+- **Credentials that are not the caller's are ordinary.** A credential that is business payload (a product that manages API keys) is a contract field like any other; a credential a ResourceAccess uses to reach an outbound system is a secret in that ResourceAccess's config, not a contract field. If authentication is the customer's business — they are building the identity provider — it goes through ordinary volatility analysis.
+
 ---
 
 ## Hybrid doctrine halves (5)
 
 Each hybrid decision splits into a **doctrine half** (fixed, below) and a **per-project half** (a typed field in the committed `DeploymentOperationsModel` slot). Only the doctrine half lives here.
 
-### 10. Agentic-job dispatch (doctrine half)
+### 11. Agentic-job dispatch (doctrine half)
 
 **How systems built here run:** the platform never holds your model keys or your code — it dispatches the work to your own tooling and reads the results back from your git.
 
-**Engineer detail:** Every LLM-needing activity (Phase-1 drafting, Phase-2 plan drafting, Phase-3 construction) is dispatched as an agentic job to the project's configured construction venue, running the customer's own agentic-coding tooling on their own subscription. The platform holds no LLM key, makes no synchronous LLM call, and holds no code text; it orchestrates via `agenticJobAccess` and reads results back from git via `projectStateAccess`. **Per-project half:** the chosen venue → `constructionVenue` (see entry 14).
+**Engineer detail:** Every LLM-needing activity (Phase-1 drafting, Phase-2 plan drafting, Phase-3 construction) is dispatched as an agentic job to the project's configured construction venue, running the customer's own agentic-coding tooling on their own subscription. The platform holds no LLM key, makes no synchronous LLM call, and holds no code text; it orchestrates via `agenticJobAccess` and reads results back from git via `projectStateAccess`. **Per-project half:** the chosen venue → `constructionVenue` (see entry 15).
 
-### 11. Billing model — pricing is a system-wide Strategy
+### 12. Billing model — pricing is a system-wide Strategy
 
 **How systems built here run:** how you're priced is a policy the platform can evolve without re-plumbing anything; the platform bills only for its own service and never touches your end users' money.
 
 **Engineer detail:** Pricing itself is the ServicePricing volatility: `billingEngine` pivots on it as a Strategy (tier floors, free-tier subsidies, and future charge categories such as design/construction work or consulting), so commercial terms evolve without touching the billing workflow. The platform is merchant of record only for its own service invoices; it never touches end-user revenue. ServicePricing is an axis-1 (system-wide) volatility, so the POLICY is platform doctrine. **Per-project half:** the billing trust summary (the customer's plain-language bill basis) is a per-project `TrustSummaries.Billing` field.
 
-### 12. Deployment scenarios are configuration, not architecture
+### 13. Deployment scenarios are configuration, not architecture
 
 **How systems built here run:** whether the platform just builds your system or also hosts and operates it is a switch — the design is identical either way.
 
 **Engineer detail:** The production scenarios (DEPLOYED — NOT OPERATED; DEPLOYED — OPERATED) differ only by an operation on/off flag — OperationsManager, OperatedRuntime, and hosting billing are simply not instantiated in the not-operated scenario. A test profile swaps the durable runtime to the embedded executor, the git target to an ephemeral repo, and the agentic CI to a local exec runner or stub. The component graph, call chains, and component count are identical across all scenarios. **Per-project half:** the chosen scenario → `deploymentScenario` (`deployedNotOperated` | `deployedOperated`).
 
-### 13. Review-policy gating — configurable oversight with a fixed risk floor
+### 14. Review-policy gating — configurable oversight with a fixed risk floor
 
 **How systems built here run:** you choose how much human oversight your delivery gets, from fully automatic to a human at every gate — but high-risk changes always get a human, and you cannot turn that off.
 
 **Engineer detail:** Every review gate in the delivery workflow — design-artifact approval and construction change review — is routed by the project's review policy: presets `vibes` (automatic), `checkpoints`, and `full` (human at every gate). A non-overridable risk floor routes high-risk changes to a human under any preset. The gate mechanism is fixed; only the routing policy varies per project. **Per-project half:** the chosen preset → `reviewPolicyRef` (references this fixed preset vocabulary; the risk floor is platform-fixed and not stored per project).
 
-### 14. Construction venue is configuration, not architecture
+### 15. Construction venue is configuration, not architecture
 
 **How systems built here run:** your system is built on the compute you choose — your own CI or your own machine, on your own account — and switching never changes the design.
 
