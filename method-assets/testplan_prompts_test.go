@@ -15,13 +15,14 @@ func TestTestPlanAndContractPromptsCarryTheirRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	const (
-		serviceTestPlan  = ".claude/commands/service-test-plan.md"
-		frontendTestPlan = ".claude/commands/frontend-test-plan.md"
-		testEngineer     = ".claude/agents/test-engineer.md"
-		reviewRouting    = ".claude/skills/the-method-review-routing/SKILL.md"
-		testingSkill     = ".claude/skills/the-method-testing/SKILL.md"
-		contractSkill    = ".claude/skills/the-method-service-contract/SKILL.md"
-		detailedDesign   = ".claude/commands/service-detailed-design.md"
+		serviceTestPlan      = ".claude/commands/service-test-plan.md"
+		frontendTestPlan     = ".claude/commands/frontend-test-plan.md"
+		frontendConstruction = ".claude/commands/frontend-construction.md"
+		testEngineer         = ".claude/agents/test-engineer.md"
+		reviewRouting        = ".claude/skills/the-method-review-routing/SKILL.md"
+		testingSkill         = ".claude/skills/the-method-testing/SKILL.md"
+		contractSkill        = ".claude/skills/the-method-service-contract/SKILL.md"
+		detailedDesign       = ".claude/commands/service-detailed-design.md"
 	)
 	for _, tc := range []struct{ path, want string }{
 		// The key: FIX-018.
@@ -40,6 +41,14 @@ func TestTestPlanAndContractPromptsCarryTheirRules(t *testing.T) {
 		{serviceTestPlan, "errorExpected"},
 		{testEngineer, "errorExpected"},
 		{reviewRouting, "errorExpected"},
+		// The browser dialect and the behaviour it tests: FIX-062.
+		{frontendTestPlan, "Toggle a checkbox with `check` or `uncheck`, never `click`"},
+		{frontendTestPlan, "`press` too"},
+		{frontendTestPlan, "Do not mark a step `hook: true` to do any of these"},
+		{frontendTestPlan, "Each observable states exactly one thing"},
+		{frontendConstruction, "reflects the user's change in the same interaction (optimistic)"},
+		{frontendConstruction, "roll it back and show the user a notice"},
+		{frontendConstruction, "A call in flight does not block unrelated input"},
 		// The contract's layer rules: FIX-019.
 		{contractSkill, `never reason "total, so no error"`},
 		{detailedDesign, "declares `error: true`"},
