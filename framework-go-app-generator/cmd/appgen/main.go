@@ -319,8 +319,9 @@ func composeConfig(m, effective *projectmodel.Model, cfg config, module string) 
 	if hooks == nil {
 		hooks = map[string][]composegen.HookArgType{}
 	}
-	// ExternalHTTP is the one approved binding no substrate supplies: its URL and client
-	// come from the app's hooks, and modelgen's constructor for it returns an error.
+	// ExternalHTTP is the one approved binding no provisioned substrate supplies: its URL is a
+	// declared external-http input (FIX-049) the app's hook reads from the generated Config,
+	// its client is the hook's own, and modelgen's constructor for it returns an error.
 	returnsError := map[string]bool{}
 	for _, b := range effective.Deployment.Bindings {
 		for _, v := range b.PerProfile {

@@ -59,8 +59,8 @@ func TestComposeWiresOnlyBuiltPackages(t *testing.T) {
 	}
 }
 
-// ExternalHTTP consumes no declared infra, yet its constructor validates its base URL and can
-// fail. A call that drops that error does not compile.
+// ExternalHTTP's constructor validates the base URL its hook supplies and can fail. A call
+// that drops that error does not compile.
 func TestComposeHandlesTheExternalHTTPConstructorsError(t *testing.T) {
 	root, base := appFixture(t, "internal/resourceaccess/caller")
 	if err := run(append([]string{"compose"}, base...), io.Discard); err != nil {
