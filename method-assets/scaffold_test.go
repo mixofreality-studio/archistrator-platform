@@ -203,6 +203,8 @@ func TestScaffoldMakefileScenariosInclude(t *testing.T) {
 		// testgen's default resolves one level above -root; every call must spell it.
 		"TESTGEN_ARGS = -project .aiarch/state/project.json -root . -uitests uitests/generated",
 		"-run 'TestScenario_'", "test-results/go-test.jsonl",
+		// the local run contract is an alias of the generated launcher, never logic of its own (FIX-049)
+		"run-local:\n\tGOWORK=off go run ./cmd/devstack\n",
 	} {
 		if !strings.Contains(m, want) {
 			t.Errorf("Makefile.scenarios.mk missing %q", want)

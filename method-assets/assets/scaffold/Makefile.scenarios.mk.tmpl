@@ -22,7 +22,12 @@
 #                      hook that is missing, or an orphan hook
 #   test-scenarios   — run every TestScenario_* as a `go test -json` stream into
 #                      test-results/go-test.jsonl (the venue uploads test-results/**)
-.PHONY: gen-models gen-models-check gen-tests gen-tests-check test-scenarios
+#   run-local        — the app's local run contract: an alias of `go run ./cmd/devstack`,
+#                      the launcher appgen compose generates from the deployment model. It
+#                      provisions the local profile's infrastructure, boots cmd/server and
+#                      prints {"devstack":"ready","url":...} once /readyz answers. All its
+#                      logic lives in the launcher, so there is exactly one run contract.
+.PHONY: gen-models gen-models-check gen-tests gen-tests-check test-scenarios run-local
 
 MODELGEN_ARGS = -project .aiarch/state/project.json -root . $(foreach c,$(CONTRACTS),-contract $(c))
 TESTGEN_ARGS = -project .aiarch/state/project.json -root . -uitests uitests/generated
@@ -42,3 +47,6 @@ gen-tests-check:
 test-scenarios:
 	mkdir -p test-results
 	GOWORK=off go test ./internal/... -run 'TestScenario_' -json 2>&1 | tee test-results/go-test.jsonl
+
+run-local:
+	GOWORK=off go run ./cmd/devstack
