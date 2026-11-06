@@ -2,10 +2,8 @@ package testgen
 
 import (
 	"fmt"
-	"maps"
 	"path"
 	"regexp"
-	"slices"
 	"strings"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
@@ -84,43 +82,83 @@ func writePlaywrightStep(b *strings.Builder, st boundStep) error {
 	return nil
 }
 
-// playwrightActions spells each browser action kind (methodcheck's dialect) as a page
-// action on the element carrying data-testid target. check/uncheck use Playwright's
-// check()/uncheck(), which fail unless the control flips on the click itself: a UI
-// that only reflects the change once the server answers does not pass them.
-var playwrightActions = map[string]func(a methodcheck.UIAction) string{
-	methodcheck.UIActionClick:    func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".click()" },
-	methodcheck.UIActionFill:     func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".fill(" + tsStr(a.Value) + ")" },
-	methodcheck.UIActionNavigate: func(a methodcheck.UIAction) string { return "page.goto(" + tsStr(a.Value) + ")" },
-	methodcheck.UIActionCheck:    func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".check()" },
-	methodcheck.UIActionUncheck:  func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".uncheck()" },
-	methodcheck.UIActionDblclick: func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".dblclick()" },
-	methodcheck.UIActionHover:    func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".hover()" },
-	methodcheck.UIActionPress:    func(a methodcheck.UIAction) string { return byTestID(a.Target) + ".press(" + tsStr(a.Value) + ")" },
+// playwrightActionLine spells one UIAction as a page action. check/uncheck use
+// Playwright's check()/uncheck(), which fail unless the control flips on the click
+// itself. The switch is exhaustive over the sealed UIAction (gochecksumtype).
+//
+// Until the element-inventory locator of the Playwright emitter v2 lands, the design
+// element id is the locator's test id.
+func playwrightActionLine(a methodcheck.UIAction) string {
+	switch v := a.(type) {
+	case methodcheck.UINavigate:
+		return "page.goto(" + tsStr(v.Route) + ")"
+	case methodcheck.UIClick:
+		return byElement(v.Target) + ".click()"
+	case methodcheck.UIDblclick:
+		return byElement(v.Target) + ".dblclick()"
+	case methodcheck.UIFill:
+		return byElement(v.Target) + ".fill(" + tsStr(v.Value) + ")"
+	case methodcheck.UIPress:
+		return byElement(v.Target) + ".press(" + tsStr(v.Key) + ")"
+	case methodcheck.UICheck:
+		return byElement(v.Target) + ".check()"
+	case methodcheck.UIUncheck:
+		return byElement(v.Target) + ".uncheck()"
+	case methodcheck.UIHover:
+		return byElement(v.Target) + ".hover()"
+	case methodcheck.UISelect:
+		return byElement(v.Target) + ".selectOption(" + tsStr(v.Option) + ")"
+	}
+	panic("unreachable: sealed UIAction")
 }
 
-// playwrightObservables spells each observable kind as an assertion.
-var playwrightObservables = map[string]func(o methodcheck.UIObservable) string{
-	methodcheck.UIObservableVisible: func(o methodcheck.UIObservable) string { return "expect(" + byTestID(o.Visible) + ").toBeVisible()" },
-	methodcheck.UIObservableText: func(o methodcheck.UIObservable) string {
-		return "expect(" + byTestID(o.Target) + ").toHaveText(" + tsStr(*o.Text) + ")"
-	},
-	methodcheck.UIObservableURL:     func(o methodcheck.UIObservable) string { return "expect(page).toHaveURL(" + urlMatcher(o.URL) + ")" },
-	methodcheck.UIObservableChecked: func(o methodcheck.UIObservable) string { return "expect(" + byTestID(o.Checked) + ").toBeChecked()" },
-	methodcheck.UIObservableUnchecked: func(o methodcheck.UIObservable) string {
-		return "expect(" + byTestID(o.Unchecked) + ").not.toBeChecked()"
-	},
+// playwrightStateMatchers is the matcher of each observable that asserts one state of an
+// element and carries no operand.
+var playwrightStateMatchers = map[methodcheck.UIObservableKind]string{
+	methodcheck.UIObservableVisible:   ".toBeVisible()",
+	methodcheck.UIObservableHidden:    ".toBeHidden()",
+	methodcheck.UIObservableAbsent:    ".toHaveCount(0)",
+	methodcheck.UIObservableChecked:   ".toBeChecked()",
+	methodcheck.UIObservableUnchecked: ".not.toBeChecked()",
+	methodcheck.UIObservableEnabled:   ".toBeEnabled()",
+	methodcheck.UIObservableDisabled:  ".toBeDisabled()",
+	methodcheck.UIObservableFocused:   ".toBeFocused()",
 }
 
-// UIActionKinds is the sorted set of browser action kinds testgen emits. It equals
-// methodcheck.UIActionKinds (gated): the one dialect the contract schema enumerates.
-func UIActionKinds() []string { return slices.Sorted(maps.Keys(playwrightActions)) }
+// playwrightObservableLine spells one UIObservable as an assertion; the switch is
+// exhaustive over the sealed UIObservable.
+func playwrightObservableLine(o methodcheck.UIObservable) string {
+	switch v := o.(type) {
+	case methodcheck.UIText:
+		return "expect(" + byElement(v.Target) + ").toHaveText(" + tsStr(v.Text) + ")"
+	case methodcheck.UIValue:
+		return "expect(" + byElement(v.Target) + ").toHaveValue(" + tsStr(v.Value) + ")"
+	case methodcheck.UICount:
+		return "expect(" + byElement(v.Target) + ").toHaveCount(" + fmt.Sprint(v.N) + ")"
+	case methodcheck.UIURL:
+		return "expect(page).toHaveURL(" + urlMatcher(v.Route) + ")"
+	case methodcheck.UIVisible, methodcheck.UIHidden, methodcheck.UIAbsent, methodcheck.UIChecked,
+		methodcheck.UIUnchecked, methodcheck.UIEnabled, methodcheck.UIDisabled, methodcheck.UIFocused:
+		t, _ := methodcheck.ObservableTarget(o)
+		return "expect(" + byElement(t) + ")" + playwrightStateMatchers[o.Kind()]
+	}
+	panic("unreachable: sealed UIObservable")
+}
 
-// UIObservableKinds is the sorted set of browser observable kinds testgen asserts. It
-// equals methodcheck.UIObservableKinds (gated).
-func UIObservableKinds() []string { return slices.Sorted(maps.Keys(playwrightObservables)) }
+// UIActionKinds is the set of browser action kinds testgen emits: the one dialect the
+// contract schema enumerates (playwrightActionLine is exhaustive over it).
+func UIActionKinds() []string { return methodcheck.UIActionKinds() }
 
-func byTestID(id string) string { return "page.getByTestId(" + tsStr(id) + ")" }
+// UIObservableKinds is the set of browser observable kinds testgen asserts.
+func UIObservableKinds() []string { return methodcheck.UIObservableKinds() }
+
+func byElement(t methodcheck.UITarget) string {
+	loc := "page.getByTestId(" + tsStr(t.Element) + ")"
+	if t.Nth != nil {
+		loc += fmt.Sprintf(".nth(%d)", *t.Nth)
+	}
+	return loc
+}
 
 // literalInput is a bound input's literal JSON text. A ref input names an
 // earlier step's result; this emitter does not resolve one, so it is a
@@ -150,7 +188,7 @@ func playwrightAction(in methodcheck.TestArg) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("input %s %s: %w", in.Name, lit, err)
 	}
-	return "  await " + playwrightActions[a.Kind](a) + ";\n", nil
+	return "  await " + playwrightActionLine(a) + ";\n", nil
 }
 
 // playwrightExpect spells the expectation's observables as assertions: one
@@ -170,7 +208,7 @@ func playwrightExpect(e methodcheck.TestExpect) (string, error) {
 	}
 	var b strings.Builder
 	for _, o := range many {
-		b.WriteString("  await " + playwrightObservables[o.Kind()](o) + ";\n")
+		b.WriteString("  await " + playwrightObservableLine(o) + ";\n")
 	}
 	return b.String(), nil
 }

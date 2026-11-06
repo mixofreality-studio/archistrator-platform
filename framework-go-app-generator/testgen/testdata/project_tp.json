@@ -897,7 +897,9 @@
                       "model": {
                         "json": {
                           "kind": "navigate",
-                          "value": "/orders"
+                          "model": {
+                            "route": "/orders"
+                          }
                         }
                       }
                     }
@@ -909,14 +911,18 @@
                       "model": {
                         "json": {
                           "kind": "click",
-                          "target": "orders-tab"
+                          "model": {
+                            "target": {
+                              "element": "orders-tab"
+                            }
+                          }
                         }
                       }
                     }
                   }
                 ],
                 "expect": {
-                  "result": "{\"visible\":\"orders-list\"}",
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"orders-list\"}}}]",
                   "errorExpected": false
                 },
                 "probes": []

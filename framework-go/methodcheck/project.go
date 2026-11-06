@@ -728,6 +728,9 @@ type ContractParam struct {
 // the testgen emitter consumes (deterministic-component-testing design §3).
 type PhaseArtifacts struct {
 	TestPlan map[string]TestPlanRecord `json:"testPlan"`
+	// UIDesign is each browser surface's typed UI design (uidesign.go); UI test steps
+	// target its elements.
+	UIDesign map[string]UIDesignRecord `json:"uiDesign"`
 }
 
 // TestPlanRecord is one component's test plan: a binding per derived scenario

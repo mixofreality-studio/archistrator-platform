@@ -270,14 +270,27 @@ func TestTP_ActorObserved_WebClientNeedsUIObservable(t *testing.T) {
 	}
 	p = withSystem(t, p, sys)
 	sc := p.ServiceContracts["shopClient"]
-	sc.Defs = map[string]json.RawMessage{"UIObservation": json.RawMessage(`{"type":"object"}`)}
+	sc.Defs = map[string]json.RawMessage{
+		"UIAction":      json.RawMessage(`{"type":"object"}`),
+		"UIObservation": json.RawMessage(`{"type":"array"}`),
+	}
 	for i := range sc.Interface.Operations {
+		sc.Interface.Operations[i].Params = []ContractParam{{Name: "action", Schema: json.RawMessage(`{"$ref":"#/$defs/UIAction"}`)}}
 		sc.Interface.Operations[i].Result = json.RawMessage(`{"$ref":"#/$defs/UIObservation"}`)
 	}
 	p.ServiceContracts["shopClient"] = sc
+	p.PhaseArtifacts.UIDesign = map[string]UIDesignRecord{"shopClient": {Surface: "shopClient", Screens: []UIScreen{{
+		ID: "orders", Route: "/", Elements: []UIElement{
+			{ID: "invoice-sent", Role: UIRoleStatus, Name: "Invoice sent"},
+			{ID: "paid", Role: UIRoleCheckbox, Name: "Paid"},
+			{ID: "pay", Role: UIRoleButton, Name: "Pay"},
+		}}}}}
 	b := binding(t, p, "shopClient", "process-order-P2")
-	b.Steps[0].Expect = TestExpect{Result: `{"visible":"invoice-sent"}`}
-	b.Steps[1].Expect = TestExpect{Result: `{"checked":"paid"}`}
+	for i := range b.Steps {
+		b.Steps[i].Inputs = []TestArg{{Name: "action", Value: lit(act("click", tgt("pay")))}}
+	}
+	b.Steps[0].Expect = TestExpect{Result: `[` + act("visible", tgt("invoice-sent")) + `]`}
+	b.Steps[1].Expect = TestExpect{Result: `[` + act("checked", tgt("paid")) + `]`}
 	wantRules(t, runTP(t, p), ruleTPActorObserved, 0)
 	b.Steps[0].Expect = TestExpect{Result: `{"unknown":"x"}`}
 	b.Steps[1].Expect = TestExpect{ErrorExpected: true, ErrorCode: "Nope"}

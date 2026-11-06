@@ -54,6 +54,7 @@ type opLookup func(name string) (ContractOperation, bool)
 func testPlanFindings(p Project, all []scenario.Scenario) []Finding {
 	out := opReachedFindings(p, all)
 	out = append(out, clientContractFindings(p)...)
+	out = append(out, uiDesignRecordFindings(p)...)
 	if p.PhaseArtifacts == nil {
 		return out
 	}
@@ -193,7 +194,7 @@ func (sc tpScope) stepFindings(stim scenario.Stimulus, st StepBinding) []Finding
 	}
 	out = append(out, argFindings(st.Inputs, cop, sc.contract, ruleTPArgName, ruleTPArgType, section, sc.l)...)
 	out = append(out, expectFindings(st.Expect, cop, sc.contract, ruleTPExpect, section, sc.l)...)
-	out = append(out, uiDialectFindings(st, cop, section, sc.l)...)
+	out = append(out, sc.uiDialectFindings(st, cop, section)...)
 	out = append(out, expectRequiredFindings(st, section, sc.l)...)
 	out = append(out, sc.refFindings(st.Inputs, st.Seq, -1, section)...)
 	proved, pf := sc.probeFindings(section, st.Seq, st.Probes)
@@ -836,31 +837,72 @@ func rawJSONKind(raw json.RawMessage) kindClass {
 // to a UIAction parameter is a known action kind with the fields that kind requires
 // (TP-ARG-TYPE), and an expected UIObservation states exactly one thing per
 // observable (TP-EXPECT). An unknown kind is refused here, when the plan is written,
-// so testgen never meets one.
-func uiDialectFindings(st StepBinding, op ContractOperation, section string, l *Location) []Finding {
+// so testgen never meets one. The decoded action and observables are then resolved
+// against the surface's UI design (uiStepFindings).
+func (sc tpScope) uiDialectFindings(st StepBinding, op ContractOperation, section string) []Finding {
+	actions, out := sc.uiActionInputs(st, op, section)
+	obs, obsFindings := sc.uiObservations(st, op, section)
+	out = append(out, obsFindings...)
+	return append(out, sc.uiStepFindings(actions, obs, section)...)
+}
+
+// uiActionInputs decodes the step's action inputs (TP-ARG-TYPE) and holds a browser step
+// to exactly one (TP-UI-ACTION).
+func (sc tpScope) uiActionInputs(st StepBinding, op ContractOperation, section string) ([]UIAction, []Finding) {
 	actionParams := refParams(op, "UIAction")
 	var out []Finding
+	var actions []UIAction
+	n := 0
 	for _, in := range st.Inputs {
-		if !actionParams[in.Name] {
+		if !actionParams[in.Name] && in.Name != webActionParam {
 			continue
 		}
-		switch v := in.Value.(type) {
-		case LiteralValue:
-			if _, err := ParseUIAction(string(v.JSON)); err != nil {
-				out = append(out, tpFinding(ruleTPArgType, l, "%s: input %q: %v", section, in.Name, err))
-			}
-		case RefValue:
-			// a ref resolves at run time
+		n++
+		lv, ok := in.Value.(LiteralValue) // a ref resolves at run time
+		if !ok {
+			continue
 		}
+		a, err := ParseUIAction(string(lv.JSON))
+		if err != nil {
+			out = append(out, tpFinding(ruleTPArgType, sc.l, "%s: input %q: %v", section, in.Name, err))
+			continue
+		}
+		actions = append(actions, a)
 	}
-	if !observesUI(op, st.Expect) {
-		return out
+	if len(actionParams) > 0 || sc.web {
+		out = append(out, sc.exactlyOneAction(n, section)...)
 	}
-	if _, err := ParseUIObservation(st.Expect.Result); err != nil {
-		out = append(out, tpFinding(ruleTPExpect, l, "%s: the expected observation: %v", section, err))
-	}
-	return out
+	return actions, out
 }
+
+// exactlyOneAction is TP-UI-ACTION over a browser step with n action inputs.
+func (sc tpScope) exactlyOneAction(n int, section string) []Finding {
+	if n == 1 {
+		return nil
+	}
+	return []Finding{tpFinding(ruleTPUIAction, sc.l, "%s: a browser step carries exactly one action input (named %q), found %d: a step with no action does nothing and asserts a state that already holds", section, webActionParam, n)}
+}
+
+// uiObservations decodes the step's expected observation and its before-state (TP-EXPECT).
+func (sc tpScope) uiObservations(st StepBinding, op ContractOperation, section string) ([]UIObservable, []Finding) {
+	var out []Finding
+	var obs []UIObservable
+	for _, e := range []*TestExpect{&st.Expect, st.Before} {
+		if e == nil || !observesUI(op, *e) {
+			continue
+		}
+		parsed, err := ParseUIObservation(e.Result)
+		if err != nil {
+			out = append(out, tpFinding(ruleTPExpect, sc.l, "%s: the expected observation: %v", section, err))
+			continue
+		}
+		obs = append(obs, parsed...)
+	}
+	return obs, out
+}
+
+// webActionParam is the name of a browser operation's action parameter.
+const webActionParam = "action"
 
 // refParams is the names of the operation's params typed by the $def named def.
 func refParams(op ContractOperation, def string) map[string]bool {
