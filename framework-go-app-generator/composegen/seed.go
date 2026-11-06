@@ -18,6 +18,25 @@ const HooksSeedFile = "hooks.go"
 // (the authorization policy, an external service's URL) it panics with FILL, so the composition
 // root compiles from the first generation and a missed decision is loud at boot.
 func HooksSeed(m *projectmodel.Model, cfg Config) ([]byte, error) {
+	return HooksSeedWith(m, cfg, SeedOptions{})
+}
+
+// SeedOptions varies HooksSeedWith's output without varying its seam catalogue or import
+// resolution; the zero value is the standard seed.
+type SeedOptions struct {
+	// Header, when set, is written before the package clause (e.g. a generated-code marker).
+	Header string
+	// Body, when set, may replace a hook's body: a non-empty result is used in place of the
+	// standard seed (or of its FILL panic).
+	Body func(Hook) string
+	// Extra is source appended to the file after the hooks (declarations the bodies use). The
+	// file's imports are resolved over it too.
+	Extra string
+}
+
+// HooksSeedWith is HooksSeed with opts applied. The conformance pipeline's nullgen uses it to
+// answer every seam with a value that lets an unbuilt model compose.
+func HooksSeedWith(m *projectmodel.Model, cfg Config, opts SeedOptions) ([]byte, error) {
 	if err := validateConfig(m, cfg); err != nil {
 		return nil, err
 	}
@@ -25,27 +44,44 @@ func HooksSeed(m *projectmodel.Model, cfg Config) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
+	hooks, err := hooksOf(r)
+	if err != nil {
+		return nil, err
+	}
 	var body strings.Builder
 	body.WriteString(seedMain)
-	for _, h := range deriveHooks(r) {
-		name, _, _ := strings.Cut(h.line, "(")
-		stmt := h.seed
-		if stmt == "" {
-			stmt = `panic("FILL: ` + name + `")`
-		}
-		recv := "appHooks"
-		if h.seedRecv != "" {
-			recv = h.seedRecv + " appHooks"
-		}
-		body.WriteString("\nfunc (" + recv + ") " + h.line + " {\n\t" + stmt + "\n}\n")
+	for i, h := range deriveHooks(r) {
+		body.WriteString(seedMethod(h, hooks[i], opts.Body))
+	}
+	if opts.Extra != "" {
+		body.WriteString("\n" + opts.Extra)
 	}
 	src := body.String()
-	out := "package " + cfg.PackageName + "\n\n" + seedImports(r, src).render() + src
+	out := opts.Header + "package " + cfg.PackageName + "\n\n" + seedImports(r, src).render() + src
 	formatted, err := format.Source([]byte(out))
 	if err != nil {
 		return nil, wrapFormatErr(err, out)
 	}
 	return formatted, nil
+}
+
+// seedMethod renders one hook's method in the seeded hooks.go: replace's body when it gives one,
+// else the standard seed, else a FILL panic.
+func seedMethod(h hookMethod, view Hook, replace func(Hook) string) string {
+	stmt := h.seed
+	if replace != nil {
+		if replaced := replace(view); replaced != "" {
+			stmt = replaced
+		}
+	}
+	if stmt == "" {
+		stmt = `panic("FILL: ` + view.Name + `")`
+	}
+	recv := "appHooks"
+	if h.seedRecv != "" {
+		recv = h.seedRecv + " appHooks"
+	}
+	return "\nfunc (" + recv + ") " + h.line + " {\n\t" + stmt + "\n}\n"
 }
 
 // seedImports is the composition root's imports the seed's source actually names.

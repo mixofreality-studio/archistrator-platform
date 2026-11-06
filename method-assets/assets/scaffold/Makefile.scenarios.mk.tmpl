@@ -16,6 +16,12 @@
 #                      its own); with none, every contracted package holding code
 #   gen-models-check — drift gate over the same set; a contracted package with no
 #                      contract.gen.go is drift
+#   gen-null         — conformance scaffolding ONLY (the platform's pipeline and fresh
+#                      scaffolds, never an app being built): write null.gen.go into every
+#                      non-client contract package and a hooks.go answering every seam of
+#                      the generated composition root, so a model with nothing built
+#                      compiles and boots. Refuses (exit 2) to replace a hooks.go it did
+#                      not write.
 #   gen-tests        — (re)write every *_scenarios_test.gen.go / *.spec.gen.ts and
 #                      seed any missing hooks file (never overwrites a hooks file)
 #   gen-tests-check  — drift gate: fails on a stale generated file, a referenced
@@ -27,7 +33,7 @@
 #                      provisions the local profile's infrastructure, boots cmd/server and
 #                      prints {"devstack":"ready","url":...} once /readyz answers. All its
 #                      logic lives in the launcher, so there is exactly one run contract.
-.PHONY: gen-models gen-models-check gen-tests gen-tests-check test-scenarios run-local
+.PHONY: gen-models gen-models-check gen-null gen-tests gen-tests-check test-scenarios run-local
 
 MODELGEN_ARGS = -project .aiarch/state/project.json -root . $(foreach c,$(CONTRACTS),-contract $(c))
 TESTGEN_ARGS = -project .aiarch/state/project.json -root . -uitests uitests/generated
@@ -37,6 +43,9 @@ gen-models:
 
 gen-models-check:
 	GOWORK=off go tool modelgen $(MODELGEN_ARGS) -check
+
+gen-null:
+	GOWORK=off go tool nullgen -project .aiarch/state/project.json -root .
 
 gen-tests:
 	GOWORK=off go tool testgen $(TESTGEN_ARGS)

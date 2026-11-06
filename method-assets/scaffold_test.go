@@ -198,8 +198,8 @@ func TestScaffoldMakefileScenariosInclude(t *testing.T) {
 	}
 	m := string(mk)
 	for _, want := range []string{
-		"gen-models:", "gen-models-check:", "gen-tests:", "gen-tests-check:", "test-scenarios:",
-		"go tool modelgen", "go tool testgen",
+		"gen-models:", "gen-models-check:", "gen-null:", "gen-tests:", "gen-tests-check:", "test-scenarios:",
+		"go tool modelgen", "go tool nullgen -project .aiarch/state/project.json -root .", "go tool testgen",
 		// testgen's default resolves one level above -root; every call must spell it.
 		"TESTGEN_ARGS = -project .aiarch/state/project.json -root . -uitests uitests/generated",
 		"-run 'TestScenario_'", "test-results/go-test.jsonl",

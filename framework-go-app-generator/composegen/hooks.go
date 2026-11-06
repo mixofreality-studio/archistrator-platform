@@ -16,6 +16,8 @@ type hookMethod struct {
 	seed string
 	// seedRecv names the seeded method's receiver when its body calls another hook ("h").
 	seedRecv string
+	// finalizes is set on a Finalize<Component> hook (see Hook.Finalizes).
+	finalizes *Finalized
 }
 
 // deriveHooks computes the container's Hooks method set from the resolved plan.
@@ -171,8 +173,9 @@ func finalizeHook(rb raBinding) hookMethod {
 			"composition policy needs to swap or wrap it (e.g. a construction",
 			"dry-run stub swap-in) — the identity implementation is always correct.",
 		},
-		line: name + "(cfg *Config, v " + typ + ") " + typ,
-		seed: "return v",
+		line:      name + "(cfg *Config, v " + typ + ") " + typ,
+		seed:      "return v",
+		finalizes: &Finalized{Type: typ, Null: rb.alias + ".Null" + rb.iface},
 	}
 }
 
