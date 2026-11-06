@@ -88,6 +88,7 @@ type pathWalk struct {
 	sc      scenario.Scenario
 	actors  map[string]bool
 	clients map[string]bool
+	comps   map[string]bool // normalized ids of every component
 	nodes   map[string]ActivityNode
 	steps   map[string]CallStep
 	at      *Location
@@ -95,9 +96,12 @@ type pathWalk struct {
 
 func newPathWalk(uc UseCase, s System, sc scenario.Scenario, clients map[string]bool) pathWalk {
 	p := pathWalk{
-		uc: uc, sc: sc, actors: actorIDs(uc), clients: clients,
+		uc: uc, sc: sc, actors: actorIDs(uc), clients: clients, comps: map[string]bool{},
 		nodes: map[string]ActivityNode{}, steps: map[string]CallStep{},
 		at: loc(0, "useCase "+uc.ID+" scenario "+sc.ID),
+	}
+	for _, comp := range s.Components {
+		p.comps[scenario.Normalize(comp.ID)] = true
 	}
 	for _, n := range uc.Activity.Nodes {
 		p.nodes[n.ID] = n
@@ -183,29 +187,62 @@ func (p pathWalk) outcomeAtAskingSurface() []Finding {
 }
 
 // outcomeShownTo reports whether the path, after node, carries a sendSignal to the
-// actor, or an objectNode reached after a step from node onward touched the client.
+// actor on the asking surface, or an objectNode reached after a step from node onward
+// touched the client.
 func (p pathWalk) outcomeShownTo(actor, client, node string) bool {
-	engaged := false
-	started := false
+	engaged, started := false, false
 	for _, id := range p.sc.Path {
-		if id == node {
-			started = true
-		}
+		started = started || id == node
 		if !started {
 			continue
 		}
-		n := p.nodes[id]
 		if st, ok := p.steps[id]; ok && stepTouchesNormalized(st, client) {
 			engaged = true
 		}
-		switch {
-		case n.Kind == kindSendSignal && n.LinkedActorID == actor:
-			return true
-		case n.Kind == kindObjectNode && engaged:
+		if p.outcomeAt(p.nodes[id], engaged, actor, client) {
 			return true
 		}
 	}
 	return false
+}
+
+// outcomeAt reports whether n shows the outcome to the asking actor on the asking
+// Client: a sendSignal to the actor that is not drawn in another component's lane
+// (cross-surface propagation is additional, never a substitute), or an objectNode
+// reached once the Client was engaged.
+func (p pathWalk) outcomeAt(n ActivityNode, engaged bool, actor, client string) bool {
+	switch n.Kind {
+	case kindSendSignal:
+		return n.LinkedActorID == actor && p.laneIsAskingSurface(n.RoleName, actor, client)
+	case kindObjectNode:
+		return engaged
+	}
+	return false
+}
+
+// laneIsAskingSurface reports whether a signal drawn in the lane roleName reaches the
+// asking surface: an unlaned signal, one in the asking Client's lane, one in the
+// actor's own lane, or one in a lane that names no component at all. A lane that
+// resolves under scenario.Normalize to a different component is another surface.
+func (p pathWalk) laneIsAskingSurface(roleName, actor, client string) bool {
+	if roleName == "" {
+		return true
+	}
+	lane := scenario.Normalize(roleName)
+	if lane == scenario.Normalize(client) || lane == scenario.Normalize(p.actorRole(actor)) {
+		return true
+	}
+	return !p.comps[lane]
+}
+
+// actorRole is the role name of the use case's actor id, or "" when it has none.
+func (p pathWalk) actorRole(actor string) string {
+	for _, a := range p.uc.Actors {
+		if a.ID == actor {
+			return a.Role
+		}
+	}
+	return ""
 }
 
 // stepTouchesNormalized reports whether any call of st names id at either end under
@@ -230,26 +267,43 @@ func startNotActionFindings(c CoreUseCases) []Finding {
 		if uc.Activity == nil {
 			continue
 		}
-		actors := actorIDs(uc)
-		roles := map[string]bool{}
-		for _, a := range uc.Actors {
-			roles[a.Role] = true
-		}
+		actors, roles := actorLane(uc)
 		for _, n := range uc.Activity.Nodes {
-			if n.Kind != nodeStart || n.Label == "" {
+			if !isLabelledActorStart(n, actors, roles) {
 				continue
 			}
-			if (n.LinkedActorID != "" && actors[n.LinkedActorID]) || (n.LinkedActorID == "" && n.RoleName != "" && roles[n.RoleName]) {
-				out = append(out, Finding{
-					RuleID: ruleUCStartNotAction, Severity: SeverityError,
-					Location: loc(i, "useCases["+uc.ID+"].activity"),
-					Message: fmt.Sprintf("start node %q of use case %s is in an actor's lane and carries the label %q; "+
-						"an actor's act is an action node (leave the start unlabelled and give the act its own action)", n.ID, uc.ID, n.Label),
-				})
-			}
+			out = append(out, Finding{
+				RuleID: ruleUCStartNotAction, Severity: SeverityError,
+				Location: loc(i, "useCases["+uc.ID+"].activity"),
+				Message: fmt.Sprintf("start node %q of use case %s is in an actor's lane and carries the label %q; "+
+					"an actor's act is an action node (leave the start unlabelled and give the act its own action)", n.ID, uc.ID, n.Label),
+			})
 		}
 	}
 	return out
+}
+
+// actorLane is the actor ids and actor role names of uc: the two ways a node can sit
+// in an actor's lane.
+func actorLane(uc UseCase) (actors, roles map[string]bool) {
+	actors = actorIDs(uc)
+	roles = map[string]bool{}
+	for _, a := range uc.Actors {
+		roles[a.Role] = true
+	}
+	return actors, roles
+}
+
+// isLabelledActorStart reports whether n is a start node that carries a label and sits
+// in an actor's lane, by linked actor id or, when unlinked, by role name.
+func isLabelledActorStart(n ActivityNode, actors, roles map[string]bool) bool {
+	if n.Kind != nodeStart || n.Label == "" {
+		return false
+	}
+	if n.LinkedActorID != "" {
+		return actors[n.LinkedActorID]
+	}
+	return n.RoleName != "" && roles[n.RoleName]
 }
 
 // scenarioProblemFindings mirrors the derivation's own Problems as findings, so a
@@ -258,15 +312,33 @@ func startNotActionFindings(c CoreUseCases) []Finding {
 func scenarioProblemFindings(r scenario.Report) []Finding {
 	out := make([]Finding, 0, len(r.Problems))
 	for _, pr := range r.Problems {
-		id := ruleSCNUnaddressed
-		if pr.Code == scenario.ProblemActorPathClient {
-			id = ruleSCNActorPathClient
-		}
 		out = append(out, Finding{
-			RuleID: id, Severity: SeverityError,
+			RuleID: problemRule(pr.Code), Severity: SeverityError,
 			Location: loc(0, "useCase "+pr.UseCase+" scenario "+pr.Scenario),
-			Message:  fmt.Sprintf("scenario %s: %s", pr.Scenario, pr.Message),
+			Message:  problemMessage(pr),
 		})
 	}
 	return out
+}
+
+// problemRule is the rule a derivation Problem code is reported under. A code this
+// gate does not know is reported under its own code, never under another rule.
+func problemRule(code string) RuleID {
+	switch code {
+	case scenario.ProblemUnaddressed:
+		return ruleSCNUnaddressed
+	case scenario.ProblemActorPathClient:
+		return ruleSCNActorPathClient
+	}
+	return RuleID(code)
+}
+
+// problemMessage is the finding text of pr; an unrecognized code names itself so the
+// gap is visible.
+func problemMessage(pr scenario.Problem) string {
+	switch pr.Code {
+	case scenario.ProblemUnaddressed, scenario.ProblemActorPathClient:
+		return fmt.Sprintf("scenario %s: %s", pr.Scenario, pr.Message)
+	}
+	return fmt.Sprintf("scenario %s: unrecognized scenario problem code %q (methodcheck has no rule for it): %s", pr.Scenario, pr.Code, pr.Message)
 }

@@ -323,7 +323,6 @@
         "components": [
           {
             "id": "shop-client",
-            "buildStatus": "planned",
             "name": "ShopClient",
             "kind": "client",
             "uiSurface": false,
@@ -374,6 +373,13 @@
                 "calls": [
                   {
                     "from": "customer",
+                    "to": "shop-client",
+                    "mode": "queued",
+                    "label": "OrderPlaceOrder",
+                    "alt": null
+                  },
+                  {
+                    "from": "customer",
                     "to": "order-manager",
                     "mode": "queued",
                     "label": "PlaceOrder",
@@ -396,6 +402,13 @@
               {
                 "activityNodeId": "pay",
                 "calls": [
+                  {
+                    "from": "customer",
+                    "to": "shop-client",
+                    "mode": "queued",
+                    "label": "BillingRecordPayment",
+                    "alt": null
+                  },
                   {
                     "from": "customer",
                     "to": "billing-manager",
@@ -450,7 +463,41 @@
       "interface": {
         "name": "ShopClient",
         "layer": "Client",
-        "operations": []
+        "operations": [
+          {
+            "name": "OrderPlaceOrder",
+            "params": [
+              {
+                "name": "order",
+                "schema": {
+                  "type": "object"
+                }
+              }
+            ],
+            "result": {
+              "type": "string"
+            },
+            "error": true
+          },
+          {
+            "name": "BillingRecordPayment",
+            "params": [
+              {
+                "name": "invoiceId",
+                "schema": {
+                  "type": "string"
+                }
+              },
+              {
+                "name": "amount",
+                "schema": {
+                  "type": "integer"
+                }
+              }
+            ],
+            "error": true
+          }
+        ]
       }
     },
     "orderManager": {

@@ -206,3 +206,56 @@ func TestScenarioProblems_AreFindings(t *testing.T) {
 		t.Fatal("no problems, no findings")
 	}
 }
+
+func TestUC_OutcomeAtAskingSurface_FiresWhenSignalIsOnAnotherClient(t *testing.T) {
+	s, c := ucPathFixture(t)
+	onlyWebApp(&s)
+	// the signal reaches the asking actor, but drawn in ANOTHER surface's lane.
+	endWith(&c, ActivityNode{ID: "sig", Kind: kindSendSignal, Label: "shown elsewhere", LinkedActorID: "team-member", RoleName: "todo-mcp-server"})
+	fs := ucPathFindings(c, s)
+	msgs := messagesFor(fs, ruleUCOutcomeAtAskingSurface)
+	if !anyContains(msgs, "reword-a-todo-P2") || !anyContains(msgs, "todowebapp") {
+		t.Fatalf("a signal in another component's lane must not satisfy the asking Client; got %v", msgs)
+	}
+	// the same signal in the asking Client's lane, or the actor's own, does.
+	for _, lane := range []string{"todo-web-app", "Team Member"} {
+		s2, c2 := ucPathFixture(t)
+		onlyWebApp(&s2)
+		endWith(&c2, ActivityNode{ID: "sig", Kind: kindSendSignal, Label: "shown here", LinkedActorID: "team-member", RoleName: lane})
+		if m := messagesFor(ucPathFindings(c2, s2), ruleUCOutcomeAtAskingSurface); len(m) != 0 {
+			t.Fatalf("lane %q is the asking surface: %v", lane, m)
+		}
+	}
+}
+
+// onlyWebApp restricts the actor's n4 input to the web app, so it is the one asking Client.
+func onlyWebApp(s *System) {
+	for i := range s.DynamicViews {
+		for j := range s.DynamicViews[i].Steps {
+			st := &s.DynamicViews[i].Steps[j]
+			if st.ActivityNodeID != "n4" {
+				continue
+			}
+			kept := st.Calls[:0:0]
+			for _, call := range st.Calls {
+				if call.To != "todo-mcp-server" {
+					kept = append(kept, call)
+				}
+			}
+			st.Calls = kept
+		}
+	}
+}
+
+func TestScenarioProblems_UnknownCodeIsNotMislabelled(t *testing.T) {
+	r := scenario.Report{Problems: []scenario.Problem{
+		{UseCase: "uc", Scenario: "uc-P1", Node: "n2", Code: "SCN-FUTURE", Message: "m"},
+	}}
+	fs := scenarioProblemFindings(r)
+	if len(fs) != 1 || fs[0].RuleID == ruleSCNUnaddressed || fs[0].RuleID == ruleSCNActorPathClient {
+		t.Fatalf("an unknown code must not be reported under a known rule: %s", dumpFindings(fs))
+	}
+	if !strings.Contains(fs[0].Message, "SCN-FUTURE") || fs[0].Severity != SeverityError {
+		t.Fatalf("the unknown code must be named, as an Error: %+v", fs[0])
+	}
+}
