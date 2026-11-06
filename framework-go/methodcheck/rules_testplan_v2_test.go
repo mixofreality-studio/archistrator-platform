@@ -330,10 +330,10 @@ func TestTP_Principal_SkippedScenarioNeedsNone(t *testing.T) {
 
 func TestTP_V2RulesAreRegistered(t *testing.T) {
 	ids := emittedRuleIDs()
-	for _, id := range []RuleID{
+	for _, id := range append([]RuleID{
 		ruleTPHook, ruleTPExpectRequired, ruleTPArgRef, ruleTPArrange, ruleTPActorObserved, ruleTPPrincipal,
 		ruleTPClientOps, ruleTPLabelOp, ruleClientMachineMirror,
-	} {
+	}, uiDesignRuleIDs...) {
 		if !ids[id] {
 			t.Errorf("%s is emitted but not in emittedRuleIDs", id)
 		}

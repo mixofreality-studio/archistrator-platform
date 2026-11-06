@@ -854,7 +854,7 @@ func (sc tpScope) uiActionInputs(st StepBinding, op ContractOperation, section s
 	var actions []UIAction
 	n := 0
 	for _, in := range st.Inputs {
-		if !actionParams[in.Name] && in.Name != webActionParam {
+		if !actionParams[in.Name] && !(sc.web && in.Name == webActionParam) {
 			continue
 		}
 		n++

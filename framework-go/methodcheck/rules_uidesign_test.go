@@ -1,6 +1,7 @@
 package methodcheck
 
 import (
+	"encoding/json"
 	"testing"
 )
 
@@ -108,4 +109,54 @@ func TestTP_UIAction_ExactlyOne(t *testing.T) {
 	st := &binding(t, p, "billingManager", "process-order-P2").Steps[0]
 	st.Inputs = append(st.Inputs, st.Inputs[0])
 	wantRules(t, runTP(t, p), ruleTPUIAction, 1)
+}
+
+// uidProject is tp_clean with billingManager as a browser surface and its design
+// recorded; mutate edits that design before the project is checked.
+func uidProject(t *testing.T, mutate func(d *UIDesignRecord)) Project {
+	t.Helper()
+	p := loadProject(t, "tp_clean.json")
+	asBrowserStep(t, p, act("click", tgt("todo-add")), `[`+act("visible", tgt("todo-list"))+`]`)
+	d := p.PhaseArtifacts.UIDesign["billingManager"]
+	if mutate != nil {
+		mutate(&d)
+	}
+	p.PhaseArtifacts.UIDesign["billingManager"] = d
+	return p
+}
+
+// The UID record rules fire through the project check pipeline (testPlanFindings),
+// not only when uiDesignFindings is called directly.
+func TestUID_RecordRulesRunInProjectCheck(t *testing.T) {
+	cases := []struct {
+		name   string
+		rule   RuleID
+		mutate func(d *UIDesignRecord)
+	}{
+		{"UID-ROLE", ruleUIDRole, func(d *UIDesignRecord) { d.Screens[0].Elements[3].Role = "bttn" }},
+		{"UID-NAME", ruleUIDName, func(d *UIDesignRecord) { d.Screens[0].Elements[3].Name = "" }},
+		{"UID-ID-UNIQUE", ruleUIDIDUnique, func(d *UIDesignRecord) { d.Screens[1].Elements[0].ID = "todo-add" }},
+		{"UID-WITHIN", ruleUIDWithin, func(d *UIDesignRecord) { d.Screens[0].Elements[2].Within = "nowhere" }},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			wantRules(t, runTP(t, uidProject(t, nil)), c.rule, 0)
+			wantRules(t, runTP(t, uidProject(t, c.mutate)), c.rule, 1)
+		})
+	}
+}
+
+// An input named "action" is a UI action only on a browser surface: a service
+// operation's ordinary string parameter of that name is not held to the dialect.
+func TestTP_UIAction_NamedActionOnServiceOpIsOrdinary(t *testing.T) {
+	p := loadProject(t, "tp_clean.json")
+	sc := p.ServiceContracts["billingManager"]
+	sc.Interface.Operations[0].Params = append(sc.Interface.Operations[0].Params,
+		ContractParam{Name: "action", Schema: json.RawMessage(`{"type":"string"}`)})
+	p.ServiceContracts["billingManager"] = sc
+	st := &binding(t, p, "billingManager", "process-order-P2").Steps[0]
+	st.Inputs = append(st.Inputs, TestArg{Name: "action", Value: lit(`"pay"`)})
+	fs := runTP(t, p)
+	wantRules(t, fs, ruleTPArgType, 0)
+	wantRules(t, fs, ruleTPUIAction, 0)
 }

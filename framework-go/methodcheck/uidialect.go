@@ -240,11 +240,12 @@ func (v UISelect) MarshalJSON() ([]byte, error) {
 
 // UIActionKinds is the sorted set of browser action kinds.
 func UIActionKinds() []string {
-	return []string{
-		string(UIActionCheck), string(UIActionClick), string(UIActionDblclick), string(UIActionFill),
-		string(UIActionHover), string(UIActionNavigate), string(UIActionPress), string(UIActionSelect),
-		string(UIActionUncheck),
+	kinds := make([]string, 0, len(uiActionDecoders))
+	for k := range uiActionDecoders {
+		kinds = append(kinds, string(k))
 	}
+	slices.Sort(kinds)
+	return kinds
 }
 
 // UnmarshalUIAction decodes the {"kind","model"} envelope into a UIAction; an unknown
@@ -519,12 +520,12 @@ func (v UIURL) MarshalJSON() ([]byte, error) { type w UIURL; return marshalEnvel
 
 // UIObservableKinds is the sorted set of browser observable kinds.
 func UIObservableKinds() []string {
-	return []string{
-		string(UIObservableAbsent), string(UIObservableChecked), string(UIObservableCount),
-		string(UIObservableDisabled), string(UIObservableEnabled), string(UIObservableFocused),
-		string(UIObservableHidden), string(UIObservableText), string(UIObservableUnchecked),
-		string(UIObservableURL), string(UIObservableValue), string(UIObservableVisible),
+	kinds := make([]string, 0, len(uiObservableDecoders))
+	for k := range uiObservableDecoders {
+		kinds = append(kinds, string(k))
 	}
+	slices.Sort(kinds)
+	return kinds
 }
 
 // UnmarshalUIObservable decodes the {"kind","model"} envelope into a UIObservable.
