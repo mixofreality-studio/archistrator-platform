@@ -151,7 +151,7 @@ func emitSumUnmarshal(buf *bytes.Buffer, st SumType, env, factory string) {
 	fmt.Fprintf(buf, "\t}\n")
 	fmt.Fprintf(buf, "\tv, ok := %s(env.Kind)\n", factory)
 	fmt.Fprintf(buf, "\tif !ok {\n")
-	fmt.Fprintf(buf, "\t\treturn nil, fmt.Errorf(\"unmarshal %s: no variant for kind %%q\", env.Kind)\n", st.Iface)
+	fmt.Fprintf(buf, "\t\treturn nil, fmt.Errorf(\"unknown kind %%q for %s\", env.Kind)\n", st.Iface)
 	fmt.Fprintf(buf, "\t}\n")
 	fmt.Fprintf(buf, "\tif err := json.Unmarshal(env.Model, v); err != nil {\n")
 	fmt.Fprintf(buf, "\t\treturn nil, fmt.Errorf(\"unmarshal %s %%q: %%w\", env.Kind, err)\n", st.Iface)

@@ -1,0 +1,51 @@
+{
+  "component": "shapeEngine",
+  "layer": "engine",
+  "goPackage": "internal/engine/shape",
+  "title": "Shape engine",
+  "$defs": {
+    "A": {
+      "type": "object",
+      "properties": {"side": {"type": "number"}},
+      "required": ["side"]
+    },
+    "B": {
+      "type": "object",
+      "properties": {"radius": {"type": "number"}},
+      "required": ["radius"]
+    },
+    "ShapeKind": {
+      "type": "string",
+      "enum": ["a", "b"],
+      "x-enum-varnames": ["ShapeKindA", "ShapeKindB"]
+    },
+    "Shape": {
+      "oneOf": [
+        {"$ref": "#/$defs/A"},
+        {"$ref": "#/$defs/B"}
+      ],
+      "x-go-sumtype": {
+        "iface": "Shape",
+        "marker": "isShape",
+        "discriminatorKey": "kind",
+        "kindEnum": "ShapeKind",
+        "variants": [
+          {"kind": "a", "type": "A", "kindConst": "ShapeKindA"},
+          {"kind": "b", "type": "B", "kindConst": "ShapeKindB"}
+        ]
+      }
+    }
+  },
+  "interface": {
+    "name": "ShapeEngine",
+    "layer": "engine",
+    "operations": [
+      {
+        "name": "Area",
+        "params": [{"name": "shape", "schema": {"$ref": "#/$defs/Shape"}}],
+        "result": {"type": "number"},
+        "error": true
+      }
+    ]
+  }
+}
