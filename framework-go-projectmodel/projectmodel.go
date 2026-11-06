@@ -36,49 +36,56 @@ type projectDoc struct {
 	} `json:"slots"`
 }
 
-// Load parses the codegen-relevant subset and cross-validates it. Unknown
-// fields anywhere are ignored; the systemDesign slot is located by kind==5.
+// Load parses the codegen-relevant subset and cross-validates it, and reports EVERY problem it
+// finds at once: when any exists the error is a [Problems]. Unknown top-level fields are
+// ignored; unknown fields inside a contract are a problem (see [ValidateContract]). The
+// systemDesign slot is located by kind==5.
 func Load(raw []byte) (*Model, error) {
 	var top projectDoc
 	if err := json.Unmarshal(raw, &top); err != nil {
-		return nil, fmt.Errorf("projectmodel: %w", err)
+		return nil, Problems{problem("$", CodeDecode, "%v", err)}
 	}
-	contracts, err := parseContracts(top.ServiceContracts)
-	if err != nil {
-		return nil, err
-	}
+	contracts, probs := parseContracts(top.ServiceContracts)
 	sys, err := findSystemDesign(top.Slots)
 	if err != nil {
-		return nil, err
+		probs = append(probs, problem("systemDesign", CodeDecode, "%v", err))
 	}
 	dep, err := findDeployment(top.Slots)
 	if err != nil {
-		return nil, err
+		probs = append(probs, problem("deployment", CodeDecode, "%v", err))
 	}
 	m := &Model{Contracts: contracts, System: sys, Deployment: dep}
-	if err := m.validate(); err != nil {
+	probs = append(probs, m.validate()...)
+	if err := probs.err(); err != nil {
 		return nil, err
 	}
 	return m, nil
 }
 
-// parseContracts parses every serviceContracts entry, in key order (for
-// deterministic first-error reporting).
-func parseContracts(raw map[string]json.RawMessage) (map[string]*Contract, error) {
+// parseContracts validates and parses every serviceContracts entry, in key order (for
+// deterministic problem order). An entry that cannot be parsed is reported and left out of the
+// returned map.
+func parseContracts(raw map[string]json.RawMessage) (map[string]*Contract, Problems) {
 	keys := make([]string, 0, len(raw))
 	for k := range raw {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
 	out := make(map[string]*Contract, len(raw))
+	var probs Problems
 	for _, k := range keys {
+		found := ValidateContract(k, raw[k])
+		probs = append(probs, found...)
 		c, err := ParseContract(k, raw[k])
 		if err != nil {
-			return nil, err
+			if len(found) == 0 {
+				probs = append(probs, problem("serviceContracts."+k, CodeDecode, "%v", err))
+			}
+			continue
 		}
 		out[k] = c
 	}
-	return out, nil
+	return out, probs
 }
 
 // findSystemDesign locates the systemDesign slot (kind==5) among the parsed

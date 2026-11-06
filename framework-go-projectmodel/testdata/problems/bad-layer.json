@@ -1,0 +1,14 @@
+{
+  "component": "messageBus",
+  "layer": "Manger",
+  "goPackage": "internal/manager/messagebus",
+  "title": "messageBus contract",
+  "$defs": {},
+  "interface": {
+    "name": "MessageBusManager",
+    "layer": "Manager",
+    "operations": [
+      { "name": "Publish", "params": null, "error": true }
+    ]
+  }
+}

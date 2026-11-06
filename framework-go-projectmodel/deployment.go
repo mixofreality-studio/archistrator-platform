@@ -135,117 +135,116 @@ func findDeployment(slots map[string]struct {
 	return nil, nil
 }
 
-// validateDeployment cross-checks the appgen sections against the environment
-// profiles and the parsed contracts. It is a no-op when no deployment slot was
-// present, and validates only the sections that are present (all optional).
-func (m *Model) validateDeployment() error {
+// validateDeployment cross-checks the appgen sections against the environment profiles and the
+// parsed contracts. It reports nothing when no deployment slot was present, and validates only
+// the sections that are present (all optional).
+func (m *Model) validateDeployment() Problems {
 	if m.Deployment == nil {
 		return nil
 	}
-	profiles := m.deploymentProfiles()
-	infraKeys := m.deploymentInfraKeys()
-
-	if err := m.validateInfrastructure(profiles); err != nil {
-		return err
-	}
-	if err := m.validateBindings(profiles, infraKeys); err != nil {
-		return err
-	}
-	return validateSettings("settings", m.Deployment.Settings)
+	return deploymentProblems(m.Deployment, m.Contracts)
 }
 
-// deploymentProfiles returns the set of profiles declared by the deployment's
-// environments.
-func (m *Model) deploymentProfiles() map[string]bool {
-	out := make(map[string]bool, len(m.Deployment.Environments))
-	for _, e := range m.Deployment.Environments {
-		out[e.Profile] = true
+// ValidateDeployment parses a deployment object (operationalConcepts.model.deployment) and
+// reports every problem in it that does not need the contracts: presence and setting-type enums,
+// and every profile and infra key a declaration references. Resolving a binding's component to a
+// contract needs the contracts, which Load has; system is reserved for the component joins the
+// deployment will gain and is not read yet.
+func ValidateDeployment(raw json.RawMessage, _ *System) Problems {
+	var d Deployment
+	if err := json.Unmarshal(raw, &d); err != nil {
+		return Problems{problem("deployment", CodeDecode, "deployment: %v", err)}
 	}
-	return out
+	return deploymentProblems(&d, nil)
 }
 
-// deploymentInfraKeys returns the set of infrastructure keys the deployment
-// declares (the targets binding variants resolve against).
-func (m *Model) deploymentInfraKeys() map[string]bool {
-	out := make(map[string]bool, len(m.Deployment.Infrastructure))
-	for _, i := range m.Deployment.Infrastructure {
-		out[i.Key] = true
+// deploymentProblems is every deployment problem. A nil contracts map skips the checks that
+// resolve a binding's component to a contract.
+func deploymentProblems(d *Deployment, contracts map[string]*Contract) Problems {
+	profiles := make(map[string]bool, len(d.Environments))
+	for _, e := range d.Environments {
+		profiles[e.Profile] = true
 	}
-	return out
+	infraKeys := make(map[string]bool, len(d.Infrastructure))
+	for _, i := range d.Infrastructure {
+		infraKeys[i.Key] = true
+	}
+	var probs Problems
+	probs = append(probs, infrastructureProblems(d, profiles)...)
+	for i, b := range d.Bindings {
+		probs = append(probs, bindingProblems(fmt.Sprintf("deployment.bindings[%d]", i), b, contracts, profiles, infraKeys)...)
+	}
+	return append(probs, settingsProblems("deployment.settings", "settings", d.Settings)...)
 }
 
-// validateInfrastructure checks each infra decl's presence enum and that every
-// profile it lists is a declared environment profile.
-func (m *Model) validateInfrastructure(profiles map[string]bool) error {
-	for _, i := range m.Deployment.Infrastructure {
+// infrastructureProblems checks each infra decl's presence enum and that every profile it lists
+// is a declared environment profile.
+func infrastructureProblems(d *Deployment, profiles map[string]bool) Problems {
+	var probs Problems
+	for idx, i := range d.Infrastructure {
+		path := fmt.Sprintf("deployment.infrastructure[%d]", idx)
 		if i.Presence != "" && !knownPresence[i.Presence] {
-			return fmt.Errorf("projectmodel: deployment infra %q: unknown presence %q", i.Key, i.Presence)
+			probs = append(probs, problem(path+".presence", CodeDeployRef, "deployment infra %q: unknown presence %q", i.Key, i.Presence))
 		}
 		for _, p := range i.Profiles {
 			if !profiles[p] {
-				return fmt.Errorf("projectmodel: deployment infra %q: profile %q not in environments", i.Key, p)
+				probs = append(probs, problem(path+".profiles", CodeDeployRef, "deployment infra %q: profile %q not in environments", i.Key, p))
 			}
 		}
 	}
-	return nil
+	return probs
 }
 
-// validateBindings checks every binding in turn.
-func (m *Model) validateBindings(profiles, infraKeys map[string]bool) error {
-	for _, b := range m.Deployment.Bindings {
-		if err := m.validateBinding(b, profiles, infraKeys); err != nil {
-			return err
+// bindingProblems checks one binding: component + provides resolve to contracts (when
+// contracts is non-nil), presence enum, perProfile keys are declared profiles, each variant's
+// infra keys resolve, and binding-scoped settings type enum.
+func bindingProblems(path string, b Binding, contracts map[string]*Contract, profiles, infraKeys map[string]bool) Problems {
+	var probs Problems
+	if contracts != nil {
+		if _, ok := contracts[b.Component]; !ok {
+			probs = append(probs, problem(path+".component", CodeDeployRef, "deployment binding: unknown component %q", b.Component))
 		}
-	}
-	return nil
-}
-
-// validateBinding checks one binding: component + provides resolve to
-// contracts, presence enum, perProfile keys are declared profiles, each
-// variant's infra keys resolve, and binding-scoped settings type enum.
-func (m *Model) validateBinding(b Binding, profiles, infraKeys map[string]bool) error {
-	if _, ok := m.Contracts[b.Component]; !ok {
-		return fmt.Errorf("projectmodel: deployment binding: unknown component %q", b.Component)
+		for _, pv := range b.Provides {
+			if _, ok := contracts[pv]; !ok {
+				probs = append(probs, problem(path+".provides", CodeDeployRef, "deployment binding %q: provides unknown component %q", b.Component, pv))
+			}
+		}
 	}
 	if b.Presence != "" && !knownPresence[b.Presence] {
-		return fmt.Errorf("projectmodel: deployment binding %q: unknown presence %q", b.Component, b.Presence)
+		probs = append(probs, problem(path+".presence", CodeDeployRef, "deployment binding %q: unknown presence %q", b.Component, b.Presence))
 	}
-	for _, pv := range b.Provides {
-		if _, ok := m.Contracts[pv]; !ok {
-			return fmt.Errorf("projectmodel: deployment binding %q: provides unknown component %q", b.Component, pv)
-		}
-	}
-	if err := validateBindingProfiles(b, profiles, infraKeys); err != nil {
-		return err
-	}
-	return validateSettings("binding "+b.Component, b.Settings)
+	probs = append(probs, bindingProfileProblems(path, b, profiles, infraKeys)...)
+	return append(probs, settingsProblems(path+".settings", "binding "+b.Component, b.Settings)...)
 }
 
-// validateBindingProfiles checks that every perProfile key is a declared
-// environment profile and that each variant's infra keys resolve.
-func validateBindingProfiles(b Binding, profiles, infraKeys map[string]bool) error {
-	for profile, variant := range b.PerProfile {
+// bindingProfileProblems checks that every perProfile key is a declared environment profile and
+// that each variant's infra keys resolve.
+func bindingProfileProblems(path string, b Binding, profiles, infraKeys map[string]bool) Problems {
+	var probs Problems
+	for _, profile := range slices.Sorted(maps.Keys(b.PerProfile)) {
+		ppath := path + ".perProfile." + profile
 		if !profiles[profile] {
-			return fmt.Errorf("projectmodel: deployment binding %q: profile %q not in environments", b.Component, profile)
+			probs = append(probs, problem(ppath, CodeDeployRef, "deployment binding %q: profile %q not in environments", b.Component, profile))
 		}
-		for _, ik := range variant.Infra {
+		for _, ik := range b.PerProfile[profile].Infra {
 			if !infraKeys[ik] {
-				return fmt.Errorf("projectmodel: deployment binding %q (profile %q): unknown infra key %q", b.Component, profile, ik)
+				probs = append(probs, problem(ppath+".infra", CodeDeployRef, "deployment binding %q (profile %q): unknown infra key %q", b.Component, profile, ik))
 			}
 		}
 	}
-	return nil
+	return probs
 }
 
-// validateSettings checks that every setting's Type is a known setting type.
-// scope names the owning section for error messages.
-func validateSettings(scope string, settings []Setting) error {
-	for _, s := range settings {
+// settingsProblems checks that every setting's Type is a known setting type. scope names the
+// owning section for messages.
+func settingsProblems(path, scope string, settings []Setting) Problems {
+	var probs Problems
+	for i, s := range settings {
 		if s.Type != "" && !knownSettingTypes[s.Type] {
-			return fmt.Errorf("projectmodel: deployment %s setting %q: unknown type %q", scope, s.Name, s.Type)
+			probs = append(probs, problem(fmt.Sprintf("%s[%d].type", path, i), CodeDeployRef, "deployment %s setting %q: unknown type %q", scope, s.Name, s.Type))
 		}
 	}
-	return nil
+	return probs
 }
 
 // Binding variants a default deployment can wire without authored knowledge: an approved

@@ -1,6 +1,7 @@
 package projectmodel
 
 import (
+	"encoding/json"
 	"fmt"
 	"sort"
 	"strings"
@@ -38,57 +39,45 @@ var legalDepTargets = map[string]map[string]bool{
 	"ResourceAccess": {},
 }
 
-// validate cross-checks the parsed contracts and systemDesign slot against
-// one another. The dep-legality checks run first (fatal); the systemDesign
-// checks run only when a systemDesign slot was present.
-func (m *Model) validate() error {
-	if err := m.validateDeps(); err != nil {
-		return err
-	}
-	if err := m.validateDeployment(); err != nil {
-		return err
-	}
+// validate cross-checks the parsed contracts and systemDesign slot against one another and
+// reports every problem it finds, in a stable order: dep legality, then deployment, then
+// relationships (only when a systemDesign slot was present). The warn-level component joins
+// land in Warnings and are never problems.
+func (m *Model) validate() Problems {
+	var probs Problems
+	probs = append(probs, m.validateDeps()...)
+	probs = append(probs, m.validateDeployment()...)
 	if m.System == nil {
-		return nil
+		return probs
 	}
-	if err := m.validateRelationships(); err != nil {
-		return err
-	}
+	probs = append(probs, systemProblems(m.System)...)
 	m.validateComponentJoins()
-	return nil
+	return probs
 }
 
-// validateDeps checks rule 1 (every Dep.Component resolves to a Contracts
-// key) and rule 2 (dep-layer legality) for every contract's deps.
-func (m *Model) validateDeps() error {
+// validateDeps checks rule 1 (every Dep.Component resolves to a Contracts key) and rule 2
+// (dep-layer legality) for every contract's deps. A contract's own layer spelling is
+// ValidateContract's.
+func (m *Model) validateDeps() Problems {
+	var probs Problems
 	for _, c := range sortedContracts(m.Contracts) {
-		if err := validateContractLayer(c); err != nil {
-			return err
-		}
-		if err := m.validateContractDeps(c); err != nil {
-			return err
-		}
+		probs = append(probs, m.validateContractDeps(c)...)
 	}
-	return nil
-}
-
-// validateContractLayer checks that every contract's Layer is a known layer.
-func validateContractLayer(c *Contract) error {
-	if !knownLayers[c.Layer] {
-		return fmt.Errorf("projectmodel: contract %s: unknown layer %q", c.Key, c.Layer)
-	}
-	return nil
+	return probs
 }
 
 // validateContractDeps validates one contract's deps against rules 1 and 2.
-func (m *Model) validateContractDeps(c *Contract) error {
-	for _, d := range c.Deps {
+func (m *Model) validateContractDeps(c *Contract) Problems {
+	var probs Problems
+	for i, d := range c.Deps {
 		if d.Component == "" {
 			continue // plain dep: exempt
 		}
+		path := fmt.Sprintf("serviceContracts.%s.deps[%d]", c.Key, i)
 		target, ok := m.Contracts[d.Component]
 		if !ok {
-			return fmt.Errorf("projectmodel: contract %s dep %q: unknown component %q", c.Key, d.Name, d.Component)
+			probs = append(probs, problem(path, CodeDepTarget, "contract %s dep %q: unknown component %q", c.Key, d.Name, d.Component))
+			continue
 		}
 		if target.Layer == "Utility" {
 			continue // Utility targets: exempt
@@ -96,25 +85,35 @@ func (m *Model) validateContractDeps(c *Contract) error {
 		// Utility sources have no dep restrictions; others have legality rules.
 		allowed, known := legalDepTargets[c.Layer]
 		if known && !allowed[target.Layer] {
-			return fmt.Errorf("projectmodel: contract %s (%s) dep %q → %s (%s): layer rule violation", c.Key, c.Layer, d.Name, d.Component, target.Layer)
+			probs = append(probs, problem(path, CodeDepTarget, "contract %s (%s) dep %q -> %s (%s): layer rule violation", c.Key, c.Layer, d.Name, d.Component, target.Layer))
 		}
 	}
-	return nil
+	return probs
 }
 
-// validateRelationships checks rule 3: every systemDesign relationship
-// endpoint resolves to a SystemComponent ID.
-func (m *Model) validateRelationships() error {
-	ids := make(map[string]bool, len(m.System.Components))
-	for _, sc := range m.System.Components {
+// systemProblems checks rule 3: every systemDesign relationship endpoint resolves to a
+// SystemComponent ID.
+func systemProblems(s *System) Problems {
+	ids := make(map[string]bool, len(s.Components))
+	for _, sc := range s.Components {
 		ids[sc.ID] = true
 	}
-	for _, r := range m.System.Relationships {
+	var probs Problems
+	for i, r := range s.Relationships {
 		if !ids[r.From] || !ids[r.To] {
-			return fmt.Errorf("projectmodel: relationship %s→%s: unresolved endpoint", r.From, r.To)
+			probs = append(probs, problem(fmt.Sprintf("systemDesign.relationships[%d]", i), CodeRelEnds, "relationship %s -> %s: unresolved endpoint", r.From, r.To))
 		}
 	}
-	return nil
+	return probs
+}
+
+// ValidateSystem parses a systemDesign slot model and reports every problem in it.
+func ValidateSystem(raw json.RawMessage) Problems {
+	s, err := ParseSystem(raw)
+	if err != nil {
+		return Problems{problem("systemDesign", CodeDecode, "systemDesign slot: %v", err)}
+	}
+	return systemProblems(s)
 }
 
 // validateComponentJoins checks rule 4 (warn-level): every non-stub contract

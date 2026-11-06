@@ -20,7 +20,7 @@ func deployDoc(contracts, deployment string) []byte {
 
 // fooAccessContract is a minimal valid ResourceAccess contract, keyed
 // "fooAccess", used as a resolvable binding target.
-const fooAccessContract = `{"fooAccess":{"component":"fooAccess","layer":"ResourceAccess","interface":{"name":"FooAccess"}}}`
+const fooAccessContract = `{"fooAccess":{"component":"fooAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/foo","interface":{"name":"FooAccess","operations":[{"name":"Get","params":null,"error":true}]}}}`
 
 // TestLoadArchistratorFixtureEmptyDeploymentExtras pins that the archistrator
 // fixture — which carries the legacy deployment (deliveryStyle/containers/

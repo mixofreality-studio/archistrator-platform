@@ -9767,23 +9767,24 @@
     "artifactRenderingAccess": {
       "component": "artifactRenderingAccess",
       "layer": "Engine",
+      "goPackage": "internal/engine/artifactrendering",
       "title": "artifactRenderingAccess contract",
       "interface": {
         "name": "ArtifactRenderingAccess",
         "layer": "engine",
         "operations": [
           {
-            "name": "renderSystem",
+            "name": "RenderSystem",
             "params": null,
             "error": true
           },
           {
-            "name": "renderUseCase",
+            "name": "RenderUseCase",
             "params": null,
             "error": true
           },
           {
-            "name": "renderArtifact",
+            "name": "RenderArtifact",
             "params": null,
             "error": true
           }
@@ -9793,6 +9794,7 @@
     "artifactValidationEngine": {
       "component": "artifactValidationEngine",
       "layer": "Engine",
+      "goPackage": "internal/engine/artifactvalidation",
       "title": "artifactValidationEngine contract",
       "interface": {
         "name": "ArtifactValidationEngine",
@@ -19269,6 +19271,7 @@
     "systemDesignEngine": {
       "component": "systemDesignEngine",
       "layer": "Engine",
+      "goPackage": "internal/engine/systemdesign",
       "title": "systemDesignEngine contract",
       "interface": {
         "name": "SystemDesignEngine",

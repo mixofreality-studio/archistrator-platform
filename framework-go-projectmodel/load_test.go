@@ -58,7 +58,7 @@ func TestLoadToleratesEmptySlotsMap(t *testing.T) {
 				"goPackage": "internal/engine/foo",
 				"title": "foo contract",
 				"$defs": {},
-				"interface": {"name": "FooEngine", "layer": "Engine", "operations": []}
+				"interface": {"name": "FooEngine", "layer": "Engine", "operations": [{"name": "Do", "params": null, "error": true}]}
 			}
 		},
 		"slots": {}
@@ -85,7 +85,7 @@ func TestCanonicalLayer(t *testing.T) {
 		if !ok || got != want {
 			t.Errorf("CanonicalLayer(%q) = %q, %v; want %q", in, got, ok, want)
 		}
-		if _, err := Load([]byte(`{"serviceContracts":{"x":{"layer":"` + got + `","goPackage":"internal/x","interface":{"name":"X","operations":[]}}}}`)); err != nil {
+		if _, err := Load([]byte(`{"serviceContracts":{"x":{"layer":"` + got + `","goPackage":"internal/x","interface":{"name":"X","operations":[{"name":"Do","params":null,"error":true}]}}}}`)); err != nil {
 			t.Errorf("Load refuses the canonical %q: %v", got, err)
 		}
 	}

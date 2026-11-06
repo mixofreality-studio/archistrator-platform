@@ -1,0 +1,12 @@
+{
+  "component": "messageBus",
+  "layer": "ResourceAccess",
+  "goPackage": "internal/resourceaccess/messagebus",
+  "title": "messageBus contract",
+  "$defs": {},
+  "interface": {
+    "name": "MessageBusAccess",
+    "layer": "ResourceAccess",
+    "operations": []
+  }
+}

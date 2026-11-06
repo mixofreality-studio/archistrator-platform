@@ -1,0 +1,15 @@
+{
+  "component": "messageBus",
+  "layer": "Engine",
+  "goPackage": "internal/engine/messagebus",
+  "title": "messageBus contract",
+  "goPackge": "internal/engine/typo",
+  "$defs": {},
+  "interface": {
+    "name": "MessageBusEngine",
+    "layer": "Engine",
+    "operations": [
+      { "name": "Publish", "params": null, "error": true, "returns": "nothing" }
+    ]
+  }
+}

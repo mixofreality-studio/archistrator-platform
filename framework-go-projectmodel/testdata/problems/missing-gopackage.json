@@ -1,0 +1,13 @@
+{
+  "component": "messageBus",
+  "layer": "Engine",
+  "title": "messageBus contract",
+  "$defs": {},
+  "interface": {
+    "name": "MessageBusEngine",
+    "layer": "Engine",
+    "operations": [
+      { "name": "Publish", "params": null, "error": true }
+    ]
+  }
+}
