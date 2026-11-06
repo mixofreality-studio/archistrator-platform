@@ -178,7 +178,7 @@ func (sc tpScope) stepFindings(stim scenario.Stimulus, st StepBinding) []Finding
 	out = append(out, uiDialectFindings(st, cop, section, sc.l)...)
 	proved, pf := sc.probeFindings(section, st.Probes)
 	out = append(out, pf...)
-	return append(out, sc.stateFindings(section, stim, st, proved)...)
+	return append(out, sc.stateFindings(section, stim, proved)...)
 }
 
 // probeFindings is TP-PROBE: every probe names a designed operation and supplies its
@@ -208,13 +208,10 @@ func (sc tpScope) probeFindings(section string, probes []Probe) (map[string]bool
 	return proved, out
 }
 
-// stateFindings is TP-STATE: every expected state on the stimulus has a probe For its
-// node; every expected output has a probe or an Unobservable declaration.
-func (sc tpScope) stateFindings(section string, stim scenario.Stimulus, st StepBinding, proved map[string]bool) []Finding {
-	unobs := make(map[string]bool, len(st.Unobservable))
-	for _, u := range st.Unobservable {
-		unobs[u] = true
-	}
+// stateFindings is TP-STATE: every expected state and every expected output on the
+// stimulus has a probe For its node. There is no unobservable escape (binding
+// model v2): an output no probe can observe is a design defect.
+func (sc tpScope) stateFindings(section string, stim scenario.Stimulus, proved map[string]bool) []Finding {
 	var out []Finding
 	for _, es := range stim.ExpectedStates {
 		if !proved[es.Node] {
@@ -222,8 +219,8 @@ func (sc tpScope) stateFindings(section string, stim scenario.Stimulus, st StepB
 		}
 	}
 	for _, eo := range stim.ExpectedOutputs {
-		if !proved[eo.Node] && !unobs[eo.Node] {
-			out = append(out, tpFinding(ruleTPState, sc.l, "%s: expected output %q (node %s) has neither a probe nor an unobservable declaration", section, eo.Label, eo.Node))
+		if !proved[eo.Node] {
+			out = append(out, tpFinding(ruleTPState, sc.l, "%s: expected output %q (node %s) has no probe", section, eo.Label, eo.Node))
 		}
 	}
 	return out
@@ -588,7 +585,11 @@ func argTypeFinding(in TestArg, p ContractParam, contract ServiceContract, op Co
 		return nil
 	}
 	paramKind := schemaKind(p.Schema, contract.Defs)
-	valueKind := jsonValueKind(in.Value)
+	lit, isLiteral := in.Value.(LiteralValue)
+	if !isLiteral {
+		return nil // a ref resolves at run time: indeterminate here
+	}
+	valueKind := rawJSONKind(lit.JSON)
 	if !kindsConflict(paramKind, valueKind) {
 		return nil
 	}
@@ -754,6 +755,29 @@ func jsonValueKind(value string) kindClass {
 	}
 }
 
+// rawJSONKind classifies a literal's JSON value (the v2 form: real JSON, never a
+// bare scalar); a JSON null or unparsable input is indeterminate.
+func rawJSONKind(raw json.RawMessage) kindClass {
+	var v any
+	if err := json.Unmarshal(raw, &v); err != nil {
+		return kindClassUnknown
+	}
+	switch v.(type) {
+	case map[string]any:
+		return kindClassObject
+	case []any:
+		return kindClassArray
+	case string:
+		return kindClassString
+	case float64:
+		return kindClassNumber
+	case bool:
+		return kindClassBoolean
+	default:
+		return kindClassUnknown
+	}
+}
+
 // ---- browser dialect (uidialect.go) ----
 
 // uiDialectFindings holds a browser operation's step to the dialect: each input bound
@@ -768,7 +792,11 @@ func uiDialectFindings(st StepBinding, op ContractOperation, section string, l *
 		if !actionParams[in.Name] {
 			continue
 		}
-		if _, err := ParseUIAction(in.Value); err != nil {
+		lit, isLiteral := in.Value.(LiteralValue)
+		if !isLiteral {
+			continue // a ref resolves at run time
+		}
+		if _, err := ParseUIAction(string(lit.JSON)); err != nil {
 			out = append(out, tpFinding(ruleTPArgType, l, "%s: input %q: %v", section, in.Name, err))
 		}
 	}

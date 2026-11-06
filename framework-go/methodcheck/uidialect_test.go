@@ -91,7 +91,7 @@ func asBrowserStep(t *testing.T, p Project, action, observation string) {
 	sc.Interface.Operations[0].Result = json.RawMessage(`{"$ref":"#/$defs/UIObservation"}`)
 	p.ServiceContracts["billingManager"] = sc
 	b := binding(t, p, "billingManager", "process-order-P2")
-	b.Steps[0].Inputs = []TestArg{{Name: "action", Value: action}}
+	b.Steps[0].Inputs = []TestArg{{Name: "action", Value: lit(action)}}
 	b.Steps[0].Expect = TestExpect{Result: observation}
 }
 

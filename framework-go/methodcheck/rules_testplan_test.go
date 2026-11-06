@@ -206,7 +206,7 @@ func TestTP_StepOp_UnresolvedDerivedAcceptsBinding(t *testing.T) {
 func TestTP_ArgName_UnknownAndMissing(t *testing.T) {
 	p := loadProject(t, "tp_clean.json")
 	b := binding(t, p, "billingManager", "process-order-P2")
-	b.Steps[0].Inputs = []TestArg{{Name: "invoiceId", Value: "inv-1"}, {Name: "amt", Value: "1"}}
+	b.Steps[0].Inputs = []TestArg{{Name: "invoiceId", Value: lit("inv-1")}, {Name: "amt", Value: lit("1")}}
 	wantRules(t, runTP(t, p), ruleTPArgName, 2) // amt unknown, amount missing
 }
 
@@ -223,7 +223,7 @@ func TestTP_ArgName_PointerParamOptional(t *testing.T) {
 func TestTP_ArgType_StringForInteger(t *testing.T) {
 	p := loadProject(t, "tp_clean.json")
 	b := binding(t, p, "billingManager", "process-order-P2")
-	b.Steps[0].Inputs[1].Value = "twelve hundred"
+	b.Steps[0].Inputs[1].Value = lit("twelve hundred")
 	wantRules(t, runTP(t, p), ruleTPArgType, 1)
 }
 
@@ -237,7 +237,7 @@ func TestTP_ArgType_SchemaRefMismatch(t *testing.T) {
 func TestTP_ArgType_ObjectForScalar(t *testing.T) {
 	p := loadProject(t, "tp_clean.json")
 	b := binding(t, p, "billingManager", "process-order-P2")
-	b.Steps[0].Inputs[0].Value = `{"id":"inv-1"}`
+	b.Steps[0].Inputs[0].Value = lit(`{"id":"inv-1"}`)
 	wantRules(t, runTP(t, p), ruleTPArgType, 1)
 }
 
@@ -247,9 +247,9 @@ func TestTP_ArgType_ObjectForScalar(t *testing.T) {
 func TestTP_ArgType_AmbiguousScalarsAreSilent(t *testing.T) {
 	p := loadProject(t, "tp_clean.json")
 	b := binding(t, p, "billingManager", "process-order-P2")
-	b.Steps[0].Inputs[0].Value = "42"
+	b.Steps[0].Inputs[0].Value = lit("42")
 	wantRules(t, runTP(t, p), ruleTPArgType, 0)
-	b.Steps[0].Inputs[1].Value = `"42"`
+	b.Steps[0].Inputs[1].Value = lit(`"42"`)
 	wantRules(t, runTP(t, p), ruleTPArgType, 1)
 }
 
@@ -294,7 +294,7 @@ func TestTP_Probe_UnknownComponent(t *testing.T) {
 func TestTP_Probe_ArgsChecked(t *testing.T) {
 	p := loadProject(t, "tp_clean.json")
 	b := binding(t, p, "billingManager", "process-order-P2")
-	b.Steps[0].Probes[0].Inputs = []TestArg{{Name: "invoice", Value: "inv-1"}}
+	b.Steps[0].Probes[0].Inputs = []TestArg{{Name: "invoice", Value: lit("inv-1")}}
 	wantRules(t, runTP(t, p), ruleTPProbe, 2) // invoice unknown, invoiceId missing
 }
 
@@ -309,15 +309,26 @@ func TestTP_State_UnprovedExpectedState(t *testing.T) {
 	}
 }
 
-func TestTP_State_OutputNeedsProbeOrUnobservable(t *testing.T) {
+func TestTP_State_OutputNeedsProbe(t *testing.T) {
 	p := loadProject(t, "tp_clean.json")
 	b := binding(t, p, "orderManager", "process-order-P2")
-	b.Steps[0].Unobservable = nil
-	fs := runTP(t, p)
-	wantRules(t, fs, ruleTPState, 1)
+	var kept []Probe
+	var send Probe
+	for _, pr := range b.Steps[0].Probes {
+		if pr.For == "send-invoice" {
+			send = pr
+			continue
+		}
+		kept = append(kept, pr)
+	}
+	if send.For == "" {
+		t.Fatal("fixture must carry a probe for send-invoice (v2 has no unobservable escape)")
+	}
+	b.Steps[0].Probes = kept
+	wantRules(t, runTP(t, p), ruleTPState, 1)
 	b.Steps[0].Probes = append(b.Steps[0].Probes, Probe{
 		For: "send-invoice", Component: "billingManager", Operation: "GetInvoice",
-		Inputs: []TestArg{{Name: "invoiceId", Value: "inv-o-2"}},
+		Inputs: []TestArg{{Name: "invoiceId", Value: lit("inv-o-2")}},
 	})
 	wantRules(t, runTP(t, p), ruleTPState, 0)
 }

@@ -707,6 +707,9 @@ type ContractOperation struct {
 	Params []ContractParam `json:"params"`
 	Result json.RawMessage `json:"result,omitempty"`
 	Error  bool            `json:"error"`
+	// ReadOnly marks an operation that observes without changing state: only a
+	// read-only operation may serve as a probe.
+	ReadOnly bool `json:"readOnly"`
 }
 
 // ContractParam is one operation parameter. Schema is a JSON Schema node (raw) —
@@ -728,16 +731,27 @@ type PhaseArtifacts struct {
 }
 
 // TestPlanRecord is one component's test plan: a binding per derived scenario
-// (scenario ids come from framework-go/scenario — see DeriveScenarios).
+// (scenario ids come from framework-go/scenario — see DeriveScenarios) plus the
+// principals the bindings act as. The record decodes strictly (bindings.go): a
+// field the model does not carry — the removed `hook` and `unobservable` — is a
+// decode error naming the field.
 type TestPlanRecord struct {
-	Component string            `json:"component"`
-	Bindings  []ScenarioBinding `json:"bindings"`
+	Component  string                   `json:"component"`
+	Principals map[string]TestPrincipal `json:"principals"`
+	Bindings   []ScenarioBinding        `json:"bindings"`
+}
+
+// TestPrincipal is one named actor identity a binding runs as.
+type TestPrincipal struct {
+	Subject string   `json:"subject"`
+	Roles   []string `json:"roles"`
 }
 
 // ScenarioBinding binds one derived scenario to concrete steps, or skips it until a
-// named activity lands.
+// named activity lands. Arrange is the typed setup run before the first step.
 type ScenarioBinding struct {
 	Scenario string        `json:"scenario"`
+	Arrange  []ArrangeCall `json:"arrange"`
 	Steps    []StepBinding `json:"steps"`
 	Skip     *SkipReason   `json:"skip"`
 }
@@ -749,16 +763,15 @@ type SkipReason struct {
 }
 
 // StepBinding is one bound stimulus: the operation it drives, its concrete inputs
-// and expected outcome, the probes that observe downstream effects, the outputs the
-// agent declares unobservable, and whether the step runs through a hand-written hook.
+// and expected outcome, the probes that observe downstream effects, and, when set,
+// the state asserted before the action (the differential's pre-state).
 type StepBinding struct {
-	Seq          int        `json:"seq"`
-	Operation    string     `json:"operation"`
-	Inputs       []TestArg  `json:"inputs"`
-	Expect       TestExpect `json:"expect"`
-	Probes       []Probe    `json:"probes"`
-	Unobservable []string   `json:"unobservable"`
-	Hook         bool       `json:"hook"`
+	Seq       int         `json:"seq"`
+	Operation string      `json:"operation"`
+	Inputs    []TestArg   `json:"inputs"`
+	Expect    TestExpect  `json:"expect"`
+	Probes    []Probe     `json:"probes"`
+	Before    *TestExpect `json:"before,omitempty"`
 }
 
 // Probe observes one expected output/state (For = the scenario node id) by calling
@@ -769,13 +782,6 @@ type Probe struct {
 	Operation string     `json:"operation"`
 	Inputs    []TestArg  `json:"inputs"`
 	Expect    TestExpect `json:"expect"`
-}
-
-// TestArg is one concrete input argument to a step's operation call.
-type TestArg struct {
-	Name      string `json:"name"`
-	Value     string `json:"value"`
-	SchemaRef string `json:"schemaRef,omitempty"`
 }
 
 // TestExpect is a step's expected outcome: a result value OR an expected error.
