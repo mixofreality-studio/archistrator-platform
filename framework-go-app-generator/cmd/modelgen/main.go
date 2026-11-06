@@ -81,11 +81,8 @@ func run(args []string, errOut io.Writer) error {
 		}
 		o.module = module
 	}
-	raw, err := os.ReadFile(o.project) // #nosec G304 G703 -- the CLI's own argument; no trust boundary
+	raw, err := cli.ReadAdmitted(o.project) // the one loader: every problem, before any emission
 	if err != nil {
-		return err
-	}
-	if err := cli.Admit(raw); err != nil { // the one loader: every problem, before any emission
 		return err
 	}
 	only, err := selectContracts(raw, o)

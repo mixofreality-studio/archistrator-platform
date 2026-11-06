@@ -73,11 +73,8 @@ func run(args []string, out, errOut io.Writer) error {
 		}
 		o.module = m
 	}
-	raw, err := os.ReadFile(o.project)
+	raw, err := cli.ReadAdmitted(o.project) // the one loader: every problem, before any emission
 	if err != nil {
-		return fmt.Errorf("testgen: %w", err)
-	}
-	if err := cli.Admit(raw); err != nil { // the one loader: every problem, before any emission
 		return err
 	}
 	gen, err := testgen.Generate(raw, testgen.Config{ModulePath: o.module, UITestsDir: filepath.ToSlash(o.uitests)})
