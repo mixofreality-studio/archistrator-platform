@@ -16,10 +16,10 @@ import (
 func TestExternalHTTPHookSeedReadsTheDeclaredEndpoint(t *testing.T) {
 	m, err := projectmodel.Load([]byte(`{"serviceContracts":{
 	"identityAccess":{"component":"identityAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/identity","infra":["ExternalHTTP"],"$defs":{"T":{"type":"string"}},
-	  "interface":{"name":"IdentityAccess","layer":"resourceaccess","operations":[]}},
+	  "interface":{"name":"IdentityAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}},
 	"listManager":{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list","$defs":{"T":{"type":"string"}},
 	  "deps":[{"name":"client","goType":"client.Client","goImport":"go.temporal.io/sdk/client"},{"name":"identity","component":"identityAccess"}],
-	  "interface":{"name":"ListManager","layer":"manager","operations":[]}}}}`))
+	  "interface":{"name":"ListManager","layer":"manager","operations":[{"name":"Ping","params":[],"error":false}]}}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}

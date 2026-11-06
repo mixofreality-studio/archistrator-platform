@@ -70,8 +70,8 @@ func TestGenerateArchistratorFidelity(t *testing.T) {
 		t.Fatalf("generate: %v", err)
 	}
 
-	if len(got) != 22 {
-		t.Errorf("Generate returned %d files, want 22 (entries with goPackage)", len(got))
+	if len(got) != 25 {
+		t.Errorf("Generate returned %d files, want 25 (entries with goPackage)", len(got))
 	}
 	for goPkg, src := range got {
 		if _, err := parser.ParseFile(token.NewFileSet(), goPkg, src, parser.AllErrors); err != nil {

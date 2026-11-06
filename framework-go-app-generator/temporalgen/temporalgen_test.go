@@ -366,7 +366,7 @@ func TestGenerateUtilityDepBecomesActivity(t *testing.T) {
 func TestActivitiesImportOnlyWhatTheyUse(t *testing.T) {
 	const project = `{"serviceContracts":{
 	"m":{"component":"m","layer":"Manager","goPackage":"internal/manager/m","$defs":{"T":{"type":"string"}},"deps":[{"name":"dep","component":"d"}],
-	  "interface":{"name":"MManager","layer":"manager","operations":[]}},
+	  "interface":{"name":"MManager","layer":"manager","operations":[{"name":"Ping","params":[],"error":false}]}},
 	"d":{"component":"d","layer":"LAYER","goPackage":"internal/x/d","$defs":{"T":{"type":"string"}},
 	  "interface":{"name":"D","layer":"x","operations":[{"name":"Now","params":[],"result":{"type":"integer"},"error":false},{"name":"Tick","params":[],"error":false}]}}}}`
 	for _, layer := range []string{"Engine", "Utility"} {
@@ -403,12 +403,12 @@ func TestActivitiesImportOnlyWhatTheyUse(t *testing.T) {
 func TestWorkerWithNoActivityImportsNoActivityPackage(t *testing.T) {
 	const engineOnly = `{"serviceContracts":{
 	"m":{"component":"m","layer":"Manager","goPackage":"internal/manager/m","$defs":{"T":{"type":"string"}},"deps":[{"name":"rules","component":"e"}],
-	  "interface":{"name":"MManager","layer":"manager","operations":[]}},
+	  "interface":{"name":"MManager","layer":"manager","operations":[{"name":"Ping","params":[],"error":false}]}},
 	"e":{"component":"e","layer":"Engine","goPackage":"internal/engine/e","$defs":{"T":{"type":"string"}},
 	  "interface":{"name":"E","layer":"engine","operations":[{"name":"Judge","params":[],"result":{"type":"string"},"error":true}]}}}}`
 	const noDeps = `{"serviceContracts":{
 	"m":{"component":"m","layer":"Manager","goPackage":"internal/manager/m","$defs":{"T":{"type":"string"}},
-	  "interface":{"name":"MManager","layer":"manager","operations":[]}}}}`
+	  "interface":{"name":"MManager","layer":"manager","operations":[{"name":"Ping","params":[],"error":false}]}}}}`
 	for name, project := range map[string]string{"engine-only": engineOnly, "no deps": noDeps} {
 		m, err := projectmodel.Load([]byte(project))
 		if err != nil {

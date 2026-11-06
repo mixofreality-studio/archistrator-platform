@@ -107,7 +107,7 @@ func ValidateContract(key string, raw json.RawMessage) Problems {
 	for i, d := range meta.Deps {
 		probs = append(probs, objectFields(fmt.Sprintf("%s.deps[%d]", base, i), d, depFields)...)
 	}
-	emitsGo := meta.GoPackage != "" && !meta.Stub
+	emitsGo := !meta.Stub && (meta.GoPackage != "" || isJoinableLayer(meta.Layer))
 	return append(probs, interfaceProblems(base+".interface", key, top["interface"], emitsGo)...)
 }
 

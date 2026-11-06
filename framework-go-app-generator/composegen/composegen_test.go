@@ -675,12 +675,12 @@ func composeProject(utilityInfra, utilityBinding, extra string) string {
 	"pubSub":{"component":"pubSub","layer":"Utility","goPackage":"internal/utility/pubsub",` + utilityInfra + `"$defs":{"T":{"type":"string"}},
 	  "interface":{"name":"PubSub","layer":"utility","operations":[{"name":"Publish","params":[{"name":"topic","schema":{"type":"string"}}]}]}},
 	"priceEngine":{"component":"priceEngine","layer":"Engine","goPackage":"internal/engine/price","$defs":{"T":{"type":"string"}},
-	  "interface":{"name":"PriceEngine","layer":"engine","operations":[]}},
+	  "interface":{"name":"PriceEngine","layer":"engine","operations":[{"name":"Ping","params":[],"error":false}]}},
 	"todoAccess":{"component":"todoAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"$defs":{"T":{"type":"string"}},
-	  "interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[]}},
+	  "interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}},
 	"listManager":{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list","$defs":{"T":{"type":"string"}},
 	  "deps":[{"name":"price","component":"priceEngine"},{"name":"todos","component":"todoAccess"},{"name":"bus","component":"pubSub"}],
-	  "interface":{"name":"ListManager","layer":"manager","operations":[]}}` + extra + `},
+	  "interface":{"name":"ListManager","layer":"manager","operations":[{"name":"Ping","params":[],"error":false}]}}` + extra + `},
 	"slots":{"6":{"kind":6,"model":{"deployment":{"deliveryStyle":"cloud","containers":[{"key":"server","name":"server","components":["listManager"]}],
 	  "infrastructure":[{"key":"db","substrate":"postgres","profiles":["local"],"presence":"required"},{"key":"bus","substrate":"temporal","profiles":["local"],"presence":"required"}],
 	  "environments":[{"title":"Local","profile":"local"}],
@@ -724,8 +724,8 @@ func TestInfraBoundUtilityTakesItsBinding(t *testing.T) {
 // the root compiling while its Manager is still ahead in the plan.
 func TestPureComponentNoManagerTakesIsLeftOut(t *testing.T) {
 	src := composeMain(t, composeProject("", "", `,
-	"auditEngine":{"component":"auditEngine","layer":"Engine","goPackage":"internal/engine/audit","$defs":{"T":{"type":"string"}},"interface":{"name":"AuditEngine","layer":"engine","operations":[]}},
-	"clock":{"component":"clock","layer":"Utility","goPackage":"internal/utility/clock","$defs":{"T":{"type":"string"}},"interface":{"name":"Clock","layer":"utility","operations":[]}}`))
+	"auditEngine":{"component":"auditEngine","layer":"Engine","goPackage":"internal/engine/audit","$defs":{"T":{"type":"string"}},"interface":{"name":"AuditEngine","layer":"engine","operations":[{"name":"Ping","params":[],"error":false}]}},
+	"clock":{"component":"clock","layer":"Utility","goPackage":"internal/utility/clock","$defs":{"T":{"type":"string"}},"interface":{"name":"Clock","layer":"utility","operations":[{"name":"Ping","params":[],"error":false}]}}`))
 	for _, absent := range []string{"audit", "clock"} {
 		if strings.Contains(src, absent) {
 			t.Errorf("main.gen.go constructs %s, which nothing takes:\n%s", absent, src)

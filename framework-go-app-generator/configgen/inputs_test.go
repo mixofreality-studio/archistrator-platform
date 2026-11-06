@@ -16,11 +16,11 @@ func freshModel(t *testing.T) *projectmodel.Model {
 	t.Helper()
 	m, err := projectmodel.Load([]byte(`{"serviceContracts":{
 	"listManager":{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list","$defs":{"T":{"type":"string"}},
-	  "interface":{"name":"ListManager","layer":"manager","operations":[]}},
+	  "interface":{"name":"ListManager","layer":"manager","operations":[{"name":"Ping","params":[],"error":false}]}},
 	"todoAccess":{"component":"todoAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"$defs":{"T":{"type":"string"}},
-	  "interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[]}},
+	  "interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}},
 	"identityAccess":{"component":"identityAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/identity","infra":["ExternalHTTP"],"$defs":{"T":{"type":"string"}},
-	  "interface":{"name":"IdentityAccess","layer":"resourceaccess","operations":[]}}}}`))
+	  "interface":{"name":"IdentityAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}

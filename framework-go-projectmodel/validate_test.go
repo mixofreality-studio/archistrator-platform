@@ -36,6 +36,17 @@ func TestValidateContract_UnexportedOpName(t *testing.T) {
 	}
 }
 
+// A built joinable-layer contract is Go-emitting by definition, so a missing goPackage must not hide
+// its unexported operation names: both problems surface in one pass.
+func TestValidateContract_MissingGoPackageStillReportsUnexportedOps(t *testing.T) {
+	raw := json.RawMessage(`{"component":"artifactRenderingAccess","layer":"Engine","title":"t","$defs":{},
+		"interface":{"name":"ArtifactRenderingAccess","layer":"engine","operations":[{"name":"renderSystem","params":null,"error":true}]}}`)
+	probs := ValidateContract("artifactRenderingAccess", raw)
+	if !probs.Has(CodeGoPackageMissing) || !probs.Has(CodeOpUnexported) {
+		t.Fatalf("want both %s and %s in one pass, got %v", CodeGoPackageMissing, CodeOpUnexported, probs)
+	}
+}
+
 // A client or utility contract is not emitted as Go, so its operation names are not Go identifiers.
 func TestValidateContract_LowercaseOpNameIsFineWhereNoGoIsEmitted(t *testing.T) {
 	raw := json.RawMessage(`{"component":"webClient","layer":"Client","title":"t","$defs":{},

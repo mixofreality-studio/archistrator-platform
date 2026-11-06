@@ -19,11 +19,11 @@ import (
 const freshProject = `{"serviceContracts":{
 	"listManager":{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list",
 	  "deps":[{"name":"client","goType":"client.Client","goImport":"go.temporal.io/sdk/client"},{"name":"todos","component":"todoAccess"},{"name":"identity","component":"identityAccess"}],
-	  "$defs":{"T":{"type":"string"}},"interface":{"name":"ListManager","layer":"manager","operations":[]}},
+	  "$defs":{"T":{"type":"string"}},"interface":{"name":"ListManager","layer":"manager","operations":[{"name":"Ping","params":[],"error":false}]}},
 	"todoAccess":{"component":"todoAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"$defs":{"T":{"type":"string"}},
-	  "interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[]}},
+	  "interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}},
 	"identityAccess":{"component":"identityAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/identity","infra":["ExternalHTTP"],"$defs":{"T":{"type":"string"}},
-	  "interface":{"name":"IdentityAccess","layer":"resourceaccess","operations":[]}}},
+	  "interface":{"name":"IdentityAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}}},
 	"slots":{"5":{"kind":5,"model":{"components":[
 	  {"id":"todo-web-app","name":"TodoWebApp","kind":"client","uiSurface":true},
 	  {"id":"assistant","name":"Assistant","kind":"client","uiSurface":false,"machineProtocol":"mcp"},
@@ -97,7 +97,7 @@ func TestLauncherCoversTheLocalConfigBothWays(t *testing.T) {
 func TestLauncherProvisionsOnlyWhatTheModelDeclares(t *testing.T) {
 	m := freshModel(t, `{"serviceContracts":{"listManager":{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list",
 	  "deps":[{"name":"client","goType":"client.Client","goImport":"go.temporal.io/sdk/client"}],
-	  "$defs":{"T":{"type":"string"}},"interface":{"name":"ListManager","layer":"manager","operations":[]}}}}`)
+	  "$defs":{"T":{"type":"string"}},"interface":{"name":"ListManager","layer":"manager","operations":[{"name":"Ping","params":[],"error":false}]}}}}`)
 	p, err := rungen.Derive(m, cfg)
 	if err != nil {
 		t.Fatal(err)

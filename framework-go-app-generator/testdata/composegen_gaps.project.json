@@ -687,11 +687,18 @@
    "component": "reportingEngine",
    "layer": "Engine",
    "goPackage": null,
+   "stub": true,
    "title": "reportingEngine contract",
    "interface": {
     "name": "ReportingEngine",
     "layer": "engine",
-    "operations": []
+    "operations": [
+     {
+      "name": "Report",
+      "params": [],
+      "error": false
+     }
+    ]
    }
   },
   "ledgerStateAccess": {
@@ -703,7 +710,13 @@
    "interface": {
     "name": "LedgerStateAccess",
     "layer": "resourceaccess",
-    "operations": []
+    "operations": [
+     {
+      "name": "Record",
+      "params": [],
+      "error": false
+     }
+    ]
    }
   },
   "billingEngine": {
@@ -714,7 +727,13 @@
    "interface": {
     "name": "BillingEngine",
     "layer": "engine",
-    "operations": []
+    "operations": [
+     {
+      "name": "Bill",
+      "params": [],
+      "error": false
+     }
+    ]
    }
   },
   "billingManager": {
@@ -725,7 +744,13 @@
    "interface": {
     "name": "BillingManager",
     "layer": "manager",
-    "operations": []
+    "operations": [
+     {
+      "name": "Charge",
+      "params": [],
+      "error": false
+     }
+    ]
    },
    "deps": [
     {

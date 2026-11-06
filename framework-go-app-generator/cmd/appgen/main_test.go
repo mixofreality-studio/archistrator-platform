@@ -11,9 +11,9 @@ import (
 )
 
 const projectDoc = `{"serviceContracts":{
-"todoAccess":{"component":"todoAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"$defs":{"T":{"type":"object"}},"interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[]}},
-"callerAccess":{"component":"callerAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/caller","infra":["ExternalHTTP"],"$defs":{"C":{"type":"object"}},"interface":{"name":"CallerAccess","layer":"resourceaccess","operations":[]}},
-"listManager":{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list","deps":[{"name":"todos","component":"todoAccess"}],"$defs":{"L":{"type":"object"}},"interface":{"name":"ListManager","layer":"manager","operations":[]}}
+"todoAccess":{"component":"todoAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"$defs":{"T":{"type":"object"}},"interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}},
+"callerAccess":{"component":"callerAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/caller","infra":["ExternalHTTP"],"$defs":{"C":{"type":"object"}},"interface":{"name":"CallerAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}},
+"listManager":{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list","deps":[{"name":"todos","component":"todoAccess"}],"$defs":{"L":{"type":"object"}},"interface":{"name":"ListManager","layer":"manager","operations":[{"name":"Ping","params":[],"error":false}]}}
 }}`
 
 func appFixture(t *testing.T, built ...string) (root string, base []string) {
