@@ -50,6 +50,9 @@ const (
 	ruleCCTriggerEvent  RuleID = "CC-TRIGGER-EVENT"
 	ruleCCPathConnected RuleID = "CC-PATH-CONNECTED"
 	ruleCCDecidedBy     RuleID = "CC-DECIDED-BY"
+	// ruleCCDecidedByActorStep: a branch an actor decides is realized by a step in
+	// which that actor calls a Client — the human choice has a surface.
+	ruleCCDecidedByActorStep RuleID = "CC-DECIDED-BY-ACTOR-STEP"
 )
 
 // ccGateSeverity is the correspondence family's gate severity. Advisory
@@ -186,6 +189,7 @@ func (cc ccContext) findings() []Finding {
 	out = append(out, cc.actorEdges()...)
 	out = append(out, cc.actorLane()...)
 	out = append(out, cc.decidedBy()...)
+	out = append(out, cc.decidedByActorStep()...)
 	out = append(out, cc.triggerEvent()...)
 	out = append(out, cc.pathConnected()...)
 	return out
@@ -465,6 +469,42 @@ func (cc ccContext) decidedByResolution(n ActivityNode) (Finding, bool) {
 			n.ID, cc.uc.ID, n.DecidedBy), true
 	}
 	return Finding{}, false
+}
+
+// ---- CC-DECIDED-BY-ACTOR-STEP ----
+
+// decidedByActorStep: a decision/switch an ACTOR decides is a human choice made on
+// a surface, so the view must realize that node with a step in which the actor
+// calls a Client. Without it the choice has no stimulus and the derivation has
+// nothing to drive (RUN-021: the reword Escape path). A component decider needs no
+// actor step, and a decidedBy that resolves to nothing is CC-DECIDED-BY's.
+func (cc ccContext) decidedByActorStep() []Finding {
+	var out []Finding
+	for _, n := range cc.uc.Activity.Nodes {
+		if n.DecidedBy == "" || !ccResolvesBranch(n.Kind) || !cc.actors[n.DecidedBy] {
+			continue
+		}
+		if st, ok := cc.steps[n.ID]; ok && cc.stepCallsClientFrom(st, n.DecidedBy) {
+			continue
+		}
+		out = append(out, ccFinding(ruleCCDecidedByActorStep, cc.ucLoc(),
+			"activity node %q (%s) of use case %s is decided by actor %s, but dynamic view %q has no step for it in which %s calls a Client; realize the actor's choice as an actor→Client call",
+			n.ID, n.Kind, cc.uc.ID, n.DecidedBy, viewLabel(cc.dv), n.DecidedBy))
+	}
+	return out
+}
+
+// stepCallsClientFrom reports whether st has a call from actor to a Client component.
+func (cc ccContext) stepCallsClientFrom(st CallStep, actor string) bool {
+	for _, call := range st.Calls {
+		if call.From != actor {
+			continue
+		}
+		if to, ok := cc.idx[call.To]; ok && to.Kind == kindClient {
+			return true
+		}
+	}
+	return false
 }
 
 // ---- CC-TRIGGER-EVENT ----

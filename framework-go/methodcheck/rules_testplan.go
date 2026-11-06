@@ -267,6 +267,7 @@ func clientContractFindings(p Project) []Finding {
 		return nil
 	}
 	out := labelOpFindings(sys, in)
+	out = append(out, clientContractedFindings(p, sys)...)
 	tools := generatedToolNames(p)
 	for _, c := range sys.Components {
 		switch {
@@ -275,6 +276,30 @@ func clientContractFindings(p Project) []Finding {
 		case c.Kind == kindClient:
 			out = append(out, machineMirrorFindings(in, c, tools)...)
 		}
+	}
+	return out
+}
+
+// ruleTPClientContracted: every Client component has a serviceContracts entry.
+const ruleTPClientContracted RuleID = "TP-CLIENT-CONTRACTED"
+
+// clientContractedFindings is TP-CLIENT-CONTRACTED. A Client with no contract has no
+// operations for a scenario to address, so every stimulus into it is unaddressed and
+// its tests cannot be generated. A contract names a component either by its key or by
+// its `component` field (a facet), compared under scenario.Normalize.
+func clientContractedFindings(p Project, sys System) []Finding {
+	contracted := map[string]bool{}
+	for key, sc := range p.ServiceContracts {
+		contracted[scenario.Normalize(key)] = true
+		contracted[scenario.Normalize(sc.Component)] = true
+	}
+	var out []Finding
+	for _, c := range sys.Components {
+		if c.Kind != kindClient || contracted[scenario.Normalize(c.ID)] {
+			continue
+		}
+		out = append(out, tpFinding(ruleTPClientContracted, loc(0, "component "+c.ID),
+			"client component %q has no serviceContracts entry; every Client's operations are tested through its contract, so record one", c.ID))
 	}
 	return out
 }

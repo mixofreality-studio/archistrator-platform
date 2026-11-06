@@ -104,12 +104,23 @@
           "id": "act",
           "kind": "action",
           "label": "decide the thing"
+         },
+         {
+          "id": "shown",
+          "kind": "sendSignal",
+          "label": "outcome shown",
+          "linkedActorId": "user"
          }
         ],
         "edges": [
          {
           "from": "start",
           "to": "act",
+          "kind": "controlFlow"
+         },
+         {
+          "from": "act",
+          "to": "shown",
           "kind": "controlFlow"
          }
         ]
@@ -139,12 +150,23 @@
           "id": "act",
           "kind": "action",
           "label": "do the other thing"
+         },
+         {
+          "id": "shown",
+          "kind": "sendSignal",
+          "label": "outcome shown",
+          "linkedActorId": "user"
          }
         ],
         "edges": [
          {
           "from": "start",
           "to": "act",
+          "kind": "controlFlow"
+         },
+         {
+          "from": "act",
+          "to": "shown",
           "kind": "controlFlow"
          }
         ]
@@ -231,13 +253,13 @@
           "from": "user",
           "to": "appclient",
           "mode": "sync",
-          "label": ""
+          "label": "DesignDecide"
          },
          {
           "from": "appclient",
           "to": "designmanager",
           "mode": "sync",
-          "label": ""
+          "label": "Decide"
          },
          {
           "from": "designmanager",
@@ -273,13 +295,13 @@
           "from": "user",
           "to": "appclient",
           "mode": "sync",
-          "label": ""
+          "label": "DesignOther"
          },
          {
           "from": "appclient",
           "to": "designmanager",
           "mode": "sync",
-          "label": ""
+          "label": "Other"
          }
         ]
        }
@@ -528,6 +550,50 @@
       "guideline": "g",
       "status": "pass",
       "justification": ""
+     }
+    ]
+   }
+  }
+ },
+ "serviceContracts": {
+  "appclient": {
+   "component": "appclient",
+   "layer": "Client",
+   "title": "client contract",
+   "interface": {
+    "name": "AppClient",
+    "layer": "Client",
+    "operations": [
+     {
+      "name": "DesignDecide",
+      "params": [],
+      "error": true
+     },
+     {
+      "name": "DesignOther",
+      "params": [],
+      "error": true
+     }
+    ]
+   }
+  },
+  "designManager": {
+   "component": "designManager",
+   "layer": "Manager",
+   "title": "design contract",
+   "interface": {
+    "name": "DesignManager",
+    "layer": "Manager",
+    "operations": [
+     {
+      "name": "Decide",
+      "params": [],
+      "error": true
+     },
+     {
+      "name": "Other",
+      "params": [],
+      "error": true
      }
     ]
    }

@@ -46,6 +46,7 @@ func scenarioFindings(p Project) ([]Finding, error) {
 	if err != nil {
 		return nil, err
 	}
+	out = append(out, scenarioProblemFindings(r)...)
 	return append(out, testPlanFindings(p, r.Scenarios)...), nil
 }
 

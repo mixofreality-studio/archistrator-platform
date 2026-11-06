@@ -323,6 +323,7 @@
         "components": [
           {
             "id": "shop-client",
+            "buildStatus": "planned",
             "name": "ShopClient",
             "kind": "client",
             "uiSurface": false,
@@ -442,6 +443,16 @@
     }
   },
   "serviceContracts": {
+    "shopClient": {
+      "component": "shopClient",
+      "layer": "Client",
+      "title": "client contract",
+      "interface": {
+        "name": "ShopClient",
+        "layer": "Client",
+        "operations": []
+      }
+    },
     "orderManager": {
       "component": "orderManager",
       "layer": "Manager",

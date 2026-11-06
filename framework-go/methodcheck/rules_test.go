@@ -497,6 +497,9 @@ func TestValidateArchitecture_Pass(t *testing.T) {
 	// entering the same Client the primary flow uses.
 	second := coreUC("Second")
 	second.UseCase.Actors = []Actor{{ID: "user", Role: "User"}}
+	// UC-OUTCOME-AT-ASKING-SURFACE: the actor who acts on the Client is told the outcome.
+	second.UseCase.Activity.Nodes = append(second.UseCase.Activity.Nodes, ActivityNode{ID: "shown", Kind: kindSendSignal, Label: "outcome shown", LinkedActorID: "user"})
+	second.UseCase.Activity.Edges = append(second.UseCase.Activity.Edges, ActivityEdge{From: "act", To: "shown", Kind: edgeControlFlow})
 	c := CoreUseCases{Decisions: []UseCaseDecision{
 		{UseCase: UseCase{ID: ucID, Name: "Core flow", Classification: classCore}},
 		second,

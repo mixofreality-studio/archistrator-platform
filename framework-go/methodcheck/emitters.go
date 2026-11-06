@@ -48,7 +48,7 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleCCViewUseCase,
 		ruleCCStepNode, ruleCCStepUnique, ruleCCCoverage, ruleCCStepNonempty,
 		ruleCCEndpoint, ruleCCActorEdge, ruleCCActorLane, ruleCCTriggerEvent,
-		ruleCCPathConnected, ruleCCDecidedBy,
+		ruleCCPathConnected, ruleCCDecidedBy, ruleCCDecidedByActorStep,
 
 		// ---- Deployment (rules_deployment.go) ----
 		ruleDepContainerRef, ruleDepMemberExist, ruleDepProfileSet,
@@ -76,6 +76,10 @@ func emittedRuleIDs() map[RuleID]bool {
 
 		// ---- Use-case I/O kinds (rules_usecase_io.go) ----
 		ruleUCIOKinds, ruleUCNoIO, ruleUCStartRedundant,
+
+		// ---- Use-case paths and scenario problems (rules_uc_path.go) ----
+		ruleUCPathOutcome, ruleUCOutcomeAtAskingSurface, ruleUCStartNotAction,
+		ruleSCNUnaddressed, ruleSCNActorPathClient, ruleTPClientContracted,
 	}
 	set := make(map[RuleID]bool, len(ids))
 	for _, id := range ids {
