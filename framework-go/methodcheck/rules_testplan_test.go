@@ -304,8 +304,13 @@ func TestTP_State_UnprovedExpectedState(t *testing.T) {
 	b.Steps[0].Probes = nil
 	fs := runTP(t, p)
 	wantRules(t, fs, ruleTPState, 1)
-	if !strings.Contains(fs[0].Message, "pay-paid") || !strings.Contains(fs[0].Message, "[paid]") {
-		t.Fatalf("TP-STATE must name the node and state: %s", fs[0].Message)
+	for _, f := range fs {
+		if f.RuleID != ruleTPState {
+			continue // the now-empty step is TP-EXPECT-REQUIRED's
+		}
+		if !strings.Contains(f.Message, "pay-paid") || !strings.Contains(f.Message, "[paid]") {
+			t.Fatalf("TP-STATE must name the node and state: %s", f.Message)
+		}
 	}
 }
 

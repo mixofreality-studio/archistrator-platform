@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // Binding model v2 (FPC plan 2). The sum types below are hand-written in the shape
@@ -272,10 +273,20 @@ func (r *TestPlanRecord) UnmarshalJSON(raw []byte) error {
 	type plain TestPlanRecord // drops this method; nested types keep theirs
 	var v plain
 	if err := strictUnmarshal(raw, &v); err != nil {
+		if removedHookField(err) {
+			return fmt.Errorf("%s: test plan: %w", ruleTPHook, err)
+		}
 		return fmt.Errorf("test plan: %w", err)
 	}
 	*r = TestPlanRecord(v)
 	return nil
+}
+
+// removedHookField reports a decode error caused by one of the fields binding model v2
+// removed: `hook` and `unobservable`. Those are TP-HOOK's.
+func removedHookField(err error) bool {
+	msg := err.Error()
+	return strings.Contains(msg, `unknown field "hook"`) || strings.Contains(msg, `unknown field "unobservable"`)
 }
 
 // ---- envelope helpers ----

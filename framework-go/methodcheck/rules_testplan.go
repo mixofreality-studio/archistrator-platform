@@ -57,6 +57,7 @@ func testPlanFindings(p Project, all []scenario.Scenario) []Finding {
 	if p.PhaseArtifacts == nil {
 		return out
 	}
+	env := newTPEnv(p)
 	comps := make([]string, 0, len(p.PhaseArtifacts.TestPlan))
 	for comp := range p.PhaseArtifacts.TestPlan {
 		comps = append(comps, comp)
@@ -69,7 +70,7 @@ func testPlanFindings(p Project, all []scenario.Scenario) []Finding {
 			continue
 		}
 		rec := p.PhaseArtifacts.TestPlan[comp]
-		out = append(out, componentPlanFindings(p, comp, rec, scenario.ForComponentAs(all, comp, contractOf(comp, sc).Client))...)
+		out = append(out, componentPlanFindings(p, env, comp, rec, scenario.ForComponentAs(all, comp, contractOf(comp, sc).Client))...)
 	}
 	return out
 }
@@ -96,13 +97,14 @@ func planKeyFinding(p Project, comp string) Finding {
 
 // componentPlanFindings is TP-BOUND over one component's plan (every projected
 // scenario bound exactly once, no unknown ids) plus the per-binding rules.
-func componentPlanFindings(p Project, comp string, rec TestPlanRecord, projected []scenario.Scenario) []Finding {
+func componentPlanFindings(p Project, env tpEnv, comp string, rec TestPlanRecord, projected []scenario.Scenario) []Finding {
 	l := loc(0, "phaseArtifacts.testPlan."+comp)
 	byID := make(map[string]scenario.Scenario, len(projected))
 	for _, s := range projected {
 		byID[s.ID] = s
 	}
 	bound := map[string]bool{}
+	var live []scenario.Scenario // bound and not skipped: the scenarios that will run
 	var out []Finding
 	for _, b := range rec.Bindings {
 		s, ok := byID[b.Scenario]
@@ -115,8 +117,18 @@ func componentPlanFindings(p Project, comp string, rec TestPlanRecord, projected
 			continue
 		}
 		bound[b.Scenario] = true
-		out = append(out, bindingFindings(p, comp, s, b, l)...)
+		if b.Skip == nil {
+			live = append(live, s)
+		}
+		out = append(out, bindingFindings(p, env, comp, s, b, l)...)
 	}
+	out = append(out, unboundFindings(comp, projected, bound, l)...)
+	return append(out, principalFindings(env, comp, rec, live, l)...)
+}
+
+// unboundFindings is the TP-BOUND half that names every projected scenario with no binding.
+func unboundFindings(comp string, projected []scenario.Scenario, bound map[string]bool, l *Location) []Finding {
+	var out []Finding
 	for _, s := range projected {
 		if !bound[s.ID] {
 			out = append(out, tpFinding(ruleTPBound, l, "%s has no binding for scenario %s", comp, s.ID))
@@ -127,7 +139,7 @@ func componentPlanFindings(p Project, comp string, rec TestPlanRecord, projected
 
 // bindingFindings checks one binding: a skip (TP-SKIP) or the step list (TP-STEP
 // cardinality, then every step).
-func bindingFindings(p Project, comp string, s scenario.Scenario, b ScenarioBinding, l *Location) []Finding {
+func bindingFindings(p Project, env tpEnv, comp string, s scenario.Scenario, b ScenarioBinding, l *Location) []Finding {
 	if b.Skip != nil {
 		return skipFindings(p, comp, b, l)
 	}
@@ -135,8 +147,8 @@ func bindingFindings(p Project, comp string, s scenario.Scenario, b ScenarioBind
 		return []Finding{tpFinding(ruleTPStep, l, "%s %s: %d steps bound, %d stimuli projected", comp, s.ID, len(b.Steps), len(s.Stimuli))}
 	}
 	contract, op := findContract(p, comp)
-	sc := tpScope{p: p, comp: comp, scenario: s.ID, contract: contract, op: op, l: l}
-	var out []Finding
+	sc := tpScope{p: p, env: env, comp: comp, scenario: s.ID, scn: s, steps: b.Steps, contract: contract, op: op, web: env.isWeb(comp, contract), l: l}
+	out := sc.arrangeFindings(b.Arrange)
 	for i, st := range b.Steps {
 		out = append(out, sc.stepFindings(s.Stimuli[i], st)...)
 	}
@@ -152,6 +164,11 @@ type tpScope struct {
 	contract ServiceContract
 	op       opLookup
 	l        *Location
+
+	env   tpEnv
+	scn   scenario.Scenario // the projected scenario under test
+	steps []StepBinding     // the binding's steps, for refs
+	web   bool              // the component is a browser surface
 }
 
 // section labels one step for messages.
@@ -177,22 +194,22 @@ func (sc tpScope) stepFindings(stim scenario.Stimulus, st StepBinding) []Finding
 	out = append(out, argFindings(st.Inputs, cop, sc.contract, ruleTPArgName, ruleTPArgType, section, sc.l)...)
 	out = append(out, expectFindings(st.Expect, cop, sc.contract, ruleTPExpect, section, sc.l)...)
 	out = append(out, uiDialectFindings(st, cop, section, sc.l)...)
-	proved, pf := sc.probeFindings(section, st.Probes)
+	out = append(out, expectRequiredFindings(st, section, sc.l)...)
+	out = append(out, sc.refFindings(st.Inputs, st.Seq, -1, section)...)
+	proved, pf := sc.probeFindings(section, st.Seq, st.Probes)
 	out = append(out, pf...)
+	out = append(out, sc.actorObservedFindings(stim, st, cop, section)...)
 	return append(out, sc.stateFindings(section, stim, proved)...)
 }
 
-// probeFindings is TP-PROBE: every probe names a designed operation and supplies its
-// params; the result is the set of scenario nodes the probes claim to prove.
-//
-// EARMARK (spec §5.2 drift): the spec says probes name real READ-ONLY ops. The mirror's
-// ContractOperation carries no read-only/mutating marker, so only existence is
-// checked here; the wave that adds that flag to the contract surface owns the other
-// half of the predicate.
-func (sc tpScope) probeFindings(section string, probes []Probe) (map[string]bool, []Finding) {
+// probeFindings is TP-PROBE: every probe names a designed READ-ONLY operation, supplies its
+// params, and is For a node on the scenario's path; the result is the set of scenario nodes
+// the probes claim to prove. A probe that could change state would make the observation
+// part of the experiment. An empty probe result is TP-EXPECT-REQUIRED's.
+func (sc tpScope) probeFindings(section string, seq int, probes []Probe) (map[string]bool, []Finding) {
 	proved := map[string]bool{}
 	var out []Finding
-	for _, pr := range probes {
+	for i, pr := range probes {
 		pc, pop := findContract(sc.p, pr.Component)
 		cpop, ok := pop(pr.Operation)
 		if !ok {
@@ -200,7 +217,14 @@ func (sc tpScope) probeFindings(section string, probes []Probe) (map[string]bool
 			continue
 		}
 		psec := fmt.Sprintf("%s probe %s.%s", section, pr.Component, pr.Operation)
+		if !cpop.ReadOnly {
+			out = append(out, tpFinding(ruleTPProbe, sc.l, "%s: the operation is not read-only; a probe observes without changing state, so mark %s readOnly in its contract or probe through a read", psec, pr.Operation))
+		}
+		if !slices.Contains(sc.scn.Path, pr.For) {
+			out = append(out, tpFinding(ruleTPProbe, sc.l, "%s: probe is For %q, which is not a node on the path of %s", psec, pr.For, sc.scenario))
+		}
 		out = append(out, argFindings(pr.Inputs, cpop, pc, ruleTPProbe, ruleTPProbe, psec, sc.l)...)
+		out = append(out, sc.refFindings(pr.Inputs, seq, i, psec)...)
 		out = append(out, expectFindings(pr.Expect, cpop, pc, ruleTPProbe, psec, sc.l)...)
 		if pr.For != "" {
 			proved[pr.For] = true

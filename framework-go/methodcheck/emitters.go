@@ -73,6 +73,8 @@ func emittedRuleIDs() map[RuleID]bool {
 		// ---- Per-component test plans (rules_testplan.go) ----
 		ruleTPKey, ruleTPBound, ruleTPStep, ruleTPStepOp, ruleTPArgName, ruleTPArgType,
 		ruleTPExpect, ruleTPProbe, ruleTPState, ruleTPOpReached, ruleTPSkip,
+		ruleTPHook, ruleTPExpectRequired, ruleTPArgRef, ruleTPArrange, ruleTPActorObserved, ruleTPPrincipal,
+		ruleTPClientOps, ruleTPLabelOp, ruleClientMachineMirror,
 
 		// ---- Use-case I/O kinds (rules_usecase_io.go) ----
 		ruleUCIOKinds, ruleUCNoIO, ruleUCStartRedundant,

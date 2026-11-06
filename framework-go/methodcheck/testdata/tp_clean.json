@@ -544,7 +544,8 @@
             "result": {
               "$ref": "#/$defs/Order"
             },
-            "error": true
+            "error": true,
+            "readOnly": true
           }
         ]
       }
@@ -593,7 +594,8 @@
             "result": {
               "$ref": "#/$defs/Invoice"
             },
-            "error": true
+            "error": true,
+            "readOnly": true
           }
         ]
       }
@@ -603,7 +605,14 @@
     "testPlan": {
       "orderManager": {
         "component": "orderManager",
-        "principals": {},
+        "principals": {
+          "customer": {
+            "subject": "cust-1",
+            "roles": [
+              "customer"
+            ]
+          }
+        },
         "bindings": [
           {
             "scenario": "process-order-P1",
@@ -740,7 +749,14 @@
       },
       "billingManager": {
         "component": "billingManager",
-        "principals": {},
+        "principals": {
+          "customer": {
+            "subject": "cust-1",
+            "roles": [
+              "customer"
+            ]
+          }
+        },
         "bindings": [
           {
             "scenario": "process-order-P2",
