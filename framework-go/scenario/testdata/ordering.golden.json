@@ -35,7 +35,12 @@
         },
         "expectedOutputs": [],
         "expectedStates": [],
-        "hints": []
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
       }
     ]
   },
@@ -84,7 +89,8 @@
             "node": "send-invoice",
             "kind": "sendSignal",
             "to": "customer",
-            "label": "Send invoice"
+            "label": "Send invoice",
+            "immediate": true
           }
         ],
         "expectedStates": [
@@ -99,7 +105,31 @@
             "inState": "[checked]"
           }
         ],
-        "hints": []
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "send-invoice",
+              "kind": "sendSignal",
+              "to": "customer",
+              "label": "Send invoice",
+              "immediate": true
+            }
+          ],
+          "expectedStates": [
+            {
+              "node": "inv-req",
+              "object": "Invoice",
+              "inState": "[requested]"
+            },
+            {
+              "node": "inv-chk",
+              "object": "Invoice",
+              "inState": "[checked]"
+            }
+          ],
+          "hints": []
+        }
       },
       {
         "seq": 2,
@@ -116,7 +146,8 @@
             "node": "notify",
             "kind": "sendSignal",
             "to": "customer",
-            "label": "Notify order"
+            "label": "Notify order",
+            "immediate": true
           }
         ],
         "expectedStates": [
@@ -128,7 +159,26 @@
         ],
         "hints": [
           "Amounts in minor units"
-        ]
+        ],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "notify",
+              "kind": "sendSignal",
+              "to": "customer",
+              "label": "Notify order",
+              "immediate": true
+            }
+          ],
+          "expectedStates": [
+            {
+              "node": "pay-paid",
+              "object": "Payment",
+              "inState": "[paid]"
+            }
+          ],
+          "hints": []
+        }
       }
     ]
   }

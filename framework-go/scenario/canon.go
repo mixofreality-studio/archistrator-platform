@@ -65,6 +65,7 @@ func withNonNilSlices(s Scenario) Scenario {
 	copy(stimuli, s.Stimuli)
 	for i := range stimuli {
 		stimuli[i].Outcome = nonNilOutcome(stimuli[i].Outcome)
+		stimuli[i].ActorOutcome = nonNilOutcome(stimuli[i].ActorOutcome)
 	}
 	s.Stimuli = stimuli
 	return s

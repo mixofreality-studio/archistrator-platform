@@ -63,12 +63,13 @@ func testPlanFindings(p Project, all []scenario.Scenario) []Finding {
 	}
 	sort.Strings(comps)
 	for _, comp := range comps {
-		if _, ok := p.ServiceContracts[comp]; !ok {
+		sc, ok := p.ServiceContracts[comp]
+		if !ok {
 			out = append(out, planKeyFinding(p, comp))
 			continue
 		}
 		rec := p.PhaseArtifacts.TestPlan[comp]
-		out = append(out, componentPlanFindings(p, comp, rec, scenario.ForComponent(all, comp))...)
+		out = append(out, componentPlanFindings(p, comp, rec, scenario.ForComponentAs(all, comp, contractOf(comp, sc).Client))...)
 	}
 	return out
 }

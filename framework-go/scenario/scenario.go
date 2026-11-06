@@ -26,6 +26,11 @@ type Stimulus struct {
 	Node  string  `json:"node"`
 	Input InputEv `json:"input"`
 	Outcome
+	// ActorOutcome is what the actor sees after this stimulus: the outputs and
+	// states the path reaches before the next actor-originated stimulus. It is set
+	// only on actor-originated stimuli (Input.Kind != "call"); Outcome, the A1
+	// attachment to the last stimulus open, stays for Engine/RA tests.
+	ActorOutcome Outcome `json:"actorOutcome"`
 }
 
 // InputEv is the input event of a stimulus. Every dynamic-view call into a
@@ -55,6 +60,10 @@ type Output struct {
 	Kind  string `json:"kind"` // sendSignal | inferred
 	To    string `json:"to"`
 	Label string `json:"label"`
+	// Immediate: no component call lies between the actor's stimulus and this
+	// output on the path, so the actor sees it without waiting on a component.
+	// Set only on outputs attached to an ActorOutcome.
+	Immediate bool `json:"immediate"`
 }
 
 // State is an expected observable object state.
@@ -72,6 +81,9 @@ type Report struct {
 	// families dropped because the diagram also has event entries and those
 	// paths carry no stimulus of their own (Amendment A3, UC-START-REDUNDANT).
 	StartRedundant []StartRedundancy
+	// Problems are the design defects found while deriving: derivation never
+	// drops a stimulus or a scenario silently, it reports it here.
+	Problems []Problem
 }
 
 // StartRedundancy is one use case whose start-family paths were dropped.

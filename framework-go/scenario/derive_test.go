@@ -568,3 +568,124 @@ func TestDerive_FacetOnlyFamily(t *testing.T) {
 		t.Errorf("unresolved call = %s, want storeaccess.", got)
 	}
 }
+
+func hasProblem(r Report, p Problem) bool {
+	for _, got := range r.Problems {
+		if got.UseCase == p.UseCase && got.Scenario == p.Scenario && got.Node == p.Node && got.Code == p.Code {
+			return true
+		}
+	}
+	return false
+}
+
+// RUN-021's reword-a-todo: P1 is the abandoned reword, whose only input is the
+// actor's decision. No stimulus reaches a Client, which the report names; the
+// scenario is still emitted so its id is stable.
+func TestDerive_RewordAbandon_Reported(t *testing.T) {
+	r := must2(DeriveReport(load(t, "reword_abandon")))
+	if len(r.Scenarios) != 3 {
+		t.Fatalf("want P1..P3, got %d scenarios", len(r.Scenarios))
+	}
+	for i, s := range r.Scenarios {
+		if want := "reword-a-todo-P" + string(rune('1'+i)); s.ID != want {
+			t.Fatalf("scenario %d id = %s, want %s", i, s.ID, want)
+		}
+	}
+	if len(r.Scenarios[0].Stimuli) == 0 {
+		t.Fatal("P1 lost its stimulus")
+	}
+	if !hasProblem(r, Problem{UseCase: "reword-a-todo", Scenario: "reword-a-todo-P1", Node: "n2", Code: ProblemActorPathClient}) {
+		t.Errorf("want SCN-ACTOR-PATH-CLIENT on reword-a-todo-P1, got %+v", r.Problems)
+	}
+	if !hasProblem(r, Problem{UseCase: "reword-a-todo", Scenario: "reword-a-todo-P1", Node: "n2", Code: ProblemUnaddressed}) {
+		t.Errorf("want SCN-UNADDRESSED on reword-a-todo-P1 n2, got %+v", r.Problems)
+	}
+	for _, p := range r.Problems {
+		if p.Code == ProblemActorPathClient && p.Scenario != "reword-a-todo-P1" {
+			t.Errorf("P2/P3 reach the web client; unexpected %+v", p)
+		}
+	}
+	b, _ := CanonicalJSON(r.Scenarios)
+	golden(t, "reword_abandon", b)
+}
+
+func TestDerive_ActorOutcomeOnClientStimulus(t *testing.T) {
+	all := must(Derive(load(t, "immediate")))
+	s := scenarioByID(t, all, "toggle-confirmed-P1")
+	if len(s.Stimuli) != 3 {
+		t.Fatalf("want 3 stimuli (client, manager, access), got %+v", s.Stimuli)
+	}
+	cl, ra := s.Stimuli[0], s.Stimuli[2]
+	if cl.Input.Kind == "call" || cl.Input.To != "webclient" {
+		t.Fatalf("first stimulus must be the actor's into the client, got %+v", cl.Input)
+	}
+	if len(cl.ActorOutcome.ExpectedOutputs) != 1 || cl.ActorOutcome.ExpectedOutputs[0].Node != "a2" {
+		t.Errorf("client ActorOutcome = %+v, want the sendSignal a2", cl.ActorOutcome)
+	}
+	if len(ra.ExpectedOutputs) != 1 || ra.ExpectedOutputs[0].Node != "a2" {
+		t.Errorf("RA Outcome = %+v, want a2 kept (A1)", ra.Outcome)
+	}
+	if len(ra.ActorOutcome.ExpectedOutputs) != 0 || len(s.Stimuli[1].ActorOutcome.ExpectedOutputs) != 0 {
+		t.Errorf("only actor-originated stimuli carry an ActorOutcome: %+v / %+v", s.Stimuli[1].ActorOutcome, ra.ActorOutcome)
+	}
+}
+
+func TestDerive_ImmediateFlag(t *testing.T) {
+	all := must(Derive(load(t, "immediate")))
+	confirmed := scenarioByID(t, all, "toggle-confirmed-P1")
+	if o := confirmed.Stimuli[0].ActorOutcome.ExpectedOutputs[0]; o.Immediate {
+		t.Errorf("a component call lies between the action and a2: want Immediate=false, got %+v", o)
+	}
+	now := scenarioByID(t, all, "toggle-immediate-P1")
+	if len(now.Stimuli) != 1 {
+		t.Fatalf("want one stimulus, got %+v", now.Stimuli)
+	}
+	ao := now.Stimuli[0].ActorOutcome
+	if len(ao.ExpectedOutputs) != 1 || !ao.ExpectedOutputs[0].Immediate {
+		t.Errorf("no component call between action and b3: want Immediate=true, got %+v", ao.ExpectedOutputs)
+	}
+	if len(ao.ExpectedStates) != 1 || ao.ExpectedStates[0].Node != "b2" {
+		t.Errorf("objectNode b2 must attach to the actor stimulus, got %+v", ao.ExpectedStates)
+	}
+	b, _ := CanonicalJSON(all)
+	golden(t, "immediate", b)
+}
+
+// A decision decided by an actor that no dynamic-view step carries is a defect:
+// it is reported and its stimulus is kept with To as written ("").
+func TestDerive_UnaddressedIsReported(t *testing.T) {
+	in := Input{
+		Actors:    map[string]bool{"user": true},
+		Contracts: map[string]Contract{"webClient": {Component: "webClient", Client: true, Ops: []Op{{Name: "Do"}}}},
+		Diagrams: []Diagram{{UseCaseID: "uc", Title: "UC", Nodes: []Node{
+			{ID: "start", Kind: "start"},
+			{ID: "d", Kind: "decision", DecidedBy: "user"},
+			{ID: "end", Kind: "end"},
+		}, Edges: []Edge{{From: "start", To: "d"}, {From: "d", To: "end", Guard: "[ok]"}}}},
+	}
+	r := must2(DeriveReport(in))
+	if len(r.Scenarios) != 1 || len(r.Scenarios[0].Stimuli) != 1 {
+		t.Fatalf("the stimulus must be kept, got %+v", r.Scenarios)
+	}
+	if st := r.Scenarios[0].Stimuli[0]; st.Input.To != "" || st.Node != "d" {
+		t.Errorf("stimulus = %+v, want To \"\" at d", st)
+	}
+	if !hasProblem(r, Problem{UseCase: "uc", Scenario: "uc-P1", Node: "d", Code: ProblemUnaddressed}) {
+		t.Errorf("want SCN-UNADDRESSED at d, got %+v", r.Problems)
+	}
+}
+
+func TestForComponent_ClientKeepsActorOutcome(t *testing.T) {
+	all := must(Derive(load(t, "immediate")))
+	cl := ForComponentAs(all, "web-client", true)
+	if len(cl) == 0 || len(cl[0].Stimuli[0].ActorOutcome.ExpectedOutputs) != 1 {
+		t.Fatalf("client projection must keep ActorOutcome, got %+v", cl)
+	}
+	nc := ForComponentAs(all, "web-client", false)
+	if len(nc) == 0 || len(nc[0].Stimuli[0].ActorOutcome.ExpectedOutputs) != 0 || len(nc[0].Stimuli[0].ActorOutcome.ExpectedStates) != 0 {
+		t.Fatalf("non-client projection must zero ActorOutcome, got %+v", nc)
+	}
+	if d := ForComponent(all, "web-client"); len(d[0].Stimuli[0].ActorOutcome.ExpectedOutputs) != 0 {
+		t.Fatalf("ForComponent delegates with client=false, got %+v", d)
+	}
+}

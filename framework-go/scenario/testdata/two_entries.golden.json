@@ -27,7 +27,12 @@
         },
         "expectedOutputs": [],
         "expectedStates": [],
-        "hints": []
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
       }
     ]
   },
@@ -66,7 +71,12 @@
         },
         "expectedOutputs": [],
         "expectedStates": [],
-        "hints": []
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
       }
     ]
   }

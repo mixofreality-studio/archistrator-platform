@@ -75,6 +75,16 @@ func callsOutward(in Input, view *View, nodeID string) bool {
 	return false
 }
 
+// callsActor reports whether any call of view step nodeID targets an actor.
+func callsActor(in Input, view *View, nodeID string) bool {
+	for _, c := range stepCalls(view, nodeID) {
+		if in.Actors[c.To] {
+			return true
+		}
+	}
+	return false
+}
+
 // stepCalls returns the calls of every view step attached to nodeID, in step
 // then call order; nil when the view is absent. Indices into the result are
 // the call indices used for provenance.

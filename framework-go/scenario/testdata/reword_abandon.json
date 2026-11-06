@@ -1,0 +1,335 @@
+{
+ "diagrams": [
+  {
+   "useCaseID": "reword-a-todo",
+   "title": "Reword a todo",
+   "nodes": [
+    {
+     "id": "n1",
+     "kind": "start",
+     "label": "Activate a todo's title for rewording",
+     "roleName": "Team Member",
+     "linkedActorID": "team-member",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "n2",
+     "kind": "decision",
+     "label": "Reword committed or abandoned?",
+     "roleName": "Team Member",
+     "linkedActorID": "",
+     "decidedBy": "team-member",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "n3",
+     "kind": "note",
+     "label": "Abandoned (e.g. Escape): the todo keeps its original title; nothing is kept",
+     "roleName": "Team Member",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "n4",
+     "kind": "action",
+     "label": "Judge whether the new wording is an acceptable title",
+     "roleName": "List Keeping",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "n5",
+     "kind": "decision",
+     "label": "Title acceptable?",
+     "roleName": "List Keeping",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "n6",
+     "kind": "action",
+     "label": "Retitle the todo in place, keeping its identity and completed state",
+     "roleName": "List Keeping",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "n7",
+     "kind": "action",
+     "label": "Remove the todo under the blank reword rule",
+     "roleName": "List Keeping",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "n8",
+     "kind": "merge",
+     "label": "",
+     "roleName": "List Keeping",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "n9",
+     "kind": "merge",
+     "label": "",
+     "roleName": "List Keeping",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    },
+    {
+     "id": "n10",
+     "kind": "end",
+     "label": "",
+     "roleName": "List Keeping",
+     "linkedActorID": "",
+     "decidedBy": "",
+     "inState": "",
+     "anchor": ""
+    }
+   ],
+   "edges": [
+    {
+     "from": "n1",
+     "to": "n2",
+     "guard": ""
+    },
+    {
+     "from": "n2",
+     "to": "n3",
+     "guard": "[abandoned]"
+    },
+    {
+     "from": "n2",
+     "to": "n4",
+     "guard": "[else]"
+    },
+    {
+     "from": "n4",
+     "to": "n5",
+     "guard": ""
+    },
+    {
+     "from": "n5",
+     "to": "n6",
+     "guard": "[acceptable]"
+    },
+    {
+     "from": "n5",
+     "to": "n7",
+     "guard": "[else]"
+    },
+    {
+     "from": "n6",
+     "to": "n8",
+     "guard": ""
+    },
+    {
+     "from": "n7",
+     "to": "n8",
+     "guard": ""
+    },
+    {
+     "from": "n8",
+     "to": "n9",
+     "guard": ""
+    },
+    {
+     "from": "n3",
+     "to": "n9",
+     "guard": ""
+    },
+    {
+     "from": "n9",
+     "to": "n10",
+     "guard": ""
+    }
+   ]
+  }
+ ],
+ "views": [
+  {
+   "useCaseID": "reword-a-todo",
+   "steps": [
+    {
+     "nodeID": "n4",
+     "calls": [
+      {
+       "from": "team-member",
+       "to": "todo-web-app",
+       "mode": "sync",
+       "label": "RewordTodo — commits new wording for a todo",
+       "alt": "s1"
+      },
+      {
+       "from": "team-member",
+       "to": "todo-mcp-server",
+       "mode": "sync",
+       "label": "RewordTodo — commits new wording for a todo in an MCP Apps host",
+       "alt": "s1"
+      },
+      {
+       "from": "todo-web-app",
+       "to": "list-manager",
+       "mode": "sync",
+       "label": "rewordTodo(todoId, wording) → todo | removed",
+       "alt": "s2"
+      },
+      {
+       "from": "todo-mcp-server",
+       "to": "list-manager",
+       "mode": "sync",
+       "label": "rewordTodo(todoId, wording) → todo | removed",
+       "alt": "s2"
+      },
+      {
+       "from": "list-manager",
+       "to": "access-granting-engine",
+       "mode": "sync",
+       "label": "DecideAccess(principal, owner, reword) → permitted | refused",
+       "alt": ""
+      },
+      {
+       "from": "list-manager",
+       "to": "list-ruling-engine",
+       "mode": "sync",
+       "label": "JudgeTitle(wording) → acceptable title | blank",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "n6",
+     "calls": [
+      {
+       "from": "list-manager",
+       "to": "todo-list-access",
+       "mode": "sync",
+       "label": "retitleTodo(todoId, title)",
+       "alt": ""
+      },
+      {
+       "from": "todo-list-access",
+       "to": "todo-list-store",
+       "mode": "sync",
+       "label": "replace the entry's title in place (idempotency: todo id)",
+       "alt": ""
+      },
+      {
+       "from": "list-manager",
+       "to": "message-bus",
+       "mode": "sync",
+       "label": "publish(ListChanged)",
+       "alt": ""
+      }
+     ]
+    },
+    {
+     "nodeID": "n7",
+     "calls": [
+      {
+       "from": "list-manager",
+       "to": "todo-list-access",
+       "mode": "sync",
+       "label": "removeTodo(todoId)",
+       "alt": ""
+      },
+      {
+       "from": "todo-list-access",
+       "to": "todo-list-store",
+       "mode": "sync",
+       "label": "delete the entry (idempotency: todo id)",
+       "alt": ""
+      },
+      {
+       "from": "list-manager",
+       "to": "message-bus",
+       "mode": "sync",
+       "label": "publish(ListChanged)",
+       "alt": ""
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "actors": {
+  "team-member": true
+ },
+ "contracts": {
+  "todoWebApp": {
+   "component": "todoWebApp",
+   "ops": [
+    {
+     "name": "RewordTodo"
+    }
+   ],
+   "client": true
+  },
+  "todoMcpServer": {
+   "component": "todoMcpServer",
+   "ops": [
+    {
+     "name": "RewordTodo"
+    }
+   ],
+   "client": true
+  },
+  "listManager": {
+   "component": "listManager",
+   "ops": [
+    {
+     "name": "rewordTodo"
+    }
+   ],
+   "client": false
+  },
+  "accessGrantingEngine": {
+   "component": "accessGrantingEngine",
+   "ops": [
+    {
+     "name": "DecideAccess"
+    }
+   ],
+   "client": false
+  },
+  "listRulingEngine": {
+   "component": "listRulingEngine",
+   "ops": [
+    {
+     "name": "JudgeTitle"
+    }
+   ],
+   "client": false
+  },
+  "todoListAccess": {
+   "component": "todoListAccess",
+   "ops": [
+    {
+     "name": "retitleTodo"
+    },
+    {
+     "name": "removeTodo"
+    }
+   ],
+   "client": false
+  }
+ }
+}

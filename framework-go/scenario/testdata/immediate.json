@@ -1,0 +1,68 @@
+{
+ "diagrams": [
+  {
+   "useCaseID": "toggle-confirmed",
+   "title": "Toggle an item, confirmed by the server",
+   "nodes": [
+    {"id": "a0", "kind": "start"},
+    {"id": "a1", "kind": "action", "label": "User toggles an item", "roleName": "User", "linkedActorID": "user"},
+    {"id": "a2", "kind": "sendSignal", "label": "Item shown done", "roleName": "User", "linkedActorID": "user"},
+    {"id": "a3", "kind": "end"}
+   ],
+   "edges": [
+    {"from": "a0", "to": "a1", "guard": ""},
+    {"from": "a1", "to": "a2", "guard": ""},
+    {"from": "a2", "to": "a3", "guard": ""}
+   ]
+  },
+  {
+   "useCaseID": "toggle-immediate",
+   "title": "Toggle an item, shown at once",
+   "nodes": [
+    {"id": "b0", "kind": "start"},
+    {"id": "b1", "kind": "action", "label": "User toggles an item", "roleName": "User", "linkedActorID": "user"},
+    {"id": "b2", "kind": "objectNode", "label": "Item", "roleName": "User", "inState": "[done]"},
+    {"id": "b3", "kind": "sendSignal", "label": "Item shown done", "roleName": "User", "linkedActorID": "user"},
+    {"id": "b4", "kind": "end"}
+   ],
+   "edges": [
+    {"from": "b0", "to": "b1", "guard": ""},
+    {"from": "b1", "to": "b2", "guard": ""},
+    {"from": "b2", "to": "b3", "guard": ""},
+    {"from": "b3", "to": "b4", "guard": ""}
+   ]
+  }
+ ],
+ "views": [
+  {
+   "useCaseID": "toggle-confirmed",
+   "steps": [
+    {
+     "nodeID": "a1",
+     "calls": [
+      {"from": "user", "to": "web-client", "mode": "sync", "label": "ToggleItem", "alt": ""},
+      {"from": "web-client", "to": "item-manager", "mode": "sync", "label": "toggleItem(id)", "alt": ""},
+      {"from": "item-manager", "to": "item-access", "mode": "sync", "label": "setDone(id)", "alt": ""}
+     ]
+    }
+   ]
+  },
+  {
+   "useCaseID": "toggle-immediate",
+   "steps": [
+    {
+     "nodeID": "b1",
+     "calls": [
+      {"from": "user", "to": "web-client", "mode": "sync", "label": "ToggleItem", "alt": ""}
+     ]
+    }
+   ]
+  }
+ ],
+ "actors": {"user": true},
+ "contracts": {
+  "webClient": {"component": "webClient", "client": true, "ops": [{"name": "ToggleItem"}]},
+  "itemManager": {"component": "itemManager", "ops": [{"name": "toggleItem"}]},
+  "itemAccess": {"component": "itemAccess", "ops": [{"name": "setDone"}]}
+ }
+}

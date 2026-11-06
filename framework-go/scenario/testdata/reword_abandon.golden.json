@@ -1,0 +1,403 @@
+[
+  {
+    "id": "reword-a-todo-P1",
+    "useCase": "reword-a-todo",
+    "title": "Reword a todo — [abandoned]",
+    "path": [
+      "n1",
+      "n2",
+      "n3",
+      "n9",
+      "n10"
+    ],
+    "guards": [
+      {
+        "at": "n2",
+        "guard": "[abandoned]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n2",
+        "input": {
+          "kind": "decision",
+          "from": "team-member",
+          "to": "",
+          "op": "",
+          "call": "",
+          "guard": "[abandoned]"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "reword-a-todo-P2",
+    "useCase": "reword-a-todo",
+    "title": "Reword a todo — [else] · [acceptable]",
+    "path": [
+      "n1",
+      "n2",
+      "n4",
+      "n5",
+      "n6",
+      "n8",
+      "n9",
+      "n10"
+    ],
+    "guards": [
+      {
+        "at": "n2",
+        "guard": "[else]"
+      },
+      {
+        "at": "n5",
+        "guard": "[acceptable]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n2",
+        "input": {
+          "kind": "decision",
+          "from": "team-member",
+          "to": "",
+          "op": "",
+          "call": "",
+          "guard": "[else]"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n4",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "RewordTodo",
+          "call": "reword-a-todo/n4/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n4",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "RewordTodo",
+          "call": "reword-a-todo/n4/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n4",
+        "input": {
+          "kind": "call",
+          "from": "todo-web-app",
+          "to": "listmanager",
+          "op": "rewordTodo",
+          "call": "reword-a-todo/n4/2",
+          "via": [
+            "todo-web-app",
+            "todo-mcp-server"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n4",
+        "input": {
+          "kind": "call",
+          "from": "list-manager",
+          "to": "accessgrantingengine",
+          "op": "DecideAccess",
+          "call": "reword-a-todo/n4/4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n4",
+        "input": {
+          "kind": "call",
+          "from": "list-manager",
+          "to": "listrulingengine",
+          "op": "JudgeTitle",
+          "call": "reword-a-todo/n4/5"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 7,
+        "node": "n6",
+        "input": {
+          "kind": "call",
+          "from": "list-manager",
+          "to": "todolistaccess",
+          "op": "retitleTodo",
+          "call": "reword-a-todo/n6/0"
+        },
+        "expectedOutputs": [
+          {
+            "node": "n6",
+            "kind": "inferred",
+            "to": "",
+            "label": "Retitle the todo in place, keeping its identity and completed state",
+            "immediate": false
+          }
+        ],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "reword-a-todo-P3",
+    "useCase": "reword-a-todo",
+    "title": "Reword a todo — [else] · [else]",
+    "path": [
+      "n1",
+      "n2",
+      "n4",
+      "n5",
+      "n7",
+      "n8",
+      "n9",
+      "n10"
+    ],
+    "guards": [
+      {
+        "at": "n2",
+        "guard": "[else]"
+      },
+      {
+        "at": "n5",
+        "guard": "[else]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n2",
+        "input": {
+          "kind": "decision",
+          "from": "team-member",
+          "to": "",
+          "op": "",
+          "call": "",
+          "guard": "[else]"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n4",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "RewordTodo",
+          "call": "reword-a-todo/n4/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n4",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "RewordTodo",
+          "call": "reword-a-todo/n4/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n4",
+        "input": {
+          "kind": "call",
+          "from": "todo-web-app",
+          "to": "listmanager",
+          "op": "rewordTodo",
+          "call": "reword-a-todo/n4/2",
+          "via": [
+            "todo-web-app",
+            "todo-mcp-server"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n4",
+        "input": {
+          "kind": "call",
+          "from": "list-manager",
+          "to": "accessgrantingengine",
+          "op": "DecideAccess",
+          "call": "reword-a-todo/n4/4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n4",
+        "input": {
+          "kind": "call",
+          "from": "list-manager",
+          "to": "listrulingengine",
+          "op": "JudgeTitle",
+          "call": "reword-a-todo/n4/5"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 7,
+        "node": "n7",
+        "input": {
+          "kind": "call",
+          "from": "list-manager",
+          "to": "todolistaccess",
+          "op": "removeTodo",
+          "call": "reword-a-todo/n7/0"
+        },
+        "expectedOutputs": [
+          {
+            "node": "n7",
+            "kind": "inferred",
+            "to": "",
+            "label": "Remove the todo under the blank reword rule",
+            "immediate": false
+          }
+        ],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  }
+]

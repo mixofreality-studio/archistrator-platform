@@ -1,0 +1,161 @@
+[
+  {
+    "id": "toggle-confirmed-P1",
+    "useCase": "toggle-confirmed",
+    "title": "Toggle an item, confirmed by the server",
+    "path": [
+      "a0",
+      "a1",
+      "a2",
+      "a3"
+    ],
+    "guards": [],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "a1",
+        "input": {
+          "kind": "action",
+          "from": "user",
+          "to": "webclient",
+          "op": "ToggleItem",
+          "call": "toggle-confirmed/a1/0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "a2",
+              "kind": "sendSignal",
+              "to": "user",
+              "label": "Item shown done",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "a1",
+        "input": {
+          "kind": "call",
+          "from": "web-client",
+          "to": "itemmanager",
+          "op": "toggleItem",
+          "call": "toggle-confirmed/a1/1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "a1",
+        "input": {
+          "kind": "call",
+          "from": "item-manager",
+          "to": "itemaccess",
+          "op": "setDone",
+          "call": "toggle-confirmed/a1/2"
+        },
+        "expectedOutputs": [
+          {
+            "node": "a2",
+            "kind": "sendSignal",
+            "to": "user",
+            "label": "Item shown done",
+            "immediate": false
+          }
+        ],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "toggle-immediate-P1",
+    "useCase": "toggle-immediate",
+    "title": "Toggle an item, shown at once",
+    "path": [
+      "b0",
+      "b1",
+      "b2",
+      "b3",
+      "b4"
+    ],
+    "guards": [],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "b1",
+        "input": {
+          "kind": "action",
+          "from": "user",
+          "to": "webclient",
+          "op": "ToggleItem",
+          "call": "toggle-immediate/b1/0"
+        },
+        "expectedOutputs": [
+          {
+            "node": "b3",
+            "kind": "sendSignal",
+            "to": "user",
+            "label": "Item shown done",
+            "immediate": true
+          }
+        ],
+        "expectedStates": [
+          {
+            "node": "b2",
+            "object": "Item",
+            "inState": "[done]"
+          }
+        ],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "b3",
+              "kind": "sendSignal",
+              "to": "user",
+              "label": "Item shown done",
+              "immediate": true
+            }
+          ],
+          "expectedStates": [
+            {
+              "node": "b2",
+              "object": "Item",
+              "inState": "[done]"
+            }
+          ],
+          "hints": []
+        }
+      }
+    ]
+  }
+]

@@ -22,7 +22,7 @@ func DeriveReport(in Input) (Report, error) {
 	diagrams := append([]Diagram{}, in.Diagrams...)
 	sort.SliceStable(diagrams, func(i, j int) bool { return diagrams[i].UseCaseID < diagrams[j].UseCaseID })
 	for _, d := range diagrams {
-		kept, dropped, err := deriveDiagram(in, d)
+		kept, dropped, problems, err := deriveDiagram(in, d)
 		if err != nil {
 			return Report{}, err
 		}
@@ -30,17 +30,20 @@ func DeriveReport(in Input) (Report, error) {
 			r.StartRedundant = append(r.StartRedundant, StartRedundancy{UseCase: d.UseCaseID, Dropped: dropped})
 		}
 		r.Scenarios = append(r.Scenarios, kept...)
+		r.Problems = append(r.Problems, problems...)
 	}
 	sort.SliceStable(r.Scenarios, func(i, j int) bool { return r.Scenarios[i].ID < r.Scenarios[j].ID })
+	sortProblems(r.Problems)
 	return r, nil
 }
 
 // deriveDiagram enumerates one diagram's paths from every entry, derives each
-// path's stimuli, drops a redundant start family (A3) and numbers what is kept.
-func deriveDiagram(in Input, d Diagram) (kept []Scenario, dropped int, err error) {
+// path's stimuli, drops a redundant start family (A3), numbers what is kept and
+// reports the defects of every kept scenario (SCN-*): nothing is dropped silently.
+func deriveDiagram(in Input, d Diagram) (kept []Scenario, dropped int, problems []Problem, err error) {
 	g, err := buildGraph(d)
 	if err != nil {
-		return nil, 0, err
+		return nil, 0, nil, err
 	}
 	view := viewFor(in, d.UseCaseID)
 	var cands []Scenario
@@ -55,8 +58,9 @@ func deriveDiagram(in Input, d Diagram) (kept []Scenario, dropped int, err error
 	kept, dropped = dropRedundantStart(g, cands)
 	for i := range kept {
 		kept[i].ID = fmt.Sprintf("%s-P%d", d.UseCaseID, i+1)
+		problems = append(problems, scenarioProblems(in, g, view, kept[i])...)
 	}
-	return kept, dropped, nil
+	return kept, dropped, problems, nil
 }
 
 // dropRedundantStart is Amendment A3. When a diagram has both a start node and
@@ -128,7 +132,7 @@ func title(base string, guards []Guard) string {
 // A node visited more than once (a loop unrolled) takes, at each visit, the
 // guard taken at that visit.
 func stimuli(in Input, g graph, d Diagram, view *View, rp rawPath) (Outcome, []Stimulus) {
-	w := stimulusWalk{hints: hintsByAnchor(d)}
+	w := stimulusWalk{in: in, view: view, hints: hintsByAnchor(d)}
 	guards := visitGuards(rp)
 	for _, id := range rp.nodes {
 		n := g.nodes[id]
@@ -170,9 +174,36 @@ func (c guardCursor) next(node string) string {
 
 // stimulusWalk is the state of one stimuli walk.
 type stimulusWalk struct {
+	in    Input
+	view  *View
 	hints map[string][]string
 	pre   Outcome
 	out   []Stimulus
+}
+
+// lastActor is the index of the nearest stimulus opened so far that an actor
+// originates (Input.Kind != "call"); false when none is open.
+func (w *stimulusWalk) lastActor() (int, bool) {
+	for i := len(w.out) - 1; i >= 0; i-- {
+		if w.out[i].Input.Kind != "call" {
+			return i, true
+		}
+	}
+	return 0, false
+}
+
+// actorStimuli is the stimuli an actor-visible observation attaches to: the
+// nearest actor-originated stimulus at index last and its alternatives, the
+// actor-originated stimuli of the same node (an alt group's calls into different
+// clients each keep their own stimulus, and each client's actor sees the outcome).
+func (w *stimulusWalk) actorStimuli(last int) []*Stimulus {
+	var ss []*Stimulus
+	for i := 0; i <= last; i++ {
+		if w.out[i].Input.Kind != "call" && w.out[i].Node == w.out[last].Node {
+			ss = append(ss, &w.out[i])
+		}
+	}
+	return ss
 }
 
 // cur is the outcome observations attach to: the last stimulus, or preconditions.
@@ -188,16 +219,50 @@ func (w *stimulusWalk) cur() *Outcome {
 func (w *stimulusWalk) observe(n Node, cls class) {
 	switch cls {
 	case classOutput:
-		c := w.cur()
-		c.ExpectedOutputs = append(c.ExpectedOutputs, outputOf(n))
+		w.observeOutput(n)
 	case classState:
-		c := w.cur()
-		c.ExpectedStates = append(c.ExpectedStates, State{Node: n.ID, Object: n.Label, InState: n.InState})
+		w.observeState(n)
 	case classInput, classInternal, classHint, classStructural:
 	}
 	if hs, ok := w.hints[n.ID]; ok {
 		c := w.cur()
 		c.Hints = append(c.Hints, hs...)
+	}
+}
+
+// observeOutput attaches n's output to the last stimulus open (A1) and, when the
+// actor sees it (a sendSignal, or an inferred output of a step that calls an
+// actor), to the actor-originated stimulus before it. The output is Immediate
+// when that stimulus is the last one open, so no component call came since it.
+func (w *stimulusWalk) observeOutput(n Node) {
+	o := outputOf(n)
+	last, ok := w.lastActor()
+	toActor := ok && (n.Kind == "sendSignal" || callsActor(w.in, w.view, n.ID))
+	if toActor {
+		o.Immediate = last == len(w.out)-1
+	}
+	c := w.cur()
+	c.ExpectedOutputs = append(c.ExpectedOutputs, o)
+	if !toActor {
+		return
+	}
+	for _, st := range w.actorStimuli(last) {
+		st.ActorOutcome.ExpectedOutputs = append(st.ActorOutcome.ExpectedOutputs, o)
+	}
+}
+
+// observeState attaches n's object state to the last stimulus open (A1) and to
+// the actor-originated stimulus before it.
+func (w *stimulusWalk) observeState(n Node) {
+	st := State{Node: n.ID, Object: n.Label, InState: n.InState}
+	c := w.cur()
+	c.ExpectedStates = append(c.ExpectedStates, st)
+	last, ok := w.lastActor()
+	if !ok {
+		return
+	}
+	for _, as := range w.actorStimuli(last) {
+		as.ActorOutcome.ExpectedStates = append(as.ActorOutcome.ExpectedStates, st)
 	}
 }
 
@@ -353,19 +418,21 @@ func componentLane(in Input, n Node) string {
 	return ""
 }
 
-// ForComponent keeps scenarios with ≥1 stimulus whose Input.To == Normalize(component),
-// with Stimuli filtered to those (Seq renumbered from 1, original seq kept in Stimulus.Node provenance).
+// ForComponent is ForComponentAs for a component that is not a Client: its
+// stimuli carry no ActorOutcome.
 func ForComponent(all []Scenario, component string) []Scenario {
+	return ForComponentAs(all, component, false)
+}
+
+// ForComponentAs keeps scenarios with ≥1 stimulus whose Input.To == Normalize(component),
+// with Stimuli filtered to those (Seq renumbered from 1, original seq kept in Stimulus.Node provenance).
+// A Client's projection (client) keeps each stimulus's ActorOutcome; an Engine's or
+// ResourceAccess's has it zeroed, because only a Client's test observes what an actor sees.
+func ForComponentAs(all []Scenario, component string, client bool) []Scenario {
 	key := Normalize(component)
 	var out []Scenario
 	for _, s := range all {
-		var kept []Stimulus
-		for _, st := range s.Stimuli {
-			if st.Input.To == key {
-				st.Seq = len(kept) + 1
-				kept = append(kept, st)
-			}
-		}
+		kept := stimuliTo(s.Stimuli, key, client)
 		if len(kept) == 0 {
 			continue
 		}
@@ -374,4 +441,21 @@ func ForComponent(all []Scenario, component string) []Scenario {
 		out = append(out, cp)
 	}
 	return out
+}
+
+// stimuliTo is the stimuli whose Input.To is key, renumbered from 1, each without
+// its ActorOutcome unless client.
+func stimuliTo(all []Stimulus, key string, client bool) []Stimulus {
+	var kept []Stimulus
+	for _, st := range all {
+		if st.Input.To != key {
+			continue
+		}
+		st.Seq = len(kept) + 1
+		if !client {
+			st.ActorOutcome = Outcome{}
+		}
+		kept = append(kept, st)
+	}
+	return kept
 }
