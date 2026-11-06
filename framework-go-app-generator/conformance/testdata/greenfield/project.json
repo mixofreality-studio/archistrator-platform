@@ -133,7 +133,8 @@
               "key": "postgres",
               "substrate": "postgres",
               "profiles": [
-                "cloud"
+                "cloud",
+                "local"
               ],
               "presence": "required"
             },
@@ -166,8 +167,10 @@
                   ]
                 },
                 "local": {
-                  "variant": "memory",
-                  "infra": []
+                  "variant": "postgres",
+                  "infra": [
+                    "postgres"
+                  ]
                 }
               }
             }
@@ -219,8 +222,7 @@
         },
         {
           "name": "repo",
-          "goType": "func(orderID string) (repolookup.RepoRef, bool)",
-          "goImport": "example.com/greenfield/server/internal/resourceaccess/repolookup"
+          "goType": "func(orderID string) (string, bool)"
         },
         {
           "name": "repoBase",
@@ -327,6 +329,22 @@
             "AmountCents",
             "Status",
             "Version"
+          ],
+          "additionalProperties": false
+        },
+        "OrderReceipt": {
+          "type": "object",
+          "properties": {
+            "OrderID": {
+              "$ref": "#/$defs/OrderID"
+            },
+            "AmountCents": {
+              "type": "integer"
+            }
+          },
+          "required": [
+            "OrderID",
+            "AmountCents"
           ],
           "additionalProperties": false
         }
@@ -483,7 +501,7 @@
               }
             ],
             "result": {
-              "x-go-type": "OrderReceipt"
+              "$ref": "#/$defs/OrderReceipt"
             },
             "error": true
           }

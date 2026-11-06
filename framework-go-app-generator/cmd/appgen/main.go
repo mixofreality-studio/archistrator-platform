@@ -35,6 +35,7 @@ import (
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/configgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/cli"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/modelgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/rungen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/temporalgen"
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
@@ -189,6 +190,11 @@ func holdsCode(dir string) bool {
 	}
 	return slices.ContainsFunc(entries, func(e os.DirEntry) bool {
 		n := e.Name()
+		if n == modelgen.NullFile {
+			// nullgen's null implementation is the package's code in a model with nothing
+			// built: the conformance pipeline wires and boots it like a hand-written one.
+			return !e.IsDir()
+		}
 		return !e.IsDir() && strings.HasSuffix(n, ".go") && !strings.HasSuffix(n, "_test.go") && !strings.HasSuffix(n, ".gen.go")
 	})
 }

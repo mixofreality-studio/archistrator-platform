@@ -27,14 +27,10 @@ type fixtureCase struct {
 // exercised.
 var cases = []fixtureCase{
 	{name: "todomvc", module: "example.com/todomvc"},
-	{name: "greenfield", module: "example.com/greenfield/server", stubs: map[string]string{
-		"internal/resourceaccess/repolookup/repolookup.go": "package repolookup\n\ntype RepoRef struct{}\n",
-		// orderStateAccess binds a result to a bare x-go-type its own package hand-writes.
-		"internal/resourceaccess/orderstate/receipt.go": "package orderstate\n\ntype OrderReceipt struct{}\n",
-		// ... and its local profile binds a Memory variant, whose constructor the app hand-writes
-		// (nullgen builds the generated constructors' builders, not an arbitrary variant's).
-		"internal/resourceaccess/orderstate/memory.go": "package orderstate\n\nfunc NewMemoryAccess() Access { return NullAccess{} }\n",
-	}},
+	// The greenfield fixture is self-contained (conformance/testdata/greenfield/README.md lists the
+	// hand-written dependencies of the original golden that were folded into the model), so no
+	// stubs are needed.
+	{name: "greenfield", module: "example.com/greenfield/server"},
 }
 
 func (fc fixtureCase) raw(t *testing.T) []byte {

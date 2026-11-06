@@ -113,6 +113,11 @@ func emitNull(buf *bytes.Buffer, iface Interface, meta contractMeta, modulePath 
 	if meta.Stub {
 		return nil
 	}
+	if iface.Layer == "manager" {
+		// appgen temporal's worker.gen.go registers a Manager only through this method (its
+		// workerManifestSource) and panics at boot without it; a null Manager has no workflows.
+		fmt.Fprintf(buf, "func (%s) WorkerManifest() genWorkerManifest {\n\treturn genWorkerManifest{}\n}\n\n", null)
+	}
 	return emitNullBuilders(buf, iface, meta, modulePath, resolver)
 }
 

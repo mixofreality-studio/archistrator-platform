@@ -50,6 +50,8 @@ func TestGenerateNulls_EveryShape(t *testing.T) {
 		"internal/manager/boss": {
 			`"example.com/app/internal/resourceaccess/store"`,
 			"func newBossManager(_ store.StoreAccess, _ string) BossManager { return NullBossManager{} }",
+			// RegisterManagerWorker panics at boot unless the manager supplies a manifest.
+			"func (NullBossManager) WorkerManifest() genWorkerManifest {\n\treturn genWorkerManifest{}\n}",
 		},
 	} {
 		src := string(got[pkg])

@@ -229,3 +229,25 @@ func TestComposeRefusesAnUndeclaredEnvRead(t *testing.T) {
 		t.Fatalf("want a refusal naming the undeclared read, got %v", err)
 	}
 }
+
+// A package holding only nullgen's null.gen.go is built: the conformance pipeline wires it. Any
+// other generated file alone is not.
+func TestHoldsCodeCountsNullImplementations(t *testing.T) {
+	for _, tc := range []struct {
+		file string
+		want bool
+	}{
+		{"null.gen.go", true},
+		{"contract.gen.go", false},
+		{"thing_test.go", false},
+		{"thing.go", true},
+	} {
+		dir := t.TempDir()
+		if err := os.WriteFile(filepath.Join(dir, tc.file), []byte("package p\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+		if got := holdsCode(dir); got != tc.want {
+			t.Errorf("holdsCode with only %s = %v, want %v", tc.file, got, tc.want)
+		}
+	}
+}
