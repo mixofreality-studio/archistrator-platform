@@ -14,11 +14,21 @@ import (
 //	UC-PATH-OUTCOME             every path with an actor-classified node carries a
 //	                            sendSignal or objectNode after the first of them
 //	UC-OUTCOME-AT-ASKING-SURFACE the Client the asking actor used shows the outcome:
-//	                            a sendSignal to that actor, or an objectNode reached
-//	                            after that Client was engaged
+//	                            a sendSignal to that actor drawn on that surface, or an
+//	                            objectNode the system returned to that Client (a call
+//	                            INTO it on the path after the asking call) or drew in
+//	                            that Client's or the actor's lane
 //	UC-START-NOT-ACTION         an actor's act is an action node, not a labelled start
 //	SCN-UNADDRESSED /
 //	SCN-ACTOR-PATH-CLIENT       the scenario derivation's own Problems, as findings
+//
+// The plan states the objectNode clause as "an objectNode whose step has a call
+// To = that Client". CC-COVERAGE forbids steps on objectNodes, so it is read as a call
+// INTO that Client on the path between the asking call and the objectNode: the system
+// returns the state to the surface that asked. The asking call itself (the stimulus
+// node's own actor->Client step) is excluded, otherwise every objectNode after the
+// first actor input would satisfy the rule and the RUN-021 defect (change sent to
+// other surfaces, never back to the asker) could not fire.
 //
 // The path rules read scenario.DeriveReport so the ids they name (UseCase-P<n>) are
 // the ids a test plan binds. validateArchitecture has no serviceContracts, so the
@@ -40,7 +50,12 @@ const (
 func ucPathFindings(c CoreUseCases, s System) []Finding {
 	rep, err := scenario.DeriveReport(pathScenarioInput(c, s))
 	if err != nil {
-		return nil // a malformed diagram is UC-ACTDIAG's to report
+		// Not every derivation error is a UC-ACTDIAG finding, so name it here rather
+		// than let the path rules go silent for every use case.
+		return []Finding{{
+			RuleID: ruleUCPathOutcome, Severity: SeverityError, Location: loc(0, "core use cases"),
+			Message: fmt.Sprintf("the scenario derivation failed, so no use-case path could be checked for an outcome: %v", err),
+		}}
 	}
 	ucs := useCaseIndex(c)
 	clients := clientIDs(s)
@@ -106,24 +121,26 @@ func newPathWalk(uc UseCase, s System, sc scenario.Scenario, clients map[string]
 	for _, n := range uc.Activity.Nodes {
 		p.nodes[n.ID] = n
 	}
+	// The derivation reads the FIRST dynamic view of a use case (scenario.viewFor);
+	// the outcome is judged against that same view's steps, never another view's.
 	for _, dv := range s.DynamicViews {
 		if dv.UseCaseID != uc.ID {
 			continue
 		}
 		for _, st := range dv.Steps {
-			if _, dup := p.steps[st.ActivityNodeID]; !dup {
-				p.steps[st.ActivityNodeID] = st
-			}
+			p.steps[st.ActivityNodeID] = st
 		}
+		break
 	}
 	return p
 }
 
 // isActorNode: the node is performed or decided by an actor of the use case. The
-// outcome kinds and notes are never an actor's act, even when lane-linked.
+// outcome kinds, notes and the structural kinds are never an actor's act, even when
+// lane-linked; scenario.classify treats them the same way (a start is structural).
 func (p pathWalk) isActorNode(n ActivityNode) bool {
 	switch n.Kind {
-	case kindSendSignal, kindObjectNode, kindNote:
+	case kindSendSignal, kindObjectNode, kindNote, nodeStart, nodeEnd, nodeMerge, nodeFork, nodeJoin:
 		return false
 	}
 	return (n.LinkedActorID != "" && p.actors[n.LinkedActorID]) || (n.DecidedBy != "" && p.actors[n.DecidedBy])
@@ -186,17 +203,18 @@ func (p pathWalk) outcomeAtAskingSurface() []Finding {
 	return out
 }
 
-// outcomeShownTo reports whether the path, after node, carries a sendSignal to the
-// actor on the asking surface, or an objectNode reached after a step from node onward
-// touched the client.
+// outcomeShownTo reports whether the path, after the asking node, carries a sendSignal
+// to the actor on the asking surface, or an objectNode the system returned to the
+// asking client (see outcomeAt). The asking node's own step is the actor->client call
+// and never counts as the system returning anything to the client.
 func (p pathWalk) outcomeShownTo(actor, client, node string) bool {
-	engaged, started := false, false
+	started, engaged := false, false
 	for _, id := range p.sc.Path {
-		started = started || id == node
 		if !started {
+			started = id == node
 			continue
 		}
-		if st, ok := p.steps[id]; ok && stepTouchesNormalized(st, client) {
+		if st, ok := p.steps[id]; ok && stepCallsInto(st, client) {
 			engaged = true
 		}
 		if p.outcomeAt(p.nodes[id], engaged, actor, client) {
@@ -209,15 +227,27 @@ func (p pathWalk) outcomeShownTo(actor, client, node string) bool {
 // outcomeAt reports whether n shows the outcome to the asking actor on the asking
 // Client: a sendSignal to the actor that is not drawn in another component's lane
 // (cross-surface propagation is additional, never a substitute), or an objectNode
-// reached once the Client was engaged.
+// that is either reached once a call into the Client followed the asking call
+// (engaged: the state was returned to that surface) or drawn in the Client's or the
+// actor's own lane (the state is drawn on that surface).
 func (p pathWalk) outcomeAt(n ActivityNode, engaged bool, actor, client string) bool {
 	switch n.Kind {
 	case kindSendSignal:
 		return n.LinkedActorID == actor && p.laneIsAskingSurface(n.RoleName, actor, client)
 	case kindObjectNode:
-		return engaged
+		return engaged || p.laneIsSurface(n.RoleName, actor, client)
 	}
 	return false
+}
+
+// laneIsSurface reports whether the lane roleName is the asking Client's or the
+// actor's own; an empty lane is neither.
+func (p pathWalk) laneIsSurface(roleName, actor, client string) bool {
+	if roleName == "" {
+		return false
+	}
+	lane := scenario.Normalize(roleName)
+	return lane == scenario.Normalize(client) || lane == scenario.Normalize(p.actorRole(actor))
 }
 
 // laneIsAskingSurface reports whether a signal drawn in the lane roleName reaches the
@@ -245,12 +275,11 @@ func (p pathWalk) actorRole(actor string) string {
 	return ""
 }
 
-// stepTouchesNormalized reports whether any call of st names id at either end under
-// scenario.Normalize.
-func stepTouchesNormalized(st CallStep, id string) bool {
+// stepCallsInto reports whether any call of st targets id under scenario.Normalize.
+func stepCallsInto(st CallStep, id string) bool {
 	want := scenario.Normalize(id)
 	for _, call := range st.Calls {
-		if scenario.Normalize(call.From) == want || scenario.Normalize(call.To) == want {
+		if scenario.Normalize(call.To) == want {
 			return true
 		}
 	}

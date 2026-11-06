@@ -95,16 +95,24 @@ func anyContains(msgs []string, sub string) bool {
 	return false
 }
 
-// endWith inserts node (and its edge) between n9 and n10 of the reword fixture.
-func endWith(c *CoreUseCases, node ActivityNode) {
+// endWith inserts nodes, chained in order, between n9 and n10 of the reword fixture.
+func endWith(c *CoreUseCases, nodes ...ActivityNode) {
 	uc := &c.Decisions[0].UseCase
-	uc.Activity.Nodes = append(uc.Activity.Nodes, node)
-	for i, e := range uc.Activity.Edges {
-		if e.From == "n9" && e.To == "n10" {
-			uc.Activity.Edges[i] = ActivityEdge{From: "n9", To: node.ID}
+	prev := "n9"
+	for _, node := range nodes {
+		uc.Activity.Nodes = append(uc.Activity.Nodes, node)
+		if prev == "n9" {
+			for i, e := range uc.Activity.Edges {
+				if e.From == "n9" && e.To == "n10" {
+					uc.Activity.Edges[i] = ActivityEdge{From: "n9", To: node.ID}
+				}
+			}
+		} else {
+			uc.Activity.Edges = append(uc.Activity.Edges, ActivityEdge{From: prev, To: node.ID})
 		}
+		prev = node.ID
 	}
-	uc.Activity.Edges = append(uc.Activity.Edges, ActivityEdge{From: node.ID, To: "n10"})
+	uc.Activity.Edges = append(uc.Activity.Edges, ActivityEdge{From: prev, To: "n10"})
 }
 
 func TestUC_PathOutcome_FiresOnNoteOnlyPath(t *testing.T) {
@@ -149,12 +157,73 @@ func TestUC_OutcomeAtAskingSurface_FiresWhenOnlyOtherSurfaces(t *testing.T) {
 	}
 }
 
+// returnToClient adds, to the step of each named node, a call from the list manager
+// back into the todo web app: the system returning state to the asking surface.
+func returnToClient(s *System, nodes ...string) {
+	for i := range s.DynamicViews {
+		for j := range s.DynamicViews[i].Steps {
+			st := &s.DynamicViews[i].Steps[j]
+			for _, n := range nodes {
+				if st.ActivityNodeID == n {
+					st.Calls = append(st.Calls, TraceCall{From: "list-manager", To: "todo-web-app", Mode: "sync", Label: "state returned to the asking surface"})
+				}
+			}
+		}
+	}
+}
+
 func TestUC_OutcomeAtAskingSurface_ObjectNodeAfterClientCall(t *testing.T) {
 	s, c := ucPathFixture(t)
+	onlyWebApp(&s)
+	// the system calls back into the asking Client on both branches before the state.
+	returnToClient(&s, "n6", "n7")
 	endWith(&c, ActivityNode{ID: "obj", Kind: kindObjectNode, Label: "Todo", InState: "[reworded]"})
 	fs := ucPathFindings(c, s)
 	if m := messagesFor(fs, ruleUCOutcomeAtAskingSurface); len(m) != 0 {
-		t.Fatalf("the state is shown after the asking Client was engaged: %v", m)
+		t.Fatalf("the state is returned to the asking Client by a call into it: %v", m)
+	}
+}
+
+func TestUC_OutcomeAtAskingSurface_FiresWhenObjectNodeIsOnlyInResourceLane(t *testing.T) {
+	s, c := ucPathFixture(t)
+	onlyWebApp(&s)
+	// RUN-021: the state exists, but only in a resource lane; nothing returns to the
+	// asking surface, and the signal goes to the actor from ANOTHER surface.
+	endWith(&c,
+		ActivityNode{ID: "obj", Kind: kindObjectNode, Label: "Todo", InState: "[reworded]", RoleName: "List Keeping"},
+		ActivityNode{ID: "sig", Kind: kindSendSignal, Label: "shown elsewhere", LinkedActorID: "team-member", RoleName: "todo-mcp-server"})
+	msgs := messagesFor(ucPathFindings(c, s), ruleUCOutcomeAtAskingSurface)
+	if !anyContains(msgs, "reword-a-todo-P2") || !anyContains(msgs, "todowebapp") {
+		t.Fatalf("an objectNode no call returned to the asking Client must not satisfy it; got %v", msgs)
+	}
+}
+
+func TestUC_OutcomeAtAskingSurface_ObjectNodeInAskingLane(t *testing.T) {
+	for _, lane := range []string{"todo-web-app", "Team Member"} {
+		s, c := ucPathFixture(t)
+		onlyWebApp(&s)
+		endWith(&c, ActivityNode{ID: "obj", Kind: kindObjectNode, Label: "Todo", InState: "[reworded]", RoleName: lane})
+		if m := messagesFor(ucPathFindings(c, s), ruleUCOutcomeAtAskingSurface); len(m) != 0 {
+			t.Fatalf("an objectNode drawn in lane %q is shown on the asking surface: %v", lane, m)
+		}
+	}
+}
+
+func TestUC_PathOutcome_NamesTheActorStimulusNotTheStart(t *testing.T) {
+	s, c := ucPathFixture(t)
+	msgs := messagesFor(ucPathFindings(c, s), ruleUCPathOutcome)
+	if !anyContains(msgs, `input at node "n2"`) || anyContains(msgs, `input at node "n1"`) {
+		t.Fatalf("n1 is a structural start; the first actor input is n2: %v", msgs)
+	}
+}
+
+func TestUC_PathRules_ReportDerivationError(t *testing.T) {
+	s, c := ucPathFixture(t)
+	uc := &c.Decisions[0].UseCase
+	uc.Activity.Nodes = append(uc.Activity.Nodes, uc.Activity.Nodes[0]) // duplicate node id
+	msgs := messagesFor(ucPathFindings(c, s), ruleUCPathOutcome)
+	if !anyContains(msgs, "derivation failed") || !anyContains(msgs, "duplicate node id") {
+		t.Fatalf("a derivation error must be a finding, not silence: %v", msgs)
 	}
 }
 
