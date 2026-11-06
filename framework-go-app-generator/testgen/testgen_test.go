@@ -57,8 +57,7 @@ func TestGenerate_GoScenarioFileShape(t *testing.T) {
 		"func TestScenario_process_order_P2(",
 		"func TestScenario_track_order_P1(",
 		"h.RunScenario(t, \"billingManager\", \"process-order-P2\"",
-		"stepProcessOrderP2S1(t, h, subject, in1)",                    // hook call for Hook:true steps
-		"subject.GetInvoice(callContext(t, h, \"1\"), in1.InvoiceId)", // direct call for Hook:false steps
+		"subject.GetInvoice(callContext(t, h, \"1\"), in1.InvoiceId)", // a step is always a direct call
 		"\"example.com/app/server/internal/manager/billing\"",
 		"fwm \"github.com/mixofreality-studio/archistrator-platform/framework-go/manager\"",
 		"\"github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost\"",
@@ -82,7 +81,6 @@ func TestGenerate_GoScenarioFileShape(t *testing.T) {
 		"// Hooks for billingManager scenario tests. Generated ONCE by testgen; owned by the construction agent.",
 		"package billing_test",
 		"func newSubject(t *testing.T, h *scenariohost.Host) billing.BillingManager",
-		"func stepProcessOrderP2S1(t *testing.T, h *scenariohost.Host, subject billing.BillingManager, in inputProcessOrderP2S1) (any, error)",
 		"func replayWorkflows() scenariohost.Workflows {",
 		"return scenariohost.Workflows{Register: func(scenariohost.Worker) {",
 		"panic(\"FILL replayWorkflows\")",
@@ -132,7 +130,6 @@ func TestGenerate_PlaywrightSpec(t *testing.T) {
 		"test('browse-orders-P1",
 		"await page.goto('/orders');",
 		"await page.getByTestId('orders-tab').click();",
-		"await hooks.step('browse-orders-P1', 1, page);",
 		"await expect(page.getByTestId('orders-list')).toBeVisible();",
 		"{ type: 'scenario', description: 'browse-orders-P1' }",
 	} {
@@ -150,8 +147,8 @@ func TestGenerate_PlaywrightSpec(t *testing.T) {
 		t.Errorf("missing reporter.gen.ts; have %v", keys(out.Generated))
 	}
 	hooks := string(out.HooksOnce[shopHooks])
-	if !strings.Contains(hooks, "before") || !strings.Contains(hooks, "step") || !strings.Contains(hooks, "FILL") {
-		t.Errorf("hooks.ts must stub before/step with FILL:\n%s", hooks)
+	if !strings.Contains(hooks, "before") || !strings.Contains(hooks, "FILL") {
+		t.Errorf("hooks.ts must stub before with FILL:\n%s", hooks)
 	}
 }
 
@@ -191,7 +188,7 @@ func TestGenerate_RefusesAPlanNotKeyedByTheContract(t *testing.T) {
 		t.Fatal(err)
 	}
 	plans := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)
-	plans["shop-client"] = map[string]any{"component": "shop-client", "bindings": []any{}}
+	plans["shop-client"] = map[string]any{"component": "shop-client", "principals": map[string]any{}, "bindings": []any{}}
 	bad, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)
@@ -217,8 +214,8 @@ func TestGenerate_PlaywrightSkipCarriesScenarioAnnotation(t *testing.T) {
 		t.Fatal(err)
 	}
 	plans := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)
-	plans["shopClient"] = map[string]any{"component": "shopClient", "bindings": []any{
-		map[string]any{"scenario": "browse-orders-P1", "steps": []any{}, "skip": map[string]any{"reason": "orders page not built", "until": "C-shop-client"}},
+	plans["shopClient"] = map[string]any{"component": "shopClient", "principals": map[string]any{}, "bindings": []any{
+		map[string]any{"scenario": "browse-orders-P1", "arrange": []any{}, "steps": []any{}, "skip": map[string]any{"reason": "orders page not built", "until": "C-shop-client"}},
 	}}
 	skipped, err := json.Marshal(doc)
 	if err != nil {
@@ -351,7 +348,7 @@ func TestDrift_MissingHookAndStaleFile(t *testing.T) {
 	root := t.TempDir()
 	writeAll(t, root, out.Generated)
 	writeAll(t, root, out.HooksOnce)
-	hooks := strings.Replace(string(out.HooksOnce[billingHooks]), "func stepProcessOrderP2S1(", "func stepRenamedS1(", 1)
+	hooks := strings.Replace(string(out.HooksOnce[billingHooks]), "func newSubject(", "func newSubjectRenamed(", 1)
 	writeAll(t, root, map[string][]byte{
 		billingHooks: []byte(hooks),
 		orderGen:     []byte("// edited by hand\n"),
@@ -364,8 +361,8 @@ func TestDrift_MissingHookAndStaleFile(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, want := range []string{
-		"missing hook stepProcessOrderP2S1 in " + billingHooks,
-		"orphan hook stepRenamedS1 in " + billingHooks,
+		"missing hook newSubject in " + billingHooks,
+		"orphan hook newSubjectRenamed in " + billingHooks,
 		"stale: " + orderGen,
 		"missing hooks file " + shopHooks,
 	} {
@@ -385,7 +382,7 @@ func TestGenerate_ZeroBindingPackageStillGetsTestMain(t *testing.T) {
 		t.Fatal(err)
 	}
 	plans := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)
-	plans["billingManager"] = map[string]any{"component": "billingManager", "bindings": []any{}}
+	plans["billingManager"] = map[string]any{"component": "billingManager", "principals": map[string]any{}, "bindings": []any{}}
 	emptied, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)

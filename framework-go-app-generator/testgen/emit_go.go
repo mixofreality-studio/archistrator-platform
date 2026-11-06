@@ -397,16 +397,16 @@ func argNamed(inputs []methodcheck.TestArg, name string) (methodcheck.TestArg, b
 }
 
 // argJSON is one input argument as the JSON the generated step unmarshals.
-// A ref argument names an earlier step's result; resolving it is Task 2.8
-// (the v2 emitters), so until then it is a generation error, never a stub.
+// A ref argument names an earlier step's result; this emitter does not
+// resolve one, so it is a generation error, never a stub.
 func argJSON(arg methodcheck.TestArg, stringTyped bool) (string, error) {
 	switch v := arg.Value.(type) {
 	case methodcheck.LiteralValue:
 		return jsonValue(string(v.JSON), stringTyped), nil
 	case methodcheck.RefValue:
-		return "", fmt.Errorf("testgen: input %q is a ref to step %d (%s): ref arguments are unsupported until Task 2.8", arg.Name, v.Step, v.Path)
+		return "", fmt.Errorf("testgen: input %q is a ref to step %d (%s): ref arguments are not resolved by this emitter", arg.Name, v.Step, v.Path)
 	}
-	return "", fmt.Errorf("testgen: input %q: unknown TestArgValue %T", arg.Name, arg.Value)
+	panic("unreachable: sealed TestArgValue")
 }
 
 // jsonValue is one binding value as the JSON the generated step unmarshals. A

@@ -123,16 +123,16 @@ func UIObservableKinds() []string { return slices.Sorted(maps.Keys(playwrightObs
 func byTestID(id string) string { return "page.getByTestId(" + tsStr(id) + ")" }
 
 // literalInput is a bound input's literal JSON text. A ref input names an
-// earlier step's result; resolving it is Task 2.8, so until then it is a
+// earlier step's result; this emitter does not resolve one, so it is a
 // generation error, never a stub.
 func literalInput(in methodcheck.TestArg) (string, error) {
 	switch v := in.Value.(type) {
 	case methodcheck.LiteralValue:
 		return string(v.JSON), nil
 	case methodcheck.RefValue:
-		return "", fmt.Errorf("input %s is a ref to step %d (%s): ref arguments are unsupported until Task 2.8", in.Name, v.Step, v.Path)
+		return "", fmt.Errorf("input %s is a ref to step %d (%s): ref arguments are not resolved by this emitter", in.Name, v.Step, v.Path)
 	}
-	return "", fmt.Errorf("input %s: unknown TestArgValue %T", in.Name, in.Value)
+	panic("unreachable: sealed TestArgValue")
 }
 
 // playwrightAction spells one bound input as a page action. An input that is not the

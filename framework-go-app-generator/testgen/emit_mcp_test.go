@@ -71,20 +71,19 @@ func withShopTools(t *testing.T, doc map[string]any) {
 		}},
 	}
 	doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)["shopTools"] = map[string]any{
-		"component": "shopTools",
-		"bindings": []any{map[string]any{"scenario": "track-order-P1", "skip": nil, "steps": []any{map[string]any{
-			"seq": 1, "operation": "OrderGetOrder", "hook": false,
-			"inputs": []any{map[string]any{"name": "orderId", "value": "o-1"}},
+		"component": "shopTools", "principals": map[string]any{},
+		"bindings": []any{map[string]any{"scenario": "track-order-P1", "skip": nil, "arrange": []any{}, "steps": []any{map[string]any{
+			"seq": 1, "operation": "OrderGetOrder",
+			"inputs": []any{map[string]any{"name": "orderId", "value": lit("o-1")}},
 			"expect": map[string]any{"result": `{"result":{"state":"open"}}`, "errorExpected": false},
 			"probes": []any{
 				map[string]any{"for": "Order[open]", "component": "shopTools", "operation": "OrderGetOrder",
-					"inputs": []any{map[string]any{"name": "orderId", "value": "o-1"}},
+					"inputs": []any{map[string]any{"name": "orderId", "value": lit("o-1")}},
 					"expect": map[string]any{"result": `{"result":{"id":"o-1"}}`, "errorExpected": false}},
 				map[string]any{"for": "Order[open]", "component": "orderManager", "operation": "GetOrder",
-					"inputs": []any{map[string]any{"name": "orderId", "value": "o-1"}},
+					"inputs": []any{map[string]any{"name": "orderId", "value": lit("o-1")}},
 					"expect": map[string]any{"result": `{"id":"o-1"}`, "errorExpected": false}},
 			},
-			"unobservable": []any{},
 		}}}},
 	}
 }
@@ -161,20 +160,18 @@ func TestGenerate_MCPClientCallsToolsInProcess(t *testing.T) {
 
 // TestGenerate_MCPClientHooksNeedNoSDK: the hooks file builds the tools
 // server from the generated tools packages' handlers and fills hooked steps
-// through the session the generated file hands it, so it imports only what
+// probes through the session the generated file hands it, so it imports only what
 // any hooks file does — the MCP SDK stays in the generated file.
 func TestGenerate_MCPClientHooksNeedNoSDK(t *testing.T) {
 	doc := fixtureDoc(t)
 	withShopTools(t, doc)
-	step := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)["shopTools"].(map[string]any)["bindings"].([]any)[0].(map[string]any)["steps"].([]any)[0].(map[string]any)
-	step["hook"] = true
 	out, err := generateDoc(t, doc)
 	if err != nil {
 		t.Fatal(err)
 	}
 	src := string(out.Generated[toolsGen])
-	if !strings.Contains(src, "out1, err1 := stepTrackOrderP1S1(t, h, subject, `{\"orderId\":\"o-1\"}`)") {
-		t.Errorf("hooked tool step must call its hook with the tool arguments:\n%s", src)
+	if strings.Contains(src, "stepTrackOrderP1S1") {
+		t.Errorf("step hooks are gone: a tool step calls the tool directly:\n%s", src)
 	}
 	hooks, ok := out.HooksOnce[toolsHooks]
 	if !ok {
@@ -184,7 +181,6 @@ func TestGenerate_MCPClientHooksNeedNoSDK(t *testing.T) {
 		"// Hooks for shopTools scenario tests. Generated ONCE by testgen; owned by the construction agent.",
 		"package mcp_test",
 		"func newSubject(t *testing.T, h *scenariohost.Host) toolServer {",
-		"func stepTrackOrderP1S1(t *testing.T, h *scenariohost.Host, subject *toolSession, args string) (any, error) {",
 		"func probeTrackOrderP1S1N2(t *testing.T, h *scenariohost.Host, subject *toolSession) (any, error) {",
 		"orderGetOrder",
 		"hand it permitAll{}",
@@ -349,7 +345,7 @@ func TestGenerate_MCPPackageServesOneSurface(t *testing.T) {
 	twin["component"] = "shopToolsTwin"
 	contracts["shopToolsTwin"] = twin
 	plans := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)
-	plans["shopToolsTwin"] = map[string]any{"component": "shopToolsTwin", "bindings": []any{}}
+	plans["shopToolsTwin"] = map[string]any{"component": "shopToolsTwin", "principals": map[string]any{}, "bindings": []any{}}
 	_, err := generateDoc(t, doc)
 	if err == nil || !strings.Contains(err.Error(), "internal/client/mcp hosts several MCP client contracts (shopTools, shopToolsTwin)") {
 		t.Fatalf("want a one-surface error, got %v", err)
@@ -377,7 +373,7 @@ func TestGenerate_RESTClientRequestsItsRoutes(t *testing.T) {
 	  "interface":{"name":"ListManager","layer":"manager","operations":[{"name":"AddTodo","params":[{"name":"owner","schema":{"$ref":"#/$defs/Owner"}}],"result":{"$ref":"#/$defs/Owner"},"error":true}]}},
 	"webApi":{"component":"webApi","layer":"Client","goPackage":"internal/client/web/list","$defs":{"Owner":{"type":"string"}},
 	  "interface":{"name":"WebApi","layer":"client","operations":[{"name":"ListAddTodo","params":[{"name":"owner","schema":{"$ref":"#/$defs/Owner"}}],"result":{"$ref":"#/$defs/Owner"},"error":true}]}}},
-	"phaseArtifacts":{"testPlan":{"webApi":{"component":"webApi","bindings":[]}}}}`
+	"phaseArtifacts":{"testPlan":{"webApi":{"component":"webApi","principals":{},"bindings":[]}}}}`
 	out, err := Generate([]byte(project), Config{ModulePath: "example/app"})
 	if err != nil {
 		t.Fatal(err)
@@ -421,4 +417,9 @@ func TestRESTTransportHelpers(t *testing.T) {
 	if _, err := transportHelpers(plan, true, routes); err == nil {
 		t.Error("an operation no handler mounts must be refused")
 	}
+}
+
+// lit is a v2 literal argument value: {"kind":"literal","model":{"json":v}}.
+func lit(v any) map[string]any {
+	return map[string]any{"kind": "literal", "model": map[string]any{"json": v}}
 }

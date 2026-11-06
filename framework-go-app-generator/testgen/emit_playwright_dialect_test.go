@@ -37,11 +37,10 @@ func generateShopStep(t *testing.T, actions []string, observation string) (Outpu
 	step := plan["bindings"].([]any)[0].(map[string]any)["steps"].([]any)[0].(map[string]any)
 	inputs := make([]any, 0, len(actions))
 	for _, a := range actions {
-		inputs = append(inputs, map[string]any{"name": "action", "value": a})
+		inputs = append(inputs, map[string]any{"name": "action", "value": lit(json.RawMessage(a))})
 	}
 	step["inputs"] = inputs
 	step["expect"] = map[string]any{"result": observation, "errorExpected": false}
-	step["hook"] = false
 	edited, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)

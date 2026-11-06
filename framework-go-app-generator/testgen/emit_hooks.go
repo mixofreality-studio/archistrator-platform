@@ -120,17 +120,6 @@ func %s(t *testing.T, h *scenariohost.Host, subject %s) (any, error) {
 `, name, bs.Scenario.Title, st.Bind.Seq, n, pr.Component, pr.Operation, pr.For, compactJSON(pr), pr.Component, pr.Operation, name, g.subjectType(plan), name)
 }
 
-func guardList(bs boundScenario) string {
-	if len(bs.Scenario.Guards) == 0 {
-		return "(none)"
-	}
-	var gs []string
-	for _, gd := range bs.Scenario.Guards {
-		gs = append(gs, gd.At+"="+gd.Guard)
-	}
-	return strings.Join(gs, ", ")
-}
-
 // compactJSON is v as a single comment line.
 func compactJSON(v any) string {
 	raw, err := json.Marshal(v)

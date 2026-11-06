@@ -136,8 +136,6 @@ func TestGenerate_SharedPackageInfixesTheInterface(t *testing.T) {
 	for _, want := range []string{
 		"func newSubjectBillingManager(t *testing.T, h *scenariohost.Host) billing.BillingManager",
 		"func newSubjectOrderManager(t *testing.T, h *scenariohost.Host) billing.OrderManager",
-		"func stepBillingManagerProcessOrderP2S1(t *testing.T, h *scenariohost.Host, subject billing.BillingManager, in inputBillingManagerProcessOrderP2S1) (any, error)",
-		"func stepOrderManagerProcessOrderP2S1(t *testing.T, h *scenariohost.Host, subject billing.OrderManager, in inputOrderManagerProcessOrderP2S1) (any, error)",
 		"func probeOrderManagerProcessOrderP2S1N1(t *testing.T, h *scenariohost.Host, subject billing.OrderManager) (any, error)",
 	} {
 		if !strings.Contains(hooks, want) {

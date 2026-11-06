@@ -686,7 +686,15 @@
                 "inputs": [
                   {
                     "name": "order",
-                    "value": "{\"id\":\"o-1\",\"total\":-1}",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "id": "o-1",
+                          "total": -1
+                        }
+                      }
+                    },
                     "schemaRef": "#/$defs/Order"
                   }
                 ],
@@ -694,12 +702,11 @@
                   "errorExpected": true,
                   "errorCode": "OrderRejected"
                 },
-                "probes": [],
-                "unobservable": [],
-                "hook": false
+                "probes": []
               }
             ],
-            "skip": null
+            "skip": null,
+            "arrange": []
           },
           {
             "scenario": "process-order-P2",
@@ -710,7 +717,15 @@
                 "inputs": [
                   {
                     "name": "order",
-                    "value": "{\"id\":\"o-2\",\"total\":1200}",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "id": "o-2",
+                          "total": 1200
+                        }
+                      }
+                    },
                     "schemaRef": "#/$defs/Order"
                   }
                 ],
@@ -726,7 +741,12 @@
                     "inputs": [
                       {
                         "name": "invoiceId",
-                        "value": "inv-o-2"
+                        "value": {
+                          "kind": "literal",
+                          "model": {
+                            "json": "inv-o-2"
+                          }
+                        }
                       }
                     ],
                     "expect": {
@@ -734,14 +754,11 @@
                       "errorExpected": false
                     }
                   }
-                ],
-                "unobservable": [
-                  "send-invoice"
-                ],
-                "hook": true
+                ]
               }
             ],
-            "skip": null
+            "skip": null,
+            "arrange": []
           },
           {
             "scenario": "track-order-P1",
@@ -752,7 +769,12 @@
                 "inputs": [
                   {
                     "name": "orderId",
-                    "value": "o-2",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "o-2"
+                      }
+                    },
                     "schemaRef": "#/$defs/OrderID"
                   }
                 ],
@@ -760,14 +782,14 @@
                   "result": "{\"id\":\"o-2\",\"status\":\"accepted\"}",
                   "errorExpected": false
                 },
-                "probes": [],
-                "unobservable": [],
-                "hook": false
+                "probes": []
               }
             ],
-            "skip": null
+            "skip": null,
+            "arrange": []
           }
-        ]
+        ],
+        "principals": {}
       },
       "billingManager": {
         "component": "billingManager",
@@ -781,11 +803,21 @@
                 "inputs": [
                   {
                     "name": "invoiceId",
-                    "value": "inv-o-2"
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "inv-o-2"
+                      }
+                    }
                   },
                   {
                     "name": "amount",
-                    "value": "1200"
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": 1200
+                      }
+                    }
                   }
                 ],
                 "expect": {
@@ -799,7 +831,12 @@
                     "inputs": [
                       {
                         "name": "invoiceId",
-                        "value": "inv-o-2"
+                        "value": {
+                          "kind": "literal",
+                          "model": {
+                            "json": "inv-o-2"
+                          }
+                        }
                       }
                     ],
                     "expect": {
@@ -807,12 +844,11 @@
                       "errorExpected": false
                     }
                   }
-                ],
-                "unobservable": [],
-                "hook": true
+                ]
               }
             ],
-            "skip": null
+            "skip": null,
+            "arrange": []
           },
           {
             "scenario": "track-order-P1",
@@ -823,21 +859,26 @@
                 "inputs": [
                   {
                     "name": "invoiceId",
-                    "value": "inv-o-2"
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "inv-o-2"
+                      }
+                    }
                   }
                 ],
                 "expect": {
                   "result": "{\"id\":\"inv-o-2\",\"state\":\"paid\"}",
                   "errorExpected": false
                 },
-                "probes": [],
-                "unobservable": [],
-                "hook": false
+                "probes": []
               }
             ],
-            "skip": null
+            "skip": null,
+            "arrange": []
           }
-        ]
+        ],
+        "principals": {}
       },
       "shopClient": {
         "component": "shopClient",
@@ -851,25 +892,41 @@
                 "inputs": [
                   {
                     "name": "action",
-                    "value": "{\"kind\":\"navigate\",\"value\":\"/orders\"}"
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "navigate",
+                          "value": "/orders"
+                        }
+                      }
+                    }
                   },
                   {
                     "name": "action",
-                    "value": "{\"kind\":\"click\",\"target\":\"orders-tab\"}"
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "target": "orders-tab"
+                        }
+                      }
+                    }
                   }
                 ],
                 "expect": {
                   "result": "{\"visible\":\"orders-list\"}",
                   "errorExpected": false
                 },
-                "probes": [],
-                "unobservable": [],
-                "hook": true
+                "probes": []
               }
             ],
-            "skip": null
+            "skip": null,
+            "arrange": []
           }
-        ]
+        ],
+        "principals": {}
       }
     }
   },
