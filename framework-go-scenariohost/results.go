@@ -223,6 +223,7 @@ func (h *Host) writeIndex(component string, verdicts []ScenarioResult) error {
 	dir := h.ResultsDir(component)
 	path := filepath.Join(dir, resultsFile)
 	merged := map[string]ScenarioResult{}
+	// #nosec G304 -- path is the host's own ResultsRoot/<component>/results.json: a fixed file name under the results directory this process writes.
 	prior, err := os.ReadFile(path)
 	switch {
 	case err == nil:
@@ -300,32 +301,38 @@ func (h *Host) RunScenario(t *testing.T, component, id string, fn func(t *testin
 			os.Exit(1)
 		})
 		defer func() {
-			if !timer.Stop() {
-				// The watchdog already fired: it records the timeout and exits the
-				// process, so this scenario must not record a verdict of its own.
-				select {}
-			}
-			r := ScenarioResult{Scenario: id, DurationMs: int(time.Since(start) / time.Millisecond)}
 			panicked := recover()
-			// Nothing the scenario started outlives it (temporal.go); ending it
-			// before the verdict lets a failure to end it fail the scenario.
-			if err := h.endScenarioWorkflows(start); err != nil {
-				t.Error(err)
-			}
-			switch {
-			case panicked != nil, t.Failed():
-				r.Status = StatusFail
-			case t.Skipped():
-				r.Status = StatusSkip
-			default:
-				r.Status = StatusPass
-			}
-			h.Record(component, r)
-			h.ran(component, id, window{start: start, end: time.Now()})
-			if panicked != nil {
-				panic(panicked)
-			}
+			h.finishScenario(t, component, id, start, timer, panicked)
 		}()
 		fn(t)
 	})
+}
+
+// finishScenario records the verdict of one scenario once it has returned (or
+// panicked), then re-raises a panic so the testing package reports it as usual.
+func (h *Host) finishScenario(t *testing.T, component, id string, start time.Time, timer *time.Timer, panicked any) {
+	if !timer.Stop() {
+		// The watchdog already fired: it records the timeout and exits the
+		// process, so this scenario must not record a verdict of its own.
+		select {}
+	}
+	r := ScenarioResult{Scenario: id, DurationMs: int(time.Since(start) / time.Millisecond)}
+	// Nothing the scenario started outlives it (temporal.go); ending it
+	// before the verdict lets a failure to end it fail the scenario.
+	if err := h.endScenarioWorkflows(start); err != nil {
+		t.Error(err)
+	}
+	switch {
+	case panicked != nil, t.Failed():
+		r.Status = StatusFail
+	case t.Skipped():
+		r.Status = StatusSkip
+	default:
+		r.Status = StatusPass
+	}
+	h.Record(component, r)
+	h.ran(component, id, window{start: start, end: time.Now()})
+	if panicked != nil {
+		panic(panicked)
+	}
 }
