@@ -304,8 +304,8 @@ func openEnvelope(raw []byte) (kind string, model json.RawMessage, err error) {
 	if e.Kind == "" {
 		return "", nil, fmt.Errorf("envelope has no kind")
 	}
-	if len(e.Model) == 0 {
-		return e.Kind, json.RawMessage(`{}`), nil
+	if len(e.Model) == 0 || string(e.Model) == "null" {
+		return "", nil, fmt.Errorf("envelope of kind %q has no model", e.Kind)
 	}
 	return e.Kind, e.Model, nil
 }

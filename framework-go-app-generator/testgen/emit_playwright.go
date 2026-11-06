@@ -55,7 +55,7 @@ func playwrightSpec(plan componentPlan, bs boundScenario) (string, error) {
 	fmt.Fprintf(&b, "  testInfo.annotations.push(%s);\n", annotation)
 	fmt.Fprintf(&b, "  await hooks.before(%s, page);\n", tsStr(id))
 	for _, st := range bs.Steps {
-		if err := writePlaywrightStep(&b, id, st); err != nil {
+		if err := writePlaywrightStep(&b, st); err != nil {
 			return "", fmt.Errorf("step %d: %w", st.Bind.Seq, err)
 		}
 	}
@@ -63,7 +63,7 @@ func playwrightSpec(plan componentPlan, bs boundScenario) (string, error) {
 	return b.String(), nil
 }
 
-func writePlaywrightStep(b *strings.Builder, id string, st boundStep) error {
+func writePlaywrightStep(b *strings.Builder, st boundStep) error {
 	seq := st.Bind.Seq
 	fmt.Fprintf(b, "  // step %d: %s (node %s)\n", seq, st.Op.Name, st.Stim.Node)
 	for _, in := range st.Bind.Inputs {
@@ -73,9 +73,6 @@ func writePlaywrightStep(b *strings.Builder, id string, st boundStep) error {
 		}
 		b.WriteString(line)
 	}
-	if st.Bind.Hook {
-		fmt.Fprintf(b, "  await hooks.step(%s, %d, page);\n", tsStr(id), seq)
-	}
 	expect, err := playwrightExpect(st.Bind.Expect)
 	if err != nil {
 		return err
@@ -83,9 +80,6 @@ func writePlaywrightStep(b *strings.Builder, id string, st boundStep) error {
 	b.WriteString(expect)
 	for _, pr := range st.Bind.Probes {
 		fmt.Fprintf(b, "  // probe for %s: %s.%s %s\n", pr.For, pr.Component, pr.Operation, compactJSON(pr))
-	}
-	if len(st.Bind.Unobservable) > 0 {
-		fmt.Fprintf(b, "  // unobservable: %s\n", strings.Join(st.Bind.Unobservable, ", "))
 	}
 	return nil
 }
@@ -128,16 +122,33 @@ func UIObservableKinds() []string { return slices.Sorted(maps.Keys(playwrightObs
 
 func byTestID(id string) string { return "page.getByTestId(" + tsStr(id) + ")" }
 
+// literalInput is a bound input's literal JSON text. A ref input names an
+// earlier step's result; resolving it is Task 2.8, so until then it is a
+// generation error, never a stub.
+func literalInput(in methodcheck.TestArg) (string, error) {
+	switch v := in.Value.(type) {
+	case methodcheck.LiteralValue:
+		return string(v.JSON), nil
+	case methodcheck.RefValue:
+		return "", fmt.Errorf("input %s is a ref to step %d (%s): ref arguments are unsupported until Task 2.8", in.Name, v.Step, v.Path)
+	}
+	return "", fmt.Errorf("input %s: unknown TestArgValue %T", in.Name, in.Value)
+}
+
 // playwrightAction spells one bound input as a page action. An input that is not the
 // web operation's action parameter stays visible as a comment; an action outside the
 // dialect is a generation error, never a silent comment.
 func playwrightAction(in methodcheck.TestArg) (string, error) {
-	if in.Name != webActionParam {
-		return fmt.Sprintf("  // input %s: %s\n", in.Name, in.Value), nil
-	}
-	a, err := methodcheck.ParseUIAction(in.Value)
+	lit, err := literalInput(in)
 	if err != nil {
-		return "", fmt.Errorf("input %s %s: %w", in.Name, in.Value, err)
+		return "", err
+	}
+	if in.Name != webActionParam {
+		return fmt.Sprintf("  // input %s: %s\n", in.Name, lit), nil
+	}
+	a, err := methodcheck.ParseUIAction(lit)
+	if err != nil {
+		return "", fmt.Errorf("input %s %s: %w", in.Name, lit, err)
 	}
 	return "  await " + playwrightActions[a.Kind](a) + ";\n", nil
 }
@@ -284,26 +295,11 @@ func playwrightHooks(plan componentPlan) string {
 	fmt.Fprintf(&b, "// Hooks for %s scenario tests. Generated ONCE by testgen; owned by the construction agent.\n", plan.Key)
 	b.WriteString(`import type { Page } from '@playwright/test';
 
-// Hooked steps (scenario / seq → binding JSON):
-`)
-	for _, bs := range plan.Scenarios {
-		for _, st := range bs.Steps {
-			if st.Bind.Hook {
-				fmt.Fprintf(&b, "//   %s / %d: %s\n", bs.Scenario.ID, st.Bind.Seq, compactJSON(st.Bind))
-			}
-		}
-	}
-	b.WriteString(`
 export const hooks = {
   // FILL: sign in and seed whatever state scenario id starts from.
   async before(id: string, page: Page): Promise<void> {
     void page;
     throw new Error('FILL hooks.before ' + id);
-  },
-  // FILL: perform step seq of scenario id (its binding is listed above) and assert its observables.
-  async step(id: string, seq: number, page: Page): Promise<void> {
-    void page;
-    throw new Error('FILL hooks.step ' + id + '/' + seq);
   },
 };
 `)

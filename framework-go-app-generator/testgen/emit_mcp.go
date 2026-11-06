@@ -110,6 +110,9 @@ func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componen
 		}
 		g.emitToolScenario(plan, bs)
 	}
+	if g.err != nil {
+		return g.err
+	}
 	src, err := g.toolsFile(plan, routes)
 	if err != nil {
 		return err
@@ -154,17 +157,10 @@ func (g *goEmit) emitToolScenario(plan componentPlan, bs boundScenario) {
 // expectation, then the probes.
 func (g *goEmit) emitToolStep(plan componentPlan, bs boundScenario, st boundStep) {
 	id, seq := bs.Scenario.ID, st.Bind.Seq
-	args := rawString(inputsJSON(plan.Contract, st.Op, st.Bind.Inputs))
+	args := rawString(g.inputs(plan.Contract, st.Op, st.Bind.Inputs))
 	fmt.Fprintf(&g.body, "\t\t// step %d: %s → tool %s (node %s%s)\n", seq, st.Op.Name, toolName(st.Op), st.Stim.Node, guardNote(bs.Scenario))
-	if st.Bind.Hook {
-		fmt.Fprintf(&g.body, "\t\tout%d, err%d := %s(t, h, subject, %s)\n", seq, seq, g.stepName(plan, id, seq), args)
-	} else {
-		fmt.Fprintf(&g.body, "\t\tout%d, err%d := subject.Call(h.Context(t), %q, %s)\n", seq, seq, toolName(st.Op), args)
-	}
+	fmt.Fprintf(&g.body, "\t\tout%d, err%d := subject.Call(h.Context(t), %q, %s)\n", seq, seq, toolName(st.Op), args)
 	fmt.Fprintf(&g.body, "\t\texpect(t, %q, %d, out%d, err%d, %s)\n", id, seq, seq, seq, rawString(expectJSON(st.Bind.Expect)))
-	if len(st.Bind.Unobservable) > 0 {
-		fmt.Fprintf(&g.body, "\t\t// unobservable: %s\n", strings.Join(st.Bind.Unobservable, ", "))
-	}
 	for i, pr := range st.Bind.Probes {
 		g.emitToolProbe(plan, bs, st, i+1, pr)
 	}
@@ -177,7 +173,7 @@ func (g *goEmit) emitToolProbe(plan componentPlan, bs boundScenario, st boundSte
 	v := fmt.Sprintf("%d_%d", seq, n)
 	fmt.Fprintf(&g.body, "\t\t// probe %d.%d: %s.%s for %s\n", seq, n, pr.Component, pr.Operation, pr.For)
 	if op, inline := g.inlineProbe(plan, pr); inline {
-		fmt.Fprintf(&g.body, "\t\tpout%s, perr%s := subject.Call(h.Context(t), %q, %s)\n", v, v, toolName(op), rawString(inputsJSON(plan.Contract, op, pr.Inputs)))
+		fmt.Fprintf(&g.body, "\t\tpout%s, perr%s := subject.Call(h.Context(t), %q, %s)\n", v, v, toolName(op), rawString(g.inputs(plan.Contract, op, pr.Inputs)))
 	} else {
 		fmt.Fprintf(&g.body, "\t\tpout%s, perr%s := %s(t, h, subject)\n", v, v, g.probeName(plan, id, seq, n))
 	}
@@ -298,21 +294,6 @@ func stepTools(plan componentPlan, st boundStep) []string {
 // stub of each of its cross-component probes.
 func (g *goEmit) writeToolStepHooks(b *bytes.Buffer, plan componentPlan, bs boundScenario, st boundStep) {
 	id, seq := bs.Scenario.ID, st.Bind.Seq
-	if st.Bind.Hook {
-		name := g.stepName(plan, id, seq)
-		fmt.Fprintf(b, `// %s — %s, step %d: %s (tool %s)
-// Projected stimulus (JSON): %s
-// Binding (JSON): %s
-// FILL: arrange state so that guards %s hold, call the tool —
-// subject.Call(h.Context(t), %q, args) — and return its result.
-func %s(t *testing.T, h *scenariohost.Host, subject *toolSession, args string) (any, error) {
-	t.Helper()
-	t.Fatal("FILL %s")
-	return nil, nil
-}
-
-`, name, bs.Scenario.Title, seq, st.Op.Name, toolName(st.Op), compactJSON(st.Stim), compactJSON(st.Bind), guardList(bs), toolName(st.Op), name, name)
-	}
 	for i, pr := range st.Bind.Probes {
 		if _, inline := g.inlineProbe(plan, pr); inline {
 			continue

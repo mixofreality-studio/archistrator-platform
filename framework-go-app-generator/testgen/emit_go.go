@@ -52,6 +52,23 @@ type goEmit struct {
 	imports map[string]bool   // extra import paths (x-go-import bindings)
 	subject bool              // ≥1 contract has a runnable binding
 	owners  map[string]string // declared Go name → the binding that declares it (claim)
+	err     error             // first generation error; emit helpers record it, the file emitters return it
+}
+
+// fail records the first generation error; later ones are dropped.
+func (g *goEmit) fail(err error) {
+	if g.err == nil {
+		g.err = err
+	}
+}
+
+// inputs is inputsJSON with a failure recorded on the emitter.
+func (g *goEmit) inputs(sc methodcheck.ServiceContract, op methodcheck.ContractOperation, inputs []methodcheck.TestArg) string {
+	s, err := inputsJSON(sc, op, inputs)
+	if err != nil {
+		g.fail(err)
+	}
+	return s
 }
 
 // emitGo emits one Go package's generated scenarios file and, when any
@@ -71,6 +88,9 @@ func emitGo(out *Output, cfg Config, goPkg, stereotype string, plans []component
 			return err
 		}
 		g.emitPlan(plan)
+	}
+	if g.err != nil {
+		return g.err
 	}
 	src, err := g.generatedFile(plans)
 	if err != nil {
@@ -278,17 +298,10 @@ func (g *goEmit) emitStep(plan componentPlan, bs boundScenario, st boundStep) {
 	id, seq := bs.Scenario.ID, st.Bind.Seq
 	fmt.Fprintf(&g.body, "\t\t// step %d: %s (node %s%s)\n", seq, st.Op.Name, st.Stim.Node, guardNote(bs.Scenario))
 	fmt.Fprintf(&g.body, "\t\tvar in%d %s\n", seq, g.inputName(plan, id, seq))
-	fmt.Fprintf(&g.body, "\t\tmustUnmarshal(t, %s, &in%d)\n", rawString(inputsJSON(plan.Contract, st.Op, st.Bind.Inputs)), seq)
+	fmt.Fprintf(&g.body, "\t\tmustUnmarshal(t, %s, &in%d)\n", rawString(g.inputs(plan.Contract, st.Op, st.Bind.Inputs)), seq)
 	fmt.Fprintf(&g.body, "\t\tvar out%d any\n\t\tvar err%d error\n", seq, seq)
-	if st.Bind.Hook {
-		fmt.Fprintf(&g.body, "\t\tout%d, err%d = %s(t, h, subject, in%d)\n", seq, seq, g.stepName(plan, id, seq), seq)
-	} else {
-		g.body.WriteString("\t\t" + callLine(st.Op, fmt.Sprintf("out%d", seq), fmt.Sprintf("err%d", seq), fmt.Sprintf("in%d", seq), strconv.Itoa(seq)) + "\n")
-	}
+	g.body.WriteString("\t\t" + callLine(st.Op, fmt.Sprintf("out%d", seq), fmt.Sprintf("err%d", seq), fmt.Sprintf("in%d", seq), strconv.Itoa(seq)) + "\n")
 	fmt.Fprintf(&g.body, "\t\texpect(t, %q, %d, out%d, err%d, %s)\n", id, seq, seq, seq, rawString(expectJSON(st.Bind.Expect)))
-	if len(st.Bind.Unobservable) > 0 {
-		fmt.Fprintf(&g.body, "\t\t// unobservable: %s\n", strings.Join(st.Bind.Unobservable, ", "))
-	}
 	for i, pr := range st.Bind.Probes {
 		g.emitProbe(plan, bs, st, i+1, pr)
 	}
@@ -305,7 +318,7 @@ func (g *goEmit) emitProbe(plan componentPlan, bs boundScenario, st boundStep, n
 	fmt.Fprintf(&g.body, "\t\tvar pout%s any\n\t\tvar perr%s error\n", v, v)
 	if inline {
 		fmt.Fprintf(&g.body, "\t\tvar probe%s %s\n", v, g.paramsStruct(op))
-		fmt.Fprintf(&g.body, "\t\tmustUnmarshal(t, %s, &probe%s)\n", rawString(inputsJSON(plan.Contract, op, pr.Inputs)), v)
+		fmt.Fprintf(&g.body, "\t\tmustUnmarshal(t, %s, &probe%s)\n", rawString(g.inputs(plan.Contract, op, pr.Inputs)), v)
 		g.body.WriteString("\t\t" + callLine(op, "pout"+v, "perr"+v, "probe"+v, fmt.Sprintf("%d.%d", seq, n)) + "\n")
 	} else {
 		fmt.Fprintf(&g.body, "\t\tpout%s, perr%s = %s(t, h, subject)\n", v, v, g.probeName(plan, id, seq, n))
@@ -358,16 +371,20 @@ func guardNote(s scenario.Scenario) string {
 // contract parameter, in contract order, carrying the binding's value — raw
 // when it parses as JSON and the parameter is not string-typed, quoted
 // otherwise. A parameter the binding leaves unnamed is omitted (zero value).
-func inputsJSON(sc methodcheck.ServiceContract, op methodcheck.ContractOperation, inputs []methodcheck.TestArg) string {
+func inputsJSON(sc methodcheck.ServiceContract, op methodcheck.ContractOperation, inputs []methodcheck.TestArg) (string, error) {
 	var parts []string
 	for _, p := range op.Params {
 		arg, ok := argNamed(inputs, p.Name)
 		if !ok {
 			continue
 		}
-		parts = append(parts, strconv.Quote(p.Name)+":"+jsonValue(arg.Value, isStringSchema(sc, p.Schema)))
+		raw, err := argJSON(arg, isStringSchema(sc, p.Schema))
+		if err != nil {
+			return "", err
+		}
+		parts = append(parts, strconv.Quote(p.Name)+":"+raw)
 	}
-	return "{" + strings.Join(parts, ",") + "}"
+	return "{" + strings.Join(parts, ",") + "}", nil
 }
 
 func argNamed(inputs []methodcheck.TestArg, name string) (methodcheck.TestArg, bool) {
@@ -377,6 +394,19 @@ func argNamed(inputs []methodcheck.TestArg, name string) (methodcheck.TestArg, b
 		}
 	}
 	return methodcheck.TestArg{}, false
+}
+
+// argJSON is one input argument as the JSON the generated step unmarshals.
+// A ref argument names an earlier step's result; resolving it is Task 2.8
+// (the v2 emitters), so until then it is a generation error, never a stub.
+func argJSON(arg methodcheck.TestArg, stringTyped bool) (string, error) {
+	switch v := arg.Value.(type) {
+	case methodcheck.LiteralValue:
+		return jsonValue(string(v.JSON), stringTyped), nil
+	case methodcheck.RefValue:
+		return "", fmt.Errorf("testgen: input %q is a ref to step %d (%s): ref arguments are unsupported until Task 2.8", arg.Name, v.Step, v.Path)
+	}
+	return "", fmt.Errorf("testgen: input %q: unknown TestArgValue %T", arg.Name, arg.Value)
 }
 
 // jsonValue is one binding value as the JSON the generated step unmarshals. A

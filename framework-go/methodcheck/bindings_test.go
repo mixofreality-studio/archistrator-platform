@@ -121,6 +121,17 @@ func TestBindings_UnknownKindRefused(t *testing.T) {
 	}
 }
 
+func TestBindings_MissingModelRefused(t *testing.T) {
+	for _, raw := range []string{`{"kind":"literal"}`, `{"kind":"literal","model":null}`, `{"kind":"ref"}`} {
+		if _, err := UnmarshalTestArgValue([]byte(raw)); err == nil || !strings.Contains(err.Error(), "has no model") {
+			t.Fatalf("%s: want a no-model refusal, got %v", raw, err)
+		}
+	}
+	if _, err := UnmarshalArrangeCall([]byte(`{"kind":"advanceClock"}`)); err == nil || !strings.Contains(err.Error(), "has no model") {
+		t.Fatalf("advanceClock without a model: want a no-model refusal, got %v", err)
+	}
+}
+
 func TestBindings_LegacyHookFieldRefused(t *testing.T) {
 	for _, field := range []string{"hook", "unobservable"} {
 		raw := `{"phaseArtifacts":{"testPlan":{"c":{"component":"c","principals":{},"bindings":[{"scenario":"s-P1","arrange":[],"steps":[{"seq":1,"operation":"Do","inputs":[],"expect":{"errorExpected":false},"probes":[],"` + field + `":true}],"skip":null}]}}}}`

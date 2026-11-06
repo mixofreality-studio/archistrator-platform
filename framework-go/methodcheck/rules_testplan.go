@@ -585,16 +585,18 @@ func argTypeFinding(in TestArg, p ContractParam, contract ServiceContract, op Co
 		return nil
 	}
 	paramKind := schemaKind(p.Schema, contract.Defs)
-	lit, isLiteral := in.Value.(LiteralValue)
-	if !isLiteral {
+	switch v := in.Value.(type) {
+	case LiteralValue:
+		valueKind := rawJSONKind(v.JSON)
+		if !kindsConflict(paramKind, valueKind) {
+			return nil
+		}
+		f := tpFinding(rule, l, "%s: input %q value is a %s but parameter %q of operation %q expects a %s", section, in.Name, valueKind, p.Name, op.Name, paramKind)
+		return &f
+	case RefValue:
 		return nil // a ref resolves at run time: indeterminate here
 	}
-	valueKind := rawJSONKind(lit.JSON)
-	if !kindsConflict(paramKind, valueKind) {
-		return nil
-	}
-	f := tpFinding(rule, l, "%s: input %q value is a %s but parameter %q of operation %q expects a %s", section, in.Name, valueKind, p.Name, op.Name, paramKind)
-	return &f
+	return nil
 }
 
 // ---- expectation rule (restored from STP-EXPECT-SHAPE) ----
@@ -792,12 +794,13 @@ func uiDialectFindings(st StepBinding, op ContractOperation, section string, l *
 		if !actionParams[in.Name] {
 			continue
 		}
-		lit, isLiteral := in.Value.(LiteralValue)
-		if !isLiteral {
-			continue // a ref resolves at run time
-		}
-		if _, err := ParseUIAction(string(lit.JSON)); err != nil {
-			out = append(out, tpFinding(ruleTPArgType, l, "%s: input %q: %v", section, in.Name, err))
+		switch v := in.Value.(type) {
+		case LiteralValue:
+			if _, err := ParseUIAction(string(v.JSON)); err != nil {
+				out = append(out, tpFinding(ruleTPArgType, l, "%s: input %q: %v", section, in.Name, err))
+			}
+		case RefValue:
+			// a ref resolves at run time
 		}
 	}
 	if !observesUI(op, st.Expect) {

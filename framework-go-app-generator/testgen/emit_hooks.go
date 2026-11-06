@@ -98,21 +98,6 @@ func hasRunnable(plan componentPlan) bool {
 // writeStepHooks writes the step stub of a hooked step and the probe stub
 // of each of its cross-component probes.
 func (g *goEmit) writeStepHooks(b *bytes.Buffer, plan componentPlan, bs boundScenario, st boundStep) {
-	id, seq := bs.Scenario.ID, st.Bind.Seq
-	if st.Bind.Hook {
-		name := g.stepName(plan, id, seq)
-		fmt.Fprintf(b, `// %s — %s, step %d: %s
-// Projected stimulus (JSON): %s
-// Binding (JSON): %s
-// FILL: arrange state so that guards %s hold, call the operation, return its result.
-func %s(t *testing.T, h *scenariohost.Host, subject %s, in %s) (any, error) {
-	t.Helper()
-	t.Fatal("FILL %s")
-	return nil, nil
-}
-
-`, name, bs.Scenario.Title, seq, st.Op.Name, compactJSON(st.Stim), compactJSON(st.Bind), guardList(bs), name, g.subjectType(plan), g.inputName(plan, id, seq), name)
-	}
 	for i, pr := range st.Bind.Probes {
 		if _, inline := g.inlineProbe(plan, pr); inline {
 			continue
