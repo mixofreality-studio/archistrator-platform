@@ -20,3 +20,8 @@ hand-written dependency of the original golden app that no generator produces:
   entry lists the `local` profile, so the generated launcher provisions it.
 
 The fixture has no browser surface, so the chain runs no web steps for it.
+
+Added when the app re-recorded this fixture through its own verbs (FPC Plan 1,
+Task 1.9): every non-Resource System component now carries the `contractKey`
+the server stamps (`lowerCamel(id)`). The golden fixture predated that field, and
+the app's project codec refuses a System whose keys are off the server derivation.

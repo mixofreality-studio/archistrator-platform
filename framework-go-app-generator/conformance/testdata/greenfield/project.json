@@ -13,7 +13,8 @@
             "kind": "client",
             "layer": "client",
             "encapsulates": "Transport entry point for the browser SPA.",
-            "atomicBusinessVerbs": []
+            "atomicBusinessVerbs": [],
+            "contractKey": "webClient"
           },
           {
             "id": "order-manager",
@@ -21,7 +22,8 @@
             "kind": "manager",
             "layer": "manager",
             "encapsulates": "Encapsulates the order lifecycle workflow: place, price, charge, cancel.",
-            "atomicBusinessVerbs": []
+            "atomicBusinessVerbs": [],
+            "contractKey": "orderManager"
           },
           {
             "id": "order-state-access",
@@ -34,7 +36,8 @@
               "putOrder",
               "cancelOrder",
               "chargeOrder"
-            ]
+            ],
+            "contractKey": "orderStateAccess"
           },
           {
             "id": "pricing-engine",
@@ -42,7 +45,8 @@
             "kind": "engine",
             "layer": "engine",
             "encapsulates": "Encapsulates the order pricing policy: order -> price quote.",
-            "atomicBusinessVerbs": []
+            "atomicBusinessVerbs": [],
+            "contractKey": "pricingEngine"
           },
           {
             "id": "fulfillment-manager",
@@ -50,6 +54,15 @@
             "kind": "manager",
             "layer": "manager",
             "encapsulates": "Encapsulates the shipment fulfillment workflow: query carrier status, ping carrier liveness.",
+            "atomicBusinessVerbs": [],
+            "contractKey": "fulfillmentManager"
+          },
+          {
+            "id": "order-store",
+            "name": "OrderStore",
+            "kind": "resource",
+            "layer": "resource",
+            "encapsulates": "Durable store of orders.",
             "atomicBusinessVerbs": []
           }
         ],
@@ -77,6 +90,12 @@
             "to": "fulfillment-manager",
             "mode": "sync",
             "label": "getShipmentStatus | pingCarrier"
+          },
+          {
+            "from": "order-state-access",
+            "to": "order-store",
+            "mode": "sync",
+            "label": "store"
           }
         ],
         "dynamicViews": []
@@ -213,11 +232,11 @@
           "goImport": "go.temporal.io/sdk/client"
         },
         {
-          "name": "orderState",
+          "name": "orderStateAccess",
           "component": "orderStateAccess"
         },
         {
-          "name": "pricing",
+          "name": "pricingEngine",
           "component": "pricingEngine"
         },
         {
