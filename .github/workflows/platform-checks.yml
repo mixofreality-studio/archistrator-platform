@@ -58,6 +58,29 @@ jobs:
           ( cd method-assets && METHODASSETS_RENDER_DIR="${render_dir}" GOWORK=off go test -count=1 -run '^TestDumpRenderedWorkflowsForLint$' . )
           cd "${render_dir}"
           GOWORK=off go run github.com/rhysd/actionlint/cmd/actionlint@v1.7.12 .github/workflows/*.yml
+  # The conformance pipeline: every embedded fixture goes through the scaffolded
+  # command chain (gen-models, gen, gen-null, gen-tests, webgen, go build, go vet,
+  # npm typecheck), then the composed todomvc app is booted and probed (GET /,
+  # POST /mcp initialize + tools/list) and a double boot must leave no Docker
+  # orphans. Docker is preinstalled on ubuntu-latest. The job name is load-bearing:
+  # release-gate.yml requires a green check run named `conformance` on the tagged SHA.
+  conformance:
+    needs: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Conformance chain, boot and probe
+        working-directory: framework-go-app-generator
+        run: GOWORK=off go test -tags conformance ./conformance -v -timeout 40m
   web:
     runs-on: ubuntu-latest
     permissions:

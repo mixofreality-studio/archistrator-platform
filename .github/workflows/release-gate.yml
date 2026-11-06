@@ -1,0 +1,44 @@
+name: Release Gate
+
+# A module tag is a release. The platform has no tagging workflow (tags are
+# pushed by hand: `git push origin fpc/main --tags`), so this workflow gates
+# them after the fact: when a tag for a module that apps consume is pushed, the
+# `conformance` job of Platform Checks must have passed on the SAME commit,
+# otherwise this run fails and the tag must be deleted and re-cut from a green SHA.
+
+on:
+  push:
+    tags:
+      - 'framework-go/v*'
+      - 'framework-go-app-generator/v*'
+      - 'method-assets/v*'
+
+jobs:
+  require-conformance:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      checks: read
+    steps:
+      - name: Require a green conformance check run on the tagged commit
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPO: ${{ github.repository }}
+          SHA: ${{ github.sha }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          for attempt in 1 2 3 4 5 6 7 8 9 10 11 12; do
+            conclusion="$(gh api "repos/${REPO}/commits/${SHA}/check-runs?check_name=conformance" \
+              --jq '[.check_runs[] | select(.name == "conformance")] | sort_by(.started_at) | last | .conclusion // "none"')"
+            echo "conformance on ${SHA} for ${TAG}: ${conclusion} (attempt ${attempt})"
+            case "${conclusion}" in
+              success) exit 0 ;;
+              failure|cancelled|timed_out|action_required)
+                echo "::error::conformance did not pass on ${SHA}; ${TAG} must not be released"
+                exit 1 ;;
+            esac
+            sleep 60
+          done
+          echo "::error::no finished conformance run on ${SHA}; ${TAG} must not be released"
+          exit 1
