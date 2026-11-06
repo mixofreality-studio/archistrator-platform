@@ -9,10 +9,10 @@ import (
 )
 
 const doc = `{"serviceContracts":{
-"todoAccess":{"component":"todoAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"$defs":{"T":{"type":"object"}},"interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[]}},
-"sibling":{"component":"sibling","layer":"Engine","goPackage":"internal/engine/sibling","$defs":{"S":{"type":"object"}},"interface":{"name":"SiblingEngine","layer":"engine","operations":[]}},
-"broken":{"component":"broken","layer":"ResourceAccess","goPackage":"internal/resourceaccess/broken","infra":["IdentityProvider"],"$defs":{"B":{"type":"object"}},"interface":{"name":"BrokenAccess","layer":"resourceaccess","operations":[]}},
-"web":{"component":"web","layer":"Client","goPackage":"internal/client/web","$defs":{"W":{"type":"object"}},"interface":{"name":"Web","layer":"client","operations":[]}}
+"todoAccess":{"component":"todoAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/todo","infra":["Postgres"],"$defs":{"T":{"type":"object"}},"interface":{"name":"TodoAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}},
+"sibling":{"component":"sibling","layer":"Engine","goPackage":"internal/engine/sibling","$defs":{"S":{"type":"object"}},"interface":{"name":"SiblingEngine","layer":"engine","operations":[{"name":"Ping","params":[],"error":false}]}},
+"broken":{"component":"broken","layer":"ResourceAccess","goPackage":"internal/resourceaccess/broken","infra":["IdentityProvider"],"$defs":{"B":{"type":"object"}},"interface":{"name":"BrokenAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}},
+"web":{"component":"web","layer":"Client","goPackage":"internal/client/web","$defs":{"W":{"type":"object"}},"interface":{"name":"Web","layer":"client","operations":[{"name":"Ping","params":[],"error":false}]}}
 }}`
 
 func fixture(t *testing.T) (root, project string) {

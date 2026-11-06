@@ -34,6 +34,7 @@ import (
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/clientgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/configgen"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/cli"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/rungen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/temporalgen"
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
@@ -107,7 +108,7 @@ func run(args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	m, err := projectmodel.LoadFile(o.project)
+	m, err := cli.Load(o.project)
 	if err != nil {
 		return err
 	}

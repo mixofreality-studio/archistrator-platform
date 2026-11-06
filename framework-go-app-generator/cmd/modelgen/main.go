@@ -35,6 +35,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/cli"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/modelgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 )
@@ -82,6 +83,9 @@ func run(args []string, errOut io.Writer) error {
 	}
 	raw, err := os.ReadFile(o.project) // #nosec G304 G703 -- the CLI's own argument; no trust boundary
 	if err != nil {
+		return err
+	}
+	if err := cli.Admit(raw); err != nil { // the one loader: every problem, before any emission
 		return err
 	}
 	only, err := selectContracts(raw, o)

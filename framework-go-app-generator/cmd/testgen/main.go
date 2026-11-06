@@ -35,6 +35,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/cli"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/testgen"
 )
 
@@ -75,6 +76,9 @@ func run(args []string, out, errOut io.Writer) error {
 	raw, err := os.ReadFile(o.project)
 	if err != nil {
 		return fmt.Errorf("testgen: %w", err)
+	}
+	if err := cli.Admit(raw); err != nil { // the one loader: every problem, before any emission
+		return err
 	}
 	gen, err := testgen.Generate(raw, testgen.Config{ModulePath: o.module, UITestsDir: filepath.ToSlash(o.uitests)})
 	if err != nil {
