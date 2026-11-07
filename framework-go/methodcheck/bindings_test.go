@@ -154,3 +154,19 @@ func TestBindings_SwitchIsExhaustive(t *testing.T) {
 		}
 	}
 }
+
+// A recording verb stamps authoredAt on every phase artifact it files; the strict plan decode
+// must carry it rather than refuse every plan an app recorded.
+func TestBindings_AuthoredAtStampIsCarried(t *testing.T) {
+	var rec TestPlanRecord
+	raw := `{"component":"c","principals":{},"bindings":[],"authoredAt":"2026-11-06T12:00:00Z"}`
+	if err := json.Unmarshal([]byte(raw), &rec); err != nil {
+		t.Fatalf("a stamped plan is refused: %v", err)
+	}
+	if rec.AuthoredAt != "2026-11-06T12:00:00Z" {
+		t.Errorf("AuthoredAt = %q", rec.AuthoredAt)
+	}
+	if err := json.Unmarshal([]byte(`{"component":"c","bindings":[],"stray":"x"}`), &rec); err == nil {
+		t.Error("an unknown field must still be refused")
+	}
+}

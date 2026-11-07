@@ -742,6 +742,10 @@ type TestPlanRecord struct {
 	Component  string                   `json:"component"`
 	Principals map[string]TestPrincipal `json:"principals"`
 	Bindings   []ScenarioBinding        `json:"bindings"`
+	// AuthoredAt is the time the recording verb stamped on the record (RFC 3339). Nothing reads
+	// it; the record decodes strictly, so a stamp the model did not carry would refuse every
+	// plan an app recorded.
+	AuthoredAt string `json:"authoredAt,omitempty"`
 }
 
 // TestPrincipal is one named actor identity a binding runs as.
