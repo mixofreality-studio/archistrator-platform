@@ -6,6 +6,7 @@ import (
 	"slices"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
@@ -449,11 +450,25 @@ func reachedOps(all []scenario.Scenario) map[string]bool {
 	return reached
 }
 
-// skipFindings is TP-SKIP: a skip carries a reason and names an activity that is
-// genuinely not yet integrated (§3.1 — there is no other skip).
+// skipToday is the clock a dated skip is read against; a test replaces it.
+var skipToday = func() time.Time { return time.Now().UTC() }
+
+// skipDateLayout is the form of a dated skip's `until`: a calendar day.
+const skipDateLayout = "2006-01-02"
+
+// skipFindings is TP-SKIP: a skip carries a reason and an `until` that ends it. The `until` is
+// the id of an activity that is genuinely not yet integrated (§3.1), or a calendar day
+// (YYYY-MM-DD) for a skip that waits on work the activity list does not hold: the skip stands
+// through that day and is an Error from the next, so no skip is permanent.
 func skipFindings(p Project, comp string, b ScenarioBinding, l *Location) []Finding {
 	if b.Skip.Until == "" || b.Skip.Reason == "" {
 		return []Finding{tpFinding(ruleTPSkip, l, "%s %s: skip needs reason and until", comp, b.Scenario)}
+	}
+	if _, err := time.Parse(skipDateLayout, b.Skip.Until); err == nil {
+		if today := skipToday().UTC().Format(skipDateLayout); today > b.Skip.Until {
+			return []Finding{tpFinding(ruleTPSkip, l, "%s %s: skip expired on %s (today is %s): bind the scenario, or end the skip with a new until", comp, b.Scenario, b.Skip.Until, today)}
+		}
+		return nil
 	}
 	if integrated(p, b.Skip.Until) {
 		return []Finding{tpFinding(ruleTPSkip, l, "%s %s: skip waits on %s, which is already integrated", comp, b.Scenario, b.Skip.Until)}

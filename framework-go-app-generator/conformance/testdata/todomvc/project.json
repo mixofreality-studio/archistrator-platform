@@ -22771,12 +22771,26 @@
           {
             "id": "list-active",
             "route": "#/active",
-            "elements": []
+            "elements": [
+              {
+                "id": "active-todo-list",
+                "role": "list",
+                "name": "Active todos",
+                "repeats": true
+              }
+            ]
           },
           {
             "id": "list-completed",
             "route": "#/completed",
-            "elements": []
+            "elements": [
+              {
+                "id": "completed-todo-list",
+                "role": "list",
+                "name": "Completed todos",
+                "repeats": true
+              }
+            ]
           }
         ]
       }

@@ -37,6 +37,13 @@ func emitPlaywright(out *Output, cfg Config, web webEnv, plan componentPlan) err
 	if err := checkWithin(design); err != nil {
 		return fmt.Errorf("testgen: %s: %w", plan.Key, err)
 	}
+	// The surface check opens each screen's route and asserts its elements are there; a screen with
+	// none would open a route and assert nothing, a test that cannot fail.
+	for _, s := range design.Screens {
+		if len(s.Elements) == 0 {
+			return fmt.Errorf("testgen: %s: screen %q has no elements, so its surface test would assert nothing: give it the elements a user sees on %s, or drop the screen", plan.Key, s.ID, s.Route)
+		}
+	}
 	for _, bs := range plan.Scenarios {
 		if plan.Design == nil && bs.Binding.Skip == nil && len(bs.Steps) > 0 {
 			return fmt.Errorf("testgen: %s %s: no uiDesign is recorded for the surface, so no element can be located: record its UI design (screens and elements) first", plan.Key, bs.Scenario.ID)

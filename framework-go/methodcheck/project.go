@@ -766,7 +766,7 @@ type ScenarioBinding struct {
 // SkipReason is why a scenario is not yet bound and which activity unblocks it.
 type SkipReason struct {
 	Reason string `json:"reason"`
-	Until  string `json:"until"` // activity id
+	Until  string `json:"until"` // activity id, or a calendar day (YYYY-MM-DD) after which the skip is an Error
 }
 
 // StepBinding is one bound stimulus: the operation it drives, its concrete inputs

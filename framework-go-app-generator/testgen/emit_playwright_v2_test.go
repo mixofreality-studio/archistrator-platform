@@ -219,6 +219,18 @@ func TestPlaywright_EmptyObservationRefusedAtGeneration(t *testing.T) {
 	}
 }
 
+// A screen with no elements would generate a surface test that opens its route and asserts nothing
+// (GC-1: no test that asserts nothing is representable), so generation refuses it.
+func TestPlaywright_ScreenWithNoElementsRefusedAtGeneration(t *testing.T) {
+	doc := shopDoc(t)
+	design := doc["phaseArtifacts"].(map[string]any)["uiDesign"].(map[string]any)["shopClient"].(map[string]any)
+	design["screens"] = append(design["screens"].([]any), map[string]any{"id": "archive", "route": "/archive", "elements": []any{}})
+	_, err := generateDoc(t, doc)
+	if err == nil || !strings.Contains(err.Error(), "shopClient") || !strings.Contains(err.Error(), `"archive"`) || !strings.Contains(err.Error(), "no elements") {
+		t.Errorf("err %v, want a refusal naming the surface and the screen with no elements", err)
+	}
+}
+
 func TestPlaywright_UnknownElementRefused(t *testing.T) {
 	_, err := generateShopStep(t, []string{act("click", tgt("no-such-button"))}, `[`+act("visible", tgt("orders-list"))+`]`)
 	if err == nil || !strings.Contains(err.Error(), `"no-such-button"`) || !strings.Contains(err.Error(), "uiDesign") {

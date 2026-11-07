@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // rules_testplan_test.go exercises the TP-* per-component test-plan family over
@@ -473,6 +474,40 @@ func TestTP_Skip_RequiresUnintegratedActivity(t *testing.T) {
 	wantRules(t, runTP(t, p), ruleTPSkip, 0)
 
 	b.Skip.Until = "C-never-opened"
+	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+}
+
+// A dated skip stands through its day and is an Error from the next: no skip is permanent.
+func TestTP_Skip_DatedSkipExpires(t *testing.T) {
+	defer func(prev func() time.Time) { skipToday = prev }(skipToday)
+	at := func(day string) func() time.Time {
+		return func() time.Time {
+			d, err := time.Parse("2006-01-02", day)
+			if err != nil {
+				t.Fatal(err)
+			}
+			return d
+		}
+	}
+	p := loadProject(t, "tp_clean.json")
+	b := binding(t, p, "billingManager", "process-order-P2")
+	b.Steps = nil
+	b.Skip = &SkipReason{Reason: "rebinding scheduled", Until: "2026-12-31"}
+
+	skipToday = at("2026-11-07")
+	wantRules(t, runTP(t, p), ruleTPSkip, 0)
+	skipToday = at("2026-12-31")
+	wantRules(t, runTP(t, p), ruleTPSkip, 0) // the day itself still stands
+
+	skipToday = at("2027-01-01")
+	fs := runTP(t, p)
+	wantRules(t, fs, ruleTPSkip, 1)
+	if !strings.Contains(dumpFindings(fs), "expired on 2026-12-31") {
+		t.Errorf("an expired skip must say when it expired, got %s", dumpFindings(fs))
+	}
+
+	// An activity id is still read as before, whatever the clock says.
+	b.Skip.Until = "C-order-manager"
 	wantRules(t, runTP(t, p), ruleTPSkip, 0)
 }
 
