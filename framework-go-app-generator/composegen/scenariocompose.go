@@ -64,8 +64,9 @@ type scenarioGen struct {
 	r   *resolved
 	imp *importSet
 
-	comps []scenarioComp
-	byKey map[string]scenarioComp
+	comps   []scenarioComp
+	byKey   map[string]scenarioComp
+	clients []scenarioClient
 
 	body                                 strings.Builder
 	usesTemporal, usesPostgres, usesTime bool
@@ -77,7 +78,10 @@ type scenarioGen struct {
 // constructor calls main.gen.go makes (ctorCall) over the substrates the scenario host boots
 // (h.TemporalHostPort, h.PostgresURL), a Null<Iface>(inner, ops...) wrapper that makes the
 // named operations return their zero result (the null-subject run), and Workflows(), every
-// Manager's workflows for the replay gate.
+// Manager's workflows for the replay gate. For every client contract whose generated handler
+// package exists (a REST or MCP transport) it also renders a New<ClientIface> returning that
+// Handler over the real Manager and a policy built from the generated authorization rows: the
+// subject of a machine-client scenario.
 //
 // m carries the deployment the app composes with (the authored one, else the default - what
 // appgen hands Generate). Where main.gen.go asks the app's hand Hooks, a test subject has
@@ -104,7 +108,13 @@ func EmitScenarioCompose(m *projectmodel.Model, cfg Config) ([]byte, error) {
 	if err := g.classify(); err != nil {
 		return nil, err
 	}
+	if err := g.classifyClients(); err != nil {
+		return nil, err
+	}
 	if err := g.emitComponents(); err != nil {
+		return nil, err
+	}
+	if err := g.emitClients(); err != nil {
 		return nil, err
 	}
 	if err := g.emitWorkflows(); err != nil {

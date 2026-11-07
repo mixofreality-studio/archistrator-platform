@@ -85,8 +85,13 @@ func TestScenarioCompose_EveryContractHasConstructor(t *testing.T) {
 		ctor := regexp.MustCompile(`(?m)^func New` + iface + `\(t \*testing\.T, h \*scenariohost\.Host\) \w+\.` + iface + ` \{$`)
 		null := regexp.MustCompile(`(?m)^func Null` + iface + `\(inner \w+\.` + iface + `, ops \.\.\.string\) \w+\.` + iface + ` \{$`)
 		if !isBuiltNonClient(c) {
-			if strings.Contains(s, "New"+iface+"(") || strings.Contains(s, "Null"+iface+"(") {
-				t.Errorf("%s: a client/package-less contract must get no constructor", key)
+			if strings.Contains(s, "Null"+iface+"(") {
+				t.Errorf("%s: a client/package-less contract must get no Null wrapper", key)
+			}
+			handlerCtor := regexp.MustCompile(`(?m)^func New` + iface + `\(t \*testing\.T, h \*scenariohost\.Host\) \*\w+\.Handler \{$`)
+			wantHandler := strings.EqualFold(c.Layer, "client") && c.GoPackage != ""
+			if wantHandler != handlerCtor.MatchString(s) {
+				t.Errorf("%s: a client with a generated handler package gets `func New%s(t, h) *<pkg>.Handler` and a package-less one none (want constructor: %v)", key, iface, wantHandler)
 			}
 			continue
 		}
@@ -111,6 +116,40 @@ func TestScenarioCompose_EveryContractHasConstructor(t *testing.T) {
 	}
 	if !strings.Contains(s, "func Workflows() scenariohost.Workflows {") {
 		t.Errorf("no Workflows() for the replay gate")
+	}
+}
+
+// TestScenarioCompose_ClientConstructorHasRealPolicy: each MCP and REST client contract of the todomvc
+// fixture gets a New<ClientIface> returning its generated Handler over the real Manager, authorized
+// by a policy built from the generated authorization rows - never a permit-all one.
+func TestScenarioCompose_ClientConstructorHasRealPolicy(t *testing.T) {
+	m, _ := loadConformance(t, "todomvc")
+	src, err := composegen.EmitScenarioCompose(m, scenarioCfg)
+	if err != nil {
+		t.Fatalf("EmitScenarioCompose: %v", err)
+	}
+	s := string(src)
+	for _, want := range []string{
+		"func NewTodoMcpServerList(t *testing.T, h *scenariohost.Host) *todomcpserverlistclient.Handler {",
+		"func NewTodoApiList(t *testing.T, h *scenariohost.Host) *weblistclient.Handler {",
+		"&todomcpserverlistclient.Handler{Manager: buildListManager(subjectFor(t, h)), Security: edgeSecurity()}",
+		"&weblistclient.Handler{Manager: buildListManager(subjectFor(t, h)), Security: edgeSecurity()}",
+		"security.New(security.WithPolicyDecisionPoint(generatedPolicy{}))",
+		"generatedAuthorizations[authzKey{verb: a.Verb, scope: r.Kind}]",
+		"r.ID == p.Subject",
+		`"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"`,
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("compose.gen.go lacks %q", want)
+		}
+	}
+	if strings.Count(s, "{verb: \"") == 0 {
+		t.Error("the policy table holds no generated authorization rows")
+	}
+	for _, banned := range []string{"permitAll", "return true, nil", "Security: nil", "PolicyDecisionPoint()"} {
+		if strings.Contains(s, banned) {
+			t.Errorf("the client policy must be deny-by-default and generated: contains %q", banned)
+		}
 	}
 }
 

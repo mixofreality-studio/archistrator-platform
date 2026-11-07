@@ -1,6 +1,7 @@
 package testgen
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -10,6 +11,7 @@ import (
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 // generateMutated emits the shared fixture after mutate has edited its decoded document.
@@ -430,38 +432,95 @@ func TestGo_RefArrangeAndProbesCompile(t *testing.T) {
 	}
 }
 
-// stubComposeMCP is the compose package an MCP client's scenarios call into: a handler that registers tools,
-// and the components below it.
-const stubComposeMCP = `package scenariocompose
+// shopToolsConventional is the shop-tools fixture laid out the way clientgen lays a machine client out: its
+// package is the tool table internal/client/<leaf>/<manager package> of the Manager it fronts, and the System
+// draws that relationship. composegen derives the client's constructor from exactly that.
+func shopToolsConventional(t *testing.T, doc map[string]any) {
+	t.Helper()
+	withShopTools(t, doc)
+	doc["serviceContracts"].(map[string]any)["shopTools"].(map[string]any)["goPackage"] = conventionalToolsPkg
+	design := doc["slots"].(map[string]any)["5"].(map[string]any)["model"].(map[string]any)
+	design["relationships"] = append(design["relationships"].([]any),
+		map[string]any{"from": "shop-tools", "to": "order-manager", "mode": "queued", "label": "OrderGetOrder"})
+}
+
+const (
+	conventionalToolsPkg = "internal/client/shoptools/order"
+	conventionalToolsGen = conventionalToolsPkg + "/client_scenarios.gen_test.go"
+)
+
+// stubOrderCtor and stubBillingCtor stand in for the Managers' generated constructors (modelgen and the
+// Manager's own code, which this module does not build); the composition around them is composegen's.
+const stubOrderCtor = `package order
+
+func NewOrderManager() OrderManager { return nil }
+`
+
+const stubBillingCtor = `package billing
+
+func NewBillingManager() BillingManager { return nil }
+`
+
+// stubToolsHandler stands in for clientgen's generated tool table: the Handler type composegen's
+// constructor builds (Manager + Security fields, Register on an MCP server). composegen's own compile
+// test builds the real clientgen output against the same constructor.
+const stubToolsHandler = `package order
 
 import (
-	"testing"
-
-	"example.com/app/server/internal/manager/order"
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost"
+	mgr "example.com/app/server/internal/manager/order"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 )
 
-type ShopTools struct{}
+type Handler struct {
+	Manager  mgr.OrderManager
+	Security security.Security
+}
 
-func (ShopTools) Register(*mcp.Server) {}
-
-func NewShopTools(t *testing.T, h *scenariohost.Host) ShopTools                { return ShopTools{} }
-func NewOrderManager(t *testing.T, h *scenariohost.Host) order.OrderManager { return nil }
+func (h *Handler) Register(srv *mcp.Server) {}
 `
 
+// The generated MCP file type-checks against the REAL composegen output for the same model: the
+// scenariocompose package is composegen.EmitScenarioCompose over the fixture, not a stand-in, so a
+// constructor the emitter calls that composegen does not produce, or one of another shape, fails here.
 func TestMCP_GeneratedFileCompiles(t *testing.T) {
 	if testing.Short() {
 		t.Skip("compiles a module")
 	}
-	out := generateShopTools(t)
+	doc := fixtureDoc(t)
+	shopToolsConventional(t, doc)
+	out, err := generateDoc(t, doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	m, err := projectmodel.Load(raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	effective := *m
+	effective.Deployment = m.EffectiveDeployment("server")
+	compose, err := composegen.EmitScenarioCompose(&effective, composegen.Config{ContainerKey: "server", ModulePath: "example.com/app/server"})
+	if err != nil {
+		t.Fatalf("composegen.EmitScenarioCompose: %v", err)
+	}
+	if !strings.Contains(string(compose), "func NewShopTools(t *testing.T, h *scenariohost.Host) *") {
+		t.Fatalf("composegen emits no constructor for the shopTools client:\n%s", compose)
+	}
 	root := writeModule(t, map[string]string{
-		"internal/manager/order/order.go":                  stubOrder,
-		"internal/scenariocompose/compose.go":              stubComposeMCP,
-		"internal/client/mcp/client_scenarios.gen_test.go": string(out.Generated[toolsGen]),
+		"internal/manager/order/order.go":     stubOrder,
+		"internal/manager/order/ctor.go":      stubOrderCtor,
+		"internal/manager/billing/billing.go": stubBilling,
+		"internal/manager/billing/ctor.go":    stubBillingCtor,
+		conventionalToolsPkg + "/tools.go":    stubToolsHandler,
+		"internal/scenariocompose/compose.go": string(compose),
+		conventionalToolsGen:                  string(out.Generated[conventionalToolsGen]),
 	}, moduleOpts{mcp: true})
 	if msg, err := goIn(root, nil, "vet", "./..."); err != nil {
-		t.Fatalf("the generated MCP file does not type-check: %v\n%s", err, msg)
+		t.Fatalf("the generated MCP file does not type-check against composegen's scenariocompose: %v\n%s", err, msg)
 	}
 }
 

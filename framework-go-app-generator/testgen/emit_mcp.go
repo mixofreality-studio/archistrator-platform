@@ -94,8 +94,8 @@ const mcpSDKImport = "github.com/modelcontextprotocol/go-sdk/mcp"
 // emitMCP emits one machine client package's generated scenarios file. One
 // package serves one tools surface, so it hosts exactly one machine client
 // contract. Its subject is the client's generated handlers, built by the
-// scenariocompose package with the app's real authorization (never a policy that
-// permits everything), served in-process and called as the principal the plan
+// scenariocompose package (composegen's New<ClientIface>) over the app's generated
+// authorization rows (never a policy that permits everything), served in-process and called as the principal the plan
 // records for each step's actor.
 func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componentPlan, routes map[string]restRoute, contracts map[string]methodcheck.ServiceContract) error {
 	if len(plans) != 1 {
@@ -107,6 +107,10 @@ func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componen
 		return err
 	}
 	g.tools = true
+	// A machine client's file never imports its own package (scenariocompose hands it the handlers), so its
+	// name is free for a component package of the same name: a tool table is named after the Manager it
+	// fronts, and a probe on that Manager imports it.
+	delete(g.aliases, g.pkg)
 	if err := g.claimPlan(plan); err != nil {
 		return err
 	}
