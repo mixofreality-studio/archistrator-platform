@@ -78,6 +78,11 @@ type Host struct {
 	// test clock's offset and the registered one-shot faults.
 	arrange arrangeState
 
+	// gitRepos are the bare repositories Input/GitRepo keep, one per infra key, created on
+	// first use under gitMu (input.go).
+	gitMu    sync.Mutex
+	gitRepos map[string]ghtestinfra.LocalGitRepo
+
 	// stops tears the doubles down, in boot order; Main runs them reversed.
 	stops []func()
 }

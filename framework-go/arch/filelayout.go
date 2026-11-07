@@ -116,6 +116,9 @@ func CheckFileLayout(t *testing.T, spec Spec) {
 	for _, v := range contractFakeViolations(testPkgs, spec) {
 		t.Errorf("%s: %s %s: %s", v.Pkg, v.Rule, v.File, v.Detail)
 	}
+
+	// ARCH-SCENARIOCOMPOSE-TEST-ONLY: the test substrates stay out of the binary.
+	CheckScenarioComposeTestOnly(t, spec)
 }
 
 // fileLayoutViolations returns every file-layout violation across pkgs. A

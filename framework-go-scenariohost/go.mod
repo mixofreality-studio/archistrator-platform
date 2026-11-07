@@ -8,6 +8,7 @@ require (
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github v0.1.6
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres v0.1.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-temporal v0.2.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.4.0
 	github.com/nexus-rpc/sdk-go v0.6.0
 	github.com/testcontainers/testcontainers-go v0.42.0
 	github.com/testcontainers/testcontainers-go/modules/postgres v0.42.0
@@ -111,4 +112,5 @@ replace (
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github => ../framework-go-infrastructure-github
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres => ../framework-go-infrastructure-postgres
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-temporal => ../framework-go-infrastructure-temporal
+	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel => ../framework-go-projectmodel
 )
