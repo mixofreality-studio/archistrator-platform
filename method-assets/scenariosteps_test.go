@@ -8,9 +8,9 @@ import (
 // The deterministic scenario tests ride the INTEGRATION task, not construction
 // (spec §12 B12): the test plan is bound in parallel with construction, so
 // construction builds the component only, and the integration step — where the
-// two branches meet — generates the tests from the reviewed plan, fills their
-// hooks, runs them against the integrated component and records the run before
-// it publishes. These pins keep the four commands on that split, and keep the
+// two branches meet — generates the tests from the reviewed plan (their subjects
+// built by the generated scenariocompose package; the agent fills nothing), runs
+// them against the integrated component and records the run before it publishes. These pins keep the four commands on that split, and keep the
 // integration commands reading the exact env names the construct workflow
 // exports (TestConstructTemplateHasScenarioSteps).
 
@@ -54,7 +54,7 @@ func TestIntegrationCommandsLeaveRunAndRecordToTheJob(t *testing.T) {
 			// component kebab (DCT plan 5 r2), so the commands address contracts.
 			".phaseArtifacts.testPlan[\"<contract>\"]",
 			"The tests are already generated: the job generated them before you started.",
-			"`FILL`", "public constructor",
+			"`scenariocompose`", "[ARCH-TEST-COMPOSE]",
 			"**Verify.** Call `run_checks()`.",
 		} {
 			if !strings.Contains(body, s) {
@@ -63,16 +63,16 @@ func TestIntegrationCommandsLeaveRunAndRecordToTheJob(t *testing.T) {
 		}
 		// The job generates the tests in the working tree but never commits them:
 		// the agent's commit is the only path that puts them on the branch.
-		if !strings.Contains(body, "**Commit** the wiring, the generated tests and the hooks file onto `activity/<activity_id>`.") {
+		if !strings.Contains(body, "**Commit** the wiring and the generated tests onto `activity/<activity_id>`.") {
 			t.Errorf("%s: the commit step must include the generated tests", slug)
 		}
 		// Ordered: generated → fill → purge → commit → publish. The job runs the
 		// scenarios and records the run.
 		at := -1
-		for _, s := range []string{"**Generated tests.**", "**Fill the hooks.**", "**Purge.**", "**Commit**", "**Publish.** `publishDraft`"} {
+		for _, s := range []string{"**Generated tests.**", "**Purge.**", "**Commit**", "**Publish.** `publishDraft`"} {
 			i := strings.Index(body, s)
 			if i < 0 || i < at {
-				t.Errorf("%s: %q is missing or out of order (generated, fill, purge, commit, publish)", slug, s)
+				t.Errorf("%s: %q is missing or out of order (generated, purge, commit, publish)", slug, s)
 				continue
 			}
 			at = i

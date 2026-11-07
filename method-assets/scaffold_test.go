@@ -199,6 +199,7 @@ func TestScaffoldMakefileScenariosInclude(t *testing.T) {
 	m := string(mk)
 	for _, want := range []string{
 		"gen-models:", "gen-models-check:", "gen-null:", "gen-tests:", "gen-tests-check:", "test-scenarios:",
+		"test-discriminate:", "surface-check:",
 		"go tool modelgen", "go tool nullgen -project .aiarch/state/project.json -root .", "go tool testgen",
 		// testgen's default resolves one level above -root; every call must spell it.
 		"TESTGEN_ARGS = -project .aiarch/state/project.json -root . -uitests uitests/generated",
@@ -343,6 +344,38 @@ func TestScaffoldFilesIncludesManifest(t *testing.T) {
 		}
 		if _, ok := renderedPaths[p]; !ok {
 			t.Errorf("unexpected key in ScaffoldFiles output: %q", p)
+		}
+	}
+}
+
+// The declarative test model (FPC plan 2) retires the hooks files and adds two gates a
+// scaffolded app runs: the null-subject pass and the generated surface check. The scaffold
+// must say neither "hooks files are hand-filled" nor leave the gates unnamed, and the arch
+// gate it seats must be the one that enforces ARCH-TEST-COMPOSE (CheckFileLayout).
+func TestScaffoldDescribesTheDeclarativeTestGates(t *testing.T) {
+	out, err := ScaffoldFiles(testData)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mk := string(out["Makefile.scenarios.mk"])
+	for _, want := range []string{
+		"-discriminate", "TP-DISCRIMINATE",
+		"surface.spec.gen.ts", "--project=surface",
+		"PHONY: gen-models gen-models-check gen-null gen-tests gen-tests-check test-scenarios test-discriminate surface-check run-local",
+	} {
+		if !strings.Contains(mk, want) {
+			t.Errorf("Makefile.scenarios.mk missing %q:\n%s", want, mk)
+		}
+	}
+	for _, stale := range []string{"hand-filled", "seed any missing hooks file", "hook that is missing", "orphan hook"} {
+		if strings.Contains(mk, stale) {
+			t.Errorf("Makefile.scenarios.mk still describes hooks files: %q", stale)
+		}
+	}
+	gate := string(out[ArchGatePath])
+	for _, want := range []string{"arch.CheckFileLayout(t, arch.MethodSpec(moduleRoot))", "ARCH-TEST-COMPOSE"} {
+		if !strings.Contains(gate, want) {
+			t.Errorf("%s missing %q", ArchGatePath, want)
 		}
 	}
 }

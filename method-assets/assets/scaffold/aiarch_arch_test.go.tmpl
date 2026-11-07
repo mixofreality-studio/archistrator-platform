@@ -4,7 +4,10 @@
 // and with the same argv. arch.MethodSpec derives the layer model from go.mod, so there
 // is no prefix to get wrong and nothing for an app to configure:
 //
-//   - TestFileLayout: every package follows the file naming convention;
+//   - TestFileLayout: every package follows the file naming convention, and no test is
+//     composed by hand (ARCH-TEST-COMPOSE: the only tests in a component package are the
+//     generated scenarios and null-subject files, and no hooks file or in-file fake of a
+//     contract exists; each test's subject comes from the generated scenariocompose package);
 //   - TestGeneratedOnlyPublic: only the generated contract is exported;
 //   - TestMethodLayering: downward-only imports, Temporal isolation, interface naming,
 //     the dependency menu, no hand-duplicated contract, and a go.mod every clone resolves;

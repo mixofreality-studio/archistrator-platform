@@ -73,9 +73,9 @@ jobs:
         run: make gen-models-check
 
       # Deterministic component testing drift gate (spec §5.3): the generated
-      # scenario tests (*_scenarios_test.gen.go, *.spec.gen.ts) must match the
-      # committed test plan, and every hook the generated tests reference must
-      # exist in the hand-filled hooks file with no orphans.
+      # scenario tests (*_scenarios.gen_test.go, null.gen_test.go, *.spec.gen.ts)
+      # must match the committed test plan, with no orphan generated file and no
+      # hooks file left over: an agent writes no test code.
       - name: Scenario test drift
         run: make gen-tests-check
 

@@ -63,9 +63,10 @@ path the contract implies if new).
 
 4. **Write no tests.** Construction builds the component only. The test plan
    is the test-engineer's, bound in parallel with your construction; the
-   integration task generates the black-box scenario tests from it, fills their
-   hooks and runs them against the integrated component. Any other test in a
-   component package is rejected by the arch gate. No BDD/Gherkin. See
+   integration task generates the black-box scenario tests from it, whose subjects
+   come from the generated `scenariocompose` package, and runs them against the
+   integrated component. Any other test in a component package is rejected by
+   the arch gate `[ARCH-TEST-COMPOSE]`. No BDD/Gherkin. See
    [[the-method-testing]].
 
 5. **Hand off for code review** to the senior-developer who designed the contract (per Löwy: not to peer juniors).
@@ -87,7 +88,7 @@ path the contract implies if new).
 - Edit anything under `*/generated/`
 - Skip code review
 - Work on more than one component at a time
-- Write, generate or edit any test, test plan or hooks file
+- Write, generate or edit any test or test plan
 - Mark the activity `done` without a passing build and senior review
 
 ## Anti-patterns

@@ -43,11 +43,14 @@ the network), ch12 (quality multiplication), ch13 (TradeMe staffing), ch14
 > any SPA/UI surface (browser-driven, hence inherently out-of-process even
 > though TS). Every Client has a contract with ops, derived rather than authored, and its ops say how it is
 > driven: a **web** client has one op per user action, each taking the one
-> param `action` = `{kind, target data-testid, value?}` (Playwright); an
+> param `action`, a typed UI action `{kind, model}` whose target is an element id
+> of the surface's typed UI design, found by the role and accessible name that
+> design gives it, never by test id (Playwright); an
 > **MCP** client has one op per generated MCP tool (op = the tool's Go method
 > name, tool = its lower-camel form, params = the tool's input properties), and
 > its Go scenario test calls those tools on an in-process MCP server, served by
-> the generated tools handlers the hooks bind to real managers. A **REST**
+> the generated tools handlers that the generated `scenariocompose` package binds
+> to real managers. A **REST**
 > machine client has one op per generated route, spelled the same way
 > (ManagerBase + op), and its Go scenario test requests that route on an
 > in-process server of the generated handlers, bound the same way. Each surface
@@ -72,8 +75,9 @@ that join at the integration phase's `testing` gate.
   parallel with construction: construction does not wait for it.
 - Construction builds the component only — no tests.
 - The integration task generates the black-box scenario tests from the
-  reviewed plan, fills their hooks with real collaborators, runs them against
-  the integrated component on the real downstream stack and records the run;
+  reviewed plan, each building its subject from the generated `scenariocompose`
+  package (the integration agent wires and writes no test code
+  `[ARCH-TEST-COMPOSE]`), runs them against the integrated component on the real downstream stack and records the run;
   the `testing` task — the join — reviews that run. Regression is the union of
   every component's run.
 
@@ -91,8 +95,7 @@ Löwy (ch09) prescribes three *distinct* roles. QA ≠ testing.
 
 Löwy's third role, the **software tester** who *runs* system testing and
 regression and files defects (ch09), has no agent here: the activity's own
-integration task generates the scenario tests, fills their hooks, runs them and
-records the run, so nobody is dispatched just to run tests. In Löwy's projects the
+integration task generates the scenario tests, runs them and records the run, so nobody is dispatched just to run tests. In Löwy's projects the
 Regression Test Harness is developer-owned and the System Test Harness
 test-engineer-owned (ch13); on this platform **the platform generates the
 scenario tests from the bindings**, so neither harness is an activity.
@@ -119,7 +122,7 @@ terminal activity feeding it directly.
 | Lifecycle task | Position | Owner | project.json target |
 |---|---|---|---|
 | `stp` — bind the component's derived scenarios | after `designReview`, parallel to `construction` | test-engineer | `.phaseArtifacts.testPlan[<contractKey>]` |
-| `integration` — the job generates the tests from the plan; the agent fills hooks and runs them; the job runs the checks and records the run | after `codeReview` | the workflow records the CheckRun (never the agent) | `.testingState.checkRuns[]` |
+| `integration` — the job generates the tests from the plan; the agent wires and writes no test code; the job runs the checks and records the run | after `codeReview` | the workflow records the CheckRun (never the agent) | `.testingState.checkRuns[]` |
 | `testing` — review the run at the current revision | gate of the `integration` phase; joins `integration` and `stpReview` | reviewers read the run | — |
 
 **When integration finds the plan wrong.** A plan cannot run against an implementation before integration, so a wrong binding can only be found there. Integration never edits the plan: it alleges, naming failing scenarios and citing the clause the binding contradicts (`reportPlanDefect`). The red run still stands. If the allegation is admissible the platform opens a system-authored send-back round on `stpReview`: the test-engineer re-derives the named bindings blind to the implementation and may answer "binding stands"; the review rules on fault; the tests regenerate and every scenario re-runs. It is rework inside the activity, not a scope change, and it is bounded at two round trips per activity, after which the activity escalates and the record names the dispute.
@@ -152,12 +155,15 @@ unrolled once, one stimulus per path (the single-stimulus principle). A
 component's plan is every scenario in which some stimulus is an input to it.
 The scenarios are derived on read and never stored — only the test-engineer's
 **bindings** are committed, keyed by stable scenario id — and `testgen`
-generates the black-box integration tests from them, leaving hooks for the
-parts an agent must fill. The full design is
+generates all of the black-box integration test code from them: each scenario's
+subject, principals, arranged world and expectations. No part of a test is left
+for an agent to fill. The full design is
 `docs/superpowers/specs/2026-10-02-deterministic-component-testing-design.md`
 (archistrator repo); the mechanical rules are `framework-go/scenario`
-(derivation), the TP-* methodcheck rules (binding completeness) and the
-`scenario-tests-only` arch gate (no other test may exist in component code).
+(derivation), the TP-* and UID-* methodcheck rules (binding and UI-design
+completeness; `TP-HOOK` refuses any hook or escape hatch) and the
+`scenario-tests-only` and `ARCH-TEST-COMPOSE` arch gates (no other test may
+exist in component code, and no test is composed by hand).
 
 ## 5. Layers and testing (structural, not type-per-layer)
 
@@ -205,7 +211,7 @@ applies to archistrator itself and to **every system archistrator builds**.
 - **R1 — Every test is black-box against a published contract.** The only
   tests permitted in archistrator-built component code (managers, engines,
   resource access, clients, the UI app) are the generated scenario tests and
-  their hooks file; any white-box or hand-written test is removed by the
+  the generated null-subject file; any white-box or hand-written test is removed by the
   integration task before merge, and the `scenario-tests-only` gate enforces it.
   White-box, in-package, internals-reaching tests are an anti-pattern *in
   Löwy's own terms* (App A's per-service testing is "black-box against the test
@@ -232,7 +238,9 @@ applies to archistrator itself and to **every system archistrator builds**.
   HTTP API and an MCP server mirroring it method-for-method), a
   **transport-agnostic step layer** drives each core use case through *both* and
   asserts identical committed state. This is what keeps "mirrors method-for-
-  method" honest as both surfaces evolve.
+  method" honest as both surfaces evolve. Tests of a machine client over the wire,
+  through the real policy, arrive in a later platform release; until then a
+  machine client's scenarios run in-process through its generated handlers.
 - **R5 — Author separation is binding.** The tests have no human (or agent)
   author: they are **generated** from the component's bound scenarios
   (`.phaseArtifacts.testPlan[<contractKey>]`) by the platform's `testgen`. The
@@ -241,14 +249,20 @@ applies to archistrator itself and to **every system archistrator builds**.
   results and probes — written by `test-engineer` on the component's test-plan
   task, and that authoring is **blind to the implementation**: it sees only the
   use cases + the component's contract, never the component source. The
-  construction agent writes no tests; the integration agent fills only the
-  hooks the generator left, runs the tests and records the run. **This separation IS the anti-cheat guarantee** —
+  construction agent writes no tests; the integration agent wires the component
+  and writes no test code (it writes none at all, `[ARCH-TEST-COMPOSE]`), and the
+  job runs the tests and records the run. **This separation IS the anti-cheat guarantee** —
   one agent must never author both a component and the plan that judges it;
   black-box surface alone is not enough without it.
 - **R6 — Enforcement is mechanical.** The arch checker / CI asserts: (a) the
   `scenario-tests-only` rule — a component package holds no `_test.go` other
-  than the generated scenario tests and their external-package hooks file;
+  than the generated scenario tests and the generated null-subject file, both
+  external-package, and no hooks file (`ARCH-TEST-COMPOSE`: the subject of every
+  generated test comes from the generated `scenariocompose` package);
   (b) `make gen-tests-check` — the generated tests match the committed bindings;
+  and `make test-discriminate` (`TP-DISCRIMINATE`) — every Go scenario also fails when
+  its stimulus operation does nothing, so a binding that would pass without the
+  behavior it claims to test is an error, not a pass;
   (c) `…/internal/…` is never imported cross-tree (compiler-true, asserted for
   clarity). **Architecture-fitness tests (the layering arch checker) are not
   "tests" in this constitution's sense and stay** — they verify structure, not

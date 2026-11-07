@@ -6,7 +6,9 @@
 #
 # Deterministic component testing (spec §4.3): the scenario tests are GENERATED
 # from the committed per-component test plan in .aiarch/state/project.json by
-# the platform's testgen; the hooks files beside them are hand-filled once.
+# the platform's testgen, subject and all (the generated scenariocompose package builds
+# every component a scenario drives). An agent writes no test code and no hooks file
+# (ARCH-TEST-COMPOSE, enforced by the arch gate's TestFileLayout).
 # Paths are module-root-relative — the app module lives at the repo root, and
 # -uitests is spelled explicitly because testgen's default resolves one level
 # ABOVE -root (it assumes a nested Go module this layout does not have).
@@ -22,16 +24,24 @@
 #                      the generated composition root, so a model with nothing built
 #                      compiles and boots. Refuses (exit 2) to replace a hooks.go it did
 #                      not write.
-#   gen-tests        — (re)write every *_scenarios_test.gen.go / *.spec.gen.ts and
-#                      seed any missing hooks file (never overwrites a hooks file)
-#   gen-tests-check  — drift gate: fails on a stale generated file, a referenced
-#                      hook that is missing, or an orphan hook
+#   gen-tests        — (re)write every generated test file: each package's
+#                      <stereotype>_scenarios.gen_test.go and null.gen_test.go, and each browser
+#                      surface's *.spec.gen.ts with its element inventory and runtime
+#   gen-tests-check  — drift gate: fails on a stale generated file, an orphan generated
+#                      file, or a hooks file left from an earlier generation (no hooks file
+#                      is current: nothing emits one)
 #   test-discriminate — the null-subject run (TP-DISCRIMINATE): re-run every Go scenario once per
 #                      stimulus operation with that operation nulled (AIARCH_NULL_OPS); a scenario
 #                      that still passes would pass without the behavior it claims to test, and is
 #                      printed as `TP-DISCRIMINATE <component> <scenario> <op>` (exit 1). Run it on
 #                      a tree gen-tests-check has just passed. Web and machine-client scenarios are
 #                      announced as skipped until the booted-server run lands.
+#   surface-check    — for each browser surface, run its generated surface.spec.gen.ts alone
+#                      (the `surface` Playwright project): every non-repeating element of the
+#                      surface's UI design must be on its screen by the role and accessible
+#                      name the design gives it. The scenario flows depend on it. Needs
+#                      `npm ci` and the Playwright browser in uitests/; a tree with no browser
+#                      surface has nothing to check.
 #   test-scenarios   — run every TestScenario_* as a `go test -json` stream into
 #                      test-results/go-test.jsonl (the venue uploads test-results/**)
 #   run-local        — the app's local run contract: an alias of `go run ./cmd/devstack`,
@@ -39,7 +49,7 @@
 #                      provisions the local profile's infrastructure, boots cmd/server and
 #                      prints {"devstack":"ready","url":...} once /readyz answers. All its
 #                      logic lives in the launcher, so there is exactly one run contract.
-.PHONY: gen-models gen-models-check gen-null gen-tests gen-tests-check test-scenarios test-discriminate run-local
+.PHONY: gen-models gen-models-check gen-null gen-tests gen-tests-check test-scenarios test-discriminate surface-check run-local
 
 MODELGEN_ARGS = -project .aiarch/state/project.json -root . $(foreach c,$(CONTRACTS),-contract $(c))
 TESTGEN_ARGS = -project .aiarch/state/project.json -root . -uitests uitests/generated
@@ -65,6 +75,12 @@ test-scenarios:
 
 test-discriminate:
 	GOWORK=off go tool testgen $(TESTGEN_ARGS) -discriminate
+
+surface-check:
+	@found=0; for cfg in uitests/generated/*/playwright.config.gen.ts; do \
+		[ -e "$$cfg" ] || continue; found=1; \
+		(cd uitests && npx playwright test -c "$${cfg#uitests/}" --project=surface) || exit 1; \
+	done; [ "$$found" = 1 ] || echo "surface-check: no browser surface to check"
 
 run-local:
 	GOWORK=off go run ./cmd/devstack
