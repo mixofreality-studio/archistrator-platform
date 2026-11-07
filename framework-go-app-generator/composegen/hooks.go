@@ -110,12 +110,22 @@ func (r *resolved) addVariantHook(rb raBinding, variant string, specs []HookArgT
 // generated Config, so a hand hook never invents an env var for it (FIX-049). "" (a FILL panic)
 // for any other hook shape.
 func (r *resolved) externalHTTPSeed(infraKeys []string, specs []HookArgType) string {
+	if ik := r.externalHTTPInfra(infraKeys, specs); ik != "" {
+		return "return cfg." + infraFieldName(ik, "URL") + ", &http.Client{Timeout: 30 * time.Second}"
+	}
+	return ""
+}
+
+// externalHTTPInfra is the external-http infra key an ExternalHTTP variant's args hook reads its
+// URL from - the hook (baseURL string, client *http.Client) the model fully determines - or "" for
+// any other hook shape.
+func (r *resolved) externalHTTPInfra(infraKeys []string, specs []HookArgType) string {
 	if len(specs) != 2 || specs[0].GoType != "string" || specs[1].GoType != "*http.Client" {
 		return ""
 	}
 	for _, ik := range infraKeys {
 		if r.infra[ik].Substrate == projectmodel.SubstrateExternalHTTP {
-			return "return cfg." + infraFieldName(ik, "URL") + ", &http.Client{Timeout: 30 * time.Second}"
+			return ik
 		}
 	}
 	return ""

@@ -3,7 +3,6 @@ package composegen
 import (
 	"fmt"
 	"go/format"
-	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -70,7 +69,7 @@ type scenarioGen struct {
 
 	body                                 strings.Builder
 	usesTemporal, usesPostgres, usesTime bool
-	usesWorker                           bool
+	usesWorker, usesHTTP                 bool
 }
 
 // EmitScenarioCompose renders internal/scenariocompose/compose.gen.go: for every built
@@ -190,9 +189,13 @@ func (g *scenarioGen) classifyOne(key string, c *projectmodel.Contract, bindings
 	}
 	switch rb, bound := bindings[key]; {
 	case bound:
-		arm, armErr := g.r.scenarioArm(rb)
+		arm, has, armErr := localArm(rb)
 		if armErr != nil {
 			return comp, false, armErr
+		}
+		if !has {
+			g.r.localVar[key] = "nil" // an optional binding with no local arm is unbuilt, as in main.gen.go
+			return comp, false, nil
 		}
 		comp.kind, comp.ra, comp.arm = scenarioRA, rb, arm
 	case g.r.localVar[key] == "nil":
@@ -218,76 +221,58 @@ func importAliasFor(importPath, alias string) string {
 	return alias
 }
 
-// scenarioArm chooses the variant arm a test builds a bound component with. A test runs
-// against the real substrates the host boots, so an arm that consumes infrastructure
-// (Postgres, Temporal) is preferred over an infrastructure-free one (a memory variant); among
-// equals the first profile in sorted order wins, so the choice is deterministic. An arm
-// whose inputs the host cannot supply is skipped; when none is usable the binding is a
-// generation error that says why each arm was refused.
-func (r *resolved) scenarioArm(rb raBinding) (variantArm, error) {
-	if rb.stub {
-		return rb.arms[0], nil
-	}
-	var usable []variantArm
-	var refusals []string
-	for _, arm := range rb.arms {
-		if _, err := r.scenarioArmArgs(rb, arm); err != nil {
-			refusals = append(refusals, err.Error())
-			continue
-		}
-		usable = append(usable, arm)
-	}
-	if i := slices.IndexFunc(usable, r.consumesSubstrate); i >= 0 {
-		return usable[i], nil
-	}
-	if len(usable) > 0 {
-		return usable[0], nil
-	}
-	return variantArm{}, fmt.Errorf("composegen: scenariocompose: component %q has no variant a generated test can build: %s", rb.key, strings.Join(refusals, "; "))
+// scenarioArgs spells constructor arguments for the generated test subject, from the scenario
+// host: the shared Temporal client for a temporal infra, the context and shared pool for a
+// postgres one, the host's Input for every config-valued infra input, the declared defaults for
+// the binding's settings. It records on the generation what it spelled, so the file imports and
+// declares exactly what it uses. It has no hooks to ask: a hook-supplied arm is an error.
+type scenarioArgs struct {
+	r *resolved
+	g *scenarioGen
 }
 
-// consumesSubstrate reports an arm that consumes a booted substrate (not just telemetry).
-func (r *resolved) consumesSubstrate(arm variantArm) bool {
-	for _, ik := range arm.infra {
-		if r.infra[ik].Substrate != "otel" {
-			return true
-		}
-	}
-	return false
+func (a scenarioArgs) infra(key string) (projectmodel.InfraDecl, error) { return a.r.infraDecl(key) }
+
+func (a scenarioArgs) temporal() []string {
+	a.g.usesTemporal = true
+	return []string{"s.temporal()"}
 }
 
-// scenarioArmArgs spells the arm's constructor arguments from the scenario host: the
-// shared Temporal client for a temporal infra, the context and shared pool for a postgres
-// one, the declared defaults for the binding's settings. Infra the host does not boot, and an
-// arm whose arguments are hook-supplied, are errors.
-func (r *resolved) scenarioArmArgs(rb raBinding, arm variantArm) ([]string, error) {
-	where := fmt.Sprintf("component %q (profile %q, variant %q)", rb.key, arm.profile, arm.variant)
-	if arm.hooked {
-		return nil, fmt.Errorf("%s takes composition-root arguments (Config.VariantHookArgs), which only the app's own root can supply", where)
-	}
-	var args []string
-	for _, ik := range arm.infra {
-		decl := r.infra[ik]
-		switch decl.Substrate {
-		case "temporal":
-			args = append(args, "s.temporal()")
-		case "postgres":
-			args = append(args, "s.t.Context()", "s.postgres()")
-		case "otel":
-			// telemetry is a global install, never a variant dependency
-		default:
-			return nil, fmt.Errorf("%s consumes infrastructure %q (substrate %q), which scenariohost does not provide (it boots temporal and postgres)", where, ik, decl.Substrate)
-		}
-	}
-	for _, st := range arm.settings {
-		lit, err := settingLiteral(st)
-		if err != nil {
-			return nil, fmt.Errorf("%s: %w", where, err)
-		}
-		args = append(args, lit)
-	}
-	return args, nil
+func (a scenarioArgs) postgres() []string {
+	a.g.usesPostgres = true
+	return []string{"s.t.Context()", "s.postgres()"}
 }
+
+// input asks the host for the input: the substrate travels as an untyped constant, so the file
+// needs no import for the catalog's type.
+func (scenarioArgs) input(decl projectmodel.InfraDecl, in projectmodel.SubstrateInput) string {
+	return fmt.Sprintf("s.h.Input(s.t, %q, %q, %q)", decl.Key, decl.Substrate, in.Name)
+}
+
+func (a scenarioArgs) setting(s projectmodel.Setting) (string, error) {
+	lit, err := settingLiteral(s)
+	if err != nil {
+		return "", err
+	}
+	a.g.usesTime = a.g.usesTime || strings.HasPrefix(lit, "time.")
+	return lit, nil
+}
+
+// hooked spells the one hook-supplied arm the model fully determines, an ExternalHTTP binding:
+// the declared endpoint URL and a plain client. Every other hooked arm is an error.
+func (a scenarioArgs) hooked(arm variantArm) ([]string, error) {
+	if arm.externalInfra == "" {
+		return nil, fmt.Errorf("component %q (variant %q) takes composition-root arguments (Config.VariantHookArgs), which only the app's own root can supply", arm.component, arm.variant)
+	}
+	decl, err := a.r.infraDecl(arm.externalInfra)
+	if err != nil {
+		return nil, err
+	}
+	a.g.usesHTTP, a.g.usesTime = true, true
+	return []string{a.input(decl, projectmodel.SubstrateInput{Name: "URL"}), "&http.Client{Timeout: 30 * time.Second}"}, nil
+}
+
+func (a scenarioArgs) kinds(component string) []string { return a.r.registrarKinds(component) }
 
 // settingLiteral spells a setting's declared default as a Go literal of the type configgen
 // gives its config field.
@@ -378,7 +363,14 @@ func (g *scenarioGen) managerArg(comp scenarioComp, dep projectmodel.Dep, zero b
 		g.usesTemporal = true
 		return "s.temporal()", nil
 	}
-	st, ok := findSetting(g.m.Deployment, dep.Name)
+	name := dep.Name
+	if dep.Setting != "" {
+		name = dep.Setting
+	}
+	st, ok := findSetting(g.m.Deployment, name)
+	if !ok && dep.Setting != "" {
+		return "", fmt.Errorf("composegen: scenariocompose: manager %q dependency %q is linked to setting %q, which the deployment does not declare", comp.key, dep.Name, dep.Setting)
+	}
 	if !ok {
 		return "", fmt.Errorf("composegen: scenariocompose: manager %q dependency %q (%s) is composition-root policy the deployment model cannot express, and a generated test subject has no hooks to ask: declare it as a deployment setting or a component", comp.key, dep.Name, strings.TrimSpace(dep.GoType))
 	}
@@ -450,20 +442,9 @@ func (g *scenarioGen) emitRABuild(comp scenarioComp) error {
 		fmt.Fprintf(&g.body, "\t\treturn %s\n", ctorCall(comp.arm.ctor, nil))
 		return nil
 	}
-	args, err := g.r.scenarioArmArgs(comp.ra, comp.arm)
+	args, err := ctorArgs(comp.arm, scenarioArgs{r: g.r, g: g})
 	if err != nil {
-		return err
-	}
-	for _, ik := range comp.arm.infra {
-		switch g.r.infra[ik].Substrate {
-		case "temporal":
-			g.usesTemporal = true
-		case "postgres":
-			g.usesPostgres = true
-		}
-	}
-	for _, a := range args {
-		g.usesTime = g.usesTime || strings.HasPrefix(a, "time.")
+		return fmt.Errorf("composegen: scenariocompose: component %q (profile %q, variant %q): %w", comp.key, comp.arm.profile, comp.arm.variant, err)
 	}
 	call := ctorCall(comp.arm.ctor, args)
 	if !comp.arm.returnsError {
@@ -735,6 +716,9 @@ func (g *scenarioGen) render() string {
 	if g.usesPostgres {
 		g.imp.add(pathPostgresInfra, "postgresinfra")
 		g.imp.add(pathPgxPool, "")
+	}
+	if g.usesHTTP {
+		g.imp.add("net/http", "")
 	}
 	if g.usesTime {
 		g.imp.add("time", "")

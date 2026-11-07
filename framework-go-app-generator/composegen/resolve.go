@@ -18,6 +18,9 @@ func itoa(n int) string { return strconv.Itoa(n) }
 // Hooks, and the config-field references — everything computed from the model so
 // emitMain is pure string assembly.
 type resolved struct {
+	// m is the model the plan is resolved over (the schedule registrar's constructor reads the
+	// Managers that depend on it from it).
+	m           *projectmodel.Model
 	cfg         Config
 	pkgName     string
 	serviceName string
@@ -118,17 +121,24 @@ type raBinding struct {
 type variantArm struct {
 	profile      string
 	variant      string // the raw binding variant name (e.g. "postgres", "memory") — the ready-log text
+	component    string // the binding's component key
 	ctor         string
-	args         []string
+	args         []string // the composition root's argument expressions (ctorArgs over rootArgs)
 	returnsError bool
 	// infra and settings are what the arm consumes, before they are spelled as the
 	// composition root's argument expressions (args): the generated test subject spells the
-	// same inputs from the scenario host instead. hooked marks an arm whose arguments
-	// come from a composition-root Hooks method (Config.VariantHookArgs), which only the
-	// app's own root can supply.
+	// same inputs from the scenario host instead (ctorArgs over scenarioArgs). hooked marks an
+	// arm whose arguments come from a composition-root Hooks method (Config.VariantHookArgs),
+	// hookCall the call that supplies them.
 	infra    []string
 	settings []projectmodel.Setting
 	hooked   bool
+	hookCall string
+	// externalInfra is the external-http infra key of a hooked arm whose hook is the one the
+	// model fully determines (an ExternalHTTP binding: the declared endpoint URL and a plain
+	// client, see externalHTTPSeed). The scenario subject spells such an arm from the host's
+	// Input instead of refusing it; "" for every other arm.
+	externalInfra string
 }
 
 // ctorCall spells one constructor call: the single place the composition root and the
@@ -204,6 +214,7 @@ func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
 // test subject (scenariocompose) both start from it.
 func newResolved(m *projectmodel.Model, cfg Config) *resolved {
 	r := &resolved{
+		m:            m,
 		cfg:          cfg,
 		pkgName:      cfg.PackageName,
 		serviceName:  cfg.ContainerKey,
@@ -443,7 +454,11 @@ func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding,
 		if !ok {
 			continue
 		}
-		rb.arms = append(rb.arms, r.resolveArm(rb, profile, pv, b.Settings))
+		arm, err := r.resolveArm(rb, profile, pv, b.Settings)
+		if err != nil {
+			return raBinding{}, err
+		}
+		rb.arms = append(rb.arms, arm)
 	}
 	return rb, nil
 }
@@ -457,77 +472,70 @@ func (r *resolved) resolveBinding(m *projectmodel.Model, b projectmodel.Binding,
 // already-CONSTRUCTED LOCAL the hook cannot reach that way (today: the
 // temporal substrate's dialed client `tc`) is instead threaded as an EXTRA
 // POSITIONAL ARG to the SURROUNDING constructor call, ahead of the hook call
-// (hookExtraCtorArgs) — e.g.
+// (rootArgs.hooked) — e.g.
 // messagebus.NewTemporalMessageBus(tc, hooks.MessageBusTemporalArgs(cfg)). This
 // is a plain multi-arg Go call (not the f(g()) sole-arg spread), so it
 // composes cleanly with a hook that itself returns multiple values. A
 // hook-args variant is registered ONCE regardless of how many profiles bind it
 // (messageBus's "Temporal" variant binds BOTH local and cloud) —
 // addVariantHook dedupes by name. Otherwise (no hook) the positional
-// convention applies: infra values (per the substrate catalog) then binding
-// settings; a variant that consumes any infra returns (Interface, error)
-// UNLESS overridden by Config.VariantConstructorNoError
+// convention applies (ctorArgs): infra values (per the substrate catalog) then
+// binding settings; a variant that consumes any infra returns (Interface,
+// error) UNLESS overridden by Config.VariantConstructorNoError
 // (messagebus.NewTemporalMessageBus is single-return despite consuming the
 // temporal infra) — an infra-free variant (memory/dry-run) returns the
 // interface alone.
-func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.BindingVariant, settings []projectmodel.Setting) variantArm {
-	ctor := rb.alias + ".New" + variantToken(pv.Variant) + rb.iface
+func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.BindingVariant, settings []projectmodel.Setting) (variantArm, error) {
 	key := rb.key + "/" + pv.Variant
-	returnsError := r.cfg.VariantConstructorReturnsError[key] || (len(pv.Infra) > 0 && !r.cfg.VariantConstructorNoError[key])
-	specs, hooked := r.cfg.VariantHookArgs[key]
-	if hooked {
-		extraCtorArgs := r.hookExtraCtorArgs(pv.Infra)
-		r.addVariantHook(rb, pv.Variant, specs, r.externalHTTPSeed(pv.Infra, specs))
-		args := append(extraCtorArgs, "hooks."+variantHookName(rb.key, pv.Variant)+"(cfg)")
-		return variantArm{
-			profile:      profile,
-			variant:      pv.Variant,
-			ctor:         ctor,
-			args:         args,
-			returnsError: returnsError,
-			infra:        pv.Infra,
-			settings:     settings,
-			hooked:       true,
-		}
-	}
-	var args []string
-	for _, ik := range pv.Infra {
-		decl := r.infra[ik]
-		r.consumedKeys[ik] = true
-		args = append(args, variantArgsForSubstrate(decl.Substrate, ik)...)
-	}
-	for _, s := range settings {
-		args = append(args, "cfg."+settingFieldName(s.Name))
-	}
-	return variantArm{
+	arm := variantArm{
 		profile:      profile,
 		variant:      pv.Variant,
-		ctor:         ctor,
-		args:         args,
-		returnsError: returnsError,
+		component:    rb.key,
+		ctor:         rb.alias + ".New" + variantToken(pv.Variant) + rb.iface,
+		returnsError: r.cfg.VariantConstructorReturnsError[key] || (len(pv.Infra) > 0 && !r.cfg.VariantConstructorNoError[key]),
 		infra:        pv.Infra,
 		settings:     settings,
 	}
+	for _, ik := range pv.Infra {
+		r.consumedKeys[ik] = true
+	}
+	if specs, hooked := r.cfg.VariantHookArgs[key]; hooked {
+		r.addVariantHook(rb, pv.Variant, specs, r.externalHTTPSeed(pv.Infra, specs))
+		arm.hooked = true
+		arm.hookCall = "hooks." + variantHookName(rb.key, pv.Variant) + "(cfg)"
+		arm.externalInfra = r.externalHTTPInfra(pv.Infra, specs)
+	}
+	args, err := ctorArgs(arm, rootArgs{r: r})
+	if err != nil {
+		return variantArm{}, fmt.Errorf("composegen: component %q (profile %q, variant %q): %w", rb.key, profile, pv.Variant, err)
+	}
+	arm.args = args
+	return arm, nil
 }
 
-// hookExtraCtorArgs computes, for a VariantHookArgs-configured arm's bound
-// infra, the EXTRA positional arg expressions the surrounding
-// New<Variant><Interface> call needs ahead of the hook call, for any infra key
-// whose substrate resolves to an already-constructed LOCAL (not a cfg field)
-// — today only "temporal" (the dialed `tc`). Every infra key is still marked
-// consumed (bookkeeping) regardless of whether it contributes an arg.
-// Postgres-substrate + hook-args is unimplemented (no bound variant needs it
-// today); extend the switch here (ctx, *pgxpool.Pool) if one ever does.
-func (r *resolved) hookExtraCtorArgs(infraKeys []string) []string {
-	var args []string
-	for _, ik := range infraKeys {
-		decl := r.infra[ik]
-		r.consumedKeys[ik] = true
-		if decl.Substrate == "temporal" {
-			args = append(args, "tc")
-		}
+// localArm is the arm of the binding's local profile: the run contract the generated test
+// subject realizes, the same profile cmd/devstack boots. A stub binding is its stub. A binding
+// with no local arm is an error when required (the composition root's own text) and simply not
+// built when optional. A local arm whose arguments the app's hand hooks supply is an error: the
+// local profile must be derived from the model alone - except an ExternalHTTP arm, whose hook is
+// the model's own endpoint URL (arm.externalInfra).
+func localArm(rb raBinding) (variantArm, bool, error) {
+	if rb.stub {
+		return rb.arms[0], true, nil
 	}
-	return args
+	for _, arm := range rb.arms {
+		if arm.profile != projectmodel.LocalProfile {
+			continue
+		}
+		if arm.hooked && arm.externalInfra == "" {
+			return variantArm{}, false, fmt.Errorf("composegen: scenariocompose: component %q (profile %q, variant %q) takes composition-root arguments (Config.VariantHookArgs): the local profile is the run contract and must be model-derived; declare its inputs as infrastructure or binding settings", rb.key, arm.profile, arm.variant)
+		}
+		return arm, true, nil
+	}
+	if strings.EqualFold(rb.presence, "required") {
+		return variantArm{}, false, fmt.Errorf("composegen: scenariocompose: %s: no %s variant for the active profile", rb.key, bindingLayerLabel(rb.layer))
+	}
+	return variantArm{}, false, nil
 }
 
 // resolveEngines constructs every Engine and infrastructure-free Utility via its pure
@@ -695,6 +703,13 @@ func (r *resolved) threadDep(m *projectmodel.Model, mc managerComp, dep projectm
 	}
 	if isTemporalClient(dep) {
 		return "tc", nil
+	}
+	if dep.Setting != "" {
+		field, ok := hasSetting(m.Deployment, dep.Setting)
+		if !ok {
+			return "", fmt.Errorf("dependency %q is linked to setting %q, which the deployment does not declare", dep.Name, dep.Setting)
+		}
+		return "cfg." + field, nil
 	}
 	if field, ok := hasSetting(m.Deployment, dep.Name); ok {
 		return "cfg." + field, nil

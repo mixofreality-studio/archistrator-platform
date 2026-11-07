@@ -172,51 +172,6 @@ func TestScenarioCompose_Golden(t *testing.T) {
 	checkGolden(t, "../testdata/scenariocompose.compose.gen.go.golden", a)
 }
 
-// TestScenarioCompose_UnmappedSubstrateIsAGenerationError: a binding that consumes
-// infrastructure the scenario host does not provide fails generation, naming the binding and
-// the substrate - never an empty or nil value the test would pass against.
-func TestScenarioCompose_UnmappedSubstrateIsAGenerationError(t *testing.T) {
-	m := loadScenarioFixture(t)
-	for i, b := range m.Deployment.Bindings {
-		if b.Component == "orderStateAccess" {
-			m.Deployment.Bindings[i].PerProfile = map[string]projectmodel.BindingVariant{
-				"cloud": {Variant: "postgres", Infra: []string{"github-app"}},
-			}
-		}
-	}
-	_, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
-	if err == nil {
-		t.Fatal("want a generation error for a binding the scenario host cannot back")
-	}
-	for _, want := range []string{"orderStateAccess", "github-app"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error must name %q, got: %v", want, err)
-		}
-	}
-}
-
-// TestScenarioCompose_HookArgsVariantIsAGenerationError: a variant whose arguments only the
-// app's own composition root can supply cannot be built by a generated subject.
-func TestScenarioCompose_HookArgsVariantIsAGenerationError(t *testing.T) {
-	m := loadScenarioFixture(t)
-	for i, b := range m.Deployment.Bindings {
-		if b.Component == "orderStateAccess" { // leave only the hook-supplied arm
-			m.Deployment.Bindings[i].PerProfile = map[string]projectmodel.BindingVariant{"cloud": b.PerProfile["cloud"]}
-		}
-	}
-	cfg := scenarioFixtureCfg
-	cfg.VariantHookArgs = map[string][]composegen.HookArgType{"orderStateAccess/postgres": {{GoType: "string"}}}
-	_, err := composegen.EmitScenarioCompose(m, cfg)
-	if err == nil {
-		t.Fatal("want a generation error for a hook-args variant")
-	}
-	for _, want := range []string{"orderStateAccess", "postgres", "VariantHookArgs"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error must name %q, got: %v", want, err)
-		}
-	}
-}
-
 // TestScenarioCompose_UnresolvedDependencyIsAGenerationError: a Manager dependency the
 // deployment model cannot express (a func-typed resolver) is composition-root policy; a
 // generated subject has no hooks to ask, so generation names the manager and the dependency.

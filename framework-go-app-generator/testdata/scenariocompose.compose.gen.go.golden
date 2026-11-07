@@ -17,8 +17,6 @@ import (
 	"example.com/greenfield/server/internal/manager/order"
 	"example.com/greenfield/server/internal/resourceaccess/ledgerstate"
 	"example.com/greenfield/server/internal/resourceaccess/orderstate"
-	"github.com/jackc/pgx/v5/pgxpool"
-	postgresinfra "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres"
 	temporalprop "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-temporal"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost"
 	fweng "github.com/mixofreality-studio/archistrator-platform/framework-go/engine"
@@ -36,7 +34,6 @@ type subject struct {
 	h    *scenariohost.Host
 	memo map[string]any
 	tc   client.Client
-	pool *pgxpool.Pool
 }
 
 // subjects holds the wiring of each running test, dropped when the test ends.
@@ -102,25 +99,6 @@ func (s *subject) temporal() client.Client {
 	s.t.Cleanup(tc.Close)
 	s.tc = tc
 	return tc
-}
-
-// postgres is the pool every Postgres-backed component shares. The host boots Postgres
-// outside -short only; under -short the test is skipped, never run against nothing.
-func (s *subject) postgres() *pgxpool.Pool {
-	s.t.Helper()
-	if s.pool != nil {
-		return s.pool
-	}
-	if s.h.PostgresURL == "" {
-		s.t.Skip("scenariocompose: postgres is not booted under -short")
-	}
-	pool, err := postgresinfra.NewPool(s.t.Context(), s.h.PostgresURL)
-	if err != nil {
-		s.t.Fatalf("scenariocompose: open postgres pool: %v", err)
-	}
-	s.t.Cleanup(pool.Close)
-	s.pool = pool
-	return pool
 }
 
 // buildBillingEngine builds the BillingEngine a scenario drives, once per test.
@@ -326,11 +304,7 @@ func (n nullOrderManager) PlaceOrder(rc fwm.Context, p0 order.Order) (order.Orde
 // buildOrderStateAccess builds the Access a scenario drives, once per test.
 func buildOrderStateAccess(s *subject) orderstate.Access {
 	return memoize(s, "orderStateAccess", func() orderstate.Access {
-		v, err := orderstate.NewPostgresAccess(s.t.Context(), s.postgres())
-		if err != nil {
-			s.t.Fatalf("scenariocompose: orderStateAccess: %v", err)
-		}
-		return v
+		return orderstate.NewMemoryAccess()
 	})
 }
 

@@ -5,8 +5,10 @@
 //	go tool appgen config   [-check]   cmd/server/config.gen.go
 //	go tool appgen compose  [-check]   cmd/server/main.gen.go, the generated authorization table
 //	                                   and its policy test, the browser surfaces' static handler,
-//	                                   hooks.go if absent, and cmd/devstack/main.gen.go, the
-//	                                   app's local run contract (go run ./cmd/devstack)
+//	                                   hooks.go if absent, cmd/devstack/main.gen.go, the
+//	                                   app's local run contract (go run ./cmd/devstack), and
+//	                                   internal/scenariocompose/compose.gen.go, the components
+//	                                   the generated scenario tests drive
 //	go tool appgen clients  [-check]   internal/client/** and api/openapi.yaml
 //
 // A contract is wired only once its package holds code, so the generated composition
@@ -268,6 +270,12 @@ func genCompose(m *projectmodel.Model, cfg config, module string, o options) (ma
 	out := prefixed(generated)
 	for name, content := range launcher {
 		out[filepath.Join(rungen.Dir, name)] = content
+	}
+	// The generated test subject is module-relative, not under cmd/server: scenario tests of
+	// every component import it. It is emitted even for an app with no test plans, because
+	// Workflows() feeds the replay gate.
+	if out[composegen.ScenarioComposeFile], err = composegen.EmitScenarioCompose(effective, cc); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
