@@ -63,11 +63,17 @@ func platformRoot() (string, error) {
 // name, so the pipeline follows whatever method-assets ships. It stops at the first
 // failing step; the Report holds every step that ran, the failing one last.
 func RunChain(ctx context.Context, fixture string, dir string) (Report, error) {
-	rep := Report{Fixture: fixture, Dir: dir}
 	raw, err := Fixture(fixture)
 	if err != nil {
-		return rep, err
+		return Report{Fixture: fixture, Dir: dir}, err
 	}
+	return RunChainOn(ctx, fixture, raw, dir)
+}
+
+// RunChainOn is RunChain over project.json bytes the caller supplies (a fixture with one
+// binding changed, say); fixture only names the scaffold's module and project.
+func RunChainOn(ctx context.Context, fixture string, raw []byte, dir string) (Report, error) {
+	rep := Report{Fixture: fixture, Dir: dir}
 	model, err := projectmodel.Load(raw)
 	if err != nil {
 		return rep, fmt.Errorf("fixture %s does not load: %w", fixture, err)
