@@ -52,7 +52,6 @@ func TestGo_NoHooksFileEmitted(t *testing.T) {
 	for _, want := range []string{
 		// the subject and the replay registration come from the generated scenariocompose package
 		"var subject billing.BillingManager = scenariocompose.NewBillingManager(t, h)",
-		"scenariohost.MainWithWorkflows(m, scenariocompose.Workflows(), \"billingManager\")",
 		"\"example.com/app/server/internal/scenariocompose\"",
 	} {
 		if !strings.Contains(src, want) {
@@ -317,17 +316,20 @@ func NewBillingManager(t *testing.T, h *scenariohost.Host) billing.BillingManage
 	return &subject{null: os.Getenv("STUB_SUBJECT") == "null"}
 }
 
+func NullBillingManager(inner billing.BillingManager, ops ...string) billing.BillingManager { return inner }
+
 func Workflows() scenariohost.Workflows { return scenariohost.Workflows{} }
 `
 
 // runGenerated builds a module around the generated billing scenarios file and runs one scenario with the
 // subject the env asks for, returning go test's combined output.
-func runGenerated(t *testing.T, gen []byte, run, subject string) (string, error) {
+func runGenerated(t *testing.T, gen, nullFile []byte, run, subject string) (string, error) {
 	t.Helper()
 	root := writeModule(t, map[string]string{
 		"internal/manager/billing/billing.go":                    stubBilling,
 		"internal/scenariocompose/compose.go":                    stubCompose,
 		"internal/manager/billing/manager_scenarios.gen_test.go": string(gen),
+		billingNull: string(nullFile),
 	}, moduleOpts{})
 	return goIn(root, []string{"STUB_SUBJECT=" + subject}, "test", "-count=1", "-run", run, "./internal/manager/billing/")
 }
@@ -340,15 +342,16 @@ func TestGo_DifferentialFailsVacuous(t *testing.T) {
 	if testing.Short() {
 		t.Skip("compiles a module")
 	}
-	gen := generate(t).Generated[billingGen]
-	out, err := runGenerated(t, gen, "^TestScenario_process_order_P2$", "null")
+	generated := generate(t).Generated
+	gen, nullFile := generated[billingGen], generated[billingNull]
+	out, err := runGenerated(t, gen, nullFile, "^TestScenario_process_order_P2$", "null")
 	if err == nil {
 		t.Fatalf("a null subject passed the scenario:\n%s", out)
 	}
 	if !strings.Contains(out, "vacuous") {
 		t.Fatalf("the failure must say vacuous:\n%s", out)
 	}
-	out, err = runGenerated(t, gen, "^TestScenario_process_order_P2$", "real")
+	out, err = runGenerated(t, gen, nullFile, "^TestScenario_process_order_P2$", "real")
 	if err != nil {
 		t.Fatalf("a subject that really pays must pass the scenario: %v\n%s", err, out)
 	}
@@ -407,6 +410,11 @@ import (
 
 func NewBillingManager(t *testing.T, h *scenariohost.Host) billing.BillingManager { return nil }
 func NewOrderManager(t *testing.T, h *scenariohost.Host) order.OrderManager       { return nil }
+
+func NullBillingManager(inner billing.BillingManager, ops ...string) billing.BillingManager {
+	return inner
+}
+func NullOrderManager(inner order.OrderManager, ops ...string) order.OrderManager { return inner }
 func Workflows() scenariohost.Workflows                                           { return scenariohost.Workflows{} }
 `
 
@@ -426,6 +434,8 @@ func TestGo_RefArrangeAndProbesCompile(t *testing.T) {
 		"internal/scenariocompose/compose.go":                    stubComposeBoth,
 		"internal/manager/billing/manager_scenarios.gen_test.go": string(out.Generated[billingGen]),
 		"internal/manager/order/manager_scenarios.gen_test.go":   string(out.Generated[orderGen]),
+		billingNull: string(out.Generated[billingNull]),
+		"internal/manager/order/null.gen_test.go": string(out.Generated["internal/manager/order/null.gen_test.go"]),
 	}, moduleOpts{})
 	if msg, err := goIn(root, nil, "vet", "./..."); err != nil {
 		t.Fatalf("the generated files do not type-check: %v\n%s", err, msg)
@@ -540,6 +550,8 @@ func TestGo_TypeChecksAgainstTheRealHost(t *testing.T) {
 		"internal/scenariocompose/compose.go":                    stubComposeBoth,
 		"internal/manager/billing/manager_scenarios.gen_test.go": string(out.Generated[billingGen]),
 		"internal/manager/order/manager_scenarios.gen_test.go":   string(out.Generated[orderGen]),
+		billingNull: string(out.Generated[billingNull]),
+		"internal/manager/order/null.gen_test.go": string(out.Generated["internal/manager/order/null.gen_test.go"]),
 	}, moduleOpts{realHost: true})
 	if msg, err := goIn(root, nil, "vet", "./..."); err != nil {
 		t.Fatalf("the generated files do not type-check against the real host: %v\n%s", err, msg)

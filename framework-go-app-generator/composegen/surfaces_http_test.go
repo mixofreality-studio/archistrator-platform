@@ -90,6 +90,17 @@ func TestComposedServerServesMCPAndSurfacesOverHTTP(t *testing.T) {
 			t.Fatalf("tools/call listGreet = %s, want the Manager's answer for the dev principal", got)
 		}
 	})
+	// The null-subject run boots the same binary with AIARCH_NULL_OPS: the named operation answers
+	// with its zero result over the real transport and the Manager is never reached.
+	t.Run("null operation answers the zero result", func(t *testing.T) {
+		nulled := bootSandbox(t, dir, "APP_DEV_PRINCIPAL=dev-user", "APP_WEB_DIST_DIR="+dist, "AIARCH_NULL_OPS=ListManager.Greet")
+		session := mcpCall(t, nulled, "", `{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"scenario","version":"1"}}}`)
+		mcpCall(t, nulled, session, `{"jsonrpc":"2.0","method":"notifications/initialized"}`)
+		got := mcpCall(t, nulled, session, `{"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"listGreet","arguments":{}}}`)
+		if strings.Contains(got, "hello") || !strings.Contains(got, `"result"`) {
+			t.Fatalf("tools/call listGreet with the op nulled = %s, want the zero result", got)
+		}
+	})
 }
 
 // ownScopeHooks is the seeded hooks.go with the one decision only the app can make filled in:
@@ -152,24 +163,25 @@ replace go.temporal.io/sdk => ./_stubs/temporal
 	files["internal/manager/list/list.go"] = `package list
 
 import (
-	"context"
-
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
+	fwm "github.com/mixofreality-studio/archistrator-platform/framework-go/manager"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 )
 
 const TaskQueue = "list"
 
+type Greeting string
+
 type ListManager interface {
-	Greet(ctx context.Context) (string, error)
+	Greet(ctx fwm.Context) (Greeting, error)
 }
 
 type impl struct{}
 
-func (impl) Greet(ctx context.Context) (string, error) {
+func (impl) Greet(ctx fwm.Context) (Greeting, error) {
 	p, _ := security.PrincipalFrom(ctx)
-	return "hello " + p.Subject, nil
+	return Greeting("hello " + p.Subject), nil
 }
 
 func NewListManager(tc client.Client) ListManager { return impl{} }
@@ -201,6 +213,7 @@ import (
 	"github.com/modelcontextprotocol/go-sdk/mcp"
 
 	mgr "` + freshModule + `/internal/manager/list"
+	fwm "github.com/mixofreality-studio/archistrator-platform/framework-go/manager"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 )
 
@@ -228,8 +241,8 @@ func (h *Handler) handleGreet(ctx context.Context, _ *mcp.CallToolRequest, _ gre
 	if err != nil || !d.Permit {
 		return nil, greetOutput{}, errors.New("forbidden")
 	}
-	got, err := h.Manager.Greet(ctx)
-	return nil, greetOutput{Result: got}, err
+	got, err := h.Manager.Greet(fwm.Context{Context: ctx})
+	return nil, greetOutput{Result: string(got)}, err
 }
 `
 	return files

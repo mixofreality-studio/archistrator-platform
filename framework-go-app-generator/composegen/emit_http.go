@@ -45,7 +45,11 @@ func writeWebManagersBundle(b *strings.Builder, r *resolved) {
 		b.WriteString("\t\t" + mc.iface + ": " + mc.varName + ",\n")
 	}
 	b.WriteString("\t}\n")
-	b.WriteString("\twebManagers = hooks.WrapManagers(webManagers)\n\n")
+	b.WriteString("\twebManagers = hooks.WrapManagers(webManagers)\n")
+	// The null-subject run (testgen -discriminate) stubs named operations out here, outermost, so the
+	// generated REST handlers and MCP tools never reach the Manager for them. Local profile only.
+	b.WriteString("\twebManagers, err = applyNullOps(hooks.ResolveProfile(cfg), webManagers)\n")
+	b.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n\n")
 }
 
 // writeServer emits the generated NewServer call + root mux + ExtraMounts +

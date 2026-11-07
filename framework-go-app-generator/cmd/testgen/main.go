@@ -14,11 +14,19 @@
 //	-module   the Go module path of -root           (default: the module line of <root>/go.mod)
 //	-uitests  the Playwright output directory, relative to -root (default ../uitests/generated)
 //	-check    report drift and exit 1 instead of writing
+//	-discriminate
+//	          run the null-subject discrimination instead of writing: for every Go
+//	          (scenario, stimulus operation) pair, re-run the scenario's generated test
+//	          with AIARCH_NULL_OPS naming that operation. A run that still passes is a
+//	          survivor: it is printed as `TP-DISCRIMINATE <component> <scenario> <op>` and
+//	          the exit status is 1. Web and machine-client scenarios need the booted
+//	          server (plan 3) and are announced as skipped. Run it on a current tree
+//	          (-check first); it does not write.
 //
 // Without -check it rewrites every generated file, writes the web client's
 // hooks.ts only when absent (a Go scenario has no hooks file: its subject, probes
 // and arrange calls are all generated), and prunes generated files
-// (*_scenarios.gen_test.go under root; *.spec.gen.ts, playwright.config.gen.ts,
+// (*_scenarios.gen_test.go and null.gen_test.go under root; *.spec.gen.ts, playwright.config.gen.ts,
 // reporter.gen.ts under the Playwright directory) that the current plan no longer
 // produces. With -check it prints one line per drifted or stale file, per missing
 // hooks.ts, per orphan generated file a write run would prune, and per orphan
@@ -53,27 +61,18 @@ var errDrift = errors.New("testgen: generated tests are out of date; run testgen
 
 type options struct {
 	project, root, module, uitests string
-	check                          bool
+	check, discriminate            bool
 }
 
 func run(args []string, out, errOut io.Writer) error {
-	var o options
-	fl := flag.NewFlagSet("testgen", flag.ContinueOnError)
-	fl.SetOutput(errOut)
-	fl.StringVar(&o.project, "project", "../.aiarch/state/project.json", "the project.json to read")
-	fl.StringVar(&o.root, "root", ".", "the Go module directory output paths resolve against")
-	fl.StringVar(&o.module, "module", "", "the Go module path of -root (default: from go.mod)")
-	fl.StringVar(&o.uitests, "uitests", "../uitests/generated", "the Playwright output directory, relative to -root")
-	fl.BoolVar(&o.check, "check", false, "report drift and exit 1 instead of writing")
-	if err := fl.Parse(args); err != nil {
+	return runWith(args, out, errOut, execGoTest)
+}
+
+// runWith is run with the go test runner of -discriminate supplied.
+func runWith(args []string, out, errOut io.Writer, goTest goTestRunner) error {
+	o, err := parseOptions(args, errOut)
+	if err != nil {
 		return err
-	}
-	if o.module == "" {
-		m, err := modulePath(filepath.Join(o.root, "go.mod"))
-		if err != nil {
-			return err
-		}
-		o.module = m
 	}
 	raw, err := cli.ReadAdmitted(o.project) // the one loader: every problem, before any emission
 	if err != nil {
@@ -88,10 +87,39 @@ func run(args []string, out, errOut io.Writer) error {
 			return err
 		}
 	}
-	if o.check {
+	switch {
+	case o.check && o.discriminate:
+		return errors.New("testgen: -check and -discriminate are separate runs")
+	case o.discriminate:
+		return discriminate(o, gen, out, goTest)
+	case o.check:
 		return check(o, gen, out)
 	}
 	return write(o, gen, out)
+}
+
+// parseOptions reads the flags and resolves the module path from go.mod when -module is not given.
+func parseOptions(args []string, errOut io.Writer) (options, error) {
+	var o options
+	fl := flag.NewFlagSet("testgen", flag.ContinueOnError)
+	fl.SetOutput(errOut)
+	fl.StringVar(&o.project, "project", "../.aiarch/state/project.json", "the project.json to read")
+	fl.StringVar(&o.root, "root", ".", "the Go module directory output paths resolve against")
+	fl.StringVar(&o.module, "module", "", "the Go module path of -root (default: from go.mod)")
+	fl.StringVar(&o.uitests, "uitests", "../uitests/generated", "the Playwright output directory, relative to -root")
+	fl.BoolVar(&o.check, "check", false, "report drift and exit 1 instead of writing")
+	fl.BoolVar(&o.discriminate, "discriminate", false, "run the scenarios against a null subject and report the survivors")
+	if err := fl.Parse(args); err != nil {
+		return o, err
+	}
+	if o.module == "" {
+		m, err := modulePath(filepath.Join(o.root, "go.mod"))
+		if err != nil {
+			return o, err
+		}
+		o.module = m
+	}
+	return o, nil
 }
 
 // modulePath reads the module line of a go.mod.
@@ -252,7 +280,7 @@ func prune(o options, gen testgen.Output) ([]string, error) {
 		return nil, err
 	}
 	for _, p := range orphans {
-		if err := os.Remove(filepath.Join(o.root, filepath.FromSlash(p))); err != nil {
+		if err := os.Remove(filepath.Join(o.root, filepath.FromSlash(p))); err != nil { // #nosec G703 -- an orphan found by walking the caller's own -root
 			return nil, fmt.Errorf("testgen: prune: %w", err)
 		}
 	}
@@ -296,7 +324,11 @@ func skipIfVendored(p, dir, name string) error {
 	return nil
 }
 
-func isGoScenarioFile(name string) bool { return strings.HasSuffix(name, "_scenarios.gen_test.go") }
+// isGoScenarioFile matches the generated Go test files of a scenario package: the scenarios file and
+// the null file holding its TestMain.
+func isGoScenarioFile(name string) bool {
+	return strings.HasSuffix(name, "_scenarios.gen_test.go") || name == "null.gen_test.go"
+}
 
 func isGoHooksFile(name string) bool { return strings.HasSuffix(name, "_hooks_test.go") }
 

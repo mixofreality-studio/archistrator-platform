@@ -228,6 +228,10 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 		OrderManager:       orderManager,
 	}
 	webManagers = hooks.WrapManagers(webManagers)
+	webManagers, err = applyNullOps(hooks.ResolveProfile(cfg), webManagers)
+	if err != nil {
+		return err
+	}
 
 	genServer := web.NewServer(dev, validator,
 		&fulfillmentweb.Handler{Manager: webManagers.FulfillmentManager, Security: sec},

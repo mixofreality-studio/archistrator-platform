@@ -7,10 +7,11 @@
 // pair becomes one black-box test.
 //
 // Two targets. A Go component (every contract with a goPackage) gets, per Go
-// PACKAGE, one generated file <goPackage>/<stereotype>_scenarios.gen_test.go
-// (`package <pkg>_test`; one TestScenario_* per binding, a TestMain that runs
-// through the scenario host). Nothing else is emitted there and nothing is
-// agent-owned: the subject is built by the generated scenariocompose package,
+// PACKAGE, two generated files: <goPackage>/<stereotype>_scenarios.gen_test.go
+// (`package <pkg>_test`; one TestScenario_* per binding) and <goPackage>/null.gen_test.go
+// (the package's TestMain, which runs through the scenario host, and the
+// null-subject switch of testgen -discriminate; emit_null.go). Nothing else is
+// emitted there and nothing is agent-owned: the subject is built by the generated scenariocompose package,
 // each step runs as the principal the plan records for its actor, $ref
 // arguments are threaded from earlier results, the plan's typed arrange calls
 // run before the first step, and every step with probes is checked as a
@@ -29,12 +30,13 @@
 // TestScenario_<id>); a package hosting several infixes the contract's
 // interface name because two contracts in one package can bind the SAME
 // scenario id. Names are lint-clean by construction (names.go, §12 B3). A
-// package whose bindings are all absent still gets its generated file
-// (TestMain only) so the arch gate's closed file set holds and the gap stays
-// visible.
+// package whose bindings are all absent still gets both files (the scenarios
+// file empty, the null file TestMain only) so the arch gate's closed file set
+// holds and the gap stays visible.
 //
-// The generated file's names are the ones the framework-go/arch
-// scenario-tests-only rule admits: "<stereotype>_scenarios.gen_test.go", with
+// The generated files' names are the ones the framework-go/arch
+// scenario-tests-only rule admits: "<stereotype>_scenarios.gen_test.go" and
+// "null.gen_test.go", with
 // the ".gen" marker BEFORE the mandatory "_test.go" suffix, since the Go tool
 // compiles only *_test.go as tests.
 package testgen
@@ -73,6 +75,11 @@ type Output struct {
 	// does not project onto the component, a projected scenario no binding
 	// covers. Each is a TP-* finding's domain; testgen only names it.
 	Warnings []string
+	// Discriminate is every (scenario, stimulus operation) pair the null-subject run executes, sorted by
+	// package then test then operation; Skipped is every runnable scenario the run cannot execute yet,
+	// with why (emit_null.go).
+	Discriminate []Discrimination
+	Skipped      []DiscriminationSkip
 }
 
 // boundStep is one projected stimulus paired with its binding and the contract
@@ -133,6 +140,7 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 			return out, err
 		}
 	}
+	sortDiscriminations(&out)
 	return out, nil
 }
 
@@ -175,8 +183,10 @@ func routePlan(out *Output, cfg Config, plan componentPlan) (string, error) {
 			return "", err
 		}
 		if d == dialectWeb {
+			out.skipDiscrimination(plan, reasonWeb)
 			return "", emitPlaywright(out, cfg, plan)
 		}
+		out.skipDiscrimination(plan, reasonClient)
 		what = plan.Key + " is an MCP client with"
 	}
 	if plan.Contract.GoPackage == "" {

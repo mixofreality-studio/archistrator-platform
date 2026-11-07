@@ -101,8 +101,8 @@ func (g *goEmit) fail(err error) {
 	}
 }
 
-// emitGo emits one Go package's generated scenarios file. Nothing else: a Go
-// scenario has no agent-owned code.
+// emitGo emits one Go package's generated scenarios file and its null file (the TestMain and the
+// null-subject switch, emit_null.go). Nothing else: a Go scenario has no agent-owned code.
 func emitGo(out *Output, cfg Config, goPkg, stereotype string, plans []componentPlan, contracts map[string]methodcheck.ServiceContract) error {
 	layer, ok := layerPkgs[layerKey(plans[0].Contract)]
 	if !ok {
@@ -127,6 +127,12 @@ func emitGo(out *Output, cfg Config, goPkg, stereotype string, plans []component
 		return err
 	}
 	out.Generated[path.Join(goPkg, stereotype+"_scenarios.gen_test.go")] = src
+	nullSrc, err := g.nullFile(plans)
+	if err != nil {
+		return err
+	}
+	out.Generated[path.Join(goPkg, nullFileName)] = nullSrc
+	out.Discriminate = append(out.Discriminate, g.discriminations(plans)...)
 	return nil
 }
 
@@ -397,6 +403,7 @@ func (g *goEmit) emitScenario(plan componentPlan, bs boundScenario) {
 	default:
 		g.imports[g.cfg.ModulePath+"/"+scenarioComposeDir] = true
 		fmt.Fprintf(&g.body, "\t\tvar subject %s = %s\n", g.subjectType(plan), g.ownTarget(plan).construct())
+		fmt.Fprintf(&g.body, "\t\tsubject = %s(subject) // the null-subject run (AIARCH_NULL_OPS) swaps the subject here\n", nullSubjectFunc(plan))
 		if len(bs.Steps) == 0 {
 			g.body.WriteString("\t\t_ = subject // the binding carries no steps\n")
 		}
@@ -673,8 +680,9 @@ func rawString(s string) string {
 	return "`" + s + "`"
 }
 
-// generatedFile assembles header, package clause, imports, TestMain, the
-// scenario tests and the helpers, gofmt'd.
+// generatedFile assembles header, package clause, imports, the scenario tests
+// and the helpers, gofmt'd. The package's TestMain is not here: it lives in the
+// null file (emit_null.go), beside the switch it owns.
 func (g *goEmit) generatedFile(plans []componentPlan) ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteString(genHeader + "\n")
@@ -683,19 +691,6 @@ func (g *goEmit) generatedFile(plans []componentPlan) ([]byte, error) {
 	}
 	fmt.Fprintf(&b, "\npackage %s_test\n\n", g.pkg)
 	g.writeImports(&b, g.generatedImports())
-	// Main names every component whose scenarios live here, so each gets its
-	// own results.json (an empty one when none of its scenarios ran).
-	comps := make([]string, 0, len(plans))
-	for _, plan := range plans {
-		comps = append(comps, strconv.Quote(plan.Key))
-	}
-	if g.replays() {
-		// A manager's workflows are replayed at every flush (DCT §12 B4): the generated
-		// compose package registers them with the host.
-		fmt.Fprintf(&b, "func TestMain(m *testing.M) {\n\tscenariohost.MainWithWorkflows(m, %s.Workflows(), %s)\n}\n\n", scenarioComposeName, strings.Join(comps, ", "))
-	} else {
-		fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %s) }\n\n", strings.Join(comps, ", "))
-	}
 	b.Write(g.body.Bytes())
 	if g.subject {
 		g.writeHelpers(&b)
@@ -715,7 +710,11 @@ func (g *goEmit) replays() bool { return g.manager && g.subject }
 // essentials always; the helpers', the layer's, the contract package's and the
 // compose package's when any binding runs.
 func (g *goEmit) generatedImports() map[string]string {
-	imps := map[string]string{"testing": "", scenarioHostImport: ""}
+	imps := map[string]string{}
+	if g.body.Len() == 0 {
+		return imps // no scenario at all: the file is its package clause
+	}
+	imps["testing"], imps[scenarioHostImport] = "", ""
 	if !g.subject {
 		return imps
 	}
@@ -737,6 +736,9 @@ func (g *goEmit) generatedImports() map[string]string {
 // writeImports writes one import block, standard library first; gofmt sorts
 // within each group.
 func (g *goEmit) writeImports(b *bytes.Buffer, imps map[string]string) {
+	if len(imps) == 0 {
+		return
+	}
 	var std, rest []string
 	for p := range imps {
 		if strings.Contains(strings.SplitN(p, "/", 2)[0], ".") {

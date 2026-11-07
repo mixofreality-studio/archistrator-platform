@@ -44,6 +44,7 @@ func TestCompileSandbox(t *testing.T) {
 
 	buildSandbox(t, dir)
 	requirePolicyTest(t, dir, files["main.go"], main)
+	requireNullOpsLocalOnly(t, dir)
 
 	// The once-seeded hooks.go is the composition root's other half: it too must compile
 	// against the generated files from the first generation (FIX-039's DevConfig seed reads
@@ -71,6 +72,45 @@ func requirePolicyTest(t *testing.T, dir, handMain string, generated map[string]
 		t.Fatalf("the generated policy test passed a policy refusing the generated verb %q: %v\n%s", verb, err, out)
 	}
 	writeTree(t, dir, map[string]string{"main.go": handMain})
+}
+
+// requireNullOpsLocalOnly runs the generated applyNullOps in the sandbox: unset, the managers pass
+// through under every profile; set, it wraps them under the local profile and refuses under any
+// other, naming the variable. A deployed binary cannot be told to stub out its own operations.
+func requireNullOpsLocalOnly(t *testing.T, dir string) {
+	t.Helper()
+	writeTree(t, dir, map[string]string{"nullops_sandbox_test.go": `package main
+
+import (
+	"strings"
+	"testing"
+)
+
+func TestApplyNullOps(t *testing.T) {
+	var managers WebManagers
+	t.Setenv("AIARCH_NULL_OPS", "")
+	for _, profile := range []string{"local", "production"} {
+		if _, err := applyNullOps(profile, managers); err != nil {
+			t.Errorf("unset, profile %q: %v", profile, err)
+		}
+	}
+	t.Setenv("AIARCH_NULL_OPS", "OrderManager.PlaceOrder, FulfillmentManager.PingCarrier")
+	got, err := applyNullOps("local", managers)
+	if err != nil {
+		t.Fatalf("local: %v", err)
+	}
+	if got.OrderManager == nil || got.FulfillmentManager == nil {
+		t.Error("local: the managers are not wrapped")
+	}
+	_, err = applyNullOps("production", managers)
+	if err == nil || !strings.Contains(err.Error(), "AIARCH_NULL_OPS") || !strings.Contains(err.Error(), "production") {
+		t.Errorf("production must refuse by name, got %v", err)
+	}
+}
+`})
+	if out, err := sandboxGo(dir, "test", "-count=1", "-run", "TestApplyNullOps", "."); err != nil {
+		t.Fatalf("the generated null-op switch misbehaves in the sandbox: %v\n%s", err, out)
+	}
 }
 
 func firstGeneratedVerb(t *testing.T, table []byte) string {
@@ -283,11 +323,19 @@ import (
 	"` + sandboxModule + `/internal/engine/pricing"
 	"` + sandboxModule + `/internal/resourceaccess/orderstate"
 	"` + sandboxModule + `/internal/resourceaccess/repolookup"
+	fwm "github.com/mixofreality-studio/archistrator-platform/framework-go/manager"
 )
 
-type OrderManager interface{}
+type Order struct{}
+
+// OrderManager carries the contract's operation: the generated null-operation middleware wraps it.
+type OrderManager interface {
+	PlaceOrder(rc fwm.Context, p0 Order) (Order, error)
+}
 
 type impl struct{}
+
+func (impl) PlaceOrder(rc fwm.Context, p0 Order) (Order, error) { return p0, nil }
 
 const TaskQueue = "order"
 
@@ -313,11 +361,26 @@ type RepoRef struct {
 import (
 	"go.temporal.io/sdk/client"
 	"go.temporal.io/sdk/worker"
+
+	fwm "github.com/mixofreality-studio/archistrator-platform/framework-go/manager"
 )
 
-type FulfillmentManager interface{}
+type ShipmentID string
+
+type ShipmentStatus struct{}
+
+// FulfillmentManager carries the contract's operations: the generated null-operation middleware wraps it.
+type FulfillmentManager interface {
+	GetShipmentStatus(rc fwm.Context, p0 ShipmentID, p1 string) (ShipmentStatus, error)
+	PingCarrier(rc fwm.Context, p0 ShipmentID) error
+}
 
 type impl struct{}
+
+func (impl) GetShipmentStatus(rc fwm.Context, p0 ShipmentID, p1 string) (ShipmentStatus, error) {
+	return ShipmentStatus{}, nil
+}
+func (impl) PingCarrier(rc fwm.Context, p0 ShipmentID) error { return nil }
 
 const TaskQueue = "fulfillment"
 

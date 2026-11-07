@@ -10,7 +10,40 @@ type ClientInterceptor interface{}
 `
 	files["_stubs/temporal/workflow/workflow.go"] = `package workflow
 
+import (
+	"time"
+
+	"go.temporal.io/sdk/temporal"
+)
+
 type ContextPropagator interface{}
+
+// ActivityOptions is the part of the SDK's options the framework's manager package builds.
+type ActivityOptions struct {
+	StartToCloseTimeout time.Duration
+	RetryPolicy         *temporal.RetryPolicy
+}
+`
+	// The framework's manager package (the call Context every generated Null wrapper takes) builds
+	// these; the sandbox only has to link them.
+	files["_stubs/temporal/temporal/temporal.go"] = `package temporal
+
+type RetryPolicy struct {
+	NonRetryableErrorTypes []string
+	MaximumAttempts        int32
+}
+
+type ApplicationError struct{ msg string }
+
+func (e *ApplicationError) Error() string { return e.msg }
+
+func NewApplicationErrorWithCause(msg, errType string, cause error, details ...any) error {
+	return &ApplicationError{msg: msg}
+}
+
+func NewNonRetryableApplicationError(msg, errType string, cause error, details ...any) error {
+	return &ApplicationError{msg: msg}
+}
 `
 	files["_stubs/temporal/log/log.go"] = `package log
 
@@ -188,6 +221,13 @@ func (s *service) Authorize(ctx context.Context, p Principal, a Action, r Resour
 	permit, err := s.pdp.Decide(ctx, p, a, r)
 	return Decision{Permit: permit && err == nil}, err
 }
+`
+	// The call Context of a Manager interface method, which the generated Null wrappers repeat.
+	files["_stubs/framework-go/manager/manager.go"] = `package manager
+
+import "context"
+
+type Context struct{ context.Context }
 `
 	files["_stubs/framework-go/utilities/telemetry/telemetry.go"] = `package telemetry
 

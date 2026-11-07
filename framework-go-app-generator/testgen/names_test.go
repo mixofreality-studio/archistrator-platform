@@ -102,9 +102,10 @@ func TestGenerate_SharedPackageInfixesTheInterface(t *testing.T) {
 // component — the same scenario id bound by two contracts lands in two
 // results.json files instead of one overwriting the other.
 func TestGenerate_SharedPackageKeysResultsByComponent(t *testing.T) {
-	src := string(generateShared(t).Generated[billingGen])
+	out := generateShared(t)
+	src := string(out.Generated[billingGen]) + string(out.Generated[billingNull])
 	for _, want := range []string{
-		"func TestMain(m *testing.M) {\n\tscenariohost.MainWithWorkflows(m, scenariocompose.Workflows(), \"billingManager\", \"orderManager\")\n}\n",
+		"\tscenariohost.MainWithWorkflows(m, scenariocompose.Workflows(), \"billingManager\", \"orderManager\")\n}\n",
 		"h.RunScenario(t, \"billingManager\", \"process-order-P2\", func(t *testing.T) {",
 		"h.RunScenario(t, \"orderManager\", \"process-order-P2\", func(t *testing.T) {",
 	} {

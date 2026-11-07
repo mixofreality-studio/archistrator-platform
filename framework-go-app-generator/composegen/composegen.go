@@ -165,6 +165,9 @@ func Generate(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
 		return nil, err
 	}
 	out[AuthzTableFile], out[AuthzTestFile] = table, test
+	if out[NullFile], err = emitNullWeb(m, r); err != nil {
+		return nil, err
+	}
 	return out, nil
 }
 

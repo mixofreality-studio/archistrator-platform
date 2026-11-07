@@ -26,6 +26,12 @@
 #                      seed any missing hooks file (never overwrites a hooks file)
 #   gen-tests-check  — drift gate: fails on a stale generated file, a referenced
 #                      hook that is missing, or an orphan hook
+#   test-discriminate — the null-subject run (TP-DISCRIMINATE): re-run every Go scenario once per
+#                      stimulus operation with that operation nulled (AIARCH_NULL_OPS); a scenario
+#                      that still passes would pass without the behavior it claims to test, and is
+#                      printed as `TP-DISCRIMINATE <component> <scenario> <op>` (exit 1). Run it on
+#                      a tree gen-tests-check has just passed. Web and machine-client scenarios are
+#                      announced as skipped until the booted-server run lands.
 #   test-scenarios   — run every TestScenario_* as a `go test -json` stream into
 #                      test-results/go-test.jsonl (the venue uploads test-results/**)
 #   run-local        — the app's local run contract: an alias of `go run ./cmd/devstack`,
@@ -33,7 +39,7 @@
 #                      provisions the local profile's infrastructure, boots cmd/server and
 #                      prints {"devstack":"ready","url":...} once /readyz answers. All its
 #                      logic lives in the launcher, so there is exactly one run contract.
-.PHONY: gen-models gen-models-check gen-null gen-tests gen-tests-check test-scenarios run-local
+.PHONY: gen-models gen-models-check gen-null gen-tests gen-tests-check test-scenarios test-discriminate run-local
 
 MODELGEN_ARGS = -project .aiarch/state/project.json -root . $(foreach c,$(CONTRACTS),-contract $(c))
 TESTGEN_ARGS = -project .aiarch/state/project.json -root . -uitests uitests/generated
@@ -56,6 +62,9 @@ gen-tests-check:
 test-scenarios:
 	mkdir -p test-results
 	GOWORK=off go test ./internal/... -run 'TestScenario_' -json 2>&1 | tee test-results/go-test.jsonl
+
+test-discriminate:
+	GOWORK=off go tool testgen $(TESTGEN_ARGS) -discriminate
 
 run-local:
 	GOWORK=off go run ./cmd/devstack
