@@ -1,6 +1,7 @@
 package testgen
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"regexp"
@@ -342,6 +343,15 @@ export const hooks = {
 };
 `)
 	return b.String()
+}
+
+// compactJSON is v as a single comment line.
+func compactJSON(v any) string {
+	raw, err := json.Marshal(v)
+	if err != nil {
+		return "{}"
+	}
+	return strings.ReplaceAll(string(raw), "\n", " ")
 }
 
 // tsStr spells s as a single-quoted TypeScript string literal.

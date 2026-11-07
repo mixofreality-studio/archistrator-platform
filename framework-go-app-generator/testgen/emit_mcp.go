@@ -10,7 +10,6 @@ import (
 
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
-	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
 
 // Client dialects (deterministic-component-testing design §12 B1). A client
@@ -92,15 +91,22 @@ func toolName(op methodcheck.ContractOperation) string { return projectmodel.Low
 // the one the generated tools packages register with.
 const mcpSDKImport = "github.com/modelcontextprotocol/go-sdk/mcp"
 
-// emitMCP emits one MCP client package's generated scenarios file and, when
-// any binding is runnable, its once-emitted hooks file. One package serves one
-// tools surface, so it hosts exactly one MCP client contract.
-func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componentPlan, routes map[string]restRoute) error {
+// emitMCP emits one machine client package's generated scenarios file. One
+// package serves one tools surface, so it hosts exactly one machine client
+// contract. Its subject is the client's generated handlers, built by the
+// scenariocompose package with the app's real authorization (never a policy that
+// permits everything), served in-process and called as the principal the plan
+// records for each step's actor.
+func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componentPlan, routes map[string]restRoute, contracts map[string]methodcheck.ServiceContract) error {
 	if len(plans) != 1 {
-		return fmt.Errorf("testgen: %s hosts several MCP client contracts (%s); a package serves one tools surface", goPkg, hooksSubject(plans))
+		return fmt.Errorf("testgen: %s hosts several MCP client contracts (%s); a package serves one tools surface", goPkg, plansLabel(plans))
 	}
 	plan := plans[0]
-	g := &goEmit{cfg: cfg, goPkg: goPkg, pkg: path.Base(goPkg), imports: map[string]bool{}, owners: map[string]string{}}
+	g, err := newGoEmit(cfg, goPkg, plans, contracts)
+	if err != nil {
+		return err
+	}
+	g.tools = true
 	if err := g.claimPlan(plan); err != nil {
 		return err
 	}
@@ -118,19 +124,20 @@ func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componen
 		return err
 	}
 	out.Generated[path.Join(goPkg, stereotype+"_scenarios.gen_test.go")] = src
-	if g.subject {
-		hooks, err := g.toolsHooksFile(plan)
-		if err != nil {
-			return err
-		}
-		out.HooksOnce[path.Join(goPkg, stereotype+"_hooks_test.go")] = hooks
-	}
 	return nil
 }
 
-// emitToolScenario emits one binding as a test: serve the hooks' tools
-// in-process, then per step call the tool (or its hook) and check the
-// expectation and probes.
+// sessionVar names the in-process session a principal's steps call through.
+func sessionVar(principalName string) string {
+	if principalName == "" {
+		return "subject"
+	}
+	return "subjectAs" + exportName(ident(principalName))
+}
+
+// emitToolScenario emits one binding as a test: build the client's handlers,
+// serve them once per principal the steps act as, run the arrange calls, then
+// per step call the tool and check the expectation and probes.
 func (g *goEmit) emitToolScenario(plan componentPlan, bs boundScenario) {
 	name := g.testName(plan, bs.Scenario.ID)
 	fmt.Fprintf(&g.body, "// %s — %s (use case %s; path %s).\n", name, bs.Scenario.Title, bs.Scenario.UseCase, strings.Join(bs.Scenario.Path, " → "))
@@ -141,46 +148,92 @@ func (g *goEmit) emitToolScenario(plan componentPlan, bs boundScenario) {
 	case bs.Binding.Skip != nil:
 		fmt.Fprintf(&g.body, "\t\tt.Skip(%q)\n", bs.Binding.Skip.Reason+" (until "+bs.Binding.Skip.Until+")")
 	default:
-		fmt.Fprintf(&g.body, "\t\tsubject := serveTools(t, h, %s(t, h))\n", g.subjectName(plan))
+		g.imports[g.cfg.ModulePath+"/"+scenarioComposeDir] = true
+		fmt.Fprintf(&g.body, "\t\thandlers := %s\n", g.ownTarget(plan).construct())
 		if len(bs.Steps) == 0 {
-			g.body.WriteString("\t\t_ = subject // the binding carries no steps\n")
+			g.body.WriteString("\t\t_ = handlers // the binding carries no steps\n")
 		}
+		g.serveSessions(plan, bs)
+		g.emitArrange(plan, bs)
+		d := toolDialect{g: g}
 		for _, st := range bs.Steps {
-			g.emitToolStep(plan, bs, st)
+			g.emitStep(d, plan, bs, st)
 		}
 	}
 	g.body.WriteString("\t})\n}\n\n")
 }
 
-// emitToolStep emits one bound stimulus: the tool call with the binding's
-// inputs as its argument object (or the step hook with them), the
-// expectation, then the probes.
-func (g *goEmit) emitToolStep(plan componentPlan, bs boundScenario, st boundStep) {
-	id, seq := bs.Scenario.ID, st.Bind.Seq
-	args := rawString(g.inputs(plan.Contract, st.Op, st.Bind.Inputs))
-	fmt.Fprintf(&g.body, "\t\t// step %d: %s → tool %s (node %s%s)\n", seq, st.Op.Name, toolName(st.Op), st.Stim.Node, guardNote(bs.Scenario))
-	fmt.Fprintf(&g.body, "\t\tout%d, err%d := subject.Call(h.Context(t), %q, %s)\n", seq, seq, toolName(st.Op), args)
-	fmt.Fprintf(&g.body, "\t\texpect(t, %q, %d, out%d, err%d, %s)\n", id, seq, seq, seq, rawString(expectJSON(st.Bind.Expect)))
-	for i, pr := range st.Bind.Probes {
-		g.emitToolProbe(plan, bs, st, i+1, pr)
+// serveSessions serves the handlers once per principal the scenario's steps act as, in step order.
+func (g *goEmit) serveSessions(plan componentPlan, bs boundScenario) {
+	seen := map[string]bool{}
+	for _, st := range bs.Steps {
+		p := stepPrincipal(plan, st)
+		if seen[p] {
+			continue
+		}
+		seen[p] = true
+		ctx := "h.Context(t)"
+		if p != "" {
+			g.usesAs = true
+			ctx = "h.PrincipalContext(t, principal(" + strconv.Quote(p) + "))"
+		}
+		fmt.Fprintf(&g.body, "\t\t%s := serveTools(%s, t, h, handlers)\n", sessionVar(p), ctx)
 	}
 }
 
-// emitToolProbe emits one probe: a tool call inline when it names one of the
-// contract's own tools, a probe hook when it reads another component.
-func (g *goEmit) emitToolProbe(plan componentPlan, bs boundScenario, st boundStep, n int, pr methodcheck.Probe) {
-	id, seq := bs.Scenario.ID, st.Bind.Seq
-	v := fmt.Sprintf("%d_%d", seq, n)
-	fmt.Fprintf(&g.body, "\t\t// probe %d.%d: %s.%s for %s\n", seq, n, pr.Component, pr.Operation, pr.For)
-	if op, inline := g.inlineProbe(plan, pr); inline {
-		fmt.Fprintf(&g.body, "\t\tpout%s, perr%s := subject.Call(h.Context(t), %q, %s)\n", v, v, toolName(op), rawString(g.inputs(plan.Contract, op, pr.Inputs)))
-	} else {
-		fmt.Fprintf(&g.body, "\t\tpout%s, perr%s := %s(t, h, subject)\n", v, v, g.probeName(plan, id, seq, n))
-	}
-	fmt.Fprintf(&g.body, "\t\texpect(t, %q, %d, pout%s, perr%s, %s)\n", fmt.Sprintf("%s probe %d.%d", id, seq, n), seq, v, v, rawString(expectJSON(pr.Expect)))
+// toolDialect drives the subject by calling the tools or routes of its generated handlers.
+type toolDialect struct{ g *goEmit }
+
+func (toolDialect) stepComment(st boundStep, bs boundScenario) string {
+	return fmt.Sprintf("step %d: %s → tool %s (node %s%s)", st.Bind.Seq, st.Op.Name, toolName(st.Op), st.Stim.Node, guardNote(bs.Scenario))
 }
 
-// toolsFile assembles the MCP client's generated file: header, package
+// stepCall calls the tool with the binding's inputs as its argument object, refs threaded in from earlier results.
+func (d toolDialect) stepCall(plan componentPlan, bs boundScenario, st boundStep, out, errVar string) []string {
+	seq := st.Bind.Seq
+	args := fmt.Sprintf("args%d", seq)
+	lines, err := d.g.toolArgs(plan.Contract, st.Op, st.Bind.Inputs, args, bs.Scenario.ID, seq)
+	if err != nil {
+		d.g.fail(err)
+		return nil
+	}
+	return append(lines, fmt.Sprintf("%s, %s = %s.Call(h.Context(t), %q, %s)", out, errVar, sessionVar(stepPrincipal(plan, st)), toolName(st.Op), args))
+}
+
+// probeBody is the closure body of a probe: a tool call inline when the probe names one of the contract's
+// own tools, a direct call on the probe's component otherwise, as the step's principal.
+func (d toolDialect) probeBody(plan componentPlan, bs boundScenario, st boundStep, n int, pr methodcheck.Probe) []string {
+	g := d.g
+	if sameComponent(plan, pr.Component) {
+		op, ok := operationNamed(plan.Contract, pr.Operation)
+		if !ok {
+			g.fail(fmt.Errorf("testgen: %s scenario %q step %d probe %d: operation %q is not on the contract", plan.Key, bs.Scenario.ID, st.Bind.Seq, n, pr.Operation))
+			return nil
+		}
+		lines, err := g.toolArgs(plan.Contract, op, pr.Inputs, "args", bs.Scenario.ID, st.Bind.Seq)
+		if err != nil {
+			g.fail(err)
+			return nil
+		}
+		return append(lines, fmt.Sprintf("return %s.Call(h.Context(t), %q, args)", sessionVar(stepPrincipal(plan, st)), toolName(op)))
+	}
+	return goDialect{g: g}.probeBody(plan, bs, st, n, pr)
+}
+
+// toolArgs declares argsVar as the JSON object of a tool call's literal inputs and threads each ref in.
+func (g *goEmit) toolArgs(sc methodcheck.ServiceContract, op methodcheck.ContractOperation, inputs []methodcheck.TestArg, argsVar, scenarioID string, seq int) ([]string, error) {
+	args, refs, err := inputsJSON(sc, op, inputs)
+	if err != nil {
+		return nil, err
+	}
+	lines := []string{fmt.Sprintf("%s := %s", argsVar, rawString(args))}
+	for _, r := range refs {
+		lines = append(lines, fmt.Sprintf("%s = threadRef(t, %q, %d, %s, %q, %s, %q)", argsVar, scenarioID, seq, argsVar, r.param, refSource(r.ref), r.ref.Path))
+	}
+	return lines, nil
+}
+
+// toolsFile assembles the machine client's generated file: header, package
 // clause, imports, TestMain (plain: a client runs no workflow of its own), the
 // scenario tests and, when any runs, the tools server and assertion helpers.
 func (g *goEmit) toolsFile(plan componentPlan, routes map[string]restRoute) ([]byte, error) {
@@ -192,24 +245,13 @@ func (g *goEmit) toolsFile(plan componentPlan, routes map[string]restRoute) ([]b
 	b.WriteString(genHeader + "\n")
 	fmt.Fprintf(&b, "// Source: project.json .phaseArtifacts.testPlan.%s × scenario.ForComponent(%q)\n", plan.Key, plan.Key)
 	fmt.Fprintf(&b, "\npackage %s_test\n\n", g.pkg)
-	imps := map[string]string{"testing": "", scenarioHostImport: ""}
-	if g.subject {
-		for _, p := range transportImports(rest) {
-			imps[p] = ""
-		}
-	}
-	g.writeImports(&b, imps)
+	g.writeImports(&b, g.toolsImports(rest))
 	fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %s) }\n\n", strconv.Quote(plan.Key))
 	b.Write(g.body.Bytes())
 	if g.subject {
-		transport, err := transportHelpers(plan, rest, routes)
-		if err != nil {
+		if err := g.writeToolHelpers(&b, plan, rest, routes); err != nil {
 			return nil, err
 		}
-		b.WriteString(transport)
-		fmt.Fprintf(&b, expectHelpers, "`")
-		b.WriteString(errorHasCodeHelper(rest))
-		b.WriteString(matchHelpers)
 	}
 	src, err := format.Source(b.Bytes())
 	if err != nil {
@@ -218,126 +260,50 @@ func (g *goEmit) toolsFile(plan componentPlan, routes map[string]restRoute) ([]b
 	return src, nil
 }
 
-// toolsHooksFile emits the once-generated, agent-owned hooks file of an MCP
-// client package: the subject constructor (the tools server), a step stub per
-// Hook:true step and a probe stub per probe on another component. It imports
-// nothing the hooks of any component would not: the MCP SDK stays in the
-// generated file, behind toolServer / toolSession.
-func (g *goEmit) toolsHooksFile(plan componentPlan) ([]byte, error) {
-	var b bytes.Buffer
-	fmt.Fprintf(&b, "// Hooks for %s scenario tests. Generated ONCE by testgen; owned by the construction agent.\n", plan.Key)
-	b.WriteString("//\n// Every func here is a hook the generated scenarios file calls; the drift check\n// (testgen -check) requires exactly this symbol set, so add or remove hooks by\n// changing the test plan, not this file. Fill the bodies.\n\n")
-	fmt.Fprintf(&b, "package %s_test\n\n", g.pkg)
-	g.writeImports(&b, map[string]string{"testing": "", scenarioHostImport: ""})
-	subject := g.subjectName(plan)
-	fmt.Fprintf(&b, `// %s builds the in-process server the scenarios call: the generated Handler
-// of this client serving the operations below, bound to real managers on the
-// host's stack, and Context when they need an identity (the principal they read
-// from it).
-// Operations: %s.
-// FILL: construct the handlers.%s
-func %s(t *testing.T, h *scenariohost.Host) toolServer {
-	t.Helper()
-	t.Fatal("FILL %s")
-	return toolServer{}
+// toolsImports is the machine client file's import set: the test essentials always, the transport's,
+// the compose package's and the called components' when any binding runs.
+func (g *goEmit) toolsImports(rest bool) map[string]string {
+	imps := map[string]string{"testing": "", scenarioHostImport: ""}
+	if !g.subject {
+		return imps
+	}
+	for _, p := range append(transportImports(rest), "fmt") {
+		imps[p] = ""
+	}
+	if g.usesTime {
+		imps["time"] = ""
+	}
+	for p := range g.imports {
+		imps[p] = ""
+	}
+	return imps
 }
 
-`, subject, strings.Join(boundTools(plan), ", "), hookNote(plan), subject, subject)
-	for _, bs := range plan.Scenarios {
-		if bs.Binding.Skip != nil {
-			continue
-		}
-		for _, st := range bs.Steps {
-			g.writeToolStepHooks(&b, plan, bs, st)
-		}
-	}
-	src, err := format.Source(b.Bytes())
+// writeToolHelpers writes the principals, the in-process server and the assertion helpers.
+func (g *goEmit) writeToolHelpers(b *bytes.Buffer, plan componentPlan, rest bool, routes map[string]restRoute) error {
+	transport, err := transportHelpers(plan, rest, routes)
 	if err != nil {
-		return nil, fmt.Errorf("testgen: %s: hooks file does not format: %w\n%s", g.goPkg, err, b.String())
+		return err
 	}
-	return src, nil
-}
-
-// boundTools is every tool a runnable binding's steps or same-contract probes
-// call, sorted and distinct.
-func boundTools(plan componentPlan) []string {
-	seen := map[string]bool{}
-	for _, bs := range plan.Scenarios {
-		if bs.Binding.Skip != nil {
-			continue
-		}
-		for _, st := range bs.Steps {
-			for _, tool := range stepTools(plan, st) {
-				seen[tool] = true
-			}
-		}
+	if g.usesAs {
+		writePrincipalTable(b, g.principals)
 	}
-	return sortedKeys(seen)
-}
-
-// stepTools is the tool one step calls and the tools its same-contract
-// probes call.
-func stepTools(plan componentPlan, st boundStep) []string {
-	tools := []string{toolName(st.Op)}
-	for _, pr := range st.Bind.Probes {
-		if scenario.Normalize(pr.Component) != scenario.Normalize(plan.Key) {
-			continue
-		}
-		if op, ok := operationNamed(plan.Contract, pr.Operation); ok {
-			tools = append(tools, toolName(op))
-		}
-	}
-	return tools
-}
-
-// writeToolStepHooks writes the step stub of a hooked tool step and the probe
-// stub of each of its cross-component probes.
-func (g *goEmit) writeToolStepHooks(b *bytes.Buffer, plan componentPlan, bs boundScenario, st boundStep) {
-	id, seq := bs.Scenario.ID, st.Bind.Seq
-	for i, pr := range st.Bind.Probes {
-		if _, inline := g.inlineProbe(plan, pr); inline {
-			continue
-		}
-		name := g.probeName(plan, id, seq, i+1)
-		fmt.Fprintf(b, `// %s — %s, step %d, probe %d: %s.%s proves %s.
-// Probe (JSON): %s
-// FILL: call %s.%s with the probe's inputs on the host's stack and return its result.
-func %s(t *testing.T, h *scenariohost.Host, subject *toolSession) (any, error) {
-	t.Helper()
-	t.Fatal("FILL %s")
-	return nil, nil
-}
-
-`, name, bs.Scenario.Title, seq, i+1, pr.Component, pr.Operation, pr.For, compactJSON(pr), pr.Component, pr.Operation, name, name)
-	}
+	b.WriteString(transport)
+	fmt.Fprintf(b, expectHelpers, "`")
+	b.WriteString(refHelpers)
+	b.WriteString(errorHasCodeHelper(rest))
+	b.WriteString(matchHelpers)
+	return nil
 }
 
 // toolsHelpers is the in-process tools server the generated MCP file runs:
-// the hooks hand it the generated tools packages' handlers, it serves them on
-// a fresh server and connects a client over an in-memory transport.
+// scenariocompose hands it the generated tools packages' handlers (built over
+// the app's real authorization), it serves them on a fresh server and connects
+// a client over an in-memory transport.
 const toolsHelpers = `// toolRegistrar is the Handler of one generated MCP tools package: it adds
 // that package's tools to a server.
 type toolRegistrar interface {
 	Register(srv *mcp.Server)
-}
-
-// permitAll is the Security a newSubject hands the handler. These scenarios prove the transport
-// over the real Manager; the app's own authorization policy is its composition root's hooks.
-type permitAll struct{ security.Security }
-
-// Authorize permits every call.
-func (permitAll) Authorize(context.Context, security.Principal, security.Action, security.ResourceRef) (security.Decision, error) {
-	return security.Decision{Permit: true}, nil
-}
-
-// toolServer is what newSubject builds: the handlers whose tools the
-// scenarios call, and the context the in-process server serves them under
-// (nil: the host's) — the one place a principal the tools read is set. A
-// context with no principal is served as one scenario principal, as the
-// server's auth middleware authenticates every call.
-type toolServer struct {
-	Handlers []toolRegistrar
-	Context  context.Context
 }
 
 // toolSession is every scenario's subject: an MCP client session on the
@@ -347,18 +313,17 @@ type toolSession struct {
 }
 
 // serveTools registers every handler on a fresh server, connects a client to
-// it over an in-memory transport, and closes both when the test ends.
-func serveTools(t *testing.T, h *scenariohost.Host, srv toolServer) *toolSession {
+// it over an in-memory transport, and closes both when the test ends. The
+// server serves its calls under ctx, the principal the session acts as; a ctx
+// carrying none is served as one scenario principal, as the server's auth
+// middleware authenticates every call.
+func serveTools(ctx context.Context, t *testing.T, h *scenariohost.Host, handlers ...toolRegistrar) *toolSession {
 	t.Helper()
-	ctx := srv.Context
-	if ctx == nil {
-		ctx = h.Context(t)
-	}
 	if _, ok := security.PrincipalFrom(ctx); !ok {
 		ctx = security.WithPrincipal(ctx, security.Principal{Subject: "scenario"})
 	}
 	server := mcp.NewServer(&mcp.Implementation{Name: "scenario-tools", Version: "testgen"}, nil)
-	for _, r := range srv.Handlers {
+	for _, r := range handlers {
 		r.Register(server)
 	}
 	clientEnd, serverEnd := mcp.NewInMemoryTransports()

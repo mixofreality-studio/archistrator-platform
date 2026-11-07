@@ -789,7 +789,14 @@
             "arrange": []
           }
         ],
-        "principals": {}
+        "principals": {
+          "customer": {
+            "subject": "user-customer",
+            "roles": [
+              "customer"
+            ]
+          }
+        }
       },
       "billingManager": {
         "component": "billingManager",
@@ -878,7 +885,14 @@
             "arrange": []
           }
         ],
-        "principals": {}
+        "principals": {
+          "customer": {
+            "subject": "user-customer",
+            "roles": [
+              "customer"
+            ]
+          }
+        }
       },
       "shopClient": {
         "component": "shopClient",
@@ -932,7 +946,14 @@
             "arrange": []
           }
         ],
-        "principals": {}
+        "principals": {
+          "customer": {
+            "subject": "user-customer",
+            "roles": [
+              "customer"
+            ]
+          }
+        }
       }
     }
   },

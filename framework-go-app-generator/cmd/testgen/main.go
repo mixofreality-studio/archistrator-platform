@@ -15,14 +15,16 @@
 //	-uitests  the Playwright output directory, relative to -root (default ../uitests/generated)
 //	-check    report drift and exit 1 instead of writing
 //
-// Without -check it rewrites every generated file, writes each hooks file
-// only when absent, and prunes generated files (*_scenarios.gen_test.go under
-// root; *.spec.gen.ts, playwright.config.gen.ts, reporter.gen.ts under the
-// Playwright directory) that the current plan no longer produces. With -check
-// it prints one line per drifted or stale file, per missing/orphan hook, per
-// orphan generated file a write run would prune, and per orphan hooks file
-// (one whose generated sibling the plan no longer produces; agent-owned, so
-// reported but never pruned), then exits 1.
+// Without -check it rewrites every generated file, writes the web client's
+// hooks.ts only when absent (a Go scenario has no hooks file: its subject, probes
+// and arrange calls are all generated), and prunes generated files
+// (*_scenarios.gen_test.go under root; *.spec.gen.ts, playwright.config.gen.ts,
+// reporter.gen.ts under the Playwright directory) that the current plan no longer
+// produces. With -check it prints one line per drifted or stale file, per missing
+// hooks.ts, per orphan generated file a write run would prune, and per orphan
+// hooks file (a Go *_hooks_test.go, which nothing emits any more, or a hooks.ts
+// whose generated sibling the plan no longer produces; agent-owned, so reported
+// but never pruned), then exits 1.
 package main
 
 import (

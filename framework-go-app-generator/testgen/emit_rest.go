@@ -94,12 +94,6 @@ func isRESTPlan(plan componentPlan) (bool, error) {
 	return d == dialectREST, err
 }
 
-// hookNote tells the hook what its Handler takes beyond the Manager. A REST handler and an MCP
-// tool both authorize through their Security (FIX-047).
-func hookNote(componentPlan) string {
-	return "\n// A Handler authorizes through its Security: hand it permitAll{}, generated beside these\n// scenarios, which prove the transport over the real Manager."
-}
-
 func transportImports(rest bool) []string {
 	if rest {
 		return []string{securityImport, "bytes", "context", "encoding/json", "errors", "fmt", "io", "net", "net/http", "net/http/httptest", "net/url", "reflect", "strings"}
@@ -123,27 +117,11 @@ func restRouteTable(plan componentPlan, routes map[string]restRoute) (string, er
 }
 
 // restHelpers is the in-process server the generated REST file runs. It names its types as the MCP
-// dialect's, because the scenario bodies and hooks are the same code.
+// dialect's, because the scenario bodies are the same code. scenariocompose hands it the generated
+// handlers, built over the app's real authorization.
 const restHelpers = `// toolRegistrar is the generated Handler of this client: it mounts its routes.
 type toolRegistrar interface {
 	Register(mux *http.ServeMux)
-}
-
-// permitAll is the Security a newSubject hands the handler. These scenarios prove the transport
-// over the real Manager; the app's own authorization policy is its composition root's hooks.
-type permitAll struct{ security.Security }
-
-// Authorize permits every call.
-func (permitAll) Authorize(context.Context, security.Principal, security.Action, security.ResourceRef) (security.Decision, error) {
-	return security.Decision{Permit: true}, nil
-}
-
-// toolServer is what newSubject builds: the handlers whose routes the scenarios
-// request, and the context requests carry (nil: the host's). Every request is
-// authenticated as one scenario principal, as the server's middleware would.
-type toolServer struct {
-	Handlers []toolRegistrar
-	Context  context.Context
 }
 
 // toolSession is every scenario's subject: a client of the in-process server.
@@ -152,20 +130,20 @@ type toolSession struct {
 	ctx context.Context
 }
 
-// serveTools mounts every handler on a fresh server and closes it when the test ends.
-func serveTools(t *testing.T, h *scenariohost.Host, srv toolServer) *toolSession {
+// serveTools mounts every handler on a fresh server and closes it when the test ends. Every request is
+// served under ctx, the principal the session acts as; a ctx carrying none is authenticated as one
+// scenario principal, as the server's middleware would.
+func serveTools(ctx context.Context, t *testing.T, h *scenariohost.Host, handlers ...toolRegistrar) *toolSession {
 	t.Helper()
-	ctx := srv.Context
-	if ctx == nil {
-		ctx = h.Context(t)
+	if _, ok := security.PrincipalFrom(ctx); !ok {
+		ctx = security.WithPrincipal(ctx, security.Principal{Subject: "scenario"})
 	}
 	mux := http.NewServeMux()
-	for _, r := range srv.Handlers {
+	for _, r := range handlers {
 		r.Register(mux)
 	}
 	server := httptest.NewUnstartedServer(mux)
-	authenticated := security.WithPrincipal(ctx, security.Principal{Subject: "scenario"})
-	server.Config.BaseContext = func(net.Listener) context.Context { return authenticated }
+	server.Config.BaseContext = func(net.Listener) context.Context { return ctx }
 	server.Start()
 	t.Cleanup(server.Close)
 	return &toolSession{url: server.URL, ctx: ctx}

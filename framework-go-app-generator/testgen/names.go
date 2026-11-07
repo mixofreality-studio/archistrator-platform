@@ -2,47 +2,30 @@ package testgen
 
 import (
 	"fmt"
-	"regexp"
 	"strconv"
 	"strings"
 	"unicode"
 )
 
-// Hook naming (deterministic-component-testing design §12 B3). The hooks file
-// is agent-owned and linted like any other source file, and B3 forbids both
-// //nolint and a lint-config exemption, so every symbol testgen spells there
-// is one revive's var-naming rule accepts. One grammar names them and the
-// SAME grammar classifies them in the drift check:
+// Declaration naming (deterministic-component-testing design §12 B3). The
+// generated file is linted like any other source file, and B3 forbids both
+// //nolint and a lint-config exemption, so every symbol testgen declares in
+// it is one revive's var-naming rule accepts. There are no agent-owned hooks
+// (FPC plan 2): the only declarations a scenario needs beyond its test are the
+// step input types,
 //
-//	newSubject[<Iface>]
-//	step[<Iface>]<ScenarioID>S<seq>
-//	probe[<Iface>]<ScenarioID>S<seq>N<n>
-//	replayWorkflows (a manager package only; one per package — §12 B4)
+//	input[<Iface>]<ScenarioID>S<seq>
 //
-// e.g. stepUC3P2S1 / probeUC3P2S1N2. The step's input type the hook takes is
-// input[<Iface>]<ScenarioID>S<seq> (declared in the generated file; not a
-// hook). The "S"/"N" separators keep the scenario id's own trailing digits
-// apart from the step and probe ordinals now that no underscore can.
+// e.g. inputUC3P2S1. The "S" separator keeps the scenario id's own trailing
+// digits apart from the step ordinal now that no underscore can.
 
-// Hook symbol prefixes: the subject constructor, a hooked step, a probe on
-// another component. The input type prefix names a generated declaration.
-const (
-	subjectPrefix = "newSubject"
-	stepPrefix    = "step"
-	probePrefix   = "probe"
-	inputPrefix   = "input"
-)
+// inputPrefix names a step's generated input declaration.
+const inputPrefix = "input"
 
-// replayHook is the one hook a manager package declares once, whatever its
-// contracts: what its workers register, handed to the scenario host's replay
-// gate by the generated TestMain (scenariohost.MainWithWorkflows).
-const replayHook = "replayWorkflows"
-
-// hookName is the one spelling of every hook symbol: prefix, the contract's
-// interface when several contracts share the package, the scenario id, and
-// the step / probe ordinals. A zero seq names the subject constructor's shape
-// (no scenario); a zero n names a step.
-func hookName(prefix, iface, id string, seq, n int) string {
+// hookName is the one spelling of every per-step declaration: prefix, the
+// contract's interface when several contracts share the package, the scenario
+// id, and the step ordinal.
+func hookName(prefix, iface, id string, seq int) string {
 	parts := []string{prefix}
 	if iface != "" {
 		parts = append(parts, ident(iface))
@@ -53,28 +36,8 @@ func hookName(prefix, iface, id string, seq, n int) string {
 	if seq > 0 {
 		parts = append(parts, "S"+strconv.Itoa(seq))
 	}
-	if n > 0 {
-		parts = append(parts, "N"+strconv.Itoa(n))
-	}
 	return goName(parts...)
 }
-
-// hookPattern is the grammar hookName spells, per hook family: after the
-// prefix, either nothing (the single-contract subject) or a word that starts
-// upper-case or with a digit (goName capitalizes every word after the first),
-// then the family's ordinal suffix. Underscores survive goName only between
-// two digits.
-var hookPattern = regexp.MustCompile(`^(?:` +
-	subjectPrefix + `(?:[A-Z0-9][A-Za-z0-9_]*)?` +
-	`|` + stepPrefix + `[A-Z0-9][A-Za-z0-9_]*S[0-9]+` +
-	`|` + probePrefix + `[A-Z0-9][A-Za-z0-9_]*S[0-9]+N[0-9]+` +
-	`|` + replayHook +
-	`)$`)
-
-// isHookName reports whether name is spelled like a hook symbol. The drift
-// check classifies both the generated file's references and the hooks file's
-// declarations with it; an agent helper not spelled like a hook is ignored.
-func isHookName(name string) bool { return hookPattern.MatchString(name) }
 
 // goName joins parts with underscores and folds the result to the name
 // revive's var-naming rule would suggest, repeating until the rule suggests

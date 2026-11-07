@@ -45,8 +45,8 @@ func generateDoc(t *testing.T, doc map[string]any) (Output, error) {
 // generated tool (OrderGetOrder → tool orderGetOrder, OrderCancelOrder →
 // orderCancelOrder), drawn into track-order's ask-order step ahead of the
 // customer's own call, and a plan binding track-order-P1's one stimulus into
-// shopTools — a direct tool call, a same-contract probe (inline) and a probe
-// on orderManager (a hook).
+// shopTools — a direct tool call, a same-contract probe (a tool call) and a probe
+// on orderManager (a direct call on the generated component).
 func withShopTools(t *testing.T, doc map[string]any) {
 	t.Helper()
 	design := doc["slots"].(map[string]any)["5"].(map[string]any)["model"].(map[string]any)
@@ -71,7 +71,7 @@ func withShopTools(t *testing.T, doc map[string]any) {
 		}},
 	}
 	doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)["shopTools"] = map[string]any{
-		"component": "shopTools", "principals": map[string]any{},
+		"component": "shopTools", "principals": map[string]any{"customer": map[string]any{"subject": "user-customer", "roles": []any{"customer"}}},
 		"bindings": []any{map[string]any{"scenario": "track-order-P1", "skip": nil, "arrange": []any{}, "steps": []any{map[string]any{
 			"seq": 1, "operation": "OrderGetOrder",
 			"inputs": []any{map[string]any{"name": "orderId", "value": lit("o-1")}},
@@ -116,34 +116,35 @@ func TestGenerate_MCPClientCallsToolsInProcess(t *testing.T) {
 		"func TestMain(m *testing.M) { scenariohost.Main(m, \"shopTools\") }",
 		"func TestScenario_track_order_P1(t *testing.T) {",
 		"h.RunScenario(t, \"shopTools\", \"track-order-P1\", func(t *testing.T) {",
-		"subject := serveTools(t, h, newSubject(t, h))",
+		"handlers := scenariocompose.NewShopTools(t, h)",
+		"subjectAsCustomer := serveTools(h.PrincipalContext(t, principal(\"customer\")), t, h, handlers)",
 		"// step 1: OrderGetOrder → tool orderGetOrder (node ask-order)",
-		"out1, err1 := subject.Call(h.Context(t), \"orderGetOrder\", `{\"orderId\":\"o-1\"}`)",
+		"args1 := `{\"orderId\":\"o-1\"}`",
+		"out1, err1 = subjectAsCustomer.Call(h.Context(t), \"orderGetOrder\", args1)",
 		"expect(t, \"track-order-P1\", 1, out1, err1, `{\"result\":\"{\\\"result\\\":{\\\"state\\\":\\\"open\\\"}}\",\"errorExpected\":false}`)",
 		// the same-contract probe is a tool call inline
-		"pout1_1, perr1_1 := subject.Call(h.Context(t), \"orderGetOrder\", `{\"orderId\":\"o-1\"}`)",
-		// a probe on another component is a hook
-		"pout1_2, perr1_2 := probeTrackOrderP1S1N2(t, h, subject)",
+		"return subjectAsCustomer.Call(h.Context(t), \"orderGetOrder\", args)",
+		// a probe on another component is a direct call on the generated component
+		"return scenariocompose.NewOrderManager(t, h).GetOrder(h.ManagerContextAs(t, principal(\"customer\")), in.OrderId)",
 		"\"github.com/modelcontextprotocol/go-sdk/mcp\"",
 		"\"github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost\"",
 		"type toolRegistrar interface {",
 		"Register(srv *mcp.Server)",
-		"type toolServer struct {",
 		"type toolSession struct {",
 		"func (s *toolSession) Call(ctx context.Context, name, args string) (any, error) {",
 		"mcp.NewInMemoryTransports()",
 		"res.IsError",
 		"res.StructuredContent",
-		// FIX-047: the generated tools authorize, so the scenarios hand them a Security and
-		// serve every call as an authenticated principal, as the server's middleware does.
-		"type permitAll struct{ security.Security }",
+		// FIX-047: the generated tools authorize, so every call is served as an authenticated
+		// principal, as the server's middleware does; the policy is the app's generated one
+		// (scenariocompose), never one that permits everything.
 		"ctx = security.WithPrincipal(ctx, security.Principal{Subject: \"scenario\"})",
 	} {
 		if !strings.Contains(string(src), want) {
 			t.Errorf("missing %q in\n%s", want, src)
 		}
 	}
-	for _, bad := range []string{"example.com/app/server/internal/client/mcp\"", "callContext", "MainWithWorkflows"} {
+	for _, bad := range []string{"example.com/app/server/internal/client/mcp\"", "callContext", "MainWithWorkflows", "permitAll"} {
 		if strings.Contains(string(src), bad) {
 			t.Errorf("an MCP client file must not carry %q:\n%s", bad, src)
 		}
@@ -158,42 +159,18 @@ func TestGenerate_MCPClientCallsToolsInProcess(t *testing.T) {
 	}
 }
 
-// TestGenerate_MCPClientHooksNeedNoSDK: the hooks file builds the tools
-// server from the generated tools packages' handlers and fills hooked steps
-// probes through the session the generated file hands it, so it imports only what
-// any hooks file does — the MCP SDK stays in the generated file.
-func TestGenerate_MCPClientHooksNeedNoSDK(t *testing.T) {
-	doc := fixtureDoc(t)
-	withShopTools(t, doc)
-	out, err := generateDoc(t, doc)
-	if err != nil {
-		t.Fatal(err)
-	}
+// TestGenerate_MCPClientHasNoHooks: a machine client's subject is built by scenariocompose and its
+// probes are direct calls, so there is no hooks file and the tree is drift-clean without one.
+func TestGenerate_MCPClientHasNoHooks(t *testing.T) {
+	out := generateShopTools(t)
 	src := string(out.Generated[toolsGen])
-	if strings.Contains(src, "stepTrackOrderP1S1") {
-		t.Errorf("step hooks are gone: a tool step calls the tool directly:\n%s", src)
-	}
-	hooks, ok := out.HooksOnce[toolsHooks]
-	if !ok {
-		t.Fatalf("missing %s; have %v", toolsHooks, keys(out.HooksOnce))
-	}
-	for _, want := range []string{
-		"// Hooks for shopTools scenario tests. Generated ONCE by testgen; owned by the construction agent.",
-		"package mcp_test",
-		"func newSubject(t *testing.T, h *scenariohost.Host) toolServer {",
-		"func probeTrackOrderP1S1N2(t *testing.T, h *scenariohost.Host, subject *toolSession) (any, error) {",
-		"orderGetOrder",
-		"hand it permitAll{}",
-	} {
-		if !strings.Contains(string(hooks), want) {
-			t.Errorf("hooks stub missing %q in\n%s", want, hooks)
+	for _, bad := range []string{"stepTrackOrderP1S1", "newSubject", "probeTrackOrderP1S1N2", "FILL"} {
+		if strings.Contains(src, bad) {
+			t.Errorf("a machine client file carries no hook, found %q:\n%s", bad, src)
 		}
 	}
-	if strings.Contains(string(hooks), "modelcontextprotocol") || strings.Contains(string(hooks), "replayWorkflows") {
-		t.Errorf("hooks must import neither the MCP SDK nor declare replay:\n%s", hooks)
-	}
-	if _, err := format.Source(hooks); err != nil {
-		t.Fatalf("hooks not gofmt-able: %v", err)
+	if _, ok := out.HooksOnce[toolsHooks]; ok {
+		t.Fatalf("an MCP client gets no hooks file; have %v", keys(out.HooksOnce))
 	}
 	root := t.TempDir()
 	writeAll(t, root, out.Generated)
@@ -397,9 +374,6 @@ func TestRESTTransportHelpers(t *testing.T) {
 	plan.Key = "webApi"
 	plan.Contract.GoPackage = "internal/client/web/list"
 	plan.Contract.Interface.Operations = []methodcheck.ContractOperation{{Name: "ListAddTodo"}}
-	if note := hookNote(plan); !strings.Contains(note, "permitAll{}") {
-		t.Errorf("a REST hook must say what its Handler's Security is: %q", note)
-	}
 	helpers, err := transportHelpers(plan, true, routes)
 	if err != nil {
 		t.Fatal(err)

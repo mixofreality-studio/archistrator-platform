@@ -9,31 +9,29 @@
 // Two targets. A Go component (every contract with a goPackage) gets, per Go
 // PACKAGE, one generated file <goPackage>/<stereotype>_scenarios.gen_test.go
 // (`package <pkg>_test`; one TestScenario_* per binding, a TestMain that runs
-// through the scenario host) and one hooks file
-// <goPackage>/<stereotype>_hooks_test.go emitted ONCE and then owned by the
-// construction agent: the subject constructor, one step hook per Hook:true
-// step, one probe hook per probe on another component, and — in a manager
-// package — replayWorkflows, which the generated TestMain hands the scenario
-// host (scenariohost.MainWithWorkflows) so every workflow history a scenario
-// starts is replayed against the current workflow code (§12 B4). A client
-// contract (layer "client") is driven in its dialect (§12 B1, emit_mcp.go): a
-// WEB client — ops taking the one `action` param — gets, per component, one
-// Playwright spec per binding under <UITestsDir>/<component>/, the generated
-// Playwright config + results reporter, and a once-emitted hooks.ts; an MCP
-// client — one op per generated MCP tool — gets the Go pair in its goPackage,
-// whose scenarios call the tools on an in-process MCP server over an
-// in-memory transport.
+// through the scenario host). Nothing else is emitted there and nothing is
+// agent-owned: the subject is built by the generated scenariocompose package,
+// each step runs as the principal the plan records for its actor, $ref
+// arguments are threaded from earlier results, the plan's typed arrange calls
+// run before the first step, and every step with probes is checked as a
+// pre/post differential (a step whose every probe expectation already held
+// before it ran fails as vacuous). A client contract (layer "client") is
+// driven in its dialect (§12 B1, emit_mcp.go): a WEB client — ops taking the
+// one `action` param — gets, per component, one Playwright spec per binding
+// under <UITestsDir>/<component>/, the generated Playwright config + results
+// reporter, and a once-emitted hooks.ts (Task 2.10 removes it); an MCP or
+// REST client — one op per generated tool or route — gets the Go pair in its
+// goPackage, whose scenarios call the tools on an in-process server.
 //
 // Grouping is by goPackage, not by contract: several contracts can share one
 // Go package, and one generated file unions every contract's bindings. A
-// package hosting ONE contract uses the plain names (newSubject,
-// step<ID>S<seq>, probe<ID>S<seq>N<n>, TestScenario_<id>); a package hosting
-// several infixes the contract's interface name (newSubject<Iface>,
-// step<Iface><ID>S<seq>, …) because two contracts in one package can bind the
-// SAME scenario id. Hook names are lint-clean by construction (names.go, §12
-// B3). A package whose bindings are all
-// absent still gets its generated file (TestMain only) so the arch gate's
-// closed file set holds and the gap stays visible.
+// package hosting ONE contract uses the plain names (input<ID>S<seq>,
+// TestScenario_<id>); a package hosting several infixes the contract's
+// interface name because two contracts in one package can bind the SAME
+// scenario id. Names are lint-clean by construction (names.go, §12 B3). A
+// package whose bindings are all absent still gets its generated file
+// (TestMain only) so the arch gate's closed file set holds and the gap stays
+// visible.
 //
 // The generated file's names are the ones the framework-go/arch
 // scenario-tests-only rule admits: "<stereotype>_scenarios.gen_test.go", with
@@ -43,11 +41,7 @@ package testgen
 
 import (
 	"fmt"
-	"go/ast"
-	"go/parser"
-	"go/token"
 	"os"
-	"path"
 	"path/filepath"
 	"sort"
 	"strings"
@@ -70,6 +64,9 @@ const defaultUITestsDir = "uitests/generated"
 // relative to the consuming module root.
 type Output struct {
 	Generated map[string][]byte // path → content; always rewritten
+	// HooksOnce holds only the web client's hooks.ts, written once and then
+	// agent-owned until the Playwright emitter v2 (plan 2, task 2.10) removes it.
+	// No Go file is ever emitted here: a Go scenario has no agent-owned code.
 	HooksOnce map[string][]byte // path → content; written only if absent
 	// Warnings are the plan-shaped conditions testgen tolerates but reports:
 	// a contract with no goPackage, a binding whose scenario the derivation
@@ -96,9 +93,10 @@ type boundScenario struct {
 
 // componentPlan is one contract's bound scenarios, sorted by scenario id.
 type componentPlan struct {
-	Key       string // the serviceContracts key, e.g. billingManager
-	Contract  methodcheck.ServiceContract
-	Scenarios []boundScenario
+	Key        string // the serviceContracts key, e.g. billingManager
+	Contract   methodcheck.ServiceContract
+	Principals map[string]methodcheck.TestPrincipal // the plan's actor identities
+	Scenarios  []boundScenario
 }
 
 // Generate emits every component's scenario tests from projectJSON. A test plan
@@ -131,7 +129,7 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 		return out, err
 	}
 	for _, goPkg := range sortedKeys(byPackage) {
-		if err := emitPackage(&out, cfg, goPkg, byPackage[goPkg], routes); err != nil {
+		if err := emitPackage(&out, cfg, goPkg, byPackage[goPkg], routes, p.ServiceContracts); err != nil {
 			return out, err
 		}
 	}
@@ -191,15 +189,15 @@ func routePlan(out *Output, cfg Config, plan componentPlan) (string, error) {
 // of one layer, and a client package is the MCP dialect's in-process tools
 // test or the REST dialect's in-process routes test (emit_mcp.go, emit_rest.go), every other
 // layer a direct-call test (emit_go.go).
-func emitPackage(out *Output, cfg Config, goPkg string, plans []componentPlan, routes map[string]restRoute) error {
+func emitPackage(out *Output, cfg Config, goPkg string, plans []componentPlan, routes map[string]restRoute, contracts map[string]methodcheck.ServiceContract) error {
 	stereotype, err := sharedStereotype(goPkg, plans)
 	if err != nil {
 		return err
 	}
 	if isClient(plans[0].Contract) {
-		return emitMCP(out, cfg, goPkg, stereotype, plans, routes)
+		return emitMCP(out, cfg, goPkg, stereotype, plans, routes, contracts)
 	}
-	return emitGo(out, cfg, goPkg, stereotype, plans)
+	return emitGo(out, cfg, goPkg, stereotype, plans, contracts)
 }
 
 // planFor pairs projected scenarios with their bindings by id, sorted by id. A
@@ -207,7 +205,7 @@ func emitPackage(out *Output, cfg Config, goPkg string, plans []componentPlan, r
 // binding covers, are warnings (TP-BOUND's domain); a bound step whose seq no
 // stimulus carries is dropped with a warning (TP-STEP's domain).
 func planFor(out *Output, comp string, sc methodcheck.ServiceContract, projected []scenario.Scenario, rec methodcheck.TestPlanRecord) (componentPlan, error) {
-	plan := componentPlan{Key: comp, Contract: sc}
+	plan := componentPlan{Key: comp, Contract: sc, Principals: rec.Principals}
 	byID := map[string]scenario.Scenario{}
 	for _, s := range projected {
 		byID[s.ID] = s
@@ -339,11 +337,9 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// Drift compares Generated against disk and verifies every hook symbol
-// referenced by a generated Go file exists in the on-disk hooks file next to
-// it, and that no hook there is orphaned. For a TypeScript hooks file it
-// checks presence. Messages are sorted by path; an empty slice means the tree
-// is current. Only an unreadable file that exists is an error.
+// Drift compares Generated against disk and checks the once-emitted hooks.ts
+// of a web client exists. Messages are sorted by path; an empty slice means the
+// tree is current. Only an unreadable file that exists is an error.
 func Drift(root string, out Output) ([]string, error) {
 	var msgs []string
 	for _, p := range sortedKeys(out.Generated) {
@@ -356,11 +352,11 @@ func Drift(root string, out Output) ([]string, error) {
 		}
 	}
 	for _, p := range sortedKeys(out.HooksOnce) {
-		m, err := hooksDrift(root, p, out)
-		if err != nil {
+		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(p))); os.IsNotExist(err) {
+			msgs = append(msgs, "missing hooks file "+p)
+		} else if err != nil {
 			return nil, err
 		}
-		msgs = append(msgs, m...)
 	}
 	return msgs, nil
 }
@@ -374,84 +370,4 @@ func isStale(full string, want []byte) (bool, error) {
 		return false, err
 	}
 	return string(got) != string(want), nil
-}
-
-// hooksDrift checks one hooks file: presence for every kind, and for a Go
-// hooks file the referenced-vs-declared hook symbol sets against the generated
-// file in the same directory.
-func hooksDrift(root, p string, out Output) ([]string, error) {
-	full := filepath.Join(root, filepath.FromSlash(p))
-	if _, err := os.Stat(full); os.IsNotExist(err) {
-		return []string{"missing hooks file " + p}, nil
-	} else if err != nil {
-		return nil, err
-	}
-	if !strings.HasSuffix(p, ".go") {
-		return nil, nil
-	}
-	declared, err := declaredHooks(full)
-	if err != nil {
-		return []string{fmt.Sprintf("unparseable hooks file %s: %v", p, err)}, nil
-	}
-	referenced, err := referencedHooks(out, path.Dir(p))
-	if err != nil {
-		return nil, err
-	}
-	return symbolDrift(p, referenced, declared), nil
-}
-
-// symbolDrift names every referenced hook the hooks file lacks and every
-// declared hook nothing references.
-func symbolDrift(p string, referenced, declared map[string]bool) []string {
-	var msgs []string
-	for _, name := range sortedKeys(referenced) {
-		if !declared[name] {
-			msgs = append(msgs, fmt.Sprintf("missing hook %s in %s", name, p))
-		}
-	}
-	for _, name := range sortedKeys(declared) {
-		if !referenced[name] {
-			msgs = append(msgs, fmt.Sprintf("orphan hook %s in %s", name, p))
-		}
-	}
-	return msgs
-}
-
-// declaredHooks parses the on-disk hooks file and returns its top-level hook
-// func names.
-func declaredHooks(full string) (map[string]bool, error) {
-	f, err := parser.ParseFile(token.NewFileSet(), full, nil, parser.SkipObjectResolution)
-	if err != nil {
-		return nil, err
-	}
-	names := map[string]bool{}
-	for _, d := range f.Decls {
-		fn, ok := d.(*ast.FuncDecl)
-		if ok && fn.Recv == nil && isHookName(fn.Name.Name) {
-			names[fn.Name.Name] = true
-		}
-	}
-	return names, nil
-}
-
-// referencedHooks parses the generated Go file(s) in dir and returns every
-// hook identifier they call.
-func referencedHooks(out Output, dir string) (map[string]bool, error) {
-	names := map[string]bool{}
-	for _, p := range sortedKeys(out.Generated) {
-		if path.Dir(p) != dir || !strings.HasSuffix(p, ".go") {
-			continue
-		}
-		f, err := parser.ParseFile(token.NewFileSet(), p, out.Generated[p], parser.SkipObjectResolution)
-		if err != nil {
-			return nil, fmt.Errorf("testgen: generated %s does not parse: %w", p, err)
-		}
-		ast.Inspect(f, func(n ast.Node) bool {
-			if id, ok := n.(*ast.Ident); ok && isHookName(id.Name) {
-				names[id.Name] = true
-			}
-			return true
-		})
-	}
-	return names, nil
 }
