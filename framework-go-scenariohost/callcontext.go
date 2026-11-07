@@ -1,12 +1,57 @@
 package scenariohost
 
 import (
+	"context"
 	"testing"
 
 	fwe "github.com/mixofreality-studio/archistrator-platform/framework-go/engine"
 	fwm "github.com/mixofreality-studio/archistrator-platform/framework-go/manager"
 	fwra "github.com/mixofreality-studio/archistrator-platform/framework-go/resourceaccess"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
 )
+
+// Principal is who a scenario step acts as: the test plan's principal for the
+// step's actor. A generated test calls the subject with a context carrying it
+// (PrincipalContext), so the component sees the identity a real request would
+// have carried - never an anonymous call.
+type Principal struct {
+	Subject string
+	Roles   []string
+}
+
+// PrincipalContext is the test's context carrying p as the authenticated
+// principal (security.PrincipalFrom reads it back). A Principal with no Subject
+// fails the test: a call with no identity is not a call made as someone.
+func (h *Host) PrincipalContext(t *testing.T, p Principal) context.Context {
+	t.Helper()
+	if p.Subject == "" {
+		t.Fatalf("scenariohost: Principal has no Subject")
+	}
+	return security.WithPrincipal(h.Context(t), security.Principal{
+		Kind:    security.PrincipalUser,
+		Subject: p.Subject,
+		Roles:   append([]string(nil), p.Roles...),
+	})
+}
+
+// ResourceAccessContextAs is ResourceAccessContext acting as p: the same
+// idempotency-key derivation, with p on the context.
+func (h *Host) ResourceAccessContextAs(t *testing.T, p Principal, key string) fwra.Context {
+	t.Helper()
+	return fwra.Context{Context: h.PrincipalContext(t, p), IdempotencyKey: fwra.IdempotencyKey(t.Name() + "/" + key)}
+}
+
+// EngineContextAs is EngineContext acting as p.
+func (h *Host) EngineContextAs(t *testing.T, p Principal) fwe.Context {
+	t.Helper()
+	return fwe.Context{Context: h.PrincipalContext(t, p)}
+}
+
+// ManagerContextAs is ManagerContext acting as p.
+func (h *Host) ManagerContextAs(t *testing.T, p Principal) fwm.Context {
+	t.Helper()
+	return fwm.Context{Context: h.PrincipalContext(t, p)}
+}
 
 // The layer call contexts (deterministic-component-testing design §12 B2): every
 // Manager, Engine and ResourceAccess op takes its layer's framework Context as

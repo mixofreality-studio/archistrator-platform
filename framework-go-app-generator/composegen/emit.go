@@ -248,7 +248,7 @@ func writeEngines(b *strings.Builder, r *resolved) {
 	}
 	b.WriteString("\t// Engines — pure, deterministic, dependency-free.\n")
 	for _, e := range r.engines {
-		b.WriteString("\t" + e.varName + " := " + e.ctor + "()\n")
+		b.WriteString("\t" + e.varName + " := " + ctorCall(e.ctor, nil) + "\n")
 	}
 	b.WriteString("\n")
 }

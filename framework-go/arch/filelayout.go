@@ -4,6 +4,7 @@ import (
 	"go/ast"
 	"go/parser"
 	"go/token"
+	"go/types"
 	"os"
 	"path"
 	"path/filepath"
@@ -19,23 +20,23 @@ import (
 // <leaf><stereotype>.go, carrying all contract methods and shared/non-workflow
 // code; (2) on the Manager layer only, one per-workflow file per workflow
 // ENTRY func, named after the func (minus the "Workflow" suffix, lowercased);
-// (3) the scenario-test pair, and ONLY that pair (rule scenario-tests-only):
+// (3) the generated test pair, and ONLY that pair (rule scenario-tests-only):
 // the generated scenarios file <stereotype>_scenarios.gen_test.go and the
-// agent-owned hooks file <stereotype>_hooks_test.go. Both must be black-box —
-// declare package <leaf>_test (rule test-package-not-external) — and the hooks
-// file may import only the component's own package, the standard library, a
-// platform test double package (…/testinfra), the scenario host
-// (…scenariohost), the module's own component packages through their public
-// API — real collaborators, never a component's internal/ sub-package, a
-// _test helper or a generated fake (DCT §12 B2) — and the consuming module's
-// Spec.HooksImportAllowlist prefixes (rule hooks-import-not-allowed). Any other _test.go file in a
-// component package — a hand-written unit test, a white-box test, the old
-// <stereotype>_test.go — is a scenario-tests-only violation: the component's
-// tests are DERIVED from its use cases and test plan, never hand-authored.
+// generated null-subject file null.gen_test.go. Both must be black-box -
+// declare package <leaf>_test (rule test-package-not-external). Anything else
+// in scope is ARCH-TEST-COMPOSE: an agent never writes code that runs inside a
+// test, so a <stereotype>_hooks_test.go is a violation whatever it contains,
+// and so is a _test package that declares a type whose method set implements
+// a generated contract interface (an in-file fake: the scenario would exercise
+// the fake, not the component; the subject comes from the generated
+// scenariocompose package). Any other _test.go file in a component package - a
+// hand-written unit test, a white-box test, the old <stereotype>_test.go - is a
+// scenario-tests-only violation: the component's tests are DERIVED from its
+// use cases and test plan, never hand-authored.
 // The generated file is named *.gen_test.go, not *_test.gen.go: the Go tool
 // compiles ONLY files ending in _test.go as tests, so a "_test.gen.go" file
 // declaring package <leaf>_test is a second package in the directory and
-// breaks the build — the ".gen" marker therefore sits before the mandatory
+// breaks the build - the ".gen" marker therefore sits before the mandatory
 // "_test.go" suffix. Anywhere in scope, a hand call to RegisterActivity/
 // RegisterActivityWithOptions is forbidden (registration is reserved for the
 // generated worker), and a workflow.Context func outside the Manager layer is
@@ -61,15 +62,12 @@ import (
 // deliberately, since the check must work for consumers without pulling the
 // real Temporal SDK into this framework module or its testdata fixtures.
 //
-// Scenario-test checking is done via os.ReadDir on the package directory plus
-// an ImportsOnly parse of each allowed test file, rather than by loading with
-// packages.Load(Tests:true): Tests:true would double the load (a separate
-// test-variant package per production package) and, worse, FAIL the load when
-// a hooks file imports a package the module does not yet depend on — when the
-// rule only needs file names, the package clause and the import list.
-// os.ReadDir + parser.ImportsOnly is simpler, avoids the double-load, needs no
-// type information, and sees an external (foo_test package) test file for
-// free since it lists names, not import graphs.
+// The file-name half of the test-file rule is done via os.ReadDir on the
+// package directory plus a package-clause parse of each allowed test file: it
+// needs only names. The in-file-fake half (contractFakeViolations) needs type
+// information and the test variants of every package, so it is a second load
+// (Tests:true) behind CheckFileLayout; fileLayoutViolations stays a
+// syntax-level core.
 //
 // fileLayoutViolations is the pure core: it takes an already-loaded package
 // set (Tests:false, syntax-level load — no type info needed) and returns every
@@ -105,6 +103,19 @@ func CheckFileLayout(t *testing.T, spec Spec) {
 	for _, v := range fileLayoutViolations(pkgs, spec) {
 		t.Errorf("%s: %s %s: %s", v.Pkg, v.Rule, v.File, v.Detail)
 	}
+
+	// ARCH-TEST-COMPOSE, in-file-fake half: needs the test variants and types.
+	testCfg := &packages.Config{Mode: contractFakeLoadMode, Dir: spec.ModuleRoot, Tests: true}
+	testPkgs, err := packages.Load(testCfg, spec.Patterns...)
+	if err != nil {
+		t.Fatalf("arch: packages.Load (tests): %v", err)
+	}
+	if n := packages.PrintErrors(testPkgs); n > 0 {
+		t.Fatalf("arch: %d package load error(s) in test code; fix the test build before checking for in-file fakes", n)
+	}
+	for _, v := range contractFakeViolations(testPkgs, spec) {
+		t.Errorf("%s: %s %s: %s", v.Pkg, v.Rule, v.File, v.Detail)
+	}
 }
 
 // fileLayoutViolations returns every file-layout violation across pkgs. A
@@ -131,11 +142,10 @@ func packageFileLayoutViolations(p *packages.Package, spec Spec, layer Layer) []
 	leaf := path.Base(p.PkgPath)
 	implFile := leaf + layer.FileStereotype + ".go"
 	scenariosFile := layer.FileStereotype + "_scenarios.gen_test.go"
-	hooksFile := layer.FileStereotype + "_hooks_test.go"
-	testFiles := scenariosFile + " and " + hooksFile
+	testFiles := scenariosFile + " and " + nullTestFile
 
 	var out []fileLayoutViolation
-	out = append(out, scenarioTestViolations(p, spec, scenariosFile, hooksFile)...)
+	out = append(out, scenarioTestViolations(p, scenariosFile)...)
 
 	for i, fpath := range p.CompiledGoFiles {
 		base := filepath.Base(fpath)
@@ -210,14 +220,26 @@ func workflowFileViolations(pkgPath, base, implFile, testFiles string, layer Lay
 	return out
 }
 
-// scenarioTestViolations enforces spec T2 on p's package directory: the only
-// _test.go files in a component package are the generated scenarios file and
-// its hooks file (scenario-tests-only), both declare the external
-// <pkg>_test package (test-package-not-external), and the hooks file's
-// imports stay inside hooksImportAllowed (hooks-import-not-allowed). See the
-// file header for why this is a directory listing + ImportsOnly parse rather
-// than a Tests:true load.
-func scenarioTestViolations(p *packages.Package, spec Spec, scenariosFile, hooksFile string) []fileLayoutViolation {
+// ruleTestCompose is the rule id of the test-composition gate: the subject of
+// every generated test is built by the generated scenariocompose package, never
+// by code an agent wrote.
+const ruleTestCompose = "ARCH-TEST-COMPOSE"
+
+// nullTestFile is the second generated test file a component package may carry:
+// the null-subject run that proves each scenario can fail.
+const nullTestFile = "null.gen_test.go"
+
+// hooksTestSuffix names the retired agent-owned hooks file. Any file ending in
+// it is ARCH-TEST-COMPOSE.
+const hooksTestSuffix = "_hooks_test.go"
+
+// scenarioTestViolations enforces the test-file half of ARCH-TEST-COMPOSE on
+// p's package directory: the only _test.go files in a component package are the
+// generated scenarios file and the generated null file (scenario-tests-only),
+// both declare the external <pkg>_test package (test-package-not-external), and
+// no <stereotype>_hooks_test.go exists (ARCH-TEST-COMPOSE). See the file header
+// for why this is a directory listing + package-clause parse.
+func scenarioTestViolations(p *packages.Package, scenariosFile string) []fileLayoutViolation {
 	dir := filepath.Dir(p.CompiledGoFiles[0])
 	entries, err := os.ReadDir(dir)
 	if err != nil {
@@ -229,113 +251,157 @@ func scenarioTestViolations(p *packages.Package, spec Spec, scenariosFile, hooks
 		if e.IsDir() || !strings.HasSuffix(name, "_test.go") {
 			continue
 		}
-		if name != scenariosFile && name != hooksFile {
-			out = append(out, fileLayoutViolation{p.PkgPath, name, "scenario-tests-only", "want only " + scenariosFile + " and " + hooksFile})
-			continue
+		switch {
+		case strings.HasSuffix(name, hooksTestSuffix):
+			out = append(out, fileLayoutViolation{p.PkgPath, name, ruleTestCompose,
+				"an agent never writes test code: the hooks file is retired, the subject comes from the generated scenariocompose package"})
+		case name != scenariosFile && name != nullTestFile:
+			out = append(out, fileLayoutViolation{p.PkgPath, name, "scenario-tests-only", "want only " + scenariosFile + " and " + nullTestFile})
+		default:
+			out = append(out, externalTestPackageViolations(p, filepath.Join(dir, name))...)
 		}
-		out = append(out, allowedTestFileViolations(p, spec, filepath.Join(dir, name), name == hooksFile)...)
 	}
 	return out
 }
 
-// allowedTestFileViolations checks one of the two allowed test files: it must
-// parse, must declare package <pkg>_test, and — when it is the hooks file —
-// may import only what hooksImportAllowed permits. Only the package clause
-// and the import list are needed, so the parse is ImportsOnly.
-func allowedTestFileViolations(p *packages.Package, spec Spec, fpath string, isHooks bool) []fileLayoutViolation {
+// externalTestPackageViolations checks one of the two allowed test files: it
+// must parse and declare package <pkg>_test. Only the package clause is needed,
+// so the parse is PackageClauseOnly.
+func externalTestPackageViolations(p *packages.Package, fpath string) []fileLayoutViolation {
 	name := filepath.Base(fpath)
-	f, err := parser.ParseFile(token.NewFileSet(), fpath, nil, parser.ImportsOnly)
+	f, err := parser.ParseFile(token.NewFileSet(), fpath, nil, parser.PackageClauseOnly)
 	if err != nil {
 		return []fileLayoutViolation{{p.PkgPath, name, "scenario-tests-only", "unparseable: " + err.Error()}}
 	}
-	var out []fileLayoutViolation
 	if f.Name.Name != p.Name+"_test" {
-		out = append(out, fileLayoutViolation{p.PkgPath, name, "test-package-not-external", "want package " + p.Name + "_test"})
+		return []fileLayoutViolation{{p.PkgPath, name, "test-package-not-external", "want package " + p.Name + "_test"}}
 	}
-	if !isHooks {
-		return out
+	return nil
+}
+
+// contractFakeLoadMode is what contractFakeViolations needs from a Tests:true
+// load: the test variants with their syntax and full type information.
+const contractFakeLoadMode = packages.NeedName | packages.NeedFiles | packages.NeedCompiledGoFiles |
+	packages.NeedImports | packages.NeedDeps | packages.NeedTypes | packages.NeedTypesInfo | packages.NeedSyntax
+
+// contractFakeViolations is the in-file-fake half of ARCH-TEST-COMPOSE: it
+// reports every type declared in a _test.go file of a classified component
+// package (in-package or external test variant) whose method set implements a
+// generated contract interface (go/types Implements, pointer receivers
+// included). A contract interface is an exported interface with at least one
+// method, declared in a generated (*.gen.go) file of a classified component
+// package that the test package is, or imports directly - a fake has to name
+// the contract's types to implement it, so a direct import is necessary.
+// pkgs must come from a Tests:true load with contractFakeLoadMode.
+func contractFakeViolations(pkgs []*packages.Package, spec Spec) []fileLayoutViolation {
+	idx := makeLayerIndex(spec)
+	var out []fileLayoutViolation
+	for _, p := range pkgs {
+		out = append(out, packageFakeViolations(p, idx, spec)...)
 	}
-	for _, imp := range f.Imports {
-		ipath := strings.Trim(imp.Path.Value, `"`)
-		if !hooksImportAllowed(ipath, p.PkgPath, spec) {
-			out = append(out, fileLayoutViolation{p.PkgPath, name, "hooks-import-not-allowed", ipath})
+	return out
+}
+
+// packageFakeViolations is contractFakeViolations for one loaded package (a production
+// package, an in-package test variant or an external test package).
+func packageFakeViolations(p *packages.Package, idx func(string) (int, bool), spec Spec) []fileLayoutViolation {
+	if p.Types == nil || strings.HasSuffix(p.PkgPath, ".test") {
+		return nil
+	}
+	base := strings.TrimSuffix(p.PkgPath, "_test")
+	layer, _, ok := layerFor(idx, spec, base)
+	if !ok || layer.FileStereotype == "" {
+		return nil
+	}
+	fakes := testDeclaredTypes(p)
+	var out []fileLayoutViolation
+	for _, c := range contractInterfaces(p, idx) {
+		for _, f := range fakes {
+			if implementsEither(f.typ, c.iface) {
+				out = append(out, fileLayoutViolation{base, f.file, ruleTestCompose,
+					"type " + f.name + " implements the generated contract " + c.pkg + "." + c.name + "; the subject comes from scenariocompose"})
+			}
 		}
 	}
 	return out
 }
 
-// hooksImportAllowed reports whether a hooks test file in package own may
-// import importPath: the component's own package and the standard library
-// always; a platform test double package (path ending in "/testinfra") and
-// the scenario host (any path SEGMENT ending in "scenariohost" — the module
-// is framework-go-scenariohost, so a "/scenariohost" substring would never
-// match its real import path) always; the module's own component packages
-// (isComponentPackage — DCT §12 B2: a hooks file builds REAL collaborators
-// through their public constructors); and any Spec.HooksImportAllowlist
-// prefix — the consuming module's generated contract packages or a generated
-// fake, typically.
-func hooksImportAllowed(importPath, own string, spec Spec) bool {
-	if importPath == own || isStdlibImport(importPath) || isComponentPackage(importPath, spec) {
-		return true
-	}
-	if strings.HasSuffix(importPath, "/testinfra") {
-		return true
-	}
-	for seg := range strings.SplitSeq(importPath, "/") {
-		if strings.HasSuffix(seg, "scenariohost") {
-			return true
-		}
-	}
-	for _, pre := range spec.HooksImportAllowlist {
-		if strings.HasPrefix(importPath, pre) {
-			return true
-		}
-	}
-	return false
+// declaredType is one non-interface named type declared in a _test.go file.
+type declaredType struct {
+	name, file string
+	typ        types.Type
 }
 
-// isComponentPackage reports whether importPath is one of the module's own
-// component packages, imported through its PUBLIC API (DCT §12 B2): it lies
-// under spec.ModulePrefix strictly beneath a declared layer's DirPrefix (a
-// layer root such as "engine" is not a component, and an unclassified module
-// package never is), and no path segment below ModulePrefix is "internal" (a
-// component's internal/ sub-package — Go hides another component's, this
-// rule also hides the hooks file's own), "testdata", a "_test"-suffixed
-// helper, or a generated "fake" double (a fake is test support, not a
-// collaborator; a module that wants one names it in
-// Spec.HooksImportAllowlist). The decision is path-only, like the rest of
-// the hooks rule, so it needs no load of the imported package: a path that
-// names no real package fails the build long before this gate matters.
-func isComponentPackage(importPath string, spec Spec) bool {
-	rel, ok := strings.CutPrefix(importPath, spec.ModulePrefix)
-	if !ok || spec.ModulePrefix == "" || !beneathLayerDir(rel, spec) {
-		return false
-	}
-	segs := strings.Split(rel, "/")
-	for _, seg := range segs {
-		if !publicComponentSegment(seg) {
-			return false
+// testDeclaredTypes lists the package-scope named non-interface, non-generic
+// types p declares in its _test.go files, in scope order.
+func testDeclaredTypes(p *packages.Package) []declaredType {
+	var out []declaredType
+	scope := p.Types.Scope()
+	for _, name := range scope.Names() {
+		tn, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok || tn.IsAlias() {
+			continue
 		}
+		file := p.Fset.Position(tn.Pos()).Filename
+		if !strings.HasSuffix(file, "_test.go") {
+			continue
+		}
+		named, ok := tn.Type().(*types.Named)
+		if !ok || named.TypeParams().Len() > 0 || types.IsInterface(named) {
+			continue
+		}
+		out = append(out, declaredType{name: name, file: filepath.Base(file), typ: named})
 	}
-	return segs[len(segs)-1] != "fake"
+	return out
 }
 
-// beneathLayerDir reports whether rel (a ModulePrefix-relative path) lies
-// strictly beneath one of spec's layer directories.
-func beneathLayerDir(rel string, spec Spec) bool {
-	for _, l := range spec.Layers {
-		if strings.HasPrefix(rel, l.DirPrefix+"/") {
-			return true
-		}
-	}
-	return false
+// implementsEither reports whether t or *t implements iface.
+func implementsEither(t types.Type, iface *types.Interface) bool {
+	return types.Implements(t, iface) || types.Implements(types.NewPointer(t), iface)
 }
 
-// publicComponentSegment reports whether one path segment of a component
-// import path keeps it on the public API: not empty, not "internal" or
-// "testdata", and not a "_test"-suffixed helper.
-func publicComponentSegment(seg string) bool {
-	return seg != "" && seg != "internal" && seg != "testdata" && !strings.HasSuffix(seg, "_test")
+// contractIface is one generated contract interface visible to a test package.
+type contractIface struct {
+	pkg, name string
+	iface     *types.Interface
+}
+
+// contractInterfaces collects the generated contract interfaces of the classified
+// component packages p is or directly imports.
+func contractInterfaces(p *packages.Package, idx func(string) (int, bool)) []contractIface {
+	cands := []*packages.Package{p}
+	for _, ip := range p.Imports {
+		cands = append(cands, ip)
+	}
+	var out []contractIface
+	seen := map[string]bool{}
+	for _, c := range cands {
+		if c.Types == nil || seen[c.Types.Path()] {
+			continue
+		}
+		seen[c.Types.Path()] = true
+		if _, ok := idx(strings.TrimSuffix(c.PkgPath, "_test")); ok {
+			out = append(out, generatedInterfaces(c)...)
+		}
+	}
+	return out
+}
+
+// generatedInterfaces lists the exported, non-empty interfaces c declares in generated
+// (*.gen.go) files: the service-contract interfaces.
+func generatedInterfaces(c *packages.Package) []contractIface {
+	var out []contractIface
+	scope := c.Types.Scope()
+	for _, name := range scope.Names() {
+		tn, ok := scope.Lookup(name).(*types.TypeName)
+		if !ok || !tn.Exported() || !strings.HasSuffix(c.Fset.Position(tn.Pos()).Filename, ".gen.go") {
+			continue
+		}
+		if it, ok := tn.Type().Underlying().(*types.Interface); ok && it.NumMethods() > 0 {
+			out = append(out, contractIface{pkg: c.Types.Name(), name: name, iface: it})
+		}
+	}
+	return out
 }
 
 // workflowFuncs returns the name of every top-level func in f whose parameter

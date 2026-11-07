@@ -121,6 +121,21 @@ type variantArm struct {
 	ctor         string
 	args         []string
 	returnsError bool
+	// infra and settings are what the arm consumes, before they are spelled as the
+	// composition root's argument expressions (args): the generated test subject spells the
+	// same inputs from the scenario host instead. hooked marks an arm whose arguments
+	// come from a composition-root Hooks method (Config.VariantHookArgs), which only the
+	// app's own root can supply.
+	infra    []string
+	settings []projectmodel.Setting
+	hooked   bool
+}
+
+// ctorCall spells one constructor call: the single place the composition root and the
+// generated test subject (scenariocompose) both build a component, so the two cannot
+// drift apart on a constructor's shape.
+func ctorCall(ctor string, args []string) string {
+	return ctor + "(" + strings.Join(args, ", ") + ")"
 }
 
 // engineComp is one engine-layer contract constructed by its pure New<Iface>().
@@ -164,23 +179,7 @@ type managerComp struct {
 
 // resolve builds the composition plan.
 func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
-	r := &resolved{
-		cfg:          cfg,
-		pkgName:      cfg.PackageName,
-		serviceName:  cfg.ContainerKey,
-		infra:        map[string]projectmodel.InfraDecl{},
-		pkgAliases:   map[string]string{},
-		optDormant:   map[string]bool{},
-		localVar:     map[string]string{},
-		consumedKeys: map[string]bool{},
-		hookSeen:     map[string]bool{},
-	}
-	if r.serviceName == "" {
-		r.serviceName = "server"
-	}
-	r.webExposedOverride = webExposedManagerSet(cfg.WebExposedManagers)
-	r.resolveInfra(m.Deployment)
-	r.profiles = sortedProfiles(m.Deployment)
+	r := newResolved(m, cfg)
 	r.resolveAliases(m)
 
 	if err := r.resolveRAs(m); err != nil {
@@ -198,6 +197,30 @@ func resolve(m *projectmodel.Model, cfg Config) (*resolved, error) {
 	}
 	r.hooks = deriveHooks(r)
 	return r, nil
+}
+
+// newResolved is the empty plan over m's deployment: the infra index, the profile set and
+// the config-derived lookups, before any component is resolved. resolve and the generated
+// test subject (scenariocompose) both start from it.
+func newResolved(m *projectmodel.Model, cfg Config) *resolved {
+	r := &resolved{
+		cfg:          cfg,
+		pkgName:      cfg.PackageName,
+		serviceName:  cfg.ContainerKey,
+		infra:        map[string]projectmodel.InfraDecl{},
+		pkgAliases:   map[string]string{},
+		optDormant:   map[string]bool{},
+		localVar:     map[string]string{},
+		consumedKeys: map[string]bool{},
+		hookSeen:     map[string]bool{},
+	}
+	if r.serviceName == "" {
+		r.serviceName = "server"
+	}
+	r.webExposedOverride = webExposedManagerSet(cfg.WebExposedManagers)
+	r.resolveInfra(m.Deployment)
+	r.profiles = sortedProfiles(m.Deployment)
+	return r
 }
 
 // validateScheduleRegistrar fails Generate with a named, actionable error
@@ -236,7 +259,11 @@ func (r *resolved) validateScheduleRegistrar() error {
 // with a numeric fallback if that still collides. A unique base keeps its plain
 // segment alias. aliasFor reads the result.
 func (r *resolved) resolveAliases(m *projectmodel.Model) {
-	pkgs := aliasImportPkgs(m)
+	r.assignAliases(aliasImportPkgs(m))
+}
+
+// assignAliases computes the import alias of every package in pkgs (sorted, de-duplicated).
+func (r *resolved) assignAliases(pkgs []string) {
 	baseCount := map[string]int{}
 	for _, gp := range pkgs {
 		baseCount[pkgAlias(gp)]++
@@ -458,6 +485,9 @@ func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.Bind
 			ctor:         ctor,
 			args:         args,
 			returnsError: returnsError,
+			infra:        pv.Infra,
+			settings:     settings,
+			hooked:       true,
 		}
 	}
 	var args []string
@@ -475,6 +505,8 @@ func (r *resolved) resolveArm(rb raBinding, profile string, pv projectmodel.Bind
 		ctor:         ctor,
 		args:         args,
 		returnsError: returnsError,
+		infra:        pv.Infra,
+		settings:     settings,
 	}
 }
 

@@ -100,22 +100,6 @@ type Spec struct {
 	// (e.g. a MongoDB client) fails the build.
 	AllowedImportPrefixes []string
 
-	// HooksImportAllowlist extends the import allowlist of a component
-	// package's hooks test file (<stereotype>_hooks_test.go — see
-	// filelayout.go). The hooks file is the ONE hand-written test file a
-	// component may carry, and it may import only what a black-box scenario
-	// test needs: the component's own package, the standard library, a
-	// platform test double package (import path ending in "/testinfra"), the
-	// scenario host (a path segment ending in "scenariohost") and the
-	// module's own component packages through their public API (real
-	// collaborators — DCT §12 B2; never a component's internal/ sub-package,
-	// a _test helper or a generated fake) are always allowed; this list adds
-	// the consuming module's own extras — typically the prefix of its
-	// generated contract packages, or a generated fake it arranges against —
-	// matched as string prefixes. Leave nil/empty (the default) and only the
-	// built-in set is allowed.
-	HooksImportAllowlist []string
-
 	// loadErr is why MethodSpec could not derive the module prefix; every Check*
 	// entry fails on it rather than checking nothing.
 	loadErr error
@@ -270,7 +254,7 @@ func checkPackage(t *testing.T, pkg *packages.Package, spec Spec, layerIndex fun
 	// lives beside the contract it fakes) without tripping the sideways-import
 	// rule, and frees it from the interface-naming rule a struct-only double could
 	// never satisfy.
-	if isGeneratedTestDouble(pkg) {
+	if isGeneratedTestDouble(pkg) || isGeneratedScenarioCompose(pkg, spec) {
 		return
 	}
 	layer, pkgIdx, ok := layerFor(layerIndex, spec, pkg.PkgPath)
@@ -310,6 +294,34 @@ func checkPackage(t *testing.T, pkg *packages.Package, spec Spec, layerIndex fun
 // the interface-naming rule to hold it to.
 func isGeneratedTestDouble(pkg *packages.Package) bool {
 	if !strings.HasSuffix(pkg.PkgPath, "/fake") {
+		return false
+	}
+	if len(pkg.CompiledGoFiles) == 0 {
+		return false
+	}
+	for _, f := range pkg.CompiledGoFiles {
+		if !strings.HasSuffix(filepath.Base(f), ".gen.go") {
+			return false
+		}
+	}
+	return true
+}
+
+// ScenarioComposeDir is the module-relative directory (under internal/) of the
+// generated scenariocompose package: the test-subject constructors
+// composegen emits. It is TEST SUPPORT, not a Method component - it builds
+// every layer's component from the real substrates a scenario test boots, so
+// it necessarily imports across all layers and sits outside them.
+const ScenarioComposeDir = "scenariocompose"
+
+// isGeneratedScenarioCompose reports whether pkg is the generated
+// scenariocompose package: STRUCTURAL, like isGeneratedTestDouble - it is
+// internal/scenariocompose directly under the module prefix AND every one of
+// its compiled Go files is generated (basename "*.gen.go"). Add one hand file
+// and it falls straight back under full layer classification (Rule 0), so a
+// hand-written package cannot hide behind the name.
+func isGeneratedScenarioCompose(pkg *packages.Package, spec Spec) bool {
+	if spec.ModulePrefix == "" || pkg.PkgPath != spec.ModulePrefix+ScenarioComposeDir {
 		return false
 	}
 	if len(pkg.CompiledGoFiles) == 0 {

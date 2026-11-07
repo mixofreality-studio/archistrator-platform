@@ -45,7 +45,7 @@ func writeFinalizeCall(b *strings.Builder, ra raBinding) {
 // writeSingleArm emits a binding with exactly one profile arm (no switch).
 func writeSingleArm(b *strings.Builder, ra raBinding) {
 	arm := ra.arms[0]
-	call := arm.ctor + "(" + strings.Join(arm.args, ", ") + ")"
+	call := ctorCall(arm.ctor, arm.args)
 	if arm.returnsError {
 		b.WriteString("\t" + ra.varName + ", err := " + call + "\n")
 		b.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n")
@@ -93,7 +93,7 @@ func writeSwitchArms(b *strings.Builder, ra raBinding) {
 
 // writeArmBody emits one switch case's construction.
 func writeArmBody(b *strings.Builder, ra raBinding, arm variantArm) {
-	call := arm.ctor + "(" + strings.Join(arm.args, ", ") + ")"
+	call := ctorCall(arm.ctor, arm.args)
 	if arm.returnsError {
 		b.WriteString("\t\tv, err := " + call + "\n")
 		b.WriteString("\t\tif err != nil {\n\t\t\treturn err\n\t\t}\n")
@@ -113,7 +113,7 @@ func writeManagers(b *strings.Builder, r *resolved) {
 	}
 	b.WriteString("\t// Managers — generated DI constructors + one embedded Worker each.\n")
 	for _, mc := range r.managers {
-		b.WriteString("\t" + mc.varName + " := " + mc.ctor + "(" + strings.Join(mc.ctorArgs, ", ") + ")\n")
+		b.WriteString("\t" + mc.varName + " := " + ctorCall(mc.ctor, mc.ctorArgs) + "\n")
 		if mc.gated {
 			writeGatedWorker(b, r, mc)
 			continue
