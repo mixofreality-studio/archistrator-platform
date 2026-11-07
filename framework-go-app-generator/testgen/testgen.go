@@ -218,7 +218,18 @@ func planOf(out *Output, p methodcheck.Project, all []scenario.Scenario, comp st
 func routePlan(out *Output, cfg Config, web webEnv, plan componentPlan) (string, error) {
 	what := plan.Key + " has"
 	if web.noSubject[plan.Key] {
-		out.Warnings = append(out.Warnings, fmt.Sprintf("testgen: %s has no local-profile arm in the deployment model, so scenariocompose builds no subject; no tests generated", plan.Key))
+		// A recorded binding with no subject is a silent coverage drop, so it is a refusal; the only
+		// way past it is a dated skip on the binding (or a local arm in the deployment model).
+		live := 0
+		for _, bs := range plan.Scenarios {
+			if bs.Binding.Skip == nil {
+				live++
+			}
+		}
+		if live > 0 {
+			return "", fmt.Errorf("testgen: %s records %d unskipped binding(s) but has no local-profile arm in the deployment model, so scenariocompose builds no subject and nothing could run them: declare the local arm, or record a dated skip {reason, until} on each of its bindings", plan.Key, live)
+		}
+		out.Warnings = append(out.Warnings, fmt.Sprintf("testgen: %s has no local-profile arm in the deployment model, so scenariocompose builds no subject; every recorded binding is skipped; no tests generated", plan.Key))
 		return "", nil
 	}
 	if isClient(plan.Contract) {
