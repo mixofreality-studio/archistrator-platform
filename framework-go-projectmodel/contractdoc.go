@@ -54,6 +54,9 @@ type Operation struct {
 	Params []Param     `json:"params"`
 	Result *SchemaNode `json:"result,omitempty"`
 	Error  bool        `json:"error"`
+	// ReadOnly marks an operation that only observes: methodcheck holds a test probe to one. The
+	// recording verb sets it from the operation's name and layer; no generator reads it.
+	ReadOnly bool `json:"readOnly,omitempty"`
 	// UI optionally marks this operation as rendering an MCP App view.
 	// Ops without it stay plain tools.
 	UI *OpUI `json:"ui,omitempty"`

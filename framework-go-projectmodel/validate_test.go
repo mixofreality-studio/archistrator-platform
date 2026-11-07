@@ -180,3 +180,20 @@ func TestValidateDeployment_UndeclaredProfile(t *testing.T) {
 		"infrastructure":[{"key":"pg","substrate":"postgres","profiles":["cloud"]}]}`)
 	findProblem(t, ValidateDeployment(raw, nil), CodeDeployRef)
 }
+
+// An operation's readOnly flag is part of the contract document: methodcheck reads it to hold a probe
+// to an observing operation, and the loader every generator runs first must not call it a misspelling.
+func TestValidateContract_ReadOnlyIsAKnownOperationField(t *testing.T) {
+	raw := json.RawMessage(`{"component":"messageBus","layer":"Utility","goPackage":"internal/utility/messagebus","title":"t","$defs":{},
+		"interface":{"name":"MessageBus","layer":"utility","operations":[{"name":"GetCursor","params":[],"error":true,"readOnly":true}]}}`)
+	if probs := ValidateContract("messageBus", raw); len(probs) != 0 {
+		t.Fatalf("readOnly refused: %v", probs)
+	}
+	c, err := ParseContract("messageBus", raw)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !c.Doc.Interface.Operations[0].ReadOnly {
+		t.Error("readOnly did not decode")
+	}
+}

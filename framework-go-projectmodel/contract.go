@@ -64,7 +64,7 @@ func ParseContract(key string, raw json.RawMessage) (*Contract, error) {
 var (
 	contractFields  = fieldSet("component", "layer", "goPackage", "infra", "stub", "deps", "title", "$id", "$schema", "$defs", "interface", "notes", "railAuthority")
 	interfaceFields = fieldSet("name", "layer", "operations")
-	operationFields = fieldSet("name", "params", "result", "error", "ui")
+	operationFields = fieldSet("name", "params", "result", "error", "readOnly", "ui")
 	paramFields     = fieldSet("name", "pointer", "schema")
 	depFields       = fieldSet("name", "component", "goType", "goImport")
 )
