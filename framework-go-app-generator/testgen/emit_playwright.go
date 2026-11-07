@@ -37,12 +37,8 @@ func emitPlaywright(out *Output, cfg Config, web webEnv, plan componentPlan) err
 	if err := checkWithin(design); err != nil {
 		return fmt.Errorf("testgen: %s: %w", plan.Key, err)
 	}
-	// The surface check opens each screen's route and asserts its elements are there; a screen with
-	// none would open a route and assert nothing, a test that cannot fail.
-	for _, s := range design.Screens {
-		if len(s.Elements) == 0 {
-			return fmt.Errorf("testgen: %s: screen %q has no elements, so its surface test would assert nothing: give it the elements a user sees on %s, or drop the screen", plan.Key, s.ID, s.Route)
-		}
+	if err := refuseElementlessScreens(plan.Key, design); err != nil {
+		return err
 	}
 	for _, bs := range plan.Scenarios {
 		if plan.Design == nil && bs.Binding.Skip == nil && len(bs.Steps) > 0 {
@@ -60,6 +56,17 @@ func emitPlaywright(out *Output, cfg Config, web webEnv, plan componentPlan) err
 	out.Generated[path.Join(dir, "surface.spec.gen.ts")] = []byte(surfaceSpecTS(plan.Key, design))
 	out.Generated[path.Join(dir, "playwright.config.gen.ts")] = []byte(playwrightConfig(playwrightResultsDir(plan.Key)))
 	out.Generated[path.Join(dir, "reporter.gen.ts")] = []byte(playwrightReporter)
+	return nil
+}
+
+// refuseElementlessScreens: the surface check opens each screen's route and asserts its elements
+// are there; a screen with none would open a route and assert nothing, a test that cannot fail.
+func refuseElementlessScreens(key string, design methodcheck.UIDesignRecord) error {
+	for _, s := range design.Screens {
+		if len(s.Elements) == 0 {
+			return fmt.Errorf("testgen: %s: screen %q has no elements, so its surface test would assert nothing: give it the elements a user sees on %s, or drop the screen", key, s.ID, s.Route)
+		}
+	}
 	return nil
 }
 

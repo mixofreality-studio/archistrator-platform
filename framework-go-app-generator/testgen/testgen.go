@@ -149,12 +149,7 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 	if err != nil {
 		return out, err
 	}
-	byComponent, err := componentRoutes(projectJSON)
-	if err != nil {
-		return out, err
-	}
-	web := webEnv{contracts: p.ServiceContracts, routes: byComponent}
-	web.noSubject, err = componentsWithoutLocalSubject(projectJSON)
+	web, err := newWebEnv(projectJSON, p.ServiceContracts)
 	if err != nil {
 		return out, err
 	}
@@ -169,6 +164,17 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 	}
 	sortDiscriminations(&out)
 	return out, nil
+}
+
+// newWebEnv reads the routes and the no-local-subject components the emitters need.
+func newWebEnv(projectJSON []byte, contracts map[string]methodcheck.ServiceContract) (webEnv, error) {
+	byComponent, err := componentRoutes(projectJSON)
+	if err != nil {
+		return webEnv{}, err
+	}
+	web := webEnv{contracts: contracts, routes: byComponent}
+	web.noSubject, err = componentsWithoutLocalSubject(projectJSON)
+	return web, err
 }
 
 // routePlans builds every component's plan and routes it by surface (§12 B1):
@@ -218,19 +224,7 @@ func planOf(out *Output, p methodcheck.Project, all []scenario.Scenario, comp st
 func routePlan(out *Output, cfg Config, web webEnv, plan componentPlan) (string, error) {
 	what := plan.Key + " has"
 	if web.noSubject[plan.Key] {
-		// A recorded binding with no subject is a silent coverage drop, so it is a refusal; the only
-		// way past it is a dated skip on the binding (or a local arm in the deployment model).
-		live := 0
-		for _, bs := range plan.Scenarios {
-			if bs.Binding.Skip == nil {
-				live++
-			}
-		}
-		if live > 0 {
-			return "", fmt.Errorf("testgen: %s records %d unskipped binding(s) but has no local-profile arm in the deployment model, so scenariocompose builds no subject and nothing could run them: declare the local arm, or record a dated skip {reason, until} on each of its bindings", plan.Key, live)
-		}
-		out.Warnings = append(out.Warnings, fmt.Sprintf("testgen: %s has no local-profile arm in the deployment model, so scenariocompose builds no subject; every recorded binding is skipped; no tests generated", plan.Key))
-		return "", nil
+		return "", refuseOrWarnNoSubject(out, plan)
 	}
 	if isClient(plan.Contract) {
 		d, err := clientDialect(plan.Key, plan.Contract)
@@ -248,6 +242,23 @@ func routePlan(out *Output, cfg Config, web webEnv, plan componentPlan) (string,
 		out.Warnings = append(out.Warnings, fmt.Sprintf("testgen: %s no goPackage; no tests generated", what))
 	}
 	return plan.Contract.GoPackage, nil
+}
+
+// refuseOrWarnNoSubject handles a plan whose component the local-profile composition does not
+// build. A recorded binding with no subject is a silent coverage drop, so it is a refusal; the only
+// way past it is a dated skip on the binding (or a local arm in the deployment model).
+func refuseOrWarnNoSubject(out *Output, plan componentPlan) error {
+	live := 0
+	for _, bs := range plan.Scenarios {
+		if bs.Binding.Skip == nil {
+			live++
+		}
+	}
+	if live > 0 {
+		return fmt.Errorf("testgen: %s records %d unskipped binding(s) but has no local-profile arm in the deployment model, so scenariocompose builds no subject and nothing could run them: declare the local arm, or record a dated skip {reason, until} on each of its bindings", plan.Key, live)
+	}
+	out.Warnings = append(out.Warnings, fmt.Sprintf("testgen: %s has no local-profile arm in the deployment model, so scenariocompose builds no subject; every recorded binding is skipped; no tests generated", plan.Key))
+	return nil
 }
 
 // emitPackage emits one Go package's scenario tests: every contract in it is
