@@ -86,6 +86,13 @@ func (g *scenarioGen) mcpClientFronts(key, managerKey string) bool {
 		return false
 	}
 	c, ok := g.m.System.ComponentByContractKey(key)
+	if !ok {
+		// A facet contract (mcpClientBilling) is keyed apart from its System component (mcp-client,
+		// contractKey mcpClient) and names that component in its own component field.
+		if facet := g.m.Contracts[key]; facet != nil && facet.Component != "" && facet.Component != key {
+			c, ok = g.m.System.ComponentByContractKey(facet.Component)
+		}
+	}
 	return ok && g.r.mcpFronts(g.m.System, *c, managerKey)
 }
 

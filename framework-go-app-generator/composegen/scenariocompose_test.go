@@ -415,3 +415,28 @@ func TestScenarioCompose_RefusalCascadesToDependentManagers(t *testing.T) {
 		t.Error("a Manager depending on a refused Manager must be left unbuilt")
 	}
 }
+
+// TestScenarioCompose_FacetClientContractIsServed: a client contract that is a facet of a System
+// component (its own key differs from the component's contractKey, as mcpClientBilling facets
+// mcpClient) gets a constructor too; the component it names carries the relationship to the Manager.
+func TestScenarioCompose_FacetClientContractIsServed(t *testing.T) {
+	m, _ := loadConformance(t, "todomvc")
+	base := m.Contracts["todoMcpServer"]
+	if base == nil || base.Doc == nil {
+		t.Fatal("the todomvc fixture has no todoMcpServer contract")
+	}
+	doc := *base.Doc
+	doc.Interface.Name = "TodoMcpServerFacet"
+	facet := *base
+	facet.Doc = &doc
+	facet.Component = "todoMcpServer"
+	facet.GoPackage = "internal/client/todomcpserverfacet/list"
+	m.Contracts["todoMcpServerFacet"] = &facet
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioCfg)
+	if err != nil {
+		t.Fatalf("EmitScenarioCompose: %v", err)
+	}
+	if !regexp.MustCompile(`(?m)^func NewTodoMcpServerFacet\(t \*testing\.T, h \*scenariohost\.Host\) \*\w+\.Handler \{$`).Match(src) {
+		t.Error("a facet client contract has no constructor")
+	}
+}

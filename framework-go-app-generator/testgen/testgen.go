@@ -111,6 +111,9 @@ type componentPlan struct {
 type webEnv struct {
 	contracts map[string]methodcheck.ServiceContract
 	routes    map[string]map[string]restRoute // contract key → operation name → route
+	// noSubject is the components the local-profile composition does not build (an optional binding
+	// with no local arm): scenariocompose has no constructor for them, so no scenario can be run.
+	noSubject map[string]bool
 }
 
 // designOf resolves a plan's surface to its UI design: the plan key, then the contract's component.
@@ -151,6 +154,10 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 		return out, err
 	}
 	web := webEnv{contracts: p.ServiceContracts, routes: byComponent}
+	web.noSubject, err = componentsWithoutLocalSubject(projectJSON)
+	if err != nil {
+		return out, err
+	}
 	byPackage, err := routePlans(&out, cfg, web, p, all)
 	if err != nil {
 		return out, err
@@ -210,6 +217,10 @@ func planOf(out *Output, p methodcheck.Project, all []scenario.Scenario, comp st
 // or "" with a warning when it names none.
 func routePlan(out *Output, cfg Config, web webEnv, plan componentPlan) (string, error) {
 	what := plan.Key + " has"
+	if web.noSubject[plan.Key] {
+		out.Warnings = append(out.Warnings, fmt.Sprintf("testgen: %s has no local-profile arm in the deployment model, so scenariocompose builds no subject; no tests generated", plan.Key))
+		return "", nil
+	}
 	if isClient(plan.Contract) {
 		d, err := clientDialect(plan.Key, plan.Contract)
 		if err != nil {

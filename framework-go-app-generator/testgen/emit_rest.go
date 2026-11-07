@@ -262,3 +262,38 @@ func errorHasCode(err error, code string) bool {
 }
 
 `
+
+// componentsWithoutLocalSubject is the components the generated test subject does not build: those
+// whose deployment binding is not required and names no local-profile arm (composegen's localArm
+// returns no arm for them, and scenariocompose emits no constructor). A scenario for one has no
+// subject to call, so testgen names it and emits none rather than emit a call to a missing constructor.
+func componentsWithoutLocalSubject(projectJSON []byte) (map[string]bool, error) {
+	// A lenient read, not projectmodel.Load: testgen tolerates plan-shaped conditions that Load
+	// refuses, and the binding is all it needs.
+	var doc struct {
+		Slots map[string]struct {
+			Model struct {
+				Deployment *projectmodel.Deployment `json:"deployment"`
+			} `json:"model"`
+		} `json:"slots"`
+	}
+	if err := json.Unmarshal(projectJSON, &doc); err != nil {
+		return nil, fmt.Errorf("testgen: deployment: %w", err)
+	}
+	out := map[string]bool{}
+	for _, slot := range doc.Slots {
+		d := slot.Model.Deployment
+		if d == nil {
+			continue
+		}
+		for _, b := range d.Bindings {
+			if len(b.PerProfile) == 0 || strings.EqualFold(b.Presence, "required") {
+				continue
+			}
+			if _, local := b.PerProfile[projectmodel.LocalProfile]; !local {
+				out[b.Component] = true
+			}
+		}
+	}
+	return out, nil
+}
