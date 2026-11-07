@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
 )
 
 // compose emits the generated test subject beside the composition root: the scenario tests
@@ -35,5 +37,17 @@ func TestCompose_WritesScenarioCompose(t *testing.T) {
 	}
 	if err := run(append([]string{"compose", "-check"}, base...), io.Discard); !errors.Is(err, errDrift) {
 		t.Errorf("a drifted scenario subject must fail -check, got %v", err)
+	}
+}
+
+// TestReportRefusals_NamesEveryUnbuiltManager: a Manager the generated subject leaves unbuilt is
+// reported on the operator's stream, one line per refusal, never dropped.
+func TestReportRefusals_NamesEveryUnbuiltManager(t *testing.T) {
+	var b strings.Builder
+	reportRefusals(&b, []composegen.Refusal{{Manager: "deliveryManager", Dependency: "repo", Reason: "policy"}, {Manager: "deliveryManager", Dependency: "repoBase", Reason: "policy"}})
+	for _, want := range []string{"deliveryManager/repo: policy", "deliveryManager/repoBase: policy"} {
+		if !strings.Contains(b.String(), want) {
+			t.Errorf("report lacks %q:\n%s", want, b.String())
+		}
 	}
 }

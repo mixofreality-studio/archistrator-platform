@@ -511,7 +511,7 @@ func TestMCP_GeneratedFileCompiles(t *testing.T) {
 	}
 	effective := *m
 	effective.Deployment = m.EffectiveDeployment("server")
-	compose, err := composegen.EmitScenarioCompose(&effective, composegen.Config{ContainerKey: "server", ModulePath: "example.com/app/server"})
+	compose, _, err := composegen.EmitScenarioCompose(&effective, composegen.Config{ContainerKey: "server", ModulePath: "example.com/app/server"})
 	if err != nil {
 		t.Fatalf("composegen.EmitScenarioCompose: %v", err)
 	}

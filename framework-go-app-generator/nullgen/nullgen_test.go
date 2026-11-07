@@ -20,10 +20,6 @@ import (
 type fixtureCase struct {
 	name, module string
 	stubs        map[string]string
-	// noScenarioSubject is why appgen compose cannot run over the fixture: compose emits the
-	// generated test subject (internal/scenariocompose), and a subject has no hooks to ask for a
-	// dependency the model cannot express. "" when it can.
-	noScenarioSubject string
 }
 
 // The todomvc harvest is the one the pipeline exists for; the greenfield one carries the plain
@@ -34,10 +30,7 @@ var cases = []fixtureCase{
 	// The greenfield fixture is self-contained (conformance/testdata/greenfield/README.md lists the
 	// hand-written dependencies of the original golden that were folded into the model), so no
 	// stubs are needed.
-	{
-		name: "greenfield", module: "example.com/greenfield/server",
-		noScenarioSubject: "orderManager's func-typed resolver deps are hook-supplied, which appgen compose's generated test subject (scenariocompose) refuses (FPC Task 2.11b)",
-	},
+	{name: "greenfield", module: "example.com/greenfield/server"},
 }
 
 func (fc fixtureCase) raw(t *testing.T) []byte {
@@ -119,9 +112,6 @@ func TestNullgen_HooksCoverEverySeam(t *testing.T) {
 	bin := buildGenerators(t, genDir)
 	for _, fc := range cases {
 		t.Run(fc.name, func(t *testing.T) {
-			if fc.noScenarioSubject != "" {
-				t.Skip(fc.noScenarioSubject)
-			}
 			out, m := fc.emit(t)
 			dir := t.TempDir()
 			scaffoldSandbox(t, dir, genDir, fc, m)

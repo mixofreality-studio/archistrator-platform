@@ -1,6 +1,7 @@
 package composegen
 
 import (
+	"errors"
 	"fmt"
 	"go/format"
 	"sort"
@@ -66,6 +67,8 @@ type scenarioGen struct {
 	comps   []scenarioComp
 	byKey   map[string]scenarioComp
 	clients []scenarioClient
+	// refused is the Managers left unbuilt, by contract key (see Refusal).
+	refused map[string]Refusal
 
 	body                                 strings.Builder
 	usesTemporal, usesPostgres, usesTime bool
@@ -88,37 +91,65 @@ type scenarioGen struct {
 // the scenario host does not provide, and a Manager dependency the model cannot express are
 // generation errors that name the component, never a nil or zero value the test would pass
 // against.
-func EmitScenarioCompose(m *projectmodel.Model, cfg Config) ([]byte, error) {
+//
+// One of those is a refusal, not an error: a Manager dependency that is composition-root policy
+// (a func-typed resolver, a derived string) the model cannot express. The generated subject has
+// no hooks to ask, so that Manager is left unbuilt (no constructor, no Null wrapper, no handler
+// over it, no Workflows() registration) and named in the returned Refusals; every other
+// component is still generated, so a model with a policy dependency regenerates everything it
+// can. The caller reports the refusals; none is ever silently dropped.
+func EmitScenarioCompose(m *projectmodel.Model, cfg Config) ([]byte, []Refusal, error) {
 	if cfg.ModulePath == "" {
-		return nil, fmt.Errorf("composegen: scenariocompose: ModulePath is required")
+		return nil, nil, fmt.Errorf("composegen: scenariocompose: ModulePath is required")
 	}
 	if m.Deployment == nil {
-		return nil, fmt.Errorf("composegen: scenariocompose: model has no deployment")
+		return nil, nil, fmt.Errorf("composegen: scenariocompose: model has no deployment")
 	}
 	if cfg.ContainerKey != "" && !hasContainer(m.Deployment, cfg.ContainerKey) {
-		return nil, fmt.Errorf("composegen: scenariocompose: container %q: not found in deployment", cfg.ContainerKey)
+		return nil, nil, fmt.Errorf("composegen: scenariocompose: container %q: not found in deployment", cfg.ContainerKey)
 	}
 	r := newResolved(m, cfg)
 	r.assignAliases(scenarioPackages(m))
 	if err := r.resolveRAs(m); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	g := &scenarioGen{m: m, r: r, imp: newImportSet(), byKey: map[string]scenarioComp{}}
+	g := &scenarioGen{m: m, r: r, imp: newImportSet(), byKey: map[string]scenarioComp{}, refused: map[string]Refusal{}}
 	if err := g.build(); err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	src := g.render()
 	out, err := format.Source([]byte(src))
 	if err != nil {
-		return nil, wrapFormatErr(err, src)
+		return nil, nil, wrapFormatErr(err, src)
 	}
-	return out, nil
+	return out, g.refusals(), nil
+}
+
+// Refusal is a Manager the generated test subject does not build: one of its constructor
+// dependencies is composition-root policy the deployment model cannot express.
+type Refusal struct {
+	// Manager is the contract key; Dependency the constructor dependency (its name, or the
+	// refused Manager's key when the refusal cascades through a component dependency).
+	Manager, Dependency string
+	// Reason says why, and what would make the Manager buildable.
+	Reason string
+}
+
+func (r Refusal) String() string {
+	return fmt.Sprintf("%s/%s: %s", r.Manager, r.Dependency, r.Reason)
+}
+
+// policyDepError is the one managerArg failure that is a refusal rather than a model error.
+type policyDepError struct{ Refusal }
+
+func (e policyDepError) Error() string {
+	return fmt.Sprintf("composegen: scenariocompose: manager %q dependency %q: %s", e.Manager, e.Dependency, e.Reason)
 }
 
 // build sequences the emission: classify the components and the machine clients, then render
 // the component constructors, the client constructors and the workflow list, in that order.
 func (g *scenarioGen) build() error {
-	steps := []func() error{g.classify, g.classifyClients, g.emitComponents, g.emitClients, g.emitWorkflows}
+	steps := []func() error{g.classify, g.refuseUnbuildable, g.classifyClients, g.emitComponents, g.emitClients, g.emitWorkflows}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return err
@@ -175,9 +206,88 @@ func (g *scenarioGen) classify() error {
 		seenIface[comp.iface] = key
 		g.comps = append(g.comps, comp)
 		g.byKey[key] = comp
-		g.imp.add(comp.importPath, importAliasFor(comp.importPath, comp.alias))
 	}
 	return nil
+}
+
+// refuseUnbuildable leaves unbuilt every Manager whose constructor arguments the model cannot
+// spell (see Refusal), then imports the packages of the components that remain. A Manager that
+// depends on a refused Manager is itself refused, so the pass runs to a fixed point.
+func (g *scenarioGen) refuseUnbuildable() error {
+	for {
+		changed, err := g.refuseRound()
+		if err != nil {
+			return err
+		}
+		if !changed {
+			break
+		}
+	}
+	kept := g.comps[:0]
+	for _, comp := range g.comps {
+		if g.refused[comp.key].Manager != "" {
+			continue
+		}
+		kept = append(kept, comp)
+		g.imp.add(comp.importPath, importAliasFor(comp.importPath, comp.alias))
+	}
+	g.comps = kept
+	return nil
+}
+
+// refuseRound refuses every not-yet-refused Manager whose arguments cannot be spelled now,
+// and reports whether it refused any.
+func (g *scenarioGen) refuseRound() (bool, error) {
+	changed := false
+	for _, comp := range g.comps {
+		if comp.kind != scenarioManager || g.refused[comp.key].Manager != "" {
+			continue
+		}
+		ref, ok, err := g.probeManager(comp)
+		if err != nil {
+			return false, err
+		}
+		if ok {
+			g.refused[comp.key] = ref
+			delete(g.byKey, comp.key)
+			changed = true
+		}
+	}
+	return changed, nil
+}
+
+// probeManager spells a Manager's constructor arguments to learn whether it is buildable. It
+// reports a refusal for a policy dependency; any other failure is a model error. Spelling
+// records which imports and helpers the file needs, so the probe leaves them as it found them:
+// a refused Manager must not leave a stray import behind.
+func (g *scenarioGen) probeManager(comp scenarioComp) (Refusal, bool, error) {
+	usesTemporal, usesPostgres, usesTime, usesWorker, usesHTTP := g.usesTemporal, g.usesPostgres, g.usesTime, g.usesWorker, g.usesHTTP
+	_, err := g.managerArgs(comp, false)
+	g.usesTemporal, g.usesPostgres, g.usesTime, g.usesWorker, g.usesHTTP = usesTemporal, usesPostgres, usesTime, usesWorker, usesHTTP
+	var pol policyDepError
+	switch {
+	case err == nil:
+		return Refusal{}, false, nil
+	case errors.As(err, &pol):
+		return pol.Refusal, true, nil
+	default:
+		return Refusal{}, false, err
+	}
+}
+
+// refusals is the refused Managers, ordered by manager then dependency.
+func (g *scenarioGen) refusals() []Refusal {
+	out := make([]Refusal, 0, len(g.refused))
+	for _, r := range g.refused {
+		out = append(out, r)
+	}
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].Manager != out[j].Manager {
+			return out[i].Manager < out[j].Manager
+		}
+		return out[i].Dependency < out[j].Dependency
+	})
+	return out
 }
 
 // classifyOne decides how one constructible contract is built; built is false for a
@@ -372,7 +482,7 @@ func (g *scenarioGen) managerArg(comp scenarioComp, dep projectmodel.Dep, zero b
 		return "", fmt.Errorf("composegen: scenariocompose: manager %q dependency %q is linked to setting %q, which the deployment does not declare", comp.key, dep.Name, dep.Setting)
 	}
 	if !ok {
-		return "", fmt.Errorf("composegen: scenariocompose: manager %q dependency %q (%s) is composition-root policy the deployment model cannot express, and a generated test subject has no hooks to ask: declare it as a deployment setting or a component", comp.key, dep.Name, strings.TrimSpace(dep.GoType))
+		return "", policyDepError{Refusal{Manager: comp.key, Dependency: dep.Name, Reason: fmt.Sprintf("(%s) is composition-root policy the deployment model cannot express, and a generated test subject has no hooks to ask: declare it as a deployment setting or a component", strings.TrimSpace(dep.GoType))}}
 	}
 	lit, err := settingLiteral(st)
 	if err != nil {
@@ -386,6 +496,9 @@ func (g *scenarioGen) managerArg(comp scenarioComp, dep projectmodel.Dep, zero b
 func (g *scenarioGen) componentDep(comp scenarioComp, dep projectmodel.Dep, zero bool) (string, error) {
 	if g.r.localVar[dep.Component] == "nil" {
 		return "nil", nil // an unbuilt optional binding: the manager receives nil, as in main.gen.go
+	}
+	if _, gone := g.refused[dep.Component]; gone {
+		return "", policyDepError{Refusal{Manager: comp.key, Dependency: dep.Name, Reason: fmt.Sprintf("depends on manager %q, which the generated test subject does not build", dep.Component)}}
 	}
 	if _, built := g.byKey[dep.Component]; !built {
 		return "", fmt.Errorf("composegen: scenariocompose: manager %q dependency %q: component %q has no constructor (needs a binding or an engine contract)", comp.key, dep.Name, dep.Component)

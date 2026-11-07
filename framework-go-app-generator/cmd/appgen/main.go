@@ -79,6 +79,8 @@ type clientsConfig struct {
 type options struct {
 	project, root, configPath string
 	check                     bool
+	// warn receives what a generation leaves undone without failing (see reportRefusals).
+	warn io.Writer
 }
 
 func main() {
@@ -93,7 +95,7 @@ func run(args []string, out io.Writer) error {
 		return errors.New("usage: appgen temporal|config|compose|clients [-check]")
 	}
 	sub, args := args[0], args[1:]
-	var o options
+	o := options{warn: out}
 	fl := flag.NewFlagSet("appgen "+sub, flag.ContinueOnError)
 	fl.SetOutput(out)
 	fl.StringVar(&o.project, "project", ".aiarch/state/project.json", "the project.json to read")
@@ -274,10 +276,25 @@ func genCompose(m *projectmodel.Model, cfg config, module string, o options) (ma
 	// The generated test subject is module-relative, not under cmd/server: scenario tests of
 	// every component import it. It is emitted even for an app with no test plans, because
 	// Workflows() feeds the replay gate.
-	if out[composegen.ScenarioComposeFile], err = composegen.EmitScenarioCompose(effective, cc); err != nil {
+	subject, refused, err := composegen.EmitScenarioCompose(effective, cc)
+	if err != nil {
 		return nil, err
 	}
+	out[composegen.ScenarioComposeFile] = subject
+	reportRefusals(o.warn, refused)
 	return out, nil
+}
+
+// reportRefusals tells the operator which Managers the generated test subject leaves unbuilt
+// (their constructor takes composition-root policy the model cannot express). Everything else
+// is generated; each refusal is named so none is silently dropped.
+func reportRefusals(w io.Writer, refused []composegen.Refusal) {
+	if w == nil {
+		return
+	}
+	for _, r := range refused {
+		_, _ = fmt.Fprintf(w, "appgen: scenariocompose: manager left unbuilt: %s\n", r) // a report; its write failing changes nothing
+	}
 }
 
 // handServerSources is the composition root's hand-written Go files (no tests, nothing

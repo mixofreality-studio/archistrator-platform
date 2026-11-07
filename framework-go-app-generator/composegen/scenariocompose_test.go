@@ -61,7 +61,7 @@ func isBuiltNonClient(c *projectmodel.Contract) bool {
 // hooks, no config, no FILL).
 func TestScenarioCompose_EveryContractHasConstructor(t *testing.T) {
 	m, _ := loadConformance(t, "todomvc")
-	src, err := composegen.EmitScenarioCompose(m, scenarioCfg)
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioCfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
@@ -124,7 +124,7 @@ func TestScenarioCompose_EveryContractHasConstructor(t *testing.T) {
 // by a policy built from the generated authorization rows - never a permit-all one.
 func TestScenarioCompose_ClientConstructorHasRealPolicy(t *testing.T) {
 	m, _ := loadConformance(t, "todomvc")
-	src, err := composegen.EmitScenarioCompose(m, scenarioCfg)
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioCfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
@@ -158,11 +158,11 @@ func TestScenarioCompose_ClientConstructorHasRealPolicy(t *testing.T) {
 // settings as dependencies) and an alias collision (engine/billing vs manager/billing).
 func TestScenarioCompose_Golden(t *testing.T) {
 	m := loadScenarioFixture(t)
-	a, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
+	a, _, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
-	b, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
+	b, _, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -172,31 +172,51 @@ func TestScenarioCompose_Golden(t *testing.T) {
 	checkGolden(t, "../testdata/scenariocompose.compose.gen.go.golden", a)
 }
 
-// TestScenarioCompose_UnresolvedDependencyIsAGenerationError: a Manager dependency the
-// deployment model cannot express (a func-typed resolver) is composition-root policy; a
-// generated subject has no hooks to ask, so generation names the manager and the dependency.
-func TestScenarioCompose_UnresolvedDependencyIsAGenerationError(t *testing.T) {
+// TestScenarioCompose_UnresolvedDependencyIsARefusal: a Manager dependency the deployment model
+// cannot express (a func-typed resolver) is composition-root policy; a generated subject has no
+// hooks to ask, so that Manager is left unbuilt and the refusal names the manager and the
+// dependency. It is not a generation failure: everything else is still generated, and nothing
+// about the refused Manager is left behind.
+func TestScenarioCompose_UnresolvedDependencyIsARefusal(t *testing.T) {
 	m, _ := loadConformance(t, "greenfield")
-	_, err := composegen.EmitScenarioCompose(m, composegen.Config{ContainerKey: "order-app", ModulePath: "example.com/greenfield/server"})
-	if err == nil {
-		t.Fatal("want a generation error for a hook-supplied dependency")
+	src, refused, err := composegen.EmitScenarioCompose(m, composegen.Config{ContainerKey: "order-app", ModulePath: "example.com/greenfield/server"})
+	if err != nil {
+		t.Fatalf("a policy dependency must be a refusal, not a generation error: %v", err)
 	}
-	for _, want := range []string{"orderManager", "repo"} {
-		if !strings.Contains(err.Error(), want) {
-			t.Errorf("error must name %q, got: %v", want, err)
+	if len(refused) == 0 {
+		t.Fatal("want a refusal for a hook-supplied dependency")
+	}
+	var named bool
+	for _, r := range refused {
+		if r.Manager == "orderManager" && r.Dependency == "repo" {
+			named = true
 		}
+		if r.Reason == "" {
+			t.Errorf("refusal %s/%s carries no reason", r.Manager, r.Dependency)
+		}
+	}
+	if !named {
+		t.Errorf("refusals must name orderManager and its dependency repo, got %v", refused)
+	}
+	for _, unwanted := range []string{"NewOrderManager", "buildOrderManager", "NullOrderManager"} {
+		if strings.Contains(string(src), unwanted) {
+			t.Errorf("the refused manager must be left unbuilt, but the subject declares %s", unwanted)
+		}
+	}
+	if !strings.Contains(string(src), "func Workflows()") {
+		t.Error("the rest of the subject must still be generated")
 	}
 }
 
 func TestScenarioCompose_ConfigErrors(t *testing.T) {
 	m := loadScenarioFixture(t)
-	if _, err := composegen.EmitScenarioCompose(m, composegen.Config{}); err == nil || !strings.Contains(err.Error(), "ModulePath") {
+	if _, _, err := composegen.EmitScenarioCompose(m, composegen.Config{}); err == nil || !strings.Contains(err.Error(), "ModulePath") {
 		t.Errorf("want a ModulePath error, got %v", err)
 	}
-	if _, err := composegen.EmitScenarioCompose(&projectmodel.Model{}, composegen.Config{ModulePath: "x"}); err == nil || !strings.Contains(err.Error(), "deployment") {
+	if _, _, err := composegen.EmitScenarioCompose(&projectmodel.Model{}, composegen.Config{ModulePath: "x"}); err == nil || !strings.Contains(err.Error(), "deployment") {
 		t.Errorf("want a no-deployment error, got %v", err)
 	}
-	if _, err := composegen.EmitScenarioCompose(m, composegen.Config{ModulePath: "x", ContainerKey: "ghost"}); err == nil || !strings.Contains(err.Error(), "container") {
+	if _, _, err := composegen.EmitScenarioCompose(m, composegen.Config{ModulePath: "x", ContainerKey: "ghost"}); err == nil || !strings.Contains(err.Error(), "container") {
 		t.Errorf("want a container error, got %v", err)
 	}
 }
@@ -235,7 +255,7 @@ func TestScenarioCompose_CompilesAgainstScenariohost(t *testing.T) {
 		runSandbox(t, dir, filepath.Join(bin, args[0]), args[1:]...)
 	}
 
-	src, err := composegen.EmitScenarioCompose(m, scenarioCfg)
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioCfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
@@ -355,5 +375,27 @@ func runSandbox(t *testing.T, dir, name string, args ...string) {
 	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod")
 	if o, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("%s %v: %v\n%s", filepath.Base(name), args, err, o)
+	}
+}
+
+// TestScenarioCompose_RefusalCascadesToDependentManagers: a Manager that depends on a refused
+// Manager cannot be built either, and is named with the refused one as its dependency.
+func TestScenarioCompose_RefusalCascadesToDependentManagers(t *testing.T) {
+	m, _ := loadConformance(t, "greenfield")
+	fm := m.Contracts["fulfillmentManager"]
+	fm.Deps = append(fm.Deps, projectmodel.Dep{Name: "orders", Component: "orderManager"})
+	src, refused, err := composegen.EmitScenarioCompose(m, composegen.Config{ContainerKey: "order-app", ModulePath: "example.com/greenfield/server"})
+	if err != nil {
+		t.Fatalf("EmitScenarioCompose: %v", err)
+	}
+	got := map[string]string{}
+	for _, r := range refused {
+		got[r.Manager] = r.Dependency
+	}
+	if got["fulfillmentManager"] != "orders" || got["orderManager"] == "" {
+		t.Errorf("want orderManager refused and fulfillmentManager refused through orders, got %v", refused)
+	}
+	if strings.Contains(string(src), "NewFulfillmentManager") {
+		t.Error("a Manager depending on a refused Manager must be left unbuilt")
 	}
 }

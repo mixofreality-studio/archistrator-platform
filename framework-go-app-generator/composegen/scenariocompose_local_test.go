@@ -23,7 +23,7 @@ func TestScenarioCompose_ConfigSubstrateIsReadFromTheHost(t *testing.T) {
 			}
 		}
 	}
-	src, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
@@ -46,7 +46,7 @@ func TestScenarioCompose_ConfigSubstrateIsReadFromTheHost(t *testing.T) {
 // consumes more infrastructure.
 func TestScenarioCompose_LocalArmOnly(t *testing.T) {
 	m := loadScenarioFixture(t)
-	src, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
@@ -70,7 +70,7 @@ func TestScenarioCompose_OptionalDormantNoLocalArmIsNil(t *testing.T) {
 			m.Deployment.Bindings[i].PerProfile = map[string]projectmodel.BindingVariant{"cloud": b.PerProfile["cloud"]}
 		}
 	}
-	src, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
@@ -93,7 +93,7 @@ func TestScenarioCompose_RequiredNoLocalArmIsError(t *testing.T) {
 			m.Deployment.Bindings[i].PerProfile = map[string]projectmodel.BindingVariant{"cloud": b.PerProfile["cloud"]}
 		}
 	}
-	_, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
+	_, _, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
 	if err == nil || !strings.Contains(err.Error(), "orderStateAccess: no ResourceAccess variant for the active profile") {
 		t.Fatalf("want the composition root's no-variant error, got %v", err)
 	}
@@ -106,7 +106,7 @@ func TestScenarioCompose_LocalHookedArmIsError(t *testing.T) {
 	m := loadScenarioFixture(t)
 	cfg := scenarioFixtureCfg
 	cfg.VariantHookArgs = map[string][]composegen.HookArgType{"orderStateAccess/memory": {{GoType: "string"}}}
-	_, err := composegen.EmitScenarioCompose(m, cfg)
+	_, _, err := composegen.EmitScenarioCompose(m, cfg)
 	if err == nil {
 		t.Fatal("want a generation error for a hooked local arm")
 	}
@@ -145,7 +145,7 @@ func TestCompose_DepSettingBothRoots(t *testing.T) {
 	if !strings.Contains(root, "cfg.ShutdownTimeout") || strings.Contains(root, "CloseAfter") {
 		t.Errorf("the root must read the linked setting and emit no resolver hook for it:\n%s", root)
 	}
-	src, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
@@ -154,7 +154,7 @@ func TestCompose_DepSettingBothRoots(t *testing.T) {
 	}
 
 	m.Contracts["orderManager"].Deps[4].Setting = "noSuchSetting"
-	if _, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg); err == nil || !strings.Contains(err.Error(), "noSuchSetting") {
+	if _, _, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg); err == nil || !strings.Contains(err.Error(), "noSuchSetting") {
 		t.Errorf("a dependency linked to an undeclared setting must fail the scenario, naming it: %v", err)
 	}
 }
@@ -168,7 +168,7 @@ func TestScenarioCompose_LocalPostgresArm(t *testing.T) {
 			m.Deployment.Bindings[i].PerProfile = map[string]projectmodel.BindingVariant{"local": b.PerProfile["cloud"]}
 		}
 	}
-	src, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioFixtureCfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
@@ -195,7 +195,7 @@ func TestCompose_RegistrarKindsFromManagers(t *testing.T) {
 	if root := string(got["main.gen.go"]); !strings.Contains(root, "messagebus.NewTemporalMessageBus(tc, order.ExecutionKinds())") {
 		t.Errorf("the root must hand the registrar its Managers' kinds:\n%s", root)
 	}
-	src, err := composegen.EmitScenarioCompose(m, cfg)
+	src, _, err := composegen.EmitScenarioCompose(m, cfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
