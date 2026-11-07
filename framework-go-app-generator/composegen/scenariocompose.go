@@ -105,19 +105,7 @@ func EmitScenarioCompose(m *projectmodel.Model, cfg Config) ([]byte, error) {
 		return nil, err
 	}
 	g := &scenarioGen{m: m, r: r, imp: newImportSet(), byKey: map[string]scenarioComp{}}
-	if err := g.classify(); err != nil {
-		return nil, err
-	}
-	if err := g.classifyClients(); err != nil {
-		return nil, err
-	}
-	if err := g.emitComponents(); err != nil {
-		return nil, err
-	}
-	if err := g.emitClients(); err != nil {
-		return nil, err
-	}
-	if err := g.emitWorkflows(); err != nil {
+	if err := g.build(); err != nil {
 		return nil, err
 	}
 	src := g.render()
@@ -126,6 +114,18 @@ func EmitScenarioCompose(m *projectmodel.Model, cfg Config) ([]byte, error) {
 		return nil, wrapFormatErr(err, src)
 	}
 	return out, nil
+}
+
+// build sequences the emission: classify the components and the machine clients, then render
+// the component constructors, the client constructors and the workflow list, in that order.
+func (g *scenarioGen) build() error {
+	steps := []func() error{g.classify, g.classifyClients, g.emitComponents, g.emitClients, g.emitWorkflows}
+	for _, step := range steps {
+		if err := step(); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 // scenarioPackages is the sorted, de-duplicated goPackage set of every built non-client

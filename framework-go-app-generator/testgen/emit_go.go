@@ -504,7 +504,7 @@ func (g *goEmit) directLines(c directCall, finish func(call string) string) []st
 // a component whose parameters are all builtin types needs no import of its package: the call goes through
 // scenariocompose.
 func (g *goEmit) importIfQualified(alias, typ string) {
-	if alias == g.pkg && !g.tools { // a machine client's file never imports its own package
+	if alias == g.pkg && !g.tools { // a component file already imports its own package (generatedImports); a machine client's own name was released in emitMCP, so a same-named component package it probes must be imported
 		return
 	}
 	if regexp.MustCompile(`[\s*\[\]]` + regexp.QuoteMeta(alias) + `\.[A-Z]`).MatchString(typ) {
