@@ -47,6 +47,12 @@ type ProjectSpec struct {
 	// nil (the default) leaves the gate off, so existing consumers are unaffected. The
 	// app keeps its allowlist as data and passes it here.
 	EncapsulationAllowlist map[string][]string
+
+	// FindingPolicy, when set, is applied to the design findings before Check reports them:
+	// the consuming app's own severity policy, such as downgrading a rule it has waived for a
+	// dated period. It may change a finding's severity and message and may not add or drop
+	// findings; Check reports what it returns. Nil reports the findings as the rules made them.
+	FindingPolicy func([]Finding) []Finding
 }
 
 // Check is the all-in-one Method gate a consuming repo runs from one go test. It
@@ -77,6 +83,9 @@ func Check(t *testing.T, spec ProjectSpec) {
 	}
 	findings, runErr := ValidateProject(proj)
 	handleValidationError(t, runErr)
+	if spec.FindingPolicy != nil {
+		findings = spec.FindingPolicy(findings)
+	}
 	reportFindings(t, findings)
 	committedSlots := proj.committedSlotCount()
 	loadedPkgs := runArchPhase(t, spec, proj)

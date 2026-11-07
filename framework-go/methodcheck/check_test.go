@@ -39,6 +39,20 @@ func TestCheck_CleanFixtureNoAlignmentPasses(t *testing.T) {
 	Check(t, ProjectSpec{RepoRoot: repoRoot})
 }
 
+// The app's own severity policy (a waived rule's Errors downgraded for a dated period) runs over
+// the design findings before Check reports them.
+func TestCheck_FindingPolicyRunsOverTheDesignFindings(t *testing.T) {
+	repoRoot := writeRepoState(t, "project_clean.json")
+	called := 0
+	Check(t, ProjectSpec{RepoRoot: repoRoot, FindingPolicy: func(f []Finding) []Finding {
+		called++
+		return f
+	}})
+	if called != 1 {
+		t.Fatalf("the finding policy ran %d times, want once", called)
+	}
+}
+
 func TestCheck_CleanFixtureWithMatchingCodePasses(t *testing.T) {
 	// GOWORK=off: the testdata alignment module is nested under testdata/ and not in
 	// the repo go.work; a real consuming module loads its own in-workspace packages.
