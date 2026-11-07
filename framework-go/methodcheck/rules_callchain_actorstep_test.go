@@ -6,14 +6,16 @@ import "testing"
 // the view must say which Client the actor makes it on.
 
 func ccDecisionDiagram() ([]ActivityNode, []ActivityEdge) {
-	return []ActivityNode{
-			{ID: "s", Kind: nodeStart},
-			{ID: "d", Kind: nodeDecision, Label: "commit or abandon?", DecidedBy: "user"},
-			{ID: "act", Kind: nodeAction, Label: "do the thing"},
-			{ID: "e", Kind: nodeEnd},
-		}, []ActivityEdge{
-			{From: "s", To: "d"}, {From: "d", To: "act", Guard: "[commit]"}, {From: "d", To: "e", Guard: "[abandon]"}, {From: "act", To: "e"},
-		}
+	nodes := []ActivityNode{
+		{ID: "s", Kind: nodeStart},
+		{ID: "d", Kind: nodeDecision, Label: "commit or abandon?", DecidedBy: "user"},
+		{ID: "act", Kind: nodeAction, Label: "do the thing"},
+		{ID: "e", Kind: nodeEnd},
+	}
+	edges := []ActivityEdge{
+		{From: "s", To: "d"}, {From: "d", To: "act", Guard: "[commit]"}, {From: "d", To: "e", Guard: "[abandon]"}, {From: "act", To: "e"},
+	}
+	return nodes, edges
 }
 
 func TestCC_DecidedByActorStep_Fires(t *testing.T) {
