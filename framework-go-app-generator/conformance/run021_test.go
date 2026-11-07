@@ -190,7 +190,10 @@ func run021Vet(t *testing.T, dir string) {
 type survivor struct{ component, scenario, op string }
 
 // discriminate runs `testgen -discriminate` in the built app dir and returns its survivors. Exit 1
-// with TP-DISCRIMINATE lines is the run's answer, not a failure of the runner.
+// with TP-DISCRIMINATE or TP-BROKEN lines is the run's answer, not a failure of the runner. The
+// built app holds only null implementations, so a scenario that asserts behavior is TP-BROKEN here
+// (it fails against the real subject, which is the null one) and is not nulled; only a scenario the
+// null subject satisfies, such as the vacuous binding, is a survivor.
 func discriminate(t *testing.T, dir string) []survivor {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Minute)
@@ -201,12 +204,17 @@ func discriminate(t *testing.T, dir string) []survivor {
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	out, err := cmd.CombinedOutput()
 	var survivors []survivor
+	broken := 0
 	for _, line := range strings.Split(string(out), "\n") {
-		if f := strings.Fields(line); len(f) == 4 && f[0] == "TP-DISCRIMINATE" {
+		f := strings.Fields(line)
+		switch {
+		case len(f) == 4 && f[0] == "TP-DISCRIMINATE":
 			survivors = append(survivors, survivor{f[1], f[2], f[3]})
+		case len(f) == 3 && f[0] == "TP-BROKEN":
+			broken++ // the built app is a null build: a scenario that asserts behavior fails against it
 		}
 	}
-	if err != nil && len(survivors) == 0 {
+	if err != nil && len(survivors) == 0 && broken == 0 {
 		t.Fatalf("testgen -discriminate: %v\n%s", err, out)
 	}
 	return survivors

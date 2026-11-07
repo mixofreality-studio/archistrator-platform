@@ -115,8 +115,15 @@ func emitNull(buf *bytes.Buffer, iface Interface, meta contractMeta, modulePath 
 	}
 	if iface.Layer == "manager" {
 		// appgen temporal's worker.gen.go registers a Manager only through this method (its
-		// workerManifestSource) and panics at boot without it; a null Manager has no workflows.
-		fmt.Fprintf(buf, "func (%s) WorkerManifest() genWorkerManifest {\n\treturn genWorkerManifest{}\n}\n\n", null)
+		// workerManifestSource) and panics at boot without it. A null Manager has no real workflow, but
+		// it registers one inert one: the scenario replay gate (scenariohost.MainWithWorkflows) exits
+		// before any test when a package registers no workflow, so a Manager that registered none would
+		// leave every scenario of a null build unrunnable and its null-subject discrimination vacuous.
+		pendingImports["go.temporal.io/sdk/workflow"] = ""
+		wf := "null" + iface.Name + "Workflow"
+		fmt.Fprintf(buf, "func (%s) WorkerManifest() genWorkerManifest {\n\treturn genWorkerManifest{Workflows: []genRegisteredWorkflow{{Name: %q, Fn: %s}}}\n}\n\n", null, null, wf)
+		fmt.Fprintf(buf, "// %s is the one workflow %s registers: it starts nothing and returns at once.\n", wf, null)
+		fmt.Fprintf(buf, "func %s(_ workflow.Context) error { return nil }\n\n", wf)
 	}
 	return emitNullBuilders(buf, iface, meta, modulePath, resolver)
 }

@@ -50,8 +50,11 @@ func TestGenerateNulls_EveryShape(t *testing.T) {
 		"internal/manager/boss": {
 			`"example.com/app/internal/resourceaccess/store"`,
 			"func newBossManager(_ store.StoreAccess, _ string) BossManager { return NullBossManager{} }",
-			// RegisterManagerWorker panics at boot unless the manager supplies a manifest.
-			"func (NullBossManager) WorkerManifest() genWorkerManifest {\n\treturn genWorkerManifest{}\n}",
+			// RegisterManagerWorker panics at boot unless the manager supplies a manifest, and the scenario
+			// replay gate exits before any test unless it registers a workflow: the null one is inert.
+			"func (NullBossManager) WorkerManifest() genWorkerManifest {\n\treturn genWorkerManifest{Workflows: []genRegisteredWorkflow{{Name: \"NullBossManager\", Fn: nullBossManagerWorkflow}}}\n}",
+			"func nullBossManagerWorkflow(_ workflow.Context) error { return nil }",
+			`"go.temporal.io/sdk/workflow"`,
 		},
 	} {
 		src := string(got[pkg])
