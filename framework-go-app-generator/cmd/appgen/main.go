@@ -165,21 +165,45 @@ func readConfig(o options) (config, error) {
 // names an unbuilt package fails to compile, which would fail every other component's checks
 // along with it. With managerContracts, a Manager whose package holds only its generated
 // contract stays: its Temporal layer is what the hand-written Manager is built against, so it
-// must exist before the first line of the Manager does.
+// must exist before the first line of the Manager does. A Client whose package holds generated
+// files stays too: REST and MCP machine clients are generated end to end, so that is their
+// built state.
 func wireOnlyBuilt(m *projectmodel.Model, root string, managerContracts bool) {
 	for key, c := range m.Contracts {
 		if c.GoPackage == "" {
 			continue
 		}
-		dir := filepath.Join(root, c.GoPackage)
-		if holdsCode(dir) {
-			continue
+		if !isBuilt(c, filepath.Join(root, c.GoPackage), managerContracts) {
+			delete(m.Contracts, key)
 		}
-		if managerContracts && strings.EqualFold(c.Layer, "manager") && hasGeneratedContract(dir) {
-			continue
-		}
-		delete(m.Contracts, key)
 	}
+}
+
+// isBuilt reports that contract c's package, at dir, is built. A REST or MCP machine client's
+// package is generated end to end, so it never holds hand-written code: its generated files are
+// the package being built.
+func isBuilt(c *projectmodel.Contract, dir string, managerContracts bool) bool {
+	switch {
+	case holdsCode(dir):
+		return true
+	case managerContracts && strings.EqualFold(c.Layer, "manager"):
+		return hasGeneratedContract(dir)
+	case strings.EqualFold(c.Layer, "client"):
+		return holdsGenerated(dir)
+	default:
+		return false
+	}
+}
+
+// holdsGenerated reports that dir holds at least one generated Go file.
+func holdsGenerated(dir string) bool {
+	entries, err := os.ReadDir(dir)
+	if err != nil {
+		return false
+	}
+	return slices.ContainsFunc(entries, func(e os.DirEntry) bool {
+		return !e.IsDir() && strings.HasSuffix(e.Name(), ".gen.go")
+	})
 }
 
 func hasGeneratedContract(dir string) bool {

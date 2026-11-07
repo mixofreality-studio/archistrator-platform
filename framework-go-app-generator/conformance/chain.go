@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -222,6 +223,28 @@ func scaffold(dir, fixture string, raw []byte, platform string) error {
 	return localizeModule(dir, platform)
 }
 
+// replacedModules is every platform module path to point at the checkout: the ones the scaffold's
+// go.mod names, and every module the checkout carries. The generators the app builds against
+// require siblings of their own (method-assets) at versions the checkout has not tagged yet.
+func replacedModules(gomod, platform string) []string {
+	var mods []string
+	for _, line := range strings.Split(gomod, "\n") {
+		f := strings.Fields(line)
+		if len(f) >= 2 && strings.HasPrefix(f[0], platformModulePrefix) && !strings.Contains(f[0], "/cmd/") {
+			mods = append(mods, f[0])
+		}
+	}
+	if entries, err := os.ReadDir(platform); err == nil {
+		for _, e := range entries {
+			if e.IsDir() {
+				mods = append(mods, platformModulePrefix+e.Name())
+			}
+		}
+	}
+	sort.Strings(mods)
+	return slices.Compact(mods)
+}
+
 // localizeModule rewrites the scaffolded go.mod to build against the platform checkout.
 func localizeModule(dir, platform string) error {
 	gomod, err := os.ReadFile(filepath.Join(dir, "go.mod")) // #nosec G304 -- the scaffold just written
@@ -229,15 +252,7 @@ func localizeModule(dir, platform string) error {
 		return err
 	}
 	args := []string{"mod", "edit", "-tool=" + nullgenTool}
-	var mods []string
-	for _, line := range strings.Split(string(gomod), "\n") {
-		f := strings.Fields(line)
-		if len(f) >= 2 && strings.HasPrefix(f[0], platformModulePrefix) && !strings.Contains(f[0], "/cmd/") {
-			mods = append(mods, f[0])
-		}
-	}
-	sort.Strings(mods)
-	for _, m := range mods {
+	for _, m := range replacedModules(string(gomod), platform) {
 		local := filepath.Join(platform, strings.TrimPrefix(m, platformModulePrefix))
 		if _, err := os.Stat(filepath.Join(local, "go.mod")); err != nil { // #nosec G703 -- a sibling of this checkout, named by the scaffold's own go.mod
 			continue // a module the checkout does not carry stays at its pinned release

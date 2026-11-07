@@ -153,6 +153,22 @@ func TestScenarioCompose_ClientConstructorHasRealPolicy(t *testing.T) {
 	}
 }
 
+// TestScenarioCompose_EmitsMachineClientConstructors: the todomvc fixture's REST and MCP client
+// contracts, whose packages hold only generated files, each get a constructor. testgen's
+// client_scenarios.gen_test.go calls these by name, so a model that lacks one fails go vet.
+func TestScenarioCompose_EmitsMachineClientConstructors(t *testing.T) {
+	m, _ := loadConformance(t, "todomvc")
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioCfg)
+	if err != nil {
+		t.Fatalf("EmitScenarioCompose: %v", err)
+	}
+	for _, name := range []string{"NewTodoApiList", "NewTodoMcpServerList"} {
+		if !regexp.MustCompile(`(?m)^func ` + name + `\(t \*testing\.T, h \*scenariohost\.Host\) \*\w+\.Handler \{$`).Match(src) {
+			t.Errorf("compose.gen.go has no machine-client constructor %s", name)
+		}
+	}
+}
+
 // TestScenarioCompose_Golden pins the whole emission for the scenariocompose fixture: an
 // infrastructure-bound ResourceAccess, an arm-less stub one, engines, two Managers (one with
 // settings as dependencies) and an alias collision (engine/billing vs manager/billing).

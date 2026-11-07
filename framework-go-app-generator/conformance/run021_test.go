@@ -43,8 +43,11 @@ func TestConformance_RUN021Proof(t *testing.T) {
 	t.Run("testgen", func(t *testing.T) { run021Testgen(t, raw) })
 
 	var built string
+	// The built tree belongs to the parent test: the subtests after the chain read it, and a
+	// subtest's own TempDir is gone when that subtest returns.
+	chainDir := t.TempDir()
 	t.Run("chain", func(t *testing.T) {
-		dir := t.TempDir()
+		dir := chainDir
 		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
 		defer cancel()
 		if _, err := RunChainOn(ctx, run021Fixture, raw, dir); err != nil {
@@ -55,6 +58,7 @@ func TestConformance_RUN021Proof(t *testing.T) {
 	if built == "" {
 		return
 	}
+	t.Run("vet", func(t *testing.T) { run021Vet(t, built) })
 	t.Run("discriminate", func(t *testing.T) {
 		for _, s := range discriminate(t, built) {
 			if s.component == "listManager" {
@@ -154,6 +158,31 @@ func run021Testgen(t *testing.T, raw []byte) {
 	}
 	if !strings.Contains(string(spec), "toBeChecked(immediate)") {
 		t.Errorf("%s does not assert the checkbox immediately (toBeChecked(immediate)):\n%s", toggle, spec)
+	}
+}
+
+// run021Vet vets the built app, test files included, in the scaffolded module whose platform
+// requirements are replaced by this checkout. The generated client_scenarios.gen_test.go calls
+// scenariocompose.NewTodoApiList / NewTodoMcpServerList: a compose.gen.go that lacks either
+// constructor (the generated-only client packages dropped as unbuilt) fails here.
+func run021Vet(t *testing.T, dir string) {
+	t.Helper()
+	compose, err := os.ReadFile(filepath.Join(dir, "internal", "scenariocompose", "compose.gen.go")) // #nosec G304 -- the chain's own output
+	if err != nil {
+		t.Fatalf("no scenario subject: %v", err)
+	}
+	for _, ctor := range []string{"func NewTodoApiList(", "func NewTodoMcpServerList("} {
+		if !strings.Contains(string(compose), ctor) {
+			t.Errorf("compose.gen.go lacks %s", ctor)
+		}
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, "go", "vet", "./...") // #nosec G204 -- fixed argv
+	cmd.Dir = dir
+	cmd.Env = append(os.Environ(), "GOWORK=off")
+	if out, err := cmd.CombinedOutput(); err != nil {
+		t.Fatalf("go vet ./... over the generated tests: %v\n%s", err, out)
 	}
 }
 
