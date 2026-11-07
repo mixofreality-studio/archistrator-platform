@@ -134,10 +134,12 @@ func TestPlaywright_LayerA_ImmediateUnderLatency(t *testing.T) {
 		"page.route('**/*'",
 		"export function assertNever(",
 		"export async function arrange(",
-		"/__scenariohost/",
 		"X-Dev-Principal",
 		"default:\n      return assertNever(",
 	)
+	// the scenario host's endpoint is never called: the composed server answers every unknown POST
+	// with 405, so a runtime that probed for it would fail a scenario instead of skipping it
+	requireAbsent(t, "runtime.gen.ts", rt, "callHost", "/__scenariohost/")
 }
 
 func TestPlaywright_UncheckAndSelectAreLayerA(t *testing.T) {
@@ -259,16 +261,29 @@ func TestPlaywright_ArrangeOverRESTAndProbes(t *testing.T) {
 	spec := string(out.Generated[shopSpec])
 	requireContains(t, "spec", spec,
 		"await arrange(testInfo, { kind: 'contractCall',",
-		"await arrange(testInfo, { kind: 'advanceClock', duration: '36h' });",
-		"await arrange(testInfo, { kind: 'failNext', component: 'billingManager', operation: 'GetInvoice', errorCode: 'NotFound' });",
-		"await arrange(testInfo, { kind: 'seedResource', resource: 'ordersDB', fixture: {\"rows\":2} });",
 		"await probe(testInfo, { verb: ",
 		"inv-o-1",
+		// the scenario host serves no endpoint yet (the composed server answers an unknown POST with
+		// 405): a scenario that arranges through it is skipped, by name, before it does anything
+		"test.skip(true, 'arrange advanceClock, failNext, seedResource needs the local-profile /__scenariohost endpoint, which no generated server serves yet');",
 	)
-	// arrange runs before the first action, probes after the step's observation
-	if a, n, p := strings.Index(spec, "await arrange("), strings.Index(spec, "page.goto("), strings.Index(spec, "await probe("); a < 0 || a > n || p < n {
-		t.Errorf("order wrong (arrange %d, goto %d, probe %d):\n%s", a, n, p, spec)
+	requireAbsent(t, "spec", spec, "kind: 'advanceClock'", "kind: 'failNext'", "kind: 'seedResource'")
+	// the skip precedes every action and every arrange call; arrange precedes the first action, probes follow it
+	if sk, a, n, p := strings.Index(spec, "test.skip(true"), strings.Index(spec, "await arrange("), strings.Index(spec, "page.goto("), strings.Index(spec, "await probe("); sk < 0 || sk > a || a > n || p < n {
+		t.Errorf("order wrong (skip %d, arrange %d, goto %d, probe %d):\n%s", sk, a, n, p, spec)
 	}
+}
+
+// A scenario arranging only through contract calls is not skipped.
+func TestPlaywright_ContractArrangeAloneIsNotSkipped(t *testing.T) {
+	doc := shopDoc(t)
+	shopBinding(doc)["arrange"] = []any{map[string]any{"kind": "contractCall", "model": map[string]any{
+		"component": "orderManager", "operation": "GetOrder",
+		"inputs": []any{map[string]any{"name": "orderId", "value": lit(json.RawMessage(`"o-1"`))}},
+		"expect": map[string]any{"result": `{"id":"o-1"}`, "errorExpected": false},
+	}}}
+	spec := string(mustGenerate(t, doc).Generated[shopSpec])
+	requireAbsent(t, "spec", spec, "test.skip(true")
 }
 
 func TestPlaywright_ArrangeRefusesWhatHasNoRoute(t *testing.T) {
@@ -281,20 +296,63 @@ func TestPlaywright_ArrangeRefusesWhatHasNoRoute(t *testing.T) {
 	}
 }
 
-// A binding observable is asserted immediately when the actor sees it without waiting on a component:
-// the output the derivation marks Immediate and names the element.
-func TestPlaywright_ImmediateElementsFromActorOutcome(t *testing.T) {
-	design := methodcheck.UIDesignRecord{Screens: []methodcheck.UIScreen{{ID: "s", Route: "/orders", Elements: []methodcheck.UIElement{
-		{ID: "order-done", Role: methodcheck.UIRoleCheckbox, Name: "Done", Repeats: true},
-		{ID: "order-count", Role: methodcheck.UIRoleStatus, Name: "Items left"},
-	}}}}
-	oc := scenario.Outcome{ExpectedOutputs: []scenario.Output{
+// An output the derivation marks Immediate is reported, never matched against element names: the label
+// is narrative, so a label that merely contains an element's name ("Order done is shown" contains the
+// name of order-row, "Order") must not make that element immediate.
+func TestPlaywright_ImmediateOutputIsWarnedNotGuessed(t *testing.T) {
+	st := boundStep{Stim: scenario.Stimulus{ActorOutcome: scenario.Outcome{ExpectedOutputs: []scenario.Output{
 		{Node: "n1", Kind: "sendSignal", Label: "Order done is shown", Immediate: true},
 		{Node: "n2", Kind: "sendSignal", Label: "Items left updated", Immediate: false},
-	}}
-	got := immediateElements(oc, design)
-	if !got["order-done"] || got["order-count"] {
-		t.Errorf("immediate elements = %v, want only order-done", got)
+	}}}}
+	st.Bind.Seq = 1
+	got := immediateWarnings("shopClient", "browse-orders-P1", st)
+	if len(got) != 1 || !strings.Contains(got[0], `"Order done is shown"`) || !strings.Contains(got[0], "shopClient browse-orders-P1 step 1") {
+		t.Errorf("warnings = %q, want one naming the Immediate output only", got)
+	}
+}
+
+func TestPlaywright_ElementNamedLikeAnImmediateLabelIsNotImmediate(t *testing.T) {
+	// order-row is named "Order"; whatever the labels of the derived outputs say, an observable on it
+	// is asserted under the default timeout, because only the action determines immediacy.
+	out, err := generateShopStep(t, []string{act("click", tgt("orders-tab"))}, `[`+act("visible", tgt("order-row"))+`]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := string(out.Generated[shopSpec])
+	requireContains(t, "spec", spec, "await expect(locate(page, 'order-row')).toBeVisible();")
+	requireAbsent(t, "spec", spec, "toBeVisible(immediate)", "immediate }")
+}
+
+// The imports name what the body used, not what its text happens to contain.
+func TestPlaywright_ImportsFollowUseNotText(t *testing.T) {
+	out, err := generateShopStep(t, []string{act("click", tgt("orders-tab"))}, `[`+act("text", `{"target":{"element":"order-count"},"text":"expect( locate( "}`)+`]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requireContains(t, "spec", string(out.Generated[shopSpec]), "import { test, expect } from '@playwright/test';", "import { locate } from './elements.gen';")
+
+	// a skipped-by-arrange-only spec that asserts through navigate/url uses neither locate nor a locator-free expect import
+	out, err = generateShopStep(t, []string{act("navigate", `{"route":"/orders"}`)}, `[`+act("url", `{"route":"/orders"}`)+`]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := string(out.Generated[shopSpec])
+	requireContains(t, "spec", spec, "import { test, expect } from '@playwright/test';")
+	requireAbsent(t, "spec", spec, "elements.gen")
+}
+
+func TestPlaywright_ContainerLoopRefused(t *testing.T) {
+	doc := shopDoc(t)
+	els := doc["phaseArtifacts"].(map[string]any)["uiDesign"].(map[string]any)["shopClient"].(map[string]any)["screens"].([]any)[0].(map[string]any)["elements"].([]any)
+	for _, e := range els {
+		m := e.(map[string]any)
+		if m["id"] == "orders-list" {
+			m["within"] = "order-row" // order-row is within orders-list
+		}
+	}
+	_, err := generateDoc(t, doc)
+	if err == nil || !strings.Contains(err.Error(), "loop") || !strings.Contains(err.Error(), "orders-list within order-row within orders-list") {
+		t.Errorf("err %v, want a refusal naming the container loop", err)
 	}
 }
 

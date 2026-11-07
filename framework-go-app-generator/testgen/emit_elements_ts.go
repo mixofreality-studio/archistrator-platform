@@ -2,6 +2,7 @@ package testgen
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
@@ -71,4 +72,29 @@ func withinField(e methodcheck.UIElement) string {
 		return ""
 	}
 	return "within: " + tsStr(e.Within) + ", "
+}
+
+// checkWithin refuses a design whose containers loop (a within b, b within a): `locate` resolves an
+// element by first locating its container, so a loop would recurse for ever at run time. methodcheck's
+// UID-WITHIN rejects only a self-reference and a container off the screen.
+func checkWithin(d methodcheck.UIDesignRecord) error {
+	byID := map[string]methodcheck.UIElement{}
+	for _, e := range designElements(d) {
+		byID[e.ID] = e
+	}
+	for _, e := range designElements(d) {
+		chain := []string{e.ID}
+		for cur := e; cur.Within != ""; {
+			next, ok := byID[cur.Within]
+			if !ok {
+				break // contained by an element the design lacks: methodcheck's finding, not a loop
+			}
+			if i := slices.Index(chain, next.ID); i >= 0 {
+				return fmt.Errorf("uiDesign elements contain each other in a loop (%s): an element is located inside its container, so the loop can never be located", strings.Join(append(chain[i:], next.ID), " within "))
+			}
+			chain = append(chain, next.ID)
+			cur = next
+		}
+	}
+	return nil
 }

@@ -72,11 +72,9 @@ export async function arrange(testInfo: TestInfo, call: ArrangeCall): Promise<vo
     case 'contractCall':
       return callContract(testInfo, call, 'arrange');
     case 'advanceClock':
-      return callHost(testInfo, call.kind, { duration: call.duration });
     case 'failNext':
-      return callHost(testInfo, call.kind, { component: call.component, operation: call.operation, errorCode: call.errorCode });
     case 'seedResource':
-      return callHost(testInfo, call.kind, { resource: call.resource, fixture: call.fixture });
+      return skipUntilScenarioHost(call.kind);
     default:
       return assertNever(call);
   }
@@ -178,16 +176,13 @@ async function callContract(testInfo: TestInfo, call: ContractCall, label: strin
 }
 
 /**
- * Asks the scenario host the server runs (a local-profile-only endpoint) to arrange state. A
- * server that does not serve it cannot be arranged, and the scenario is skipped with that reason
- * instead of running against state it did not set up.
+ * A scenario that arranges the clock, a failing operation or a seeded resource needs the
+ * local-profile /__scenariohost endpoint, which no generated server serves yet (the composed server
+ * answers every unknown POST with 405, so the endpoint cannot be probed for: the scenario is skipped
+ * up front, by name, instead of being run against state it did not set up). testgen emits the same
+ * skip into the spec ahead of every action; this is the runtime's own answer if an arrange call of
+ * one of these kinds reaches it. Plan 3 adds the endpoint and replaces both.
  */
-async function callHost(testInfo: TestInfo, kind: string, body: Record<string, unknown>): Promise<void> {
-  const url = new URL('/__scenariohost/' + kind, baseURL(testInfo));
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/json', ...headers() }, body: JSON.stringify(body) });
-  if (res.status === 404) {
-    test.skip(true, 'arrange ' + kind + ' needs the local-profile /__scenariohost endpoint, which this server does not serve');
-    return;
-  }
-  expect(res.ok, 'arrange ' + kind + ' failed: ' + (await res.text())).toBe(true);
+export function skipUntilScenarioHost(kind: string): void {
+  test.skip(true, 'arrange ' + kind + ' needs the local-profile /__scenariohost endpoint, which no generated server serves yet');
 }
