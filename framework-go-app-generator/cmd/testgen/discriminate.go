@@ -55,8 +55,8 @@ func (ranFailed) isRunOutcome()       {}
 func (ranInconclusive) isRunOutcome() {}
 
 // classify reads one run of test. Only a run that executed the scenario counts: a package that does
-// not build, a test that skipped (for instance under -short, or with no substrate), a -run that
-// matched nothing and a test binary that exited before reporting the test prove nothing either way.
+// not build, a test that skipped (for instance under -short, or with no substrate), a package with
+// no test files (`[no test files]`, exit 0), a -run that matched nothing and a test binary that exited before reporting the test prove nothing either way.
 // In particular a bare `FAIL <package>` is not a failed scenario: it is what a TestMain that exits
 // non-zero prints before any test ran, so a failure needs the test's own `--- FAIL:` line.
 func classify(output string, err error, test string) runOutcome {
@@ -65,6 +65,8 @@ func classify(output string, err error, test string) runOutcome {
 		return ranInconclusive{"the package does not build"}
 	case strings.Contains(output, "no tests to run"):
 		return ranInconclusive{"no test matched"}
+	case strings.Contains(output, "[no test files]"):
+		return ranInconclusive{"the package has no test files (go test exits 0 without running anything)"}
 	case strings.Contains(output, "--- SKIP"):
 		return ranInconclusive{"the scenario skipped itself"}
 	case err == nil:

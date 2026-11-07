@@ -17,11 +17,20 @@
 //	-discriminate
 //	          run the null-subject discrimination instead of writing: for every Go
 //	          (scenario, stimulus operation) pair, re-run the scenario's generated test
-//	          with AIARCH_NULL_OPS naming that operation. A run that still passes is a
-//	          survivor: it is printed as `TP-DISCRIMINATE <component> <scenario> <op>` and
-//	          the exit status is 1. Web and machine-client scenarios need the booted
-//	          server (plan 3) and are announced as skipped. Run it on a current tree
-//	          (-check first); it does not write.
+//	          with AIARCH_NULL_OPS naming that operation. Each scenario is first run
+//	          against its real subject (the pre-run): one that does not pass there is
+//	          printed as `TP-BROKEN <component> <scenario>`, is never nulled (its null
+//	          runs would fail for the wrong reason and prove nothing) and makes the exit
+//	          status 1. A scenario that passes is then run once per stimulus operation
+//	          with that operation nulled; a run that still passes is a survivor, printed
+//	          as `TP-DISCRIMINATE <component> <scenario> <op>`, and the exit status is 1.
+//	          The last line is `discriminate: N scenario(s), M null run(s), S survivor(s),
+//	          B broken`. A run that did not execute the scenario (the package does not
+//	          build, the test skipped, no test matched, `[no test files]` with exit 0, or
+//	          the test binary died before reporting) is inconclusive: it is the tool's
+//	          error (exit 1, no survivor or broken line), never a kill or a pass. Web and
+//	          machine-client scenarios need the booted server (plan 3) and are announced
+//	          as skipped. Run it on a current tree (-check first); it does not write.
 //
 // Without -check it rewrites every generated file (nothing testgen emits is agent-owned: a
 // scenario's subject, probes and arrange calls, and a browser spec's locators, are all

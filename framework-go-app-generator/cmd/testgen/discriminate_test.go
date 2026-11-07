@@ -227,6 +227,36 @@ func TestDiscriminate_PackageThatCannotStartIsNotAKill(t *testing.T) {
 	}
 }
 
+// `go test` prints `? pkg [no test files]` and exits 0 for a package that holds no test file: the
+// scenario was not run. That is a run that proved nothing, not a pass (a pass would let a package
+// whose generated tests were never emitted look like a scenario the real subject satisfies, and a
+// nulled run would then count it a survivor for no reason).
+func TestDiscriminate_NoTestFilesIsInconclusive(t *testing.T) {
+	const noTests = "?   \texample.com/app/server/internal/manager/billing\t[no test files]\n"
+	if _, ok := classify(noTests, nil, "TestScenario_x").(ranInconclusive); !ok {
+		t.Fatalf("classify(no test files, exit 0) = %T, want ranInconclusive", classify(noTests, nil, "TestScenario_x"))
+	}
+	for _, when := range []string{"real", "nulled"} {
+		t.Run(when, func(t *testing.T) {
+			args := discriminateArgs(t)
+			r := &recorder{answer: func(nullOps, test string) (string, error) {
+				if (nullOps == "") == (when == "real") {
+					return noTests, nil
+				}
+				return passedRun(test)
+			}}
+			var out, errOut bytes.Buffer
+			err := runWith(args, &out, &errOut, r.run)
+			if err == nil || errors.Is(err, errSurvivors) || errors.Is(err, errBroken) {
+				t.Fatalf("err = %v, want an inconclusive-run error", err)
+			}
+			if !strings.Contains(err.Error(), "no test files") {
+				t.Errorf("the error does not say the package has no test files: %v", err)
+			}
+		})
+	}
+}
+
 // The web half is skipped with a printed notice until Plan 3 boots the server.
 func TestDiscriminate_WebHalfIsSkippedWithNotice(t *testing.T) {
 	args := discriminateArgs(t)
