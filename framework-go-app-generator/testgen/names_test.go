@@ -81,12 +81,13 @@ func TestGenerate_SharedPackageInfixesTheInterface(t *testing.T) {
 			t.Errorf("shared generated file lacks %q:\n%s", want, src)
 		}
 	}
-	if len(out.HooksOnce) != 1 { // the web client's hooks.ts only
-		t.Errorf("a shared Go package gets no hooks file: %v", keys(out.HooksOnce))
+	for p := range out.Generated {
+		if strings.Contains(p, "hooks") {
+			t.Errorf("a shared Go package gets no hooks file: %s", p)
+		}
 	}
 	root := t.TempDir()
 	writeAll(t, root, out.Generated)
-	writeAll(t, root, out.HooksOnce)
 	msgs, err := Drift(root, out)
 	if err != nil {
 		t.Fatal(err)

@@ -26,23 +26,52 @@ type restRoute struct{ Verb, Path string }
 // managerRoutes is every Manager operation's route, by its client op name. It reads the same route
 // planner the handlers are generated from, so a test cannot name a route the handler does not mount.
 func managerRoutes(projectJSON []byte) (map[string]restRoute, error) {
+	routes := map[string]restRoute{}
+	err := eachManagerPlan(projectJSON, func(_ string, parsed *projectmodel.Doc, plans []httpgen.OpPlan) {
+		for _, p := range plans {
+			routes[parsed.ManagerBase()+p.Name] = restRoute{Verb: p.Verb, Path: p.PathTemplate}
+		}
+	})
+	return routes, err
+}
+
+// componentRoutes is every Manager operation's route, by the contract's key and the operation's
+// name: the route a generated browser test calls to arrange state or probe an effect. It reads
+// the same route planner as managerRoutes.
+func componentRoutes(projectJSON []byte) (map[string]map[string]restRoute, error) {
+	routes := map[string]map[string]restRoute{}
+	err := eachManagerPlan(projectJSON, func(key string, _ *projectmodel.Doc, plans []httpgen.OpPlan) {
+		routes[key] = map[string]restRoute{}
+		for _, p := range plans {
+			routes[key][p.Name] = restRoute{Verb: p.Verb, Path: p.PathTemplate}
+		}
+	})
+	return routes, err
+}
+
+// eachManagerPlan plans the routes of every Manager contract of the document, in key order.
+func eachManagerPlan(projectJSON []byte, visit func(key string, parsed *projectmodel.Doc, plans []httpgen.OpPlan)) error {
 	var doc struct {
 		ServiceContracts map[string]json.RawMessage `json:"serviceContracts"`
 	}
 	if err := json.Unmarshal(projectJSON, &doc); err != nil {
-		return nil, fmt.Errorf("testgen: %w", err)
+		return fmt.Errorf("testgen: %w", err)
 	}
-	routes := map[string]restRoute{}
-	for key, raw := range doc.ServiceContracts {
-		if err := addManagerRoutes(routes, raw); err != nil {
-			return nil, fmt.Errorf("testgen: contract %s: %w", key, err)
+	for _, key := range sortedKeys(doc.ServiceContracts) {
+		parsed, plans, err := planManager(doc.ServiceContracts[key])
+		if err != nil {
+			return fmt.Errorf("testgen: contract %s: %w", key, err)
+		}
+		if parsed != nil {
+			visit(key, parsed, plans)
 		}
 	}
-	return routes, nil
+	return nil
 }
 
-// addManagerRoutes adds one contract's routes, when it is a Manager's.
-func addManagerRoutes(routes map[string]restRoute, raw json.RawMessage) error {
+// planManager plans one contract's routes when it is a Manager's; a contract of any other
+// layer plans nothing (a nil document).
+func planManager(raw json.RawMessage) (*projectmodel.Doc, []httpgen.OpPlan, error) {
 	var meta struct {
 		Layer     string `json:"layer"`
 		Interface struct {
@@ -50,23 +79,20 @@ func addManagerRoutes(routes map[string]restRoute, raw json.RawMessage) error {
 		} `json:"interface"`
 	}
 	if err := json.Unmarshal(raw, &meta); err != nil {
-		return err
+		return nil, nil, err
 	}
 	if !strings.EqualFold(meta.Layer, "manager") && !strings.EqualFold(meta.Interface.Layer, "manager") {
-		return nil
+		return nil, nil, nil
 	}
 	parsed, err := projectmodel.Parse(raw)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
 	plans, err := httpgen.PlanOps(parsed)
 	if err != nil {
-		return err
+		return nil, nil, err
 	}
-	for _, p := range plans {
-		routes[parsed.ManagerBase()+p.Name] = restRoute{Verb: p.Verb, Path: p.PathTemplate}
-	}
-	return nil
+	return parsed, plans, nil
 }
 
 // transportHelpers is the code under toolSession for the plan's dialect.

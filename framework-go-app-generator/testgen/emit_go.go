@@ -261,13 +261,19 @@ func (g *goEmit) targetFor(component string) (target, error) {
 // findContract resolves a component name to its contract: the key exactly, then
 // under scenario.Normalize (the derivation's own fold).
 func (g *goEmit) findContract(component string) (string, methodcheck.ServiceContract, bool) {
-	if sc, ok := g.contracts[component]; ok {
+	return findContractIn(g.contracts, component)
+}
+
+// findContractIn resolves a component name among contracts: the key exactly, then under
+// scenario.Normalize.
+func findContractIn(contracts map[string]methodcheck.ServiceContract, component string) (string, methodcheck.ServiceContract, bool) {
+	if sc, ok := contracts[component]; ok {
 		return component, sc, true
 	}
 	want := scenario.Normalize(component)
-	for _, key := range sortedKeys(g.contracts) {
+	for _, key := range sortedKeys(contracts) {
 		if scenario.Normalize(key) == want {
-			return key, g.contracts[key], true
+			return key, contracts[key], true
 		}
 	}
 	return "", methodcheck.ServiceContract{}, false

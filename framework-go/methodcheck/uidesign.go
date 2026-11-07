@@ -68,6 +68,11 @@ func findDesign(p Project, surface string) (UIDesignRecord, bool) {
 	return UIDesignRecord{}, false
 }
 
+// FindUIDesign resolves a surface (a test-plan key or a contract's component) to its recorded
+// UI design, as the TP-UI-* rules do: the uiDesign key or the record's own surface, under
+// scenario.Normalize equality. The Playwright emitter locates its elements through it.
+func FindUIDesign(p Project, surface string) (UIDesignRecord, bool) { return findDesign(p, surface) }
+
 // nameOptional reports the roles that are located by structure, not by an accessible name.
 func nameOptional(r UIRole) bool {
 	switch r {

@@ -41,11 +41,9 @@ func planBinding(t *testing.T, doc map[string]any, component, id string) map[str
 
 func TestGo_NoHooksFileEmitted(t *testing.T) {
 	out := generate(t)
-	for _, files := range []map[string][]byte{out.Generated, out.HooksOnce} {
-		for p := range files {
-			if strings.HasSuffix(p, "_hooks_test.go") {
-				t.Errorf("a Go hooks file was emitted: %s", p)
-			}
+	for p := range out.Generated {
+		if strings.HasSuffix(p, "_hooks_test.go") {
+			t.Errorf("a Go hooks file was emitted: %s", p)
 		}
 	}
 	src := string(out.Generated[billingGen])
@@ -375,7 +373,7 @@ func TestMCP_NoPermitAll(t *testing.T) {
 			t.Errorf("missing %q in\n%s", want, src)
 		}
 	}
-	if _, ok := out.HooksOnce[toolsHooks]; ok {
+	if _, ok := out.Generated[toolsHooks]; ok {
 		t.Error("an MCP client gets no hooks file")
 	}
 }

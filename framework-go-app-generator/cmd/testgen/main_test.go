@@ -10,11 +10,12 @@ import (
 )
 
 // TestRun_WriteThenCheck drives the CLI end to end against the testgen
-// fixture: a first run writes the generated files (and the web client's
-// once-emitted hooks.ts) and reports them; a check is then silent; a hand edit
-// to a generated file, a hooks file nothing owns any more and a stale generated
-// file are reported and exit non-zero; a rerun rewrites the generated file,
-// leaves the agent-owned hooks.ts alone, and prunes the stale generated file.
+// fixture: a first run writes the generated files (the web client's element
+// inventory and runtime among them; no hooks file) and reports them; a check is
+// then silent; a hand edit to a generated file, a hooks file nothing emits any
+// more and a stale generated file are reported and exit non-zero; a rerun
+// rewrites the generated file, leaves the agent-owned hooks files alone, and
+// prunes the stale generated file.
 func TestRun_WriteThenCheck(t *testing.T) {
 	root := t.TempDir()
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/app/server\n\ngo 1.25\n"), 0o600); err != nil {
@@ -28,11 +29,15 @@ func TestRun_WriteThenCheck(t *testing.T) {
 		t.Fatalf("first run: %v\n%s", err, errOut.String())
 	}
 	gen := filepath.Join(root, "internal", "manager", "billing", "manager_scenarios.gen_test.go")
-	tsHooks := filepath.Join(root, "uitests", "generated", "shopClient", "hooks.ts")
-	for _, p := range []string{gen, tsHooks} {
+	web := filepath.Join(root, "uitests", "generated", "shopClient")
+	for _, p := range []string{gen, filepath.Join(web, "elements.gen.ts"), filepath.Join(web, "runtime.gen.ts"), filepath.Join(web, "surface.spec.gen.ts")} {
 		if _, err := os.Stat(p); err != nil {
 			t.Fatalf("first run did not write %s: %v", p, err)
 		}
+	}
+	// A web surface has no agent-owned file either: no hooks.ts is written beside its specs.
+	if _, err := os.Stat(filepath.Join(web, "hooks.ts")); !os.IsNotExist(err) {
+		t.Errorf("a hooks.ts was written: %v", err)
 	}
 	// A Go scenario has no agent-owned file: no hooks file is written beside it.
 	if _, err := os.Stat(filepath.Join(root, "internal", "manager", "billing", "manager_hooks_test.go")); !os.IsNotExist(err) {
@@ -50,11 +55,9 @@ func TestRun_WriteThenCheck(t *testing.T) {
 	if err := os.WriteFile(gen, []byte("// edited\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	edited, err := os.ReadFile(tsHooks)
-	if err != nil {
-		t.Fatal(err)
-	}
-	edited = append(edited, []byte("\n// agent edit\n")...)
+	// A hooks.ts beside a current surface is a leftover of the generation that seeded it.
+	tsHooks := filepath.Join(web, "hooks.ts")
+	edited := []byte("export const hooks = {}; // agent edit\n")
 	if err := os.WriteFile(tsHooks, edited, 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -80,7 +83,7 @@ func TestRun_WriteThenCheck(t *testing.T) {
 	}
 
 	out.Reset()
-	err = run(append(args, "-check"), &out, &errOut)
+	err := run(append(args, "-check"), &out, &errOut)
 	if !errors.Is(err, errDrift) {
 		t.Fatalf("check must report drift, got err=%v", err)
 	}
@@ -89,6 +92,7 @@ func TestRun_WriteThenCheck(t *testing.T) {
 		"orphan generated file internal/manager/gone/manager_scenarios.gen_test.go", // no plan produces it any more; a write run would prune it
 		"orphan hooks file internal/manager/billing/manager_hooks_test.go",          // a Go hooks file nothing emits any more; agent-owned, so reported, never pruned
 		"orphan hooks file uitests/generated/goneClient/hooks.ts",
+		"orphan hooks file uitests/generated/shopClient/hooks.ts", // nothing emits a hooks.ts any more, current surface or not
 	} {
 		if !strings.Contains(out.String(), want) {
 			t.Errorf("check output lacks %q:\n%s", want, out.String())
@@ -109,7 +113,7 @@ func TestRun_WriteThenCheck(t *testing.T) {
 	if err != nil || !bytes.Equal(after, edited) {
 		t.Errorf("rerun must leave the agent-owned hooks.ts alone")
 	}
-	for _, p := range []string{staleHooks, staleTSHooks} {
+	for _, p := range []string{staleHooks, staleTSHooks, tsHooks} {
 		if _, err := os.Stat(p); err != nil {
 			t.Errorf("rerun must not prune the orphan hooks file %s: %v", p, err)
 		}

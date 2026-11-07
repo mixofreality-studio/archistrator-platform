@@ -955,6 +955,73 @@
           }
         }
       }
+    },
+    "uiDesign": {
+      "shopClient": {
+        "surface": "shopClient",
+        "screens": [
+          {
+            "id": "orders",
+            "route": "/orders",
+            "elements": [
+              {
+                "id": "orders-tab",
+                "role": "button",
+                "name": "Orders",
+                "repeats": false
+              },
+              {
+                "id": "orders-list",
+                "role": "list",
+                "name": "",
+                "repeats": false
+              },
+              {
+                "id": "order-row",
+                "role": "listitem",
+                "name": "Order",
+                "within": "orders-list",
+                "repeats": true
+              },
+              {
+                "id": "order-done",
+                "role": "checkbox",
+                "name": "Done",
+                "within": "order-row",
+                "repeats": true
+              },
+              {
+                "id": "order-flag",
+                "role": "checkbox",
+                "name": "Flag",
+                "within": "order-row",
+                "repeats": true
+              },
+              {
+                "id": "order-title",
+                "role": "heading",
+                "name": "Order title",
+                "within": "order-row",
+                "repeats": true
+              },
+              {
+                "id": "order-edit",
+                "role": "textbox",
+                "name": "Edit order",
+                "within": "order-row",
+                "repeats": true
+              },
+              {
+                "id": "order-count",
+                "role": "status",
+                "name": "Items left",
+                "repeats": false
+              }
+            ]
+          }
+        ],
+        "content": "Orders screen."
+      }
     }
   },
   "activityExecution": {

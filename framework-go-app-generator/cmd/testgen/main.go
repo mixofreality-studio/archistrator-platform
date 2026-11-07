@@ -23,16 +23,16 @@
 //	          server (plan 3) and are announced as skipped. Run it on a current tree
 //	          (-check first); it does not write.
 //
-// Without -check it rewrites every generated file, writes the web client's
-// hooks.ts only when absent (a Go scenario has no hooks file: its subject, probes
-// and arrange calls are all generated), and prunes generated files
-// (*_scenarios.gen_test.go and null.gen_test.go under root; *.spec.gen.ts, playwright.config.gen.ts,
+// Without -check it rewrites every generated file (nothing testgen emits is agent-owned: a
+// scenario's subject, probes and arrange calls, and a browser spec's locators, are all
+// generated) and prunes generated files (*_scenarios.gen_test.go and null.gen_test.go under
+// root; *.spec.gen.ts, elements.gen.ts, runtime.gen.ts, playwright.config.gen.ts,
 // reporter.gen.ts under the Playwright directory) that the current plan no longer
-// produces. With -check it prints one line per drifted or stale file, per missing
-// hooks.ts, per orphan generated file a write run would prune, and per orphan
-// hooks file (a Go *_hooks_test.go, which nothing emits any more, or a hooks.ts
-// whose generated sibling the plan no longer produces; agent-owned, so reported
-// but never pruned), then exits 1.
+// produces. With -check it prints one line per drifted or stale file, per orphan
+// generated file a write run would prune, and per orphan hooks file (any Go
+// *_hooks_test.go or hooks.ts: nothing emits either any more, so every one is a
+// leftover of an earlier generation; agent-owned, so reported but never pruned),
+// then exits 1.
 package main
 
 import (
@@ -137,12 +137,12 @@ func modulePath(goMod string) (string, error) {
 }
 
 // check reports every way the tree differs from what a write run would
-// leave: Drift over the generated and hooks files, the generated files a
-// write run would prune (spec §5.3: any diff in generated files fails), and
-// the hooks files whose generated sibling the plan no longer produces — a
-// write run leaves those alone (agent-owned), but a Go one still references
-// the input types its pruned sibling declared, so the package no longer
-// compiles and the break must be attributable.
+// leave: Drift over the generated files, the generated files a write run
+// would prune (spec §5.3: any diff in generated files fails), and every hooks
+// file still on disk — nothing emits one any more, so each is a leftover of an
+// earlier generation. A write run leaves those alone (agent-owned), but a Go
+// one still references the input types its pruned sibling declared, so the
+// package no longer compiles and the break must be attributable.
 func check(o options, gen testgen.Output, out io.Writer) error {
 	msgs, err := testgen.Drift(o.root, gen)
 	if err != nil {
@@ -155,7 +155,7 @@ func check(o options, gen testgen.Output, out io.Writer) error {
 	for _, p := range orphans {
 		msgs = append(msgs, "orphan generated file "+p)
 	}
-	orphanHooks, err := orphanHooksFiles(o, gen)
+	orphanHooks, err := orphanHooksFiles(o)
 	if err != nil {
 		return err
 	}
@@ -180,16 +180,13 @@ func say(w io.Writer, line string) error {
 	return err
 }
 
-// write rewrites every generated file, writes absent hooks files, and prunes
-// generated files the plan no longer produces.
+// write rewrites every generated file and prunes generated files the plan no
+// longer produces.
 func write(o options, gen testgen.Output, out io.Writer) error {
 	for p, b := range gen.Generated {
 		if err := writeFile(o.root, p, b); err != nil {
 			return err
 		}
-	}
-	if err := writeHooks(o.root, gen.HooksOnce, out); err != nil {
-		return err
 	}
 	pruned, err := prune(o, gen)
 	if err != nil {
@@ -201,23 +198,6 @@ func write(o options, gen testgen.Output, out io.Writer) error {
 		}
 	}
 	return say(out, fmt.Sprintf("wrote %d generated file(s)", len(gen.Generated)))
-}
-
-// writeHooks writes each hooks file that is absent; an existing one is the
-// agent's and is left alone.
-func writeHooks(root string, hooks map[string][]byte, out io.Writer) error {
-	for p, b := range hooks {
-		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(p))); err == nil {
-			continue
-		}
-		if err := writeFile(root, p, b); err != nil {
-			return err
-		}
-		if err := say(out, "wrote hooks "+p); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 func writeFile(root, p string, b []byte) error {
@@ -252,12 +232,12 @@ func orphanGenerated(o options, gen testgen.Output) ([]string, error) {
 	return orphans, nil
 }
 
-// orphanHooksFiles lists, root-relative with slashes, the hooks files the plan
-// no longer pairs a generated file with: Go hooks files anywhere under root,
-// hooks.ts under the uitests directory. They are reported by -check and
-// never pruned: the agent owns them.
-func orphanHooksFiles(o options, gen testgen.Output) ([]string, error) {
-	keep := func(rel string) bool { _, ok := gen.HooksOnce[filepath.ToSlash(rel)]; return ok }
+// orphanHooksFiles lists, root-relative with slashes, every hooks file on disk:
+// Go hooks files anywhere under root, hooks.ts under the uitests directory.
+// Nothing emits a hooks file, so none is current; they are reported by -check
+// and never pruned: the agent owns them.
+func orphanHooksFiles(o options) ([]string, error) {
+	keep := func(string) bool { return false }
 	goStale, err := staleFiles(o.root, o.root, isGoHooksFile, keep)
 	if err != nil {
 		return nil, err
@@ -335,5 +315,6 @@ func isGoHooksFile(name string) bool { return strings.HasSuffix(name, "_hooks_te
 func isPlaywrightHooksFile(name string) bool { return name == "hooks.ts" }
 
 func isPlaywrightGenFile(name string) bool {
-	return strings.HasSuffix(name, ".spec.gen.ts") || name == "playwright.config.gen.ts" || name == "reporter.gen.ts"
+	return strings.HasSuffix(name, ".spec.gen.ts") || name == "playwright.config.gen.ts" || name == "reporter.gen.ts" ||
+		name == "elements.gen.ts" || name == "runtime.gen.ts"
 }

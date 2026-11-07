@@ -110,17 +110,22 @@ func TestPlaywrightDialect_CheckboxStepGolden(t *testing.T) {
 	if !strings.Contains(spec, want) {
 		t.Fatalf("missing step header in\n%s", spec)
 	}
+	// each action is followed by what it changes in place (Layer A, asserted at once); the step's own
+	// observables come after the last action, under the default timeout
 	golden := `  await page.goto('/orders');
-  await page.getByTestId('order-done').check();
-  await page.getByTestId('order-flag').uncheck();
-  await page.getByTestId('order-title').dblclick();
-  await page.getByTestId('order-edit').fill('rename');
-  await page.getByTestId('order-edit').press('Enter');
-  await page.getByTestId('order-row').hover();
-  await expect(page.getByTestId('order-done')).toBeChecked();
-  await expect(page.getByTestId('order-flag')).not.toBeChecked();
-  await expect(page.getByTestId('order-count')).toHaveText('1 item left');
-  await expect(page.getByTestId('order-edit')).toHaveText('');
+  await locate(page, 'order-done').check();
+  await expect(locate(page, 'order-done')).toBeChecked(immediate);
+  await locate(page, 'order-flag').uncheck();
+  await expect(locate(page, 'order-flag')).not.toBeChecked(immediate);
+  await locate(page, 'order-title').dblclick();
+  await locate(page, 'order-edit').fill('rename');
+  await expect(locate(page, 'order-edit')).toHaveValue('rename', immediate);
+  await locate(page, 'order-edit').press('Enter');
+  await locate(page, 'order-row').hover();
+  await expect(locate(page, 'order-done')).toBeChecked();
+  await expect(locate(page, 'order-flag')).not.toBeChecked();
+  await expect(locate(page, 'order-count')).toHaveText('1 item left');
+  await expect(locate(page, 'order-edit')).toHaveText('');
 `
 	if !strings.Contains(spec, golden) {
 		t.Errorf("spec does not carry the golden step:\n%s\nwant:\n%s", spec, golden)

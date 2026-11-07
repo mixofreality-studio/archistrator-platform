@@ -1,94 +1,355 @@
 package testgen
 
 import (
+	"bytes"
+	_ "embed" // tsRuntimeSource
 	"encoding/json"
 	"fmt"
 	"path"
 	"regexp"
+	"slices"
 	"strings"
+	"time"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
 
-// emitPlaywright emits one client component's Playwright tests under
-// <UITestsDir>/<component>/: a spec per binding, the generated config and
-// results reporter, and the once-emitted hooks.ts. The emitter is a function
-// over the projected scenario + binding JSON only; nothing of the Go emitter
-// is needed here.
-func emitPlaywright(out *Output, cfg Config, plan componentPlan) error {
+// tsRuntimeSource is the runtime every generated spec of a surface imports (installLatency, immediate,
+// arrange, probe, assertNever): one source, type-checked on its own, copied unchanged beside the specs.
+//
+//go:embed tsruntime/runtime.ts
+var tsRuntimeSource string
+
+// emitPlaywright emits one web client's Playwright tests under <UITestsDir>/<component>/. Nothing is
+// agent-owned and nothing in a spec is chosen by an agent but the typed record:
+//
+//   - elements.gen.ts: the UI design's inventory and `locate`, the role/name locator of every element;
+//   - runtime.gen.ts: the shared runtime (latency, immediacy, arrange, probe);
+//   - surface.spec.gen.ts: every element the design names is on its screen, checked before any scenario;
+//   - <scenario>.spec.gen.ts: one spec per binding;
+//   - the generated config and results reporter.
+func emitPlaywright(out *Output, cfg Config, web webEnv, plan componentPlan) error {
 	dir := path.Join(cfg.UITestsDir, plan.Key)
+	design := methodcheck.UIDesignRecord{Surface: plan.Key}
+	if plan.Design != nil {
+		design = *plan.Design
+	}
 	for _, bs := range plan.Scenarios {
-		spec, err := playwrightSpec(plan, bs)
+		if plan.Design == nil && bs.Binding.Skip == nil && len(bs.Steps) > 0 {
+			return fmt.Errorf("testgen: %s %s: no uiDesign is recorded for the surface, so no element can be located: record its UI design (screens and elements) first", plan.Key, bs.Scenario.ID)
+		}
+		spec, err := playwrightSpec(plan, bs, design, web)
 		if err != nil {
 			return fmt.Errorf("testgen: %s %s: %w", plan.Key, bs.Scenario.ID, err)
 		}
 		out.Generated[path.Join(dir, bs.Scenario.ID+".spec.gen.ts")] = []byte(spec)
 	}
+	out.Generated[path.Join(dir, "elements.gen.ts")] = []byte(elementsTS(plan.Key, design))
+	out.Generated[path.Join(dir, "runtime.gen.ts")] = []byte(genHeader + "\n" + tsRuntimeSource)
+	out.Generated[path.Join(dir, "surface.spec.gen.ts")] = []byte(surfaceSpecTS(plan.Key, design))
 	out.Generated[path.Join(dir, "playwright.config.gen.ts")] = []byte(playwrightConfig(playwrightResultsDir(plan.Key)))
 	out.Generated[path.Join(dir, "reporter.gen.ts")] = []byte(playwrightReporter)
-	out.HooksOnce[path.Join(dir, "hooks.ts")] = []byte(playwrightHooks(plan))
 	return nil
 }
 
-// playwrightSpec is one scenario's spec: the hooks' before, then per step the
-// bound actions, the step hook when hooked, and the expected observables.
+// specWriter builds one scenario's spec: the body, and which runtime names the body used so the
+// import line names exactly those.
+type specWriter struct {
+	b      strings.Builder
+	plan   componentPlan
+	design methodcheck.UIDesignRecord
+	byID   map[string]methodcheck.UIElement
+	web    webEnv
+	uses   map[string]bool // runtime names the body used
+}
+
+func (w *specWriter) use(name string) { w.uses[name] = true }
+
+func (w *specWriter) line(format string, args ...any) {
+	fmt.Fprintf(&w.b, "  "+format+"\n", args...)
+}
+
+// playwrightSpec is one scenario's spec: the latency, the typed arrange, then per step the bound
+// actions each followed by what a user sees the instant it lands (Layer A, asserted immediately),
+// the expected observables, and the probes.
 //
 // Both arms carry the 'scenario' annotation, because reporter.gen.ts keys
 // results.json by it and would otherwise fall back to the display title: the
 // live test pushes it first thing in the body (so a failing step keeps it),
 // the skipped test declares it statically through test.skip's details
 // argument (Playwright ≥1.42 TestDetails), since a skipped body never runs.
-func playwrightSpec(plan componentPlan, bs boundScenario) (string, error) {
+func playwrightSpec(plan componentPlan, bs boundScenario, design methodcheck.UIDesignRecord, web webEnv) (string, error) {
 	id := bs.Scenario.ID
-	var b strings.Builder
-	b.WriteString(genHeader + "\n")
-	fmt.Fprintf(&b, "// Source: project.json .phaseArtifacts.testPlan.%s × scenario.ForComponent(%s)\n", plan.Key, tsStr(plan.Key))
-	b.WriteString("import { test, expect } from '@playwright/test';\nimport { hooks } from './hooks';\n\n")
 	title := tsStr(id + " — " + bs.Scenario.Title)
 	annotation := fmt.Sprintf("{ type: 'scenario', description: %s }", tsStr(id))
 	if sk := bs.Binding.Skip; sk != nil {
-		fmt.Fprintf(&b, "// skipped: %s (until %s)\ntest.skip(%s, { annotation: %s }, async () => {});\n", sk.Reason, sk.Until, title, annotation)
-		return b.String(), nil
+		return genHeader + "\n" + fmt.Sprintf("// Source: project.json .phaseArtifacts.testPlan.%s × scenario.ForComponentAs(%s, client)\n", plan.Key, tsStr(plan.Key)) +
+			"import { test } from '@playwright/test';\n\n" +
+			fmt.Sprintf("// skipped: %s (until %s)\ntest.skip(%s, { annotation: %s }, async () => {});\n", sk.Reason, sk.Until, title, annotation), nil
 	}
-	fmt.Fprintf(&b, "test(%s, async ({ page }, testInfo) => {\n", title)
-	fmt.Fprintf(&b, "  testInfo.annotations.push(%s);\n", annotation)
-	fmt.Fprintf(&b, "  await hooks.before(%s, page);\n", tsStr(id))
+	w := &specWriter{plan: plan, design: design, web: web, uses: map[string]bool{}, byID: map[string]methodcheck.UIElement{}}
+	for _, e := range designElements(design) {
+		w.byID[e.ID] = e
+	}
+	fmt.Fprintf(&w.b, "test(%s, async ({ page }, testInfo) => {\n", title)
+	w.line("testInfo.annotations.push(%s);", annotation)
+	w.use("installLatency")
+	w.line("await installLatency(page, Number(process.env.AIARCH_UI_LATENCY_MS ?? 1500));")
+	if err := w.arrange(bs); err != nil {
+		return "", err
+	}
 	for _, st := range bs.Steps {
-		if err := writePlaywrightStep(&b, st); err != nil {
+		if err := w.step(st); err != nil {
 			return "", fmt.Errorf("step %d: %w", st.Bind.Seq, err)
 		}
 	}
-	b.WriteString("});\n")
-	return b.String(), nil
+	w.b.WriteString("});\n")
+	return w.file(), nil
 }
 
-func writePlaywrightStep(b *strings.Builder, st boundStep) error {
-	seq := st.Bind.Seq
-	fmt.Fprintf(b, "  // step %d: %s (node %s)\n", seq, st.Op.Name, st.Stim.Node)
-	for _, in := range st.Bind.Inputs {
-		line, err := playwrightAction(in)
+// file is the spec: header, imports (only what the body used), body.
+func (w *specWriter) file() string {
+	var b strings.Builder
+	b.WriteString(genHeader + "\n")
+	fmt.Fprintf(&b, "// Source: project.json .phaseArtifacts.testPlan.%s × scenario.ForComponentAs(%s, client)\n", w.plan.Key, tsStr(w.plan.Key))
+	body := w.b.String()
+	playwright := []string{"test"}
+	if strings.Contains(body, "expect(") {
+		playwright = append(playwright, "expect")
+	}
+	fmt.Fprintf(&b, "import { %s } from '@playwright/test';\n", strings.Join(playwright, ", "))
+	if strings.Contains(body, "locate(") {
+		b.WriteString("import { locate } from './elements.gen';\n")
+	}
+	var names []string
+	for n := range w.uses {
+		names = append(names, n)
+	}
+	slices.Sort(names)
+	if len(names) > 0 {
+		fmt.Fprintf(&b, "import { %s } from './runtime.gen';\n", strings.Join(names, ", "))
+	}
+	b.WriteString("\n" + body)
+	return b.String()
+}
+
+// arrange emits the binding's typed setup, in the plan's order, ahead of the first action. The switch is
+// exhaustive over the sealed ArrangeCall and has no default, so gochecksumtype fails the build of a
+// fifth kind nobody emits. A contract call goes to the component's generated REST route; the other
+// three are the scenario host's, which the runtime asks.
+func (w *specWriter) arrange(bs boundScenario) error {
+	for i, a := range bs.Binding.Arrange {
+		w.line("// arrange %d: %s", i+1, a.Kind())
+		w.use("arrange")
+		literal, err := w.arrangeLiteral(a)
 		if err != nil {
-			return err
+			return fmt.Errorf("arrange %d: %w", i+1, err)
 		}
-		b.WriteString(line)
-	}
-	expect, err := playwrightExpect(st.Bind.Expect)
-	if err != nil {
-		return err
-	}
-	b.WriteString(expect)
-	for _, pr := range st.Bind.Probes {
-		fmt.Fprintf(b, "  // probe for %s: %s.%s %s\n", pr.For, pr.Component, pr.Operation, compactJSON(pr))
+		w.line("await arrange(testInfo, %s);", literal)
 	}
 	return nil
 }
 
-// playwrightActionLine spells one UIAction as a page action. check/uncheck use
-// Playwright's check()/uncheck(), which fail unless the control flips on the click
-// itself. The switch is exhaustive over the sealed UIAction (gochecksumtype).
-//
-// Until the element-inventory locator of the Playwright emitter v2 lands, the design
-// element id is the locator's test id.
+// arrangeLiteral is one ArrangeCall as the runtime's ArrangeCall literal.
+func (w *specWriter) arrangeLiteral(a methodcheck.ArrangeCall) (string, error) {
+	switch v := a.(type) {
+	case methodcheck.ContractCall:
+		call, err := w.contractCall(v.Component, v.Operation, v.Inputs, v.Expect)
+		if err != nil {
+			return "", err
+		}
+		return "{ kind: 'contractCall', " + call + " }", nil
+	case methodcheck.AdvanceClock:
+		if _, err := time.ParseDuration(v.Duration); err != nil {
+			return "", fmt.Errorf("advanceClock duration %q: %w", v.Duration, err)
+		}
+		return "{ kind: 'advanceClock', duration: " + tsStr(v.Duration) + " }", nil
+	case methodcheck.FailNext:
+		return "{ kind: 'failNext', component: " + tsStr(v.Component) + ", operation: " + tsStr(v.Operation) + ", errorCode: " + tsStr(v.ErrorCode) + " }", nil
+	case methodcheck.SeedResource:
+		var fixture bytes.Buffer
+		if err := json.Compact(&fixture, v.Fixture); err != nil {
+			return "", fmt.Errorf("seedResource %q fixture is not JSON: %w", v.Resource, err)
+		}
+		return "{ kind: 'seedResource', resource: " + tsStr(v.Resource) + ", fixture: " + fixture.String() + " }", nil
+	}
+	panic("unreachable: sealed ArrangeCall")
+}
+
+// contractCall spells a call on a Manager operation's generated route: `verb, path, args, expect`.
+// Arguments are the literal inputs the route reads (a ref reads an earlier step's result, which a
+// call made before or beside the step cannot see).
+func (w *specWriter) contractCall(component, operation string, inputs []methodcheck.TestArg, want methodcheck.TestExpect) (string, error) {
+	key, sc, ok := findContractIn(w.web.contracts, component)
+	if !ok {
+		return "", fmt.Errorf("component %q has no service contract to call", component)
+	}
+	op, ok := operationNamed(sc, operation)
+	if !ok {
+		return "", fmt.Errorf("operation %q is not on %s", operation, key)
+	}
+	route, ok := w.web.routes[key][op.Name]
+	if !ok {
+		return "", fmt.Errorf("%s.%s is no Manager's generated route, so a browser test cannot call it", component, operation)
+	}
+	args, refs, err := inputsJSON(sc, op, inputs)
+	if err != nil {
+		return "", err
+	}
+	if len(refs) > 0 {
+		return "", fmt.Errorf("argument %q of %s.%s reads the result of step %d: a browser call is made without an earlier result", refs[0].param, component, operation, refs[0].ref.Step)
+	}
+	return fmt.Sprintf("verb: %s, path: %s, args: %s, expect: %s", tsStr(route.Verb), tsStr(route.Path), args, tsExpect(want)), nil
+}
+
+// tsExpect is a call's expectation as the runtime's Expectation literal.
+func tsExpect(e methodcheck.TestExpect) string {
+	parts := []string{}
+	if e.Result != "" {
+		parts = append(parts, "result: "+tsStr(e.Result))
+	}
+	parts = append(parts, fmt.Sprintf("errorExpected: %t", e.ErrorExpected))
+	if e.ErrorCode != "" {
+		parts = append(parts, "errorCode: "+tsStr(e.ErrorCode))
+	}
+	return "{ " + strings.Join(parts, ", ") + " }"
+}
+
+func (w *specWriter) step(st boundStep) error {
+	w.line("// step %d: %s (node %s)", st.Bind.Seq, st.Op.Name, st.Stim.Node)
+	for _, in := range st.Bind.Inputs {
+		if err := w.action(in); err != nil {
+			return err
+		}
+	}
+	if err := w.observe(st); err != nil {
+		return err
+	}
+	for _, pr := range st.Bind.Probes {
+		call, err := w.contractCall(pr.Component, pr.Operation, pr.Inputs, pr.Expect)
+		if err != nil {
+			return fmt.Errorf("probe for %s: %w", pr.For, err)
+		}
+		w.use("probe")
+		w.line("// probe for %s: %s.%s", pr.For, pr.Component, pr.Operation)
+		w.line("await probe(testInfo, { %s });", call)
+	}
+	return nil
+}
+
+// action emits one bound input as a page action followed by Layer A: what the user sees the instant
+// the action lands, asserted under the immediate timeout, with the server's answers held back by the
+// latency the spec installed. An input that is not the web operation's action parameter stays visible
+// as a comment; an action outside the dialect is a generation error, never a silent comment.
+func (w *specWriter) action(in methodcheck.TestArg) error {
+	lit, err := literalInput(in)
+	if err != nil {
+		return err
+	}
+	if in.Name != webActionParam {
+		w.line("// input %s: %s", in.Name, lit)
+		return nil
+	}
+	a, err := methodcheck.ParseUIAction(lit)
+	if err != nil {
+		return fmt.Errorf("input %s %s: %w", in.Name, lit, err)
+	}
+	if t, ok := methodcheck.ActionTarget(a); ok {
+		if err := w.known(t); err != nil {
+			return err
+		}
+	}
+	w.line("await %s;", playwrightActionLine(a))
+	for _, o := range methodcheck.LayerAObservables(a) {
+		w.use("immediate")
+		w.line("await %s;", observableLine(o, true))
+	}
+	return nil
+}
+
+// observe emits the expectation's observables as assertions: one object, or an array of them; an
+// expected error is a comment (a UI step observes, it does not return). A step that asserts nothing is
+// a generation error: a test with no assertion proves nothing. An observable on what the actor sees
+// without waiting on a component is asserted immediately, the rest under the default timeout.
+func (w *specWriter) observe(st boundStep) error {
+	e := st.Bind.Expect
+	if e.ErrorExpected {
+		w.line("// expected error: %s", e.ErrorCode)
+		return nil
+	}
+	if e.Result == "" {
+		return fmt.Errorf("the step asserts nothing: a browser step expects at least one thing the user sees")
+	}
+	many, err := methodcheck.ParseUIObservation(e.Result)
+	if err != nil {
+		return fmt.Errorf("expected result %s: %w", e.Result, err)
+	}
+	seen := immediateElements(st.Stim.ActorOutcome, w.design)
+	for _, o := range many {
+		if err := w.observable(o, seen); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// observable emits one assertion, immediate when the actor sees its element without waiting.
+func (w *specWriter) observable(o methodcheck.UIObservable, seen map[string]bool) error {
+	imm := false
+	if t, ok := methodcheck.ObservableTarget(o); ok {
+		if err := w.known(t); err != nil {
+			return err
+		}
+		imm = seen[t.Element]
+	}
+	if imm {
+		w.use("immediate")
+	}
+	w.line("await %s;", observableLine(o, imm))
+	return nil
+}
+
+// known refuses a target the surface's design does not have: the locator would be built from nothing.
+func (w *specWriter) known(t methodcheck.UITarget) error {
+	if _, ok := w.byID[t.Element]; !ok {
+		return fmt.Errorf("element %q is not in the uiDesign of surface %s", t.Element, w.plan.Key)
+	}
+	return nil
+}
+
+// immediateElements is the set of design elements the actor sees without waiting on a component: those
+// a derived output marked Immediate names, by the element's id or accessible name in the output's label
+// (the scenario names what the user sees; the design names what it is called).
+func immediateElements(oc scenario.Outcome, d methodcheck.UIDesignRecord) map[string]bool {
+	out := map[string]bool{}
+	for _, o := range oc.ExpectedOutputs {
+		if !o.Immediate {
+			continue
+		}
+		label := scenario.Normalize(o.Label)
+		for _, e := range designElements(d) {
+			if namesElement(label, e) {
+				out[e.ID] = true
+			}
+		}
+	}
+	return out
+}
+
+// namesElement reports whether the normalized label mentions the element by id or by name.
+func namesElement(label string, e methodcheck.UIElement) bool {
+	for _, n := range []string{e.ID, e.Name} {
+		if key := scenario.Normalize(n); key != "" && strings.Contains(label, key) {
+			return true
+		}
+	}
+	return false
+}
+
+// playwrightActionLine spells one UIAction as a page action on the located element. check/uncheck use
+// Playwright's check()/uncheck(), which fail unless the control flips on the click itself. The switch is
+// exhaustive over the sealed UIAction (gochecksumtype).
 func playwrightActionLine(a methodcheck.UIAction) string {
 	switch v := a.(type) {
 	case methodcheck.UINavigate:
@@ -113,35 +374,53 @@ func playwrightActionLine(a methodcheck.UIAction) string {
 	panic("unreachable: sealed UIAction")
 }
 
-// playwrightStateMatchers is the matcher of each observable that asserts one state of an
-// element and carries no operand.
-var playwrightStateMatchers = map[methodcheck.UIObservableKind]string{
-	methodcheck.UIObservableVisible:   ".toBeVisible()",
-	methodcheck.UIObservableHidden:    ".toBeHidden()",
-	methodcheck.UIObservableAbsent:    ".toHaveCount(0)",
-	methodcheck.UIObservableChecked:   ".toBeChecked()",
-	methodcheck.UIObservableUnchecked: ".not.toBeChecked()",
-	methodcheck.UIObservableEnabled:   ".toBeEnabled()",
-	methodcheck.UIObservableDisabled:  ".toBeDisabled()",
-	methodcheck.UIObservableFocused:   ".toBeFocused()",
+// playwrightMatcher is the matcher call of an observable that asserts one state of an element and
+// carries no operand besides the optional timeout.
+type playwrightMatcher struct {
+	call string   // ".toBeChecked", ".not.toBeChecked"
+	args []string // operands, before the timeout
 }
 
-// playwrightObservableLine spells one UIObservable as an assertion; the switch is
-// exhaustive over the sealed UIObservable.
-func playwrightObservableLine(o methodcheck.UIObservable) string {
+var playwrightStateMatchers = map[methodcheck.UIObservableKind]playwrightMatcher{
+	methodcheck.UIObservableVisible:   {call: ".toBeVisible"},
+	methodcheck.UIObservableHidden:    {call: ".toBeHidden"},
+	methodcheck.UIObservableAbsent:    {call: ".toHaveCount", args: []string{"0"}},
+	methodcheck.UIObservableChecked:   {call: ".toBeChecked"},
+	methodcheck.UIObservableUnchecked: {call: ".not.toBeChecked"},
+	methodcheck.UIObservableEnabled:   {call: ".toBeEnabled"},
+	methodcheck.UIObservableDisabled:  {call: ".toBeDisabled"},
+	methodcheck.UIObservableFocused:   {call: ".toBeFocused"},
+}
+
+// matcherCall spells call(args..., timeout?): the immediate timeout is the last argument.
+func matcherCall(call string, immediate bool, args ...string) string {
+	if immediate {
+		args = append(args, "immediate")
+	}
+	return call + "(" + strings.Join(args, ", ") + ")"
+}
+
+// playwrightObservableLine spells one UIObservable as an assertion under the default timeout.
+func playwrightObservableLine(o methodcheck.UIObservable) string { return observableLine(o, false) }
+
+// observableLine spells one UIObservable as an assertion; immediate asserts it under the short
+// timeout of what the user sees the instant an action lands. The switch is exhaustive over the sealed
+// UIObservable.
+func observableLine(o methodcheck.UIObservable, immediate bool) string {
 	switch v := o.(type) {
 	case methodcheck.UIText:
-		return "expect(" + byElement(v.Target) + ").toHaveText(" + tsStr(v.Text) + ")"
+		return "expect(" + byElement(v.Target) + ")" + matcherCall(".toHaveText", immediate, tsStr(v.Text))
 	case methodcheck.UIValue:
-		return "expect(" + byElement(v.Target) + ").toHaveValue(" + tsStr(v.Value) + ")"
+		return "expect(" + byElement(v.Target) + ")" + matcherCall(".toHaveValue", immediate, tsStr(v.Value))
 	case methodcheck.UICount:
-		return "expect(" + byElement(v.Target) + ").toHaveCount(" + fmt.Sprint(v.N) + ")"
+		return "expect(" + byElement(v.Target) + ")" + matcherCall(".toHaveCount", immediate, fmt.Sprint(v.N))
 	case methodcheck.UIURL:
-		return "expect(page).toHaveURL(" + urlMatcher(v.Route) + ")"
+		return "expect(page)" + matcherCall(".toHaveURL", immediate, urlMatcher(v.Route))
 	case methodcheck.UIVisible, methodcheck.UIHidden, methodcheck.UIAbsent, methodcheck.UIChecked,
 		methodcheck.UIUnchecked, methodcheck.UIEnabled, methodcheck.UIDisabled, methodcheck.UIFocused:
 		t, _ := methodcheck.ObservableTarget(o)
-		return "expect(" + byElement(t) + ")" + playwrightStateMatchers[o.Kind()]
+		m := playwrightStateMatchers[o.Kind()]
+		return "expect(" + byElement(t) + ")" + matcherCall(m.call, immediate, m.args...)
 	}
 	panic("unreachable: sealed UIObservable")
 }
@@ -153,12 +432,14 @@ func UIActionKinds() []string { return methodcheck.UIActionKinds() }
 // UIObservableKinds is the set of browser observable kinds testgen asserts.
 func UIObservableKinds() []string { return methodcheck.UIObservableKinds() }
 
+// byElement is the locator of a target: the element found by role and name through the surface's
+// generated inventory, one instance of it when the target picks one.
 func byElement(t methodcheck.UITarget) string {
-	loc := "page.getByTestId(" + tsStr(t.Element) + ")"
+	loc := "locate(page, " + tsStr(t.Element)
 	if t.Nth != nil {
-		loc += fmt.Sprintf(".nth(%d)", *t.Nth)
+		loc += fmt.Sprintf(", %d", *t.Nth)
 	}
-	return loc
+	return loc + ")"
 }
 
 // literalInput is a bound input's literal JSON text. A ref input names an
@@ -172,46 +453,6 @@ func literalInput(in methodcheck.TestArg) (string, error) {
 		return "", fmt.Errorf("input %s is a ref to step %d (%s): ref arguments are not resolved by this emitter", in.Name, v.Step, v.Path)
 	}
 	panic("unreachable: sealed TestArgValue")
-}
-
-// playwrightAction spells one bound input as a page action. An input that is not the
-// web operation's action parameter stays visible as a comment; an action outside the
-// dialect is a generation error, never a silent comment.
-func playwrightAction(in methodcheck.TestArg) (string, error) {
-	lit, err := literalInput(in)
-	if err != nil {
-		return "", err
-	}
-	if in.Name != webActionParam {
-		return fmt.Sprintf("  // input %s: %s\n", in.Name, lit), nil
-	}
-	a, err := methodcheck.ParseUIAction(lit)
-	if err != nil {
-		return "", fmt.Errorf("input %s %s: %w", in.Name, lit, err)
-	}
-	return "  await " + playwrightActionLine(a) + ";\n", nil
-}
-
-// playwrightExpect spells the expectation's observables as assertions: one
-// object, or an array of them; an expected error is a comment (a UI step
-// observes, it does not return). An observation outside the dialect is a
-// generation error.
-func playwrightExpect(e methodcheck.TestExpect) (string, error) {
-	if e.ErrorExpected {
-		return fmt.Sprintf("  // expected error: %s\n", e.ErrorCode), nil
-	}
-	if e.Result == "" {
-		return "", nil
-	}
-	many, err := methodcheck.ParseUIObservation(e.Result)
-	if err != nil {
-		return "", fmt.Errorf("expected result %s: %w", e.Result, err)
-	}
-	var b strings.Builder
-	for _, o := range many {
-		b.WriteString("  await " + playwrightObservableLine(o) + ";\n")
-	}
-	return b.String(), nil
 }
 
 // urlMatcher is the toHaveURL argument for a `url` observable. The observable
@@ -245,17 +486,20 @@ func playwrightResultsDir(component string) string {
 // playwrightConfig is the generated config: video and trace always on, the
 // JSON report and results.json under test-results/<component>, and ONE worker.
 // Every scenario of a client runs against the one real stack its venue boots —
-// one server, one state repository, one workflow namespace — and its hooks
-// arrange that shared state before each scenario, so two scenarios running at
-// once would arrange over each other: the scenarios of a component run one at a
-// time, in file order, exactly as a Go package's TestScenario_* functions do.
+// one server, one state repository, one workflow namespace — and each arranges
+// that shared state before it runs, so two scenarios running at once would
+// arrange over each other: the scenarios of a component run one at a time, in
+// file order, exactly as a Go package's TestScenario_* functions do.
+//
+// Two projects: the surface check runs first, and every scenario depends on
+// it, so a built surface that does not match its design fails once, naming the
+// element, before any scenario spends its time failing at its first locator.
 func playwrightConfig(results string) string {
 	return genHeader + `
 import { defineConfig } from '@playwright/test';
 
 export default defineConfig({
   testDir: '.',
-  testMatch: /\.spec\.gen\.ts$/,
   workers: 1,
   fullyParallel: false,
   timeout: Number(process.env.AIARCH_SCENARIO_TIMEOUT_MS ?? 300000),
@@ -266,13 +510,18 @@ export default defineConfig({
     ['list'],
     ['./reporter.gen.ts'],
   ],
+  projects: [
+    { name: 'surface', testMatch: /surface\.spec\.gen\.ts$/ },
+    { name: 'scenarios', testMatch: /\.spec\.gen\.ts$/, testIgnore: /surface\.spec\.gen\.ts$/, dependencies: ['surface'] },
+  ],
 });
 `
 }
 
 // playwrightReporter maps Playwright's test results to results.json in the
 // TestRun shape (design §4.2): scenario from the annotation, status folded to
-// pass|fail|skip|timeout, videoRef/traceRef from the attachments.
+// pass|fail|skip|timeout, videoRef/traceRef from the attachments. The surface
+// check is not a scenario: its verdict is the run's exit status, not a row.
 const playwrightReporter = genHeader + `
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -297,6 +546,7 @@ class ScenarioReporter implements Reporter {
   }
 
   onTestEnd(test: TestCase, result: TestResult): void {
+    if (test.annotations.some((a) => a.type === 'surface')) return;
     const scenario = test.annotations.find((a) => a.type === 'scenario')?.description ?? test.title;
     const status = result.status === 'passed' ? 'pass' : result.status === 'skipped' ? 'skip' : result.status === 'timedOut' ? 'timeout' : 'fail';
     const r: ScenarioResult = { scenario, status, durationMs: result.duration };
@@ -326,33 +576,6 @@ class ScenarioReporter implements Reporter {
 
 export default ScenarioReporter;
 `
-
-// playwrightHooks is the once-emitted hooks.ts: before/step stubs that throw
-// FILL, with each hooked step's binding inline for the agent.
-func playwrightHooks(plan componentPlan) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "// Hooks for %s scenario tests. Generated ONCE by testgen; owned by the construction agent.\n", plan.Key)
-	b.WriteString(`import type { Page } from '@playwright/test';
-
-export const hooks = {
-  // FILL: sign in and seed whatever state scenario id starts from.
-  async before(id: string, page: Page): Promise<void> {
-    void page;
-    throw new Error('FILL hooks.before ' + id);
-  },
-};
-`)
-	return b.String()
-}
-
-// compactJSON is v as a single comment line.
-func compactJSON(v any) string {
-	raw, err := json.Marshal(v)
-	if err != nil {
-		return "{}"
-	}
-	return strings.ReplaceAll(string(raw), "\n", " ")
-}
 
 // tsStr spells s as a single-quoted TypeScript string literal.
 func tsStr(s string) string {

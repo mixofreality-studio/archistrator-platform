@@ -19,10 +19,12 @@
 // before it ran fails as vacuous). A client contract (layer "client") is
 // driven in its dialect (§12 B1, emit_mcp.go): a WEB client — ops taking the
 // one `action` param — gets, per component, one Playwright spec per binding
-// under <UITestsDir>/<component>/, the generated Playwright config + results
-// reporter, and a once-emitted hooks.ts (Task 2.10 removes it); an MCP or
-// REST client — one op per generated tool or route — gets the Go pair in its
-// goPackage, whose scenarios call the tools on an in-process server.
+// under <UITestsDir>/<component>/, the surface's element inventory (the UI
+// design's roles and names, from which every locator is derived), the shared
+// runtime, a surface check, the generated Playwright config + results
+// reporter (emit_playwright.go); an MCP or REST client — one op per generated
+// tool or route — gets the Go pair in its goPackage, whose scenarios call the
+// tools on an in-process server. Nothing testgen emits is agent-owned.
 //
 // Grouping is by goPackage, not by contract: several contracts can share one
 // Go package, and one generated file unions every contract's bindings. A
@@ -66,10 +68,6 @@ const defaultUITestsDir = "uitests/generated"
 // relative to the consuming module root.
 type Output struct {
 	Generated map[string][]byte // path → content; always rewritten
-	// HooksOnce holds only the web client's hooks.ts, written once and then
-	// agent-owned until the Playwright emitter v2 (plan 2, task 2.10) removes it.
-	// No Go file is ever emitted here: a Go scenario has no agent-owned code.
-	HooksOnce map[string][]byte // path → content; written only if absent
 	// Warnings are the plan-shaped conditions testgen tolerates but reports:
 	// a contract with no goPackage, a binding whose scenario the derivation
 	// does not project onto the component, a projected scenario no binding
@@ -104,6 +102,23 @@ type componentPlan struct {
 	Contract   methodcheck.ServiceContract
 	Principals map[string]methodcheck.TestPrincipal // the plan's actor identities
 	Scenarios  []boundScenario
+	// Design is the surface's recorded UI design (a web client's plan only); nil when none is recorded.
+	Design *methodcheck.UIDesignRecord
+}
+
+// webEnv is what a browser surface's emitter needs from the rest of the document: every contract (to
+// resolve an arrange call's or a probe's component) and the REST route of each Manager operation.
+type webEnv struct {
+	contracts map[string]methodcheck.ServiceContract
+	routes    map[string]map[string]restRoute // contract key → operation name → route
+}
+
+// designOf resolves a plan's surface to its UI design: the plan key, then the contract's component.
+func designOf(p methodcheck.Project, key string, sc methodcheck.ServiceContract) (methodcheck.UIDesignRecord, bool) {
+	if d, ok := methodcheck.FindUIDesign(p, key); ok {
+		return d, true
+	}
+	return methodcheck.FindUIDesign(p, sc.Component)
 }
 
 // Generate emits every component's scenario tests from projectJSON. A test plan
@@ -120,18 +135,23 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 	if err != nil {
 		return Output{}, err
 	}
-	out := Output{Generated: map[string][]byte{}, HooksOnce: map[string][]byte{}}
+	out := Output{Generated: map[string][]byte{}}
 	if p.PhaseArtifacts == nil {
 		return out, nil
 	}
 	if cfg.UITestsDir == "" {
 		cfg.UITestsDir = defaultUITestsDir
 	}
-	byPackage, err := routePlans(&out, cfg, p, all)
+	routes, err := managerRoutes(projectJSON)
 	if err != nil {
 		return out, err
 	}
-	routes, err := managerRoutes(projectJSON)
+	byComponent, err := componentRoutes(projectJSON)
+	if err != nil {
+		return out, err
+	}
+	web := webEnv{contracts: p.ServiceContracts, routes: byComponent}
+	byPackage, err := routePlans(&out, cfg, web, p, all)
 	if err != nil {
 		return out, err
 	}
@@ -148,20 +168,14 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 // a web client is emitted as Playwright on the spot; an MCP client and every
 // layer contract are grouped by goPackage for emitPackage; a Go-hosted
 // contract without a goPackage is warned about.
-func routePlans(out *Output, cfg Config, p methodcheck.Project, all []scenario.Scenario) (map[string][]componentPlan, error) {
+func routePlans(out *Output, cfg Config, web webEnv, p methodcheck.Project, all []scenario.Scenario) (map[string][]componentPlan, error) {
 	byPackage := map[string][]componentPlan{}
 	for _, comp := range sortedKeys(p.PhaseArtifacts.TestPlan) {
-		// The plan's key names the generated test, its results directory and the checks
-		// that read them, so it must be the contract key itself (methodcheck TP-KEY).
-		sc, ok := p.ServiceContracts[comp]
-		if !ok {
-			return nil, fmt.Errorf("testgen: test plan key %q is not a serviceContracts key", comp)
-		}
-		plan, err := planFor(out, comp, sc, scenario.ForComponent(all, comp), p.PhaseArtifacts.TestPlan[comp])
+		plan, err := planOf(out, p, all, comp)
 		if err != nil {
 			return nil, err
 		}
-		pkg, err := routePlan(out, cfg, plan)
+		pkg, err := routePlan(out, cfg, web, plan)
 		if err != nil {
 			return nil, err
 		}
@@ -172,10 +186,29 @@ func routePlans(out *Output, cfg Config, p methodcheck.Project, all []scenario.S
 	return byPackage, nil
 }
 
+// planOf is one component's plan with its surface's UI design.
+func planOf(out *Output, p methodcheck.Project, all []scenario.Scenario, comp string) (componentPlan, error) {
+	// The plan's key names the generated test, its results directory and the checks
+	// that read them, so it must be the contract key itself (methodcheck TP-KEY).
+	sc, ok := p.ServiceContracts[comp]
+	if !ok {
+		return componentPlan{}, fmt.Errorf("testgen: test plan key %q is not a serviceContracts key", comp)
+	}
+	// Only a Client's test observes what an actor sees: its projection keeps the actor outcome.
+	plan, err := planFor(out, comp, sc, scenario.ForComponentAs(all, comp, isClient(sc)), p.PhaseArtifacts.TestPlan[comp])
+	if err != nil {
+		return plan, err
+	}
+	if d, ok := designOf(p, comp, sc); ok {
+		plan.Design = &d
+	}
+	return plan, nil
+}
+
 // routePlan routes one plan: a web client is emitted as Playwright here; an
 // MCP client or a layer contract returns the goPackage it is grouped under,
 // or "" with a warning when it names none.
-func routePlan(out *Output, cfg Config, plan componentPlan) (string, error) {
+func routePlan(out *Output, cfg Config, web webEnv, plan componentPlan) (string, error) {
 	what := plan.Key + " has"
 	if isClient(plan.Contract) {
 		d, err := clientDialect(plan.Key, plan.Contract)
@@ -184,7 +217,7 @@ func routePlan(out *Output, cfg Config, plan componentPlan) (string, error) {
 		}
 		if d == dialectWeb {
 			out.skipDiscrimination(plan, reasonWeb)
-			return "", emitPlaywright(out, cfg, plan)
+			return "", emitPlaywright(out, cfg, web, plan)
 		}
 		out.skipDiscrimination(plan, reasonClient)
 		what = plan.Key + " is an MCP client with"
@@ -347,9 +380,10 @@ func sortedKeys[V any](m map[string]V) []string {
 	return keys
 }
 
-// Drift compares Generated against disk and checks the once-emitted hooks.ts
-// of a web client exists. Messages are sorted by path; an empty slice means the
-// tree is current. Only an unreadable file that exists is an error.
+// Drift compares Generated against disk. Messages are sorted by path; an empty
+// slice means the tree is current. Only an unreadable file that exists is an
+// error. An agent-owned hooks file (a hooks.ts, a Go *_hooks_test.go) is no part
+// of the output any more; cmd/testgen reports any that remains as an orphan.
 func Drift(root string, out Output) ([]string, error) {
 	var msgs []string
 	for _, p := range sortedKeys(out.Generated) {
@@ -359,13 +393,6 @@ func Drift(root string, out Output) ([]string, error) {
 		}
 		if stale {
 			msgs = append(msgs, "stale: "+p)
-		}
-	}
-	for _, p := range sortedKeys(out.HooksOnce) {
-		if _, err := os.Stat(filepath.Join(root, filepath.FromSlash(p))); os.IsNotExist(err) {
-			msgs = append(msgs, "missing hooks file "+p)
-		} else if err != nil {
-			return nil, err
 		}
 	}
 	return msgs, nil

@@ -169,12 +169,11 @@ func TestGenerate_MCPClientHasNoHooks(t *testing.T) {
 			t.Errorf("a machine client file carries no hook, found %q:\n%s", bad, src)
 		}
 	}
-	if _, ok := out.HooksOnce[toolsHooks]; ok {
-		t.Fatalf("an MCP client gets no hooks file; have %v", keys(out.HooksOnce))
+	if _, ok := out.Generated[toolsHooks]; ok {
+		t.Fatalf("an MCP client gets no hooks file; have %v", keys(out.Generated))
 	}
 	root := t.TempDir()
 	writeAll(t, root, out.Generated)
-	writeAll(t, root, out.HooksOnce)
 	msgs, err := Drift(root, out)
 	if err != nil {
 		t.Fatal(err)
@@ -307,7 +306,7 @@ func TestGenerate_MCPClientSkippedBindingNeedsNoHooks(t *testing.T) {
 			t.Errorf("an all-skipped MCP file must not carry %q:\n%s", bad, src)
 		}
 	}
-	if _, ok := out.HooksOnce[toolsHooks]; ok {
+	if _, ok := out.Generated[toolsHooks]; ok {
 		t.Errorf("an all-skipped MCP package must not get a hooks file")
 	}
 }
