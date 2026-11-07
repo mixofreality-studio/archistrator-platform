@@ -382,7 +382,9 @@ func (a scenarioArgs) hooked(arm variantArm) ([]string, error) {
 	return []string{a.input(decl, projectmodel.SubstrateInput{Name: "URL"}), "&http.Client{Timeout: 30 * time.Second}"}, nil
 }
 
-func (a scenarioArgs) kinds(component string) []string { return a.r.registrarKinds(component) }
+func (a scenarioArgs) kinds(component string) []string {
+	return a.r.registrarKinds(component, a.g.refused)
+}
 
 // settingLiteral spells a setting's declared default as a Go literal of the type configgen
 // gives its config field.

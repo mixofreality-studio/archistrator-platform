@@ -111,8 +111,10 @@ func (r *resolved) infraDecl(key string) (projectmodel.InfraDecl, error) {
 // registrarKinds is the ExecutionKinds() of every built Manager that depends on the schedule
 // registrar component, in manager-key order, when component is that registrar. A Manager owns
 // the kinds it runs; the registrar's constructor is handed them rather than a hook supplying a
-// table the model already holds.
-func (r *resolved) registrarKinds(component string) []string {
+// table the model already holds. skip names the Managers a generation leaves unbuilt (the
+// scenario subject's refusals): their packages are not imported, so their kinds are not handed
+// over.
+func (r *resolved) registrarKinds(component string, skip map[string]Refusal) []string {
 	reg := r.cfg.ScheduleRegistrarComponent
 	if reg == "" || component != reg || r.m == nil {
 		return nil
@@ -120,7 +122,7 @@ func (r *resolved) registrarKinds(component string) []string {
 	var out []string
 	for _, key := range sortedKeys(r.m.Contracts) {
 		c := r.m.Contracts[key]
-		if builtManagerDependingOn(c, reg) {
+		if _, unbuilt := skip[key]; !unbuilt && builtManagerDependingOn(c, reg) {
 			out = append(out, r.aliasFor(c.GoPackage)+".ExecutionKinds()")
 		}
 	}
@@ -169,4 +171,4 @@ func (a rootArgs) hooked(arm variantArm) ([]string, error) {
 	return append(args, arm.hookCall), nil
 }
 
-func (a rootArgs) kinds(component string) []string { return a.r.registrarKinds(component) }
+func (a rootArgs) kinds(component string) []string { return a.r.registrarKinds(component, nil) }

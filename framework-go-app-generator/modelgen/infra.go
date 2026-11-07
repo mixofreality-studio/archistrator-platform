@@ -145,7 +145,7 @@ var infraBindings = map[string]infraBinding{
 		returnsError: false,
 		params: []infraField{
 			{name: "cl", typ: "client.Client", imports: map[string]string{"go.temporal.io/sdk/client": ""}},
-			{name: "table", typ: "map[ExecutionKind]KindBinding"},
+			{name: "tables", typ: "...map[ExecutionKind]KindBinding"}, // variadic: one ExecutionKinds() per Manager
 		},
 	},
 

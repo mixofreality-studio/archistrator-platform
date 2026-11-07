@@ -120,6 +120,10 @@ func emitDelegatingConstructor(buf *bytes.Buffer, iface Interface, name string, 
 	args := make([]string, 0, len(binding.params))
 	for _, f := range binding.params {
 		params = append(params, f.name+" "+f.typ)
+		if strings.HasPrefix(f.typ, "...") {
+			args = append(args, f.name+"...") // a variadic parameter is forwarded as one
+			continue
+		}
 		args = append(args, f.name)
 	}
 	ret := iface.Name

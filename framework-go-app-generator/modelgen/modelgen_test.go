@@ -173,6 +173,23 @@ func TestGenerateUtilityLayerContext(t *testing.T) {
 	}
 }
 
+// TestGenerateTemporalConstructorTakesKindTablesVariadically pins Task 2.11d: the schedule
+// registrar is handed one ExecutionKinds() table per Manager that depends on it, so the
+// delegating Temporal constructor takes the tables variadically and forwards them as such.
+func TestGenerateTemporalConstructorTakesKindTablesVariadically(t *testing.T) {
+	got, err := modelgen.Generate([]byte(busFixture), modelgen.Config{ModulePath: "example.com/bus"})
+	if err != nil {
+		t.Fatalf("generate: %v", err)
+	}
+	out := string(got["internal/utility/messagebus"])
+	if !contains(out, "func NewTemporalMessageBus(cl client.Client, tables ...map[ExecutionKind]KindBinding) MessageBus {") {
+		t.Errorf("the Temporal constructor must take the kind tables variadically, got:\n%s", out)
+	}
+	if !contains(out, "return newTemporalMessageBus(cl, tables...)") {
+		t.Errorf("the Temporal constructor must forward the tables as a variadic, got:\n%s", out)
+	}
+}
+
 // TestGenerateFakesUtilityLayer asserts the utility layer reaches the fake
 // emitter too — a Fake<Iface> whose methods carry the same fwra.Context, so it
 // satisfies the real generated interface.

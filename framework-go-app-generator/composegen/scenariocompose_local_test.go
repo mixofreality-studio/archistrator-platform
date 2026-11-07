@@ -203,3 +203,30 @@ func TestCompose_RegistrarKindsFromManagers(t *testing.T) {
 		t.Errorf("the scenario must hand the registrar its Managers' kinds:\n%s", src)
 	}
 }
+
+// TestCompose_RegistrarKindsSkipRefusedManagers: a Manager left unbuilt (policy dependency) is
+// neither constructed nor imported by the subject, so its ExecutionKinds() must not be handed to
+// the registrar either; the production root, which builds it, still does.
+func TestCompose_RegistrarKindsSkipRefusedManagers(t *testing.T) {
+	policy := strings.Replace(messageBusHookFixture, `{ "name": "messageBus", "component": "messageBus" }`,
+		`{ "name": "messageBus", "component": "messageBus" }, { "name": "resolver", "goType": "func(string) bool" }`, 1)
+	m, err := projectmodel.Load([]byte(strings.ReplaceAll(policy, "prod", "local")))
+	if err != nil {
+		t.Fatalf("load fixture: %v", err)
+	}
+	cfg := messageBusHookCfg()
+	cfg.VariantHookArgs = nil
+	src, refused, err := composegen.EmitScenarioCompose(m, cfg)
+	if err != nil {
+		t.Fatalf("EmitScenarioCompose: %v", err)
+	}
+	if len(refused) != 1 || refused[0].Manager != "orderManager" {
+		t.Fatalf("want orderManager refused, got %v", refused)
+	}
+	if strings.Contains(string(src), "order.") {
+		t.Errorf("the subject must not reference the refused manager's package:\n%s", src)
+	}
+	if !strings.Contains(string(src), "messagebus.NewTemporalMessageBus(s.temporal())") {
+		t.Errorf("the registrar must be built with no kinds from the refused manager:\n%s", src)
+	}
+}
