@@ -96,6 +96,7 @@ func TestUIDialect_ParseUIObservation(t *testing.T) {
 		`{"kind":"visible","model":{"target":{"element":"a"}}}`:            "not a UI observation",
 		`[` + act("enabled", tgt("a")) + `,` + act("glow", tgt("a")) + `]`: "observable 1",
 		`[` + act("count", `{"target":{"element":"a"},"n":-1}`) + `]`:      "n must not be negative",
+		`[` + act("count", `{"target":{"element":"a"}}`) + `]`:             `needs "n"`,
 		`[` + act("visible", `{}`) + `]`:                                   "needs an element",
 		`[` + act("url", `{}`) + `]`:                                       "needs a route",
 		`[{"visible":"a"}]`:                                                "observable 0",

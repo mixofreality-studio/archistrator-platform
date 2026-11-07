@@ -854,25 +854,37 @@ func (sc tpScope) uiActionInputs(st StepBinding, op ContractOperation, section s
 	var actions []UIAction
 	n := 0
 	for _, in := range st.Inputs {
-		if !actionParams[in.Name] && !(sc.web && in.Name == webActionParam) {
+		if !sc.isActionInput(in, actionParams) {
 			continue
 		}
 		n++
-		lv, ok := in.Value.(LiteralValue) // a ref resolves at run time
-		if !ok {
-			continue
-		}
-		a, err := ParseUIAction(string(lv.JSON))
+		a, err := decodeActionInput(in)
 		if err != nil {
 			out = append(out, tpFinding(ruleTPArgType, sc.l, "%s: input %q: %v", section, in.Name, err))
-			continue
+		} else if a != nil {
+			actions = append(actions, a)
 		}
-		actions = append(actions, a)
 	}
 	if len(actionParams) > 0 || sc.web {
 		out = append(out, sc.exactlyOneAction(n, section)...)
 	}
 	return actions, out
+}
+
+// isActionInput is whether an input is bound to a UIAction parameter (or, on a web
+// surface, is the conventional action parameter).
+func (sc tpScope) isActionInput(in TestArg, actionParams map[string]bool) bool {
+	return actionParams[in.Name] || (sc.web && in.Name == webActionParam)
+}
+
+// decodeActionInput decodes a literal action input; a ref resolves at run time, so it
+// yields (nil, nil).
+func decodeActionInput(in TestArg) (UIAction, error) {
+	lv, ok := in.Value.(LiteralValue)
+	if !ok {
+		return nil, nil
+	}
+	return ParseUIAction(string(lv.JSON))
 }
 
 // exactlyOneAction is TP-UI-ACTION over a browser step with n action inputs.

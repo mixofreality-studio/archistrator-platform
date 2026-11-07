@@ -10,9 +10,6 @@ import (
 // self-check (validate) per variant for what the schema's `required` cannot say
 // (non-empty strings, a non-negative count), and the target accessor the rules use.
 
-// uiTargeted is a variant that acts on or observes a design element.
-type uiTargeted interface{ uiTarget() UITarget }
-
 // decodeVariant strictly decodes an envelope's model into the variant T and runs its
 // self-check.
 func decodeVariant[T interface{ validate() error }](model json.RawMessage) (T, error) {
@@ -35,6 +32,20 @@ func observableDecoder[T interface {
 	validate() error
 }]() func(json.RawMessage) (UIObservable, error) {
 	return func(model json.RawMessage) (UIObservable, error) { return decodeVariant[T](model) }
+}
+
+// countDecoder refuses a count whose n is absent: an absent n would decode as 0 and
+// assert "zero rows" by omission rather than by statement.
+func countDecoder() func(json.RawMessage) (UIObservable, error) {
+	return func(model json.RawMessage) (UIObservable, error) {
+		var keys map[string]json.RawMessage
+		if json.Unmarshal(model, &keys) == nil {
+			if _, ok := keys["n"]; !ok {
+				return nil, needs(false, `"n"`)
+			}
+		}
+		return decodeVariant[UICount](model)
+	}
 }
 
 var uiActionDecoders = map[UIActionKind]func(json.RawMessage) (UIAction, error){
@@ -60,7 +71,7 @@ var uiObservableDecoders = map[UIObservableKind]func(json.RawMessage) (UIObserva
 	UIObservableEnabled:   observableDecoder[UIEnabled](),
 	UIObservableDisabled:  observableDecoder[UIDisabled](),
 	UIObservableFocused:   observableDecoder[UIFocused](),
-	UIObservableCount:     observableDecoder[UICount](),
+	UIObservableCount:     countDecoder(),
 	UIObservableURL:       observableDecoder[UIURL](),
 }
 
@@ -123,38 +134,34 @@ func needs(ok bool, what string) error {
 
 // ---- targets ----
 
-func (v UIClick) uiTarget() UITarget     { return v.Target }
-func (v UIDblclick) uiTarget() UITarget  { return v.Target }
-func (v UIFill) uiTarget() UITarget      { return v.Target }
-func (v UIPress) uiTarget() UITarget     { return v.Target }
-func (v UICheck) uiTarget() UITarget     { return v.Target }
-func (v UIUncheck) uiTarget() UITarget   { return v.Target }
-func (v UIHover) uiTarget() UITarget     { return v.Target }
-func (v UISelect) uiTarget() UITarget    { return v.Target }
-func (v UIVisible) uiTarget() UITarget   { return v.Target }
-func (v UIHidden) uiTarget() UITarget    { return v.Target }
-func (v UIAbsent) uiTarget() UITarget    { return v.Target }
-func (v UIText) uiTarget() UITarget      { return v.Target }
-func (v UIValue) uiTarget() UITarget     { return v.Target }
-func (v UIChecked) uiTarget() UITarget   { return v.Target }
-func (v UIUnchecked) uiTarget() UITarget { return v.Target }
-func (v UIEnabled) uiTarget() UITarget   { return v.Target }
-func (v UIDisabled) uiTarget() UITarget  { return v.Target }
-func (v UIFocused) uiTarget() UITarget   { return v.Target }
-func (v UICount) uiTarget() UITarget     { return v.Target }
+// uiTarget is required by the sealed interfaces themselves, so a new variant that does
+// not say whether it has a design element fails to compile: there is no fallback arm to
+// fall into silently.
+func (UINavigate) uiTarget() (UITarget, bool) { return UITarget{}, false }
+func (UIURL) uiTarget() (UITarget, bool)      { return UITarget{}, false }
+
+func (v UIClick) uiTarget() (UITarget, bool)     { return v.Target, true }
+func (v UIDblclick) uiTarget() (UITarget, bool)  { return v.Target, true }
+func (v UIFill) uiTarget() (UITarget, bool)      { return v.Target, true }
+func (v UIPress) uiTarget() (UITarget, bool)     { return v.Target, true }
+func (v UICheck) uiTarget() (UITarget, bool)     { return v.Target, true }
+func (v UIUncheck) uiTarget() (UITarget, bool)   { return v.Target, true }
+func (v UIHover) uiTarget() (UITarget, bool)     { return v.Target, true }
+func (v UISelect) uiTarget() (UITarget, bool)    { return v.Target, true }
+func (v UIVisible) uiTarget() (UITarget, bool)   { return v.Target, true }
+func (v UIHidden) uiTarget() (UITarget, bool)    { return v.Target, true }
+func (v UIAbsent) uiTarget() (UITarget, bool)    { return v.Target, true }
+func (v UIText) uiTarget() (UITarget, bool)      { return v.Target, true }
+func (v UIValue) uiTarget() (UITarget, bool)     { return v.Target, true }
+func (v UIChecked) uiTarget() (UITarget, bool)   { return v.Target, true }
+func (v UIUnchecked) uiTarget() (UITarget, bool) { return v.Target, true }
+func (v UIEnabled) uiTarget() (UITarget, bool)   { return v.Target, true }
+func (v UIDisabled) uiTarget() (UITarget, bool)  { return v.Target, true }
+func (v UIFocused) uiTarget() (UITarget, bool)   { return v.Target, true }
+func (v UICount) uiTarget() (UITarget, bool)     { return v.Target, true }
 
 // ActionTarget is the element an action acts on (ok false for navigate).
-func ActionTarget(a UIAction) (UITarget, bool) {
-	if t, ok := a.(uiTargeted); ok {
-		return t.uiTarget(), true
-	}
-	return UITarget{}, false
-}
+func ActionTarget(a UIAction) (UITarget, bool) { return a.uiTarget() }
 
 // ObservableTarget is the element an observable is about (ok false for url).
-func ObservableTarget(o UIObservable) (UITarget, bool) {
-	if t, ok := o.(uiTargeted); ok {
-		return t.uiTarget(), true
-	}
-	return UITarget{}, false
-}
+func ObservableTarget(o UIObservable) (UITarget, bool) { return o.uiTarget() }

@@ -100,6 +100,7 @@ const (
 type UIAction interface {
 	Kind() UIActionKind
 	isUIAction()
+	uiTarget() (UITarget, bool)
 }
 
 // UINavigate goes to a screen route of the design.
@@ -249,7 +250,7 @@ func UIActionKinds() []string {
 }
 
 // UnmarshalUIAction decodes the {"kind","model"} envelope into a UIAction; an unknown
-// kind, an unknown field, or a missing required field is an error.
+// kind, an unknown field, an empty required string, or a count without n is an error.
 func UnmarshalUIAction(raw []byte) (UIAction, error) {
 	kind, model, err := openEnvelope(raw)
 	if err != nil {
@@ -338,6 +339,7 @@ const (
 type UIObservable interface {
 	Kind() UIObservableKind
 	isUIObservable()
+	uiTarget() (UITarget, bool)
 }
 
 // UIVisible: the element is shown.
