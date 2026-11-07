@@ -74,6 +74,10 @@ type Host struct {
 	booted   time.Time
 	replay   *replayGate
 
+	// arrange is the state the arrange primitives share (arrange.go): the
+	// test clock's offset and the registered one-shot faults.
+	arrange arrangeState
+
 	// stops tears the doubles down, in boot order; Main runs them reversed.
 	stops []func()
 }
