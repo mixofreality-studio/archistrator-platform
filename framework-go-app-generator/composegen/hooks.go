@@ -49,6 +49,9 @@ func deriveHooks(r *resolved) []hookMethod {
 	if len(r.webMgrs) > 0 {
 		hs = append(hs, hookPDP(), hookTokenValidator(), hookDevConfig(), hookWrapManagers(), hookExtraMounts())
 	}
+	if len(r.mcpMounts) > 0 {
+		hs = append(hs, hookMCPMount())
+	}
 	hs = append(hs, r.variantHooks...)    // G3: per-variant args hooks
 	hs = append(hs, r.finalizeHooks...)   // B3: per-binding post-construction seams
 	hs = append(hs, r.workerGateHooks...) // G6b: conditional-worker gates
@@ -283,6 +286,24 @@ func hookExtraMounts() hookMethod {
 		},
 		line: "ExtraMounts(root *http.ServeMux, cfg *Config, dev web.DevConfig, validator security.Validator, sec security.Security, managers WebManagers)",
 		seed: "// No composition-root routes yet.",
+	}
+}
+
+// hookMCPMount is the seam on the generated /mcp mount. The generated composition root owns the
+// "/mcp" pattern (a literal, so no wildcard mount a hand route sets up can shadow it), so an app's
+// hand additions to the MCP surface - a resource registered on the server beside the generated tool
+// tables, a CORS or anti-framing wrap - ride this hook instead of a second mount. authed is the
+// transport already behind the auth boundary; the seed returns it unchanged.
+func hookMCPMount() hookMethod {
+	return hookMethod{
+		doc: []string{
+			"MCPMount receives the MCP server carrying every generated tool table and the",
+			"streamable-HTTP transport already behind the auth boundary, and returns the",
+			"handler the generated root mounts at /mcp. Register hand resources on server",
+			"and add outer wraps (CORS, anti-framing) here. Return authed unchanged for none.",
+		},
+		line: "MCPMount(server *mcp.Server, dev web.DevConfig, authed http.Handler) http.Handler",
+		seed: "return authed",
 	}
 }
 

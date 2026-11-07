@@ -55,7 +55,8 @@ func TestComposeMountsTheMCPClientsToolTables(t *testing.T) {
 		`"github.com/modelcontextprotocol/go-sdk/mcp"`,
 		`mcpServer := mcp.NewServer(&mcp.Implementation{Name: serviceName, Version: "1.0.0"}, nil)`,
 		`(&listmcp.Handler{Manager: webManagers.ListManager, Security: sec}).Register(mcpServer)`,
-		`root.Handle("/mcp", web.AuthMiddleware(dev, validator)(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil)))`,
+		`root.Handle("/mcp", hooks.MCPMount(mcpServer, dev, web.AuthMiddleware(dev, validator)(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil))))`,
+		"MCPMount(server *mcp.Server, dev web.DevConfig, authed http.Handler) http.Handler",
 	} {
 		if !strings.Contains(main, want) {
 			t.Errorf("main.gen.go lacks %q:\n%s", want, main)

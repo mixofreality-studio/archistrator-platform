@@ -140,7 +140,7 @@ func writeRootMounts(b *strings.Builder, r *resolved) {
 	for _, mm := range r.mcpMounts {
 		b.WriteString("\t(&" + mm.alias + ".Handler{Manager: webManagers." + mm.iface + ", Security: sec}).Register(mcpServer)\n")
 	}
-	b.WriteString("\troot.Handle(\"/mcp\", web.AuthMiddleware(dev, validator)(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil)))\n")
+	b.WriteString("\troot.Handle(\"/mcp\", hooks.MCPMount(mcpServer, dev, web.AuthMiddleware(dev, validator)(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil))))\n")
 }
 
 // addSurfaceImports adds the MCP SDK and the mounted tool tables.
