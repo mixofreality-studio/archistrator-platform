@@ -85,3 +85,25 @@ holds the result to zero Error findings, with no waiver. Every judgement made:
   settled here.
 - testgen warns that reword-a-todo-P1's `n3` output is Immediate and no observable is joined
   to it; the join is not implemented.
+
+## Harvested implementation bodies (`impl/`, FPC plan 2, Task 2.13b)
+
+`impl/` holds the RUN-021 harvest's hand-written component bodies, the non-generated,
+non-test `.go` files of `harvest/app/server/internal/**` and `cmd/server/hooks.go`
+(list-manager, list-ruling and access-granting engines, todo-list-access, message-bus).
+`conformance.WithImpl(FixtureImpl("todomvc"))` overlays them on the scaffold after the
+generators have run and before the first build: each directory the overlay writes a Go file
+into loses its generated `null.gen.go`, and `hooks.go` replaces nullgen's. The subtest
+`TestConformance_RUN021Proof/discriminate_impl` then runs `testgen -discriminate` over the
+real bodies and requires zero `TP-BROKEN` and zero survivors.
+
+The `testdata` path keeps these files out of the platform module's build and lint.
+
+Adaptations to the harvest (the complete list):
+
+- The module path in every import is `example.com/conformance/todomvc` (the scaffold's), not
+  the harvest's `github.com/local/todomvc-run-20261105T141816Z-04ce59ca`.
+- `cmd/server/hooks.go` gains `MCPMount` (and the `mcp` import): the generated composition
+  root now asks the app for it, and the harvest predates the seam. It returns the
+  authenticated handler unchanged.
+- Nothing else is changed; no interface of a component moved between binding model v1 and v2.

@@ -5,6 +5,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,6 +15,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/modelgen"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/nullgen"
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 	methodassets "github.com/mixofreality-studio/archistrator-platform/method-assets"
 )
@@ -63,17 +66,40 @@ func platformRoot() (string, error) {
 // go build, go vet and the web typecheck. The scaffolded Makefile targets are run by
 // name, so the pipeline follows whatever method-assets ships. It stops at the first
 // failing step; the Report holds every step that ran, the failing one last.
-func RunChain(ctx context.Context, fixture string, dir string) (Report, error) {
+func RunChain(ctx context.Context, fixture string, dir string, opts ...ChainOption) (Report, error) {
 	raw, err := Fixture(fixture)
 	if err != nil {
 		return Report{Fixture: fixture, Dir: dir}, err
 	}
-	return RunChainOn(ctx, fixture, raw, dir)
+	return RunChainOn(ctx, fixture, raw, dir, opts...)
+}
+
+// ChainOption adjusts a chain run.
+type ChainOption func(*chainConfig)
+
+type chainConfig struct{ impl fs.FS }
+
+// WithImpl overlays impl, a module-relative tree of an app's hand-written files (the
+// component bodies and cmd/server/hooks.go), onto the generated scaffold before the first
+// build. In every directory impl writes a Go file into, the null.gen.go nullgen wrote is
+// removed: the overlay is the component built, in place of the null implementation, and
+// the nullgen hooks.go is replaced by impl's own. The overlay is not applied to anything the earlier
+// generators read, so the models and tests generated are those of the null build.
+func WithImpl(impl fs.FS) ChainOption { return func(c *chainConfig) { c.impl = impl } }
+
+// FixtureImpl is the hand-written implementation tree embedded beside the named fixture
+// (testdata/<fixture>/impl), the argument of WithImpl.
+func FixtureImpl(fixture string) (fs.FS, error) {
+	return fs.Sub(Fixtures(), fixture+"/impl")
 }
 
 // RunChainOn is RunChain over project.json bytes the caller supplies (a fixture with one
 // binding changed, say); fixture only names the scaffold's module and project.
-func RunChainOn(ctx context.Context, fixture string, raw []byte, dir string) (Report, error) {
+func RunChainOn(ctx context.Context, fixture string, raw []byte, dir string, opts ...ChainOption) (Report, error) {
+	var cfg chainConfig
+	for _, o := range opts {
+		o(&cfg)
+	}
 	rep := Report{Fixture: fixture, Dir: dir}
 	model, err := projectmodel.Load(raw)
 	if err != nil {
@@ -92,7 +118,7 @@ func RunChainOn(ctx context.Context, fixture string, raw []byte, dir string) (Re
 	}
 
 	run := &runner{ctx: ctx, dir: dir, rep: &rep}
-	for _, st := range chainSteps(model) {
+	for _, st := range chainSteps(model, cfg.impl) {
 		if err := run.step(st); err != nil {
 			return rep, err
 		}
@@ -102,17 +128,20 @@ func RunChainOn(ctx context.Context, fixture string, raw []byte, dir string) (Re
 
 // chainStep is one command of the chain; sub is its working directory under the
 // scaffold ("" is the module root).
+//
+// A step with do set runs in process instead of argv (the impl overlay).
 type chainStep struct {
 	name string
 	sub  string
 	argv []string
+	do   func(dir string) error
 }
 
 // chainSteps is the ordered command list for model. gen-null comes first: modelgen
 // and appgen generate for a contract package only once it holds code (null.gen.go is
 // that code in a model with nothing built), and appgen compose seeds hooks.go only
 // when absent, which nullgen would then refuse to replace.
-func chainSteps(model *projectmodel.Model) []chainStep {
+func chainSteps(model *projectmodel.Model, impl fs.FS) []chainStep {
 	steps := []chainStep{
 		{name: "go mod tidy", argv: []string{"go", "mod", "tidy"}},
 		{name: "make gen-null", argv: []string{"make", "gen-null"}},
@@ -131,6 +160,9 @@ func chainSteps(model *projectmodel.Model) []chainStep {
 	if len(surfaces) > 0 {
 		steps = append(steps, chainStep{name: "webgen generate",
 			argv: []string{"go", "tool", "webgen", "generate", "-C", webDir}})
+	}
+	if impl != nil {
+		steps = append(steps, chainStep{name: "overlay impl", do: func(dir string) error { return overlayImpl(dir, impl) }})
 	}
 	steps = append(steps,
 		chainStep{name: "go mod tidy (generated imports)", argv: []string{"go", "mod", "tidy"}},
@@ -158,6 +190,14 @@ type runner struct {
 
 func (r *runner) step(st chainStep) error {
 	start := time.Now()
+	if st.do != nil {
+		err := st.do(r.dir)
+		r.rep.Steps = append(r.rep.Steps, stepOf(st.name, []string{st.name}, err, start))
+		if err != nil {
+			return fmt.Errorf("conformance: step %q failed: %w", st.name, err)
+		}
+		return nil
+	}
 	cmd := exec.CommandContext(r.ctx, st.argv[0], st.argv[1:]...) // #nosec G204 -- fixed argv built above
 	cmd.Dir = filepath.Join(r.dir, st.sub)
 	cmd.Env = append(os.Environ(), "GOWORK=off")
@@ -177,6 +217,47 @@ func (r *runner) step(st chainStep) error {
 		return fmt.Errorf("conformance: step %q failed (exit %d): %w\n%s", st.name, res.ExitCode, err, res.Stderr)
 	}
 	return nil
+}
+
+// overlayImpl writes impl into dir and removes the null.gen.go of every directory it writes
+// a Go file into, so the component's own body replaces the null implementation.
+func overlayImpl(dir string, impl fs.FS) error {
+	return fs.WalkDir(impl, ".", func(path string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return err
+		}
+		body, err := fs.ReadFile(impl, path)
+		if err != nil {
+			return err
+		}
+		dest := filepath.Join(dir, filepath.FromSlash(path))
+		if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+			return err
+		}
+		if strings.HasSuffix(path, ".go") {
+			if err := removeNullImpl(filepath.Join(filepath.Dir(dest), modelgen.NullFile)); err != nil {
+				return err
+			}
+		}
+		return os.WriteFile(dest, body, 0o600)
+	})
+}
+
+// removeNullImpl deletes path when nullgen wrote it. A null.gen.go with any other header is
+// another generator's (cmd/server/null.gen.go is the composition root's null-operation wrapper)
+// and stays.
+func removeNullImpl(path string) error {
+	head, err := os.ReadFile(path) // #nosec G304 -- inside the scaffold the chain just wrote
+	if errors.Is(err, fs.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if !strings.HasPrefix(string(head), nullgen.Header) {
+		return nil
+	}
+	return os.Remove(path)
 }
 
 func stepOf(name string, argv []string, err error, start time.Time) StepResult {

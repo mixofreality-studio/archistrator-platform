@@ -5,6 +5,7 @@ package conformance
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -30,8 +31,15 @@ const run021Fixture = "todomvc"
 //	methodcheck   the fixture, with no waiver, has zero Error findings
 //	testgen       the generated mark-a-todo spec asserts the checked box immediately
 //	chain         the fixture scaffolds, generates and builds (needs the released platform pins)
-//	discriminate  list-manager has zero null-subject survivors (needs the chain)
+//	discriminate  on the null build no scenario survives, and exactly the scenarios that assert
+//	              behavior are TP-BROKEN (the null build cannot satisfy them; they are never nulled)
 //	vacuous       the old delete binding, left in place, is a survivor (needs the chain)
+//	discriminate_impl
+//	              over the RUN-021 harvest's hand-written bodies (testdata/todomvc/impl, overlaid
+//	              in place of null.gen.go and the nullgen hooks.go) every generated Go scenario
+//	              passes against its real subject (broken == 0) and none survives its stimulus
+//	              being nulled (survivors == 0): the proof that the generated tests discriminate
+//	              a real implementation, which the null build alone cannot give
 func TestConformance_RUN021Proof(t *testing.T) {
 	raw, err := Fixture(run021Fixture)
 	if err != nil {
@@ -60,10 +68,22 @@ func TestConformance_RUN021Proof(t *testing.T) {
 	}
 	t.Run("vet", func(t *testing.T) { run021Vet(t, built) })
 	t.Run("discriminate", func(t *testing.T) {
-		for _, s := range discriminate(t, built) {
-			if s.component == "listManager" {
-				t.Errorf("list-manager scenario %s op %s survives the null subject", s.scenario, s.op)
-			}
+		got := discriminate(t, built)
+		for _, s := range got.list {
+			t.Errorf("%s scenario %s op %s survives the null subject", s.component, s.scenario, s.op)
+		}
+		if got.survivors != 0 {
+			t.Errorf("null build: %d survivor(s), want 0", got.survivors)
+		}
+		if want := goScenarios(t, built); got.scenarios != want {
+			t.Errorf("null build: %d scenario(s) discriminated, but %d TestScenario_ functions were generated for Go components", got.scenarios, want)
+		}
+		// The null build is all-null: its "real subject" returns zero results, so every scenario
+		// that asserts behavior fails there (TP-BROKEN) and is not nulled. Only the scenarios whose
+		// assertions the zero results satisfy reach the null runs; pinning the count makes a change
+		// in what the generators emit (or in the fixture) show up here.
+		if got.broken != nullBuildBroken {
+			t.Errorf("null build: %d broken scenario(s), want %d", got.broken, nullBuildBroken)
 		}
 	})
 	t.Run("vacuous", func(t *testing.T) {
@@ -73,13 +93,75 @@ func TestConformance_RUN021Proof(t *testing.T) {
 		if _, err := RunChainOn(ctx, run021Fixture, vacuousDiscard(t, raw), dir); err != nil {
 			t.Fatalf("RunChain (vacuous delete): %v", err)
 		}
-		for _, s := range discriminate(t, dir) {
+		for _, s := range discriminate(t, dir).list {
 			if s.component == "listManager" && s.scenario == "discard-a-todo-P1" {
 				return
 			}
 		}
 		t.Error("the old, vacuous discard-a-todo-P1 binding passes a null subject yet was not listed as a survivor")
 	})
+	t.Run("discriminate_impl", func(t *testing.T) { run021DiscriminateImpl(t, raw) })
+}
+
+// nullBuildBroken is how many Go scenarios of the todomvc fixture fail against the null build's own
+// (all-null) real subject.
+const nullBuildBroken = 76
+
+// run021DiscriminateImpl builds the fixture with the harvest's hand-written component bodies in
+// place of the null implementations and requires the discrimination to be clean over them: every
+// generated Go scenario passes against the real subject, and nulling any stimulus operation fails it.
+func run021DiscriminateImpl(t *testing.T, raw []byte) {
+	impl, err := FixtureImpl(run021Fixture)
+	if err != nil {
+		t.Fatalf("FixtureImpl: %v", err)
+	}
+	dir := t.TempDir()
+	ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
+	defer cancel()
+	if _, err := RunChainOn(ctx, run021Fixture, raw, dir, WithImpl(impl)); err != nil {
+		t.Fatalf("RunChain (harvested bodies): %v", err)
+	}
+	got := discriminate(t, dir)
+	for _, s := range got.list {
+		t.Errorf("%s scenario %s op %s survives the null subject over the real bodies", s.component, s.scenario, s.op)
+	}
+	if got.broken != 0 {
+		t.Errorf("%d scenario(s) fail against the harvested bodies (TP-BROKEN), want 0", got.broken)
+	}
+	if got.survivors != 0 {
+		t.Errorf("%d survivor(s), want 0", got.survivors)
+	}
+	if want := goScenarios(t, dir); got.scenarios != want || want == 0 {
+		t.Errorf("%d scenario(s) discriminated, but %d TestScenario_ functions were generated for Go components", got.scenarios, want)
+	}
+}
+
+// goScenarios counts the TestScenario_ functions testgen generated for Go components under dir
+// (client_scenarios.gen_test.go belongs to the machine clients, which -discriminate announces as
+// skipped).
+func goScenarios(t *testing.T, dir string) int {
+	t.Helper()
+	n := 0
+	err := filepath.WalkDir(filepath.Join(dir, "internal"), func(path string, d os.DirEntry, err error) error {
+		base := filepath.Base(path)
+		if err != nil || d.IsDir() || !strings.HasSuffix(base, "_scenarios.gen_test.go") || base == "client_scenarios.gen_test.go" {
+			return err
+		}
+		src, err := os.ReadFile(path) // #nosec G304 -- the chain's own output
+		if err != nil {
+			return err
+		}
+		for _, line := range strings.Split(string(src), "\n") {
+			if strings.HasPrefix(line, "func TestScenario_") {
+				n++
+			}
+		}
+		return nil
+	})
+	if err != nil {
+		t.Fatalf("counting generated scenarios: %v", err)
+	}
+	return n
 }
 
 func run021Derive(t *testing.T, raw []byte) {
@@ -189,12 +271,20 @@ func run021Vet(t *testing.T, dir string) {
 // survivor is one TP-DISCRIMINATE line.
 type survivor struct{ component, scenario, op string }
 
-// discriminate runs `testgen -discriminate` in the built app dir and returns its survivors. Exit 1
-// with TP-DISCRIMINATE or TP-BROKEN lines is the run's answer, not a failure of the runner. The
-// built app holds only null implementations, so a scenario that asserts behavior is TP-BROKEN here
-// (it fails against the real subject, which is the null one) and is not nulled; only a scenario the
-// null subject satisfies, such as the vacuous binding, is a survivor.
-func discriminate(t *testing.T, dir string) []survivor {
+// discriminateRun is what one `testgen -discriminate` run reported: the counts of its summary line
+// `discriminate: N scenario(s), M null run(s), S survivor(s), B broken`, and the survivors it named.
+type discriminateRun struct {
+	scenarios, nullRuns, survivors, broken int
+	list                                   []survivor
+}
+
+// discriminate runs `testgen -discriminate` in the built app dir and returns what it reported. Exit 1
+// with TP-DISCRIMINATE or TP-BROKEN lines is the run's answer, not a failure of the runner; a run with
+// no summary line did not complete (an inconclusive scenario run is the tool's error) and fails the
+// test. On a null build a scenario that asserts behavior is TP-BROKEN (it fails against the real
+// subject, which is the null one) and is not nulled; only a scenario the null subject satisfies, such
+// as the vacuous binding, is a survivor.
+func discriminate(t *testing.T, dir string) discriminateRun {
 	t.Helper()
 	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Minute)
 	defer cancel()
@@ -203,21 +293,32 @@ func discriminate(t *testing.T, dir string) []survivor {
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	out, err := cmd.CombinedOutput()
-	var survivors []survivor
-	broken := 0
+	var got discriminateRun
+	summarized := false
+	named, brokenNamed := 0, 0
 	for _, line := range strings.Split(string(out), "\n") {
 		f := strings.Fields(line)
 		switch {
 		case len(f) == 4 && f[0] == "TP-DISCRIMINATE":
-			survivors = append(survivors, survivor{f[1], f[2], f[3]})
+			got.list = append(got.list, survivor{f[1], f[2], f[3]})
+			named++
 		case len(f) == 3 && f[0] == "TP-BROKEN":
-			broken++ // the built app is a null build: a scenario that asserts behavior fails against it
+			brokenNamed++
+		default:
+			var n [4]int
+			if c, _ := fmt.Sscanf(line, "discriminate: %d scenario(s), %d null run(s), %d survivor(s), %d broken", &n[0], &n[1], &n[2], &n[3]); c == 4 {
+				got.scenarios, got.nullRuns, got.survivors, got.broken = n[0], n[1], n[2], n[3]
+				summarized = true
+			}
 		}
 	}
-	if err != nil && len(survivors) == 0 && broken == 0 {
-		t.Fatalf("testgen -discriminate: %v\n%s", err, out)
+	if !summarized {
+		t.Fatalf("testgen -discriminate did not complete (%v); no summary line in:\n%s", err, out)
 	}
-	return survivors
+	if named != got.survivors || brokenNamed != got.broken {
+		t.Fatalf("testgen -discriminate named %d survivor(s) and %d broken but summarized %d and %d:\n%s", named, brokenNamed, got.survivors, got.broken, out)
+	}
+	return got
 }
 
 // vacuousDiscard is raw with listManager's discard-a-todo-P1 binding put back to what RUN-021's
