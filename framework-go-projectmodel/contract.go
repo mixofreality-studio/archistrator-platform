@@ -31,6 +31,10 @@ type Dep struct {
 	Component string `json:"component,omitempty"`
 	GoType    string `json:"goType,omitempty"`
 	GoImport  string `json:"goImport,omitempty"`
+	// Setting names the deployment setting that supplies this plain dependency's value: cfg.<Field>
+	// in the production composition, the setting's default in a scenario. It must be of a type
+	// compatible with GoType (duration <-> time.Duration, string, bool, int).
+	Setting string `json:"setting,omitempty"`
 }
 
 // ParseContract parses one serviceContracts entry. The raw entry doubles as
@@ -66,7 +70,7 @@ var (
 	interfaceFields = fieldSet("name", "layer", "operations")
 	operationFields = fieldSet("name", "params", "result", "error", "readOnly", "ui")
 	paramFields     = fieldSet("name", "pointer", "schema")
-	depFields       = fieldSet("name", "component", "goType", "goImport")
+	depFields       = fieldSet("name", "component", "goType", "goImport", "setting")
 )
 
 func fieldSet(names ...string) map[string]bool {

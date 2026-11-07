@@ -25,6 +25,11 @@ const (
 	CodeRelEnds = "PM-REL-ENDS"
 	// CodeDeployRef: a deployment declaration references something that is not declared.
 	CodeDeployRef = "PM-DEPLOY-REF"
+	// CodeSubstrateUnknown: an infrastructure declaration names a substrate outside the catalog.
+	CodeSubstrateUnknown = "PM-SUBSTRATE-UNKNOWN"
+	// CodeDepSetting: a dependency's setting link names no deployment setting, names one of an
+	// incompatible type, or sits on a component dependency.
+	CodeDepSetting = "PM-DEP-SETTING"
 	// CodeDecode: a document that is not decodable at all (malformed JSON, wrong JSON type,
 	// no interface descriptor). Added beside the plan's set: a decode failure has no other home.
 	CodeDecode = "PM-DECODE"

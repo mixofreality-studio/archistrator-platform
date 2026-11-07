@@ -7,20 +7,15 @@ import (
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
-// pascalToken and upperFirst are shared verbatim with configgen via
-// internal/deploynaming, so composegen references the SAME config field names
-// configgen emits (the two share the field-naming convention; a drift here can
-// no longer silently break the cfg.<Field> references).
-var (
-	pascalToken = deploynaming.PascalToken
-	upperFirst  = deploynaming.UpperFirst
-)
+// upperFirst is shared verbatim with configgen via internal/deploynaming, so composegen
+// references the SAME setting field names configgen emits.
+var upperFirst = deploynaming.UpperFirst
 
-// infraFieldName is the config.gen.go field for one infra input: the configgen
-// convention pascalToken(infraKey)+pascalToken(input) (e.g. temporal+HOSTPORT ->
-// "TemporalHostport", postgres+URL -> "PostgresURL").
+// infraFieldName is the config.gen.go field for one infra input: projectmodel's single
+// derivation, the one configgen emits (e.g. temporal+HOSTPORT -> "TemporalHostport",
+// postgres+URL -> "PostgresURL").
 func infraFieldName(infraKey, input string) string {
-	return pascalToken(infraKey) + pascalToken(input)
+	return projectmodel.InfraFieldName(infraKey, input)
 }
 
 // settingFieldName is the config.gen.go field for one setting: upperFirst(name)

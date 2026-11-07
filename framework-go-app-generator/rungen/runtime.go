@@ -37,6 +37,7 @@ const runtime = `
 // runPlan is the shape of plan.
 type runPlan struct {
 	Temporal, Postgres                     bool
+	GitRepos                               []string
 	WebDir                                 string
 	ListenEnv, WebDistEnv, DevPrincipalEnv string
 	Provisioned                            []provisionedEnv
@@ -133,6 +134,9 @@ func checkPrerequisites() error {
 	if plan.Postgres {
 		tools = append(tools, "docker")
 	}
+	if len(plan.GitRepos) > 0 {
+		tools = append(tools, "git")
+	}
 	if plan.WebDir != "" {
 		tools = append(tools, "npm")
 	}
@@ -183,6 +187,13 @@ func provision(ctx context.Context, stack *cleanups) (map[string]string, error) 
 			return nil, err
 		}
 		values["postgres.url"] = url
+	}
+	for _, key := range plan.GitRepos {
+		url, err := startGitRepo(ctx, key, stack)
+		if err != nil {
+			return nil, err
+		}
+		values["git-repo."+key+".url"] = url
 	}
 	env := map[string]string{}
 	for _, p := range plan.Provisioned {
@@ -251,6 +262,40 @@ func startPostgres(ctx context.Context, stack *cleanups) (string, error) {
 	}
 	fmt.Fprintln(os.Stderr, "devstack: postgres on 127.0.0.1:"+port)
 	return "postgres://app:app@127.0.0.1:" + port + "/app?sslmode=disable", nil
+}
+
+// startGitRepo creates a temporary bare repository whose main branch holds one empty seed commit,
+// so a clone sees a real tip to compare-and-swap against, and returns its file:// URL.
+func startGitRepo(ctx context.Context, key string, stack *cleanups) (string, error) {
+	root, err := os.MkdirTemp("", "devstack-git-")
+	if err != nil {
+		return "", err
+	}
+	stack.add(func() { _ = os.RemoveAll(root) })
+	bare := filepath.Join(root, "remote.git")
+	if err := step(ctx, root, "git", "init", "--bare", "--initial-branch=main", bare); err != nil {
+		return "", fmt.Errorf("git repo %s: %w", key, err)
+	}
+	identity := append(os.Environ(),
+		"GIT_AUTHOR_NAME=seed", "GIT_AUTHOR_EMAIL=seed@aiarch.local", "GIT_AUTHOR_DATE=1970-01-01T00:00:00Z",
+		"GIT_COMMITTER_NAME=seed", "GIT_COMMITTER_EMAIL=seed@aiarch.local", "GIT_COMMITTER_DATE=1970-01-01T00:00:00Z")
+	hash := exec.CommandContext(ctx, "git", "-C", bare, "hash-object", "-t", "tree", "-w", "--stdin") // #nosec G204 -- fixed tool, the repo created above
+	hash.Stdin = strings.NewReader("")
+	tree, err := hash.Output()
+	if err != nil {
+		return "", fmt.Errorf("git repo %s: write the empty tree: %w", key, err)
+	}
+	commit := exec.CommandContext(ctx, "git", "-C", bare, "commit-tree", strings.TrimSpace(string(tree)), "-m", "seed") // #nosec G204 -- fixed tool, the repo created above
+	commit.Env = identity
+	sha, err := commit.Output()
+	if err != nil {
+		return "", fmt.Errorf("git repo %s: seed commit: %w", key, err)
+	}
+	if err := step(ctx, root, "git", "-C", bare, "update-ref", "refs/heads/main", strings.TrimSpace(string(sha))); err != nil {
+		return "", fmt.Errorf("git repo %s: %w", key, err)
+	}
+	fmt.Fprintln(os.Stderr, "devstack: git repo "+key+" at "+bare)
+	return "file://" + bare, nil
 }
 
 // buildWeb runs the managed web build and returns the built surfaces' directory.

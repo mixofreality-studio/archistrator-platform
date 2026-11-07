@@ -70,10 +70,11 @@ func (m *Model) validateDeps() Problems {
 func (m *Model) validateContractDeps(c *Contract) Problems {
 	var probs Problems
 	for i, d := range c.Deps {
+		path := fmt.Sprintf("serviceContracts.%s.deps[%d]", c.Key, i)
+		probs = append(probs, m.depSettingProblems(path, c.Key, d)...)
 		if d.Component == "" {
 			continue // plain dep: exempt
 		}
-		path := fmt.Sprintf("serviceContracts.%s.deps[%d]", c.Key, i)
 		target, ok := m.Contracts[d.Component]
 		if !ok {
 			probs = append(probs, problem(path, CodeDepTarget, "contract %s dep %q: unknown component %q", c.Key, d.Name, d.Component))
@@ -89,6 +90,37 @@ func (m *Model) validateContractDeps(c *Contract) Problems {
 		}
 	}
 	return probs
+}
+
+// settingGoTypes maps a deployment setting type to the Go type a dependency linked to it must have.
+var settingGoTypes = map[string]string{"": "string", "string": "string", "bool": "bool", "int": "int", "duration": "time.Duration"}
+
+// depSettingProblems checks a dependency's Setting link: only a plain dependency may carry one, it
+// must name a setting of the deployment (the authored one, else the derived default), and that
+// setting's type must be the dependency's Go type.
+func (m *Model) depSettingProblems(path, contract string, d Dep) Problems {
+	if d.Setting == "" {
+		return nil
+	}
+	if d.Component != "" {
+		return Problems{problem(path+".setting", CodeDepSetting, "contract %s dep %q: a component dependency has no setting to link", contract, d.Name)}
+	}
+	var settings []Setting
+	if m.Deployment != nil {
+		settings = m.Deployment.Settings
+	} else {
+		settings = DefaultDeployment(m.Contracts, "").Settings
+	}
+	for _, s := range settings {
+		if s.Name != d.Setting {
+			continue
+		}
+		if want := settingGoTypes[s.Type]; want != d.GoType {
+			return Problems{problem(path+".setting", CodeDepSetting, "contract %s dep %q: setting %q is %s (Go %s) but the dependency is %q", contract, d.Name, s.Name, s.Type, want, d.GoType)}
+		}
+		return nil
+	}
+	return Problems{problem(path+".setting", CodeDepSetting, "contract %s dep %q: no deployment setting named %q", contract, d.Name, d.Setting)}
 }
 
 // systemProblems checks rule 3: every systemDesign relationship endpoint resolves to a

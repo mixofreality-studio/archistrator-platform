@@ -6,7 +6,8 @@
 //  1. checks its prerequisites (go, and the temporal CLI, docker and npm when the local
 //     profile needs them) and fails naming any that is missing;
 //  2. provisions the substrates it knows for the local profile: a Temporal dev server
-//     (temporal server start-dev) and a postgres:16-alpine container;
+//     (temporal server start-dev), a postgres:16-alpine container and a temporary bare git
+//     repo per git-repo infrastructure key;
 //  3. runs the managed web build when the System has a browser surface;
 //  4. sets the <PREFIX>_* variables, named by configgen.Inputs, and boots cmd/server;
 //  5. waits for /readyz and prints one machine-readable line with the URL.
@@ -33,9 +34,6 @@ const (
 	File = "main.gen.go"
 )
 
-// localProfile is the profile the launcher runs.
-const localProfile = "local"
-
 // defaultWebDir is the web project every browser surface shares (webgen's bootstrap seats it).
 const defaultWebDir = "webApp"
 
@@ -60,9 +58,16 @@ const (
 	PostgresURL       Provision = "postgres.url"
 )
 
+// GitRepoURL is the provision of the URL of the temporary bare repo made for git-repo
+// infrastructure key.
+func GitRepoURL(key string) Provision { return Provision("git-repo." + key + ".url") }
+
 // Plan is the local run contract derived from the deployment model.
 type Plan struct {
 	Temporal, Postgres bool
+	// GitRepos is the git-repo infrastructure keys the launcher makes a temporary bare repo for,
+	// sorted.
+	GitRepos []string
 	// WebDir is the web project to build ("" when there is no browser surface to serve).
 	WebDir string
 	// ListenEnv, WebDistEnv and DevPrincipalEnv are the variables the launcher sets itself.
@@ -144,16 +149,34 @@ func (p *Plan) take(in configgen.Input) error {
 		p.ListenEnv = in.Env
 	case in.Setting == projectmodel.WebDistDirSetting:
 		p.WebDistEnv = in.Env
-	case in.InfraKey == "" || !slices.Contains(in.Profiles, localProfile):
+	case in.InfraKey == "" || !slices.Contains(in.Profiles, projectmodel.LocalProfile):
 		// A setting with a default, or infrastructure the local profile does not use.
-	case in.Substrate == "temporal":
+	default:
+		return p.takeInfra(in)
+	}
+	return nil
+}
+
+// takeInfra files one local-profile infrastructure input: provisioned when the launcher can make
+// the substrate, otherwise required of the caller when the Config requires it.
+func (p *Plan) takeInfra(in configgen.Input) error {
+	switch in.Substrate {
+	case projectmodel.SubstrateTemporal:
 		p.Temporal = true
 		return p.provision(in, map[string]Provision{"HOSTPORT": TemporalHostport, "NAMESPACE": TemporalNamespace})
-	case in.Substrate == "postgres":
+	case projectmodel.SubstratePostgres:
 		p.Postgres = true
 		return p.provision(in, map[string]Provision{"URL": PostgresURL})
-	case in.RequiredFor(localProfile):
-		p.Required = append(p.Required, in.Env)
+	case projectmodel.SubstrateGitRepo:
+		if !slices.Contains(p.GitRepos, in.InfraKey) {
+			p.GitRepos = append(p.GitRepos, in.InfraKey)
+			slices.Sort(p.GitRepos)
+		}
+		return p.provision(in, map[string]Provision{"URL": GitRepoURL(in.InfraKey)})
+	case projectmodel.SubstrateGitHubApp, projectmodel.SubstrateKeycloak, projectmodel.SubstrateOtel, projectmodel.SubstrateExternalHTTP:
+		if in.RequiredFor(projectmodel.LocalProfile) {
+			p.Required = append(p.Required, in.Env)
+		}
 	}
 	return nil
 }
@@ -186,6 +209,14 @@ func render(p Plan) string {
 	b.WriteString("// plan is the local profile's run contract, rendered from the deployment model.\n")
 	b.WriteString("var plan = runPlan{\n")
 	fmt.Fprintf(&b, "\tTemporal: %t,\n\tPostgres: %t,\n", p.Temporal, p.Postgres)
+	b.WriteString("\tGitRepos: []string{")
+	for i, k := range p.GitRepos {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%q", k)
+	}
+	b.WriteString("},\n")
 	fmt.Fprintf(&b, "\tWebDir: %q,\n\tListenEnv: %q,\n\tWebDistEnv: %q,\n\tDevPrincipalEnv: %q,\n", p.WebDir, p.ListenEnv, p.WebDistEnv, p.DevPrincipalEnv)
 	b.WriteString("\tProvisioned: []provisionedEnv{\n")
 	for _, e := range p.Provisioned {

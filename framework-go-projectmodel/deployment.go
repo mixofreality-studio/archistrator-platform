@@ -49,7 +49,7 @@ type DeployEnvironment struct {
 // Presence class, and per-input env-var name overrides (input name → ENV_VAR).
 type InfraDecl struct {
 	Key       string            `json:"key"`
-	Substrate string            `json:"substrate"`
+	Substrate Substrate         `json:"substrate"`
 	Profiles  []string          `json:"profiles"`
 	Presence  string            `json:"presence"`
 	Env       map[string]string `json:"env"`
@@ -177,19 +177,30 @@ func deploymentProblems(d *Deployment, contracts map[string]*Contract) Problems 
 	return append(probs, settingsProblems("deployment.settings", "settings", d.Settings)...)
 }
 
-// infrastructureProblems checks each infra decl's presence enum and that every profile it lists
-// is a declared environment profile.
+// infrastructureProblems checks each infra decl's substrate and presence enums and that every
+// profile it lists is a declared environment profile.
 func infrastructureProblems(d *Deployment, profiles map[string]bool) Problems {
 	var probs Problems
 	for idx, i := range d.Infrastructure {
 		path := fmt.Sprintf("deployment.infrastructure[%d]", idx)
+		if !i.Substrate.Known() {
+			probs = append(probs, problem(path+".substrate", CodeSubstrateUnknown, "deployment infra %q: unknown substrate %q (known: %v)", i.Key, i.Substrate, Substrates()))
+		}
 		if i.Presence != "" && !knownPresence[i.Presence] {
 			probs = append(probs, problem(path+".presence", CodeDeployRef, "deployment infra %q: unknown presence %q", i.Key, i.Presence))
 		}
-		for _, p := range i.Profiles {
-			if !profiles[p] {
-				probs = append(probs, problem(path+".profiles", CodeDeployRef, "deployment infra %q: profile %q not in environments", i.Key, p))
-			}
+		probs = append(probs, infraProfileProblems(path, i, profiles)...)
+	}
+	return probs
+}
+
+// infraProfileProblems checks that every profile an infra decl lists is a declared environment
+// profile.
+func infraProfileProblems(path string, i InfraDecl, profiles map[string]bool) Problems {
+	var probs Problems
+	for _, p := range i.Profiles {
+		if !profiles[p] {
+			probs = append(probs, problem(path+".profiles", CodeDeployRef, "deployment infra %q: profile %q not in environments", i.Key, p))
 		}
 	}
 	return probs
@@ -323,9 +334,102 @@ func defaultBindings(key string, infra, profiles []string) []Binding {
 	return out
 }
 
-// SubstrateExternalHTTP is the substrate of an external HTTP endpoint a binding calls: its one
-// input is the endpoint's base URL.
-const SubstrateExternalHTTP = "external-http"
+// Substrate is a kind of infrastructure the deployment catalog knows: it fixes the configuration
+// inputs a declaration of that kind supplies. It is a closed choice; every switch over it is
+// exhaustive, and Substrates lists every kind.
+type Substrate string
+
+// The substrate catalog.
+const (
+	SubstrateTemporal  Substrate = "temporal"
+	SubstratePostgres  Substrate = "postgres"
+	SubstrateGitHubApp Substrate = "github-app"
+	SubstrateKeycloak  Substrate = "keycloak"
+	SubstrateOtel      Substrate = "otel"
+	// SubstrateExternalHTTP is an external HTTP endpoint a binding calls: its one input is the
+	// endpoint's base URL.
+	SubstrateExternalHTTP Substrate = "external-http"
+	// SubstrateGitRepo is a git repository addressed by URL: its one input is that URL. The local
+	// profile's launcher and the scenario host provision a temporary bare repo for it.
+	SubstrateGitRepo Substrate = "git-repo"
+)
+
+// LocalProfile is the profile the local run contract (cmd/devstack) and the scenario composition
+// both realize.
+const LocalProfile = "local"
+
+// Substrates is every substrate in the catalog, in catalog order.
+func Substrates() []Substrate {
+	return []Substrate{SubstrateTemporal, SubstratePostgres, SubstrateGitHubApp, SubstrateKeycloak, SubstrateOtel, SubstrateExternalHTTP, SubstrateGitRepo}
+}
+
+// SubstrateInput is one configuration input a substrate declares: its canonical UPPER_SNAKE name
+// plus an OPTIONAL default. A non-empty Default means the input is never "missing": the config
+// falls back to it instead of hard-requiring the env var.
+//
+// The field is Name (not "Token") deliberately: gosec's G101 hardcoded-credentials heuristic
+// pattern-matches a "Token"-named field against its string literal value, flagging entries like
+// PRIVATE_KEY_PEM as false-positive secrets though they are catalog input names.
+type SubstrateInput struct {
+	Name    string
+	Default string
+}
+
+// Inputs is the ordered configuration inputs a declaration of this substrate supplies; nil for a
+// substrate not in the catalog. Every input is a plain string on the wire: typed coercion (the
+// github-app installation id to int64, the PEM to a resolved secret) is the composition root's.
+// Only temporal carries defaults (the archistrator dev cluster's well-known frontend address).
+func (s Substrate) Inputs() []SubstrateInput {
+	switch s {
+	case SubstrateTemporal:
+		return []SubstrateInput{{Name: "HOSTPORT", Default: "temporal-frontend.temporal.svc:7233"}, {Name: "NAMESPACE", Default: "default"}}
+	case SubstratePostgres:
+		return []SubstrateInput{{Name: "URL"}}
+	case SubstrateGitHubApp:
+		return []SubstrateInput{{Name: "APP_ID"}, {Name: "PRIVATE_KEY_PEM"}, {Name: "ACCOUNT"}, {Name: "APP_SLUG"}, {Name: "INSTALLATION_ID"}, {Name: "API_BASE_URL"}}
+	case SubstrateKeycloak:
+		return []SubstrateInput{{Name: "JWKS_URL"}, {Name: "ISSUER"}}
+	case SubstrateOtel:
+		return []SubstrateInput{} // env-driven by the OTEL_* SDK convention; no declared inputs
+	case SubstrateExternalHTTP, SubstrateGitRepo:
+		return []SubstrateInput{{Name: "URL"}}
+	}
+	return nil
+}
+
+// Known reports whether s is in the catalog.
+func (s Substrate) Known() bool { return slices.Contains(Substrates(), s) }
+
+// initialisms are the input/key tokens rendered all-caps in a derived Go field name.
+var initialisms = map[string]bool{"ID": true, "URL": true, "PEM": true, "API": true, "JWKS": true}
+
+// pascalToken renders an UPPER_SNAKE / kebab / lower token as a PascalCase Go identifier
+// fragment, uppercasing known initialisms ("APP_ID" -> "AppID", "github-app" -> "GithubApp").
+func pascalToken(s string) string {
+	var b strings.Builder
+	for _, p := range strings.FieldsFunc(s, func(r rune) bool { return r == '_' || r == '-' }) {
+		if initialisms[strings.ToUpper(p)] {
+			b.WriteString(strings.ToUpper(p))
+			continue
+		}
+		b.WriteString(strings.ToUpper(p[:1]) + strings.ToLower(p[1:]))
+	}
+	return b.String()
+}
+
+// InfraFieldName is the Go config field for one infra input: PascalCase(key)+PascalCase(input)
+// (temporal+HOSTPORT -> "TemporalHostport", project-state-git-repo+URL -> "ProjectStateGitRepoURL").
+// It is the one derivation configgen emits and composegen references.
+func InfraFieldName(key, input string) string { return pascalToken(key) + pascalToken(input) }
+
+// InfraEnvName is the environment variable one infra input is read from: the declaration's
+// explicit override, else <PREFIX>_<KEY>_<INPUT> with the key in UPPER_SNAKE.
+func InfraEnvName(prefix string, d InfraDecl, input string) string {
+	if env := d.Env[input]; env != "" {
+		return env
+	}
+	return prefix + "_" + strings.ToUpper(strings.ReplaceAll(d.Key, "-", "_")) + "_" + input
+}
 
 // ExternalEndpointKey is the infra key a component's external HTTP endpoint is declared under,
 // so its URL surfaces as <PREFIX>_<COMPONENT>_URL (identityAccess -> APP_IDENTITY_ACCESS_URL).

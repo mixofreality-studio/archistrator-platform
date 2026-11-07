@@ -21,7 +21,7 @@ type Input struct {
 	Field string
 	// InfraKey, Substrate and CatalogInput identify an infrastructure input ("" for a setting).
 	InfraKey     string
-	Substrate    string
+	Substrate    projectmodel.Substrate
 	CatalogInput string
 	// Setting is the declared setting's name ("" for an infrastructure input).
 	Setting string

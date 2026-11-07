@@ -43,16 +43,16 @@ type Config struct {
 
 // infraField is one emitted infrastructure input field.
 type infraField struct {
-	GoName        string   // exported Go field name
-	Env           string   // resolved env-var name
-	InfraKey      string   // owning infra decl key
-	Substrate     string   // owning decl's catalog substrate
-	Input         string   // the catalog input name (e.g. URL, HOSTPORT)
-	RequiredAll   bool     // required across ALL declared profiles ⇒ hard-required
-	RequiredClass bool     // owning decl presence == "required" (neither optional nor optional-dormant)
-	Profiles      []string // profiles the owning decl is provisioned for
-	OptDormant    bool     // owning decl presence == optional-dormant
-	Default       string   // catalog-declared default; non-empty ⇒ never "missing" (LoadConfig falls back to it)
+	GoName        string                 // exported Go field name
+	Env           string                 // resolved env-var name
+	InfraKey      string                 // owning infra decl key
+	Substrate     projectmodel.Substrate // owning decl's catalog substrate
+	Input         string                 // the catalog input name (e.g. URL, HOSTPORT)
+	RequiredAll   bool                   // required across ALL declared profiles ⇒ hard-required
+	RequiredClass bool                   // owning decl presence == "required" (neither optional nor optional-dormant)
+	Profiles      []string               // profiles the owning decl is provisioned for
+	OptDormant    bool                   // owning decl presence == optional-dormant
+	Default       string                 // catalog-declared default; non-empty ⇒ never "missing" (LoadConfig falls back to it)
 }
 
 // settingField is one emitted setting field.
@@ -152,19 +152,14 @@ func collectInfra(d *projectmodel.Deployment, prefix string) ([]infraField, erro
 
 	var out []infraField
 	for _, decl := range decls {
-		inputs, ok := substrateCatalog[decl.Substrate]
-		if !ok {
+		if !decl.Substrate.Known() {
 			return nil, fmt.Errorf("configgen: infra %q: unknown substrate %q", decl.Key, decl.Substrate)
 		}
 		requiredClass := decl.Presence != "optional" && decl.Presence != "optional-dormant"
-		for _, in := range inputs {
-			env := decl.Env[in.Name]
-			if env == "" {
-				env = prefix + "_" + upperSnakeKey(decl.Key) + "_" + in.Name
-			}
+		for _, in := range decl.Substrate.Inputs() {
 			out = append(out, infraField{
-				GoName:        pascalToken(decl.Key) + pascalToken(in.Name),
-				Env:           env,
+				GoName:        projectmodel.InfraFieldName(decl.Key, in.Name),
+				Env:           projectmodel.InfraEnvName(prefix, decl, in.Name),
 				InfraKey:      decl.Key,
 				Substrate:     decl.Substrate,
 				Input:         in.Name,

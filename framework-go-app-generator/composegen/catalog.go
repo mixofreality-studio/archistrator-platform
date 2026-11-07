@@ -1,15 +1,11 @@
 package composegen
 
-import "github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/deploynaming"
+import "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 
-// substrateCatalog maps a declared infrastructure substrate to its ordered
-// configuration INPUTS — the MECHANISM half of the deployment split. Shared
-// verbatim with configgen via internal/deploynaming (composegen threads the
-// SAME cfg fields the config file exposes for those inputs — see that
-// package's doc comment for the full rationale; a drift here can no longer
-// silently break the cfg.<Field> references).
-var substrateCatalog = deploynaming.SubstrateCatalog
-
+// The substrate catalog (a substrate's ordered configuration inputs) is projectmodel's:
+// projectmodel.Substrate.Inputs. configgen emits the fields from it and composegen threads the
+// SAME cfg fields, so the two cannot drift.
+//
 // The substrates that produce a SINGLE root-level satellite the composition
 // root constructs once and shares (rather than config values a variant consumes
 // directly) are otel/temporal/postgres — their construction is emitted in the
@@ -24,21 +20,23 @@ var substrateCatalog = deploynaming.SubstrateCatalog
 //   - postgres  → the request context + the shared pool `ctx, pool`.
 //   - otel      → nothing (telemetry is a global install, never a variant dep).
 //   - otherwise → the cfg string fields for every catalog input of that infra
-//     key (github-app / keycloak: the variant mints its own client internally
-//     from these — the A1 fold that keeps sibling infra out of the RA surface).
-func variantArgsForSubstrate(substrate, infraKey string) []string {
+//     key (github-app / keycloak / git-repo: the variant mints its own client
+//     internally from these — the A1 fold that keeps sibling infra out of the
+//     RA surface).
+func variantArgsForSubstrate(substrate projectmodel.Substrate, infraKey string) []string {
 	switch substrate {
-	case "temporal":
+	case projectmodel.SubstrateTemporal:
 		return []string{"tc"}
-	case "postgres":
+	case projectmodel.SubstratePostgres:
 		return []string{"ctx", "pool"}
-	case "otel":
+	case projectmodel.SubstrateOtel:
 		return nil
-	default:
+	case projectmodel.SubstrateGitHubApp, projectmodel.SubstrateKeycloak, projectmodel.SubstrateExternalHTTP, projectmodel.SubstrateGitRepo:
 		var out []string
-		for _, in := range substrateCatalog[substrate] {
+		for _, in := range substrate.Inputs() {
 			out = append(out, "cfg."+infraFieldName(infraKey, in.Name))
 		}
 		return out
 	}
+	return nil
 }
