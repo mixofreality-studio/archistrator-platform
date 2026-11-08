@@ -105,7 +105,7 @@ func TestConformance_RUN021Proof(t *testing.T) {
 
 // nullBuildBroken is how many Go scenarios of the todomvc fixture fail against the null build's own
 // (all-null) real subject.
-const nullBuildBroken = 76
+const nullBuildBroken = 78
 
 // run021DiscriminateImpl builds the fixture with the harvest's hand-written component bodies in
 // place of the null implementations and requires the discrimination to be clean over them: every
@@ -134,7 +134,14 @@ func run021DiscriminateImpl(t *testing.T, raw []byte) {
 	if want := goScenarios(t, dir); got.scenarios != want || want == 0 {
 		t.Errorf("%d scenario(s) discriminated, but %d TestScenario_ functions were generated for Go components", got.scenarios, want)
 	}
+	if got.scenarios != implScenarios {
+		t.Errorf("%d scenario(s) discriminated over the harvested bodies, want %d: a scenario was dropped or added", got.scenarios, implScenarios)
+	}
 }
+
+// implScenarios is how many Go scenarios the todomvc fixture generates: every one passes against the
+// harvested bodies and none survives its stimulus being nulled.
+const implScenarios = 78
 
 // goScenarios counts the TestScenario_ functions testgen generated for Go components under dir
 // (client_scenarios.gen_test.go belongs to the machine clients, which -discriminate announces as

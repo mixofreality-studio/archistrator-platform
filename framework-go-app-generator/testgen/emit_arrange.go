@@ -69,7 +69,7 @@ func (g *goEmit) arrangeContractCall(plan componentPlan, label string, n int, v 
 	}
 	call := directCall{
 		recv: recv, alias: tgt.alias, sc: tgt.sc, op: op, inputs: v.Inputs,
-		ctx:   g.ctxExpr(tgt.layer, "", "arrange-"+strconv.Itoa(n)),
+		ctx:   g.ctxExpr(hostRecv, tgt.layer, "", "arrange-"+strconv.Itoa(n)),
 		inVar: "in", scenario: label,
 	}
 	g.body.WriteString("\t\t{\n\t\t\tvar aout any\n\t\t\tvar aerr error\n")

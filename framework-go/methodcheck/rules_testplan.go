@@ -195,13 +195,15 @@ func (sc tpScope) stepFindings(stim scenario.Stimulus, st StepBinding) []Finding
 	}
 	out = append(out, argFindings(st.Inputs, cop, sc.contract, ruleTPArgName, ruleTPArgType, section, sc.l)...)
 	out = append(out, expectFindings(st.Expect, cop, sc.contract, ruleTPExpect, section, sc.l)...)
+	out = append(out, expectZeroFindings(st.Expect, cop, sc.contract, section, sc.l)...)
+	out = append(out, sc.probeSelfFindings(st, section)...)
 	out = append(out, sc.uiDialectFindings(st, cop, section)...)
 	out = append(out, expectRequiredFindings(st, section, sc.l)...)
 	out = append(out, sc.refFindings(st.Inputs, st.Seq, -1, section)...)
 	proved, pf := sc.probeFindings(section, st.Seq, st.Probes)
 	out = append(out, pf...)
 	out = append(out, sc.actorObservedFindings(stim, st, cop, section)...)
-	return append(out, sc.stateFindings(section, stim, proved)...)
+	return append(out, sc.stateFindings(section, stim, st, cop, proved)...)
 }
 
 // probeFindings is TP-PROBE: every probe names a designed READ-ONLY operation, supplies its
@@ -228,6 +230,8 @@ func (sc tpScope) probeFindings(section string, seq int, probes []Probe) (map[st
 		out = append(out, argFindings(pr.Inputs, cpop, pc, ruleTPProbe, ruleTPProbe, psec, sc.l)...)
 		out = append(out, sc.refFindings(pr.Inputs, seq, i, psec)...)
 		out = append(out, expectFindings(pr.Expect, cpop, pc, ruleTPProbe, psec, sc.l)...)
+		out = append(out, expectZeroFindings(pr.Expect, cpop, pc, psec, sc.l)...)
+		out = append(out, pollingFindings(cpop, psec, sc.l)...)
 		if pr.For != "" {
 			proved[pr.For] = true
 		}
@@ -238,7 +242,15 @@ func (sc tpScope) probeFindings(section string, seq int, probes []Probe) (map[st
 // stateFindings is TP-STATE: every expected state and every expected output on the
 // stimulus has a probe For its node. There is no unobservable escape (binding
 // model v2): an output no probe can observe is a design defect.
-func (sc tpScope) stateFindings(section string, stim scenario.Stimulus, proved map[string]bool) []Finding {
+//
+// A step on a read-only operation that asserts a result or an error is its own observation (a pure
+// Engine's every operation, a ResourceAccess read): the probe that could discharge its outputs would
+// re-read the same operation (TP-PROBE-SELF), so the step's expectation stands for them. Its
+// falsifiability is the null-subject run's.
+func (sc tpScope) stateFindings(section string, stim scenario.Stimulus, st StepBinding, op ContractOperation, proved map[string]bool) []Finding {
+	if op.ReadOnly && probeAsserts(Probe{Expect: st.Expect}) {
+		return nil
+	}
 	var out []Finding
 	for _, es := range stim.ExpectedStates {
 		if !proved[es.Node] {

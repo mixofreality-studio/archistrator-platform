@@ -123,9 +123,9 @@ func TestGenerate_MCPClientCallsToolsInProcess(t *testing.T) {
 		"out1, err1 = subjectAsCustomer.Call(h.Context(t), \"orderGetOrder\", args1)",
 		"expect(t, \"track-order-P1\", 1, out1, err1, `{\"result\":\"{\\\"result\\\":{\\\"state\\\":\\\"open\\\"}}\",\"errorExpected\":false}`)",
 		// the same-contract probe is a tool call inline
-		"return subjectAsCustomer.Call(h.Context(t), \"orderGetOrder\", args)",
+		"return subjectAsCustomer.Call(pc.Context(t), \"orderGetOrder\", args)",
 		// a probe on another component is a direct call on the generated component
-		"return scenariocompose.NewOrderManager(t, h).GetOrder(h.ManagerContextAs(t, principal(\"customer\")), in.OrderId)",
+		"return scenariocompose.NewOrderManager(t, h).GetOrder(pc.ManagerContextAs(t, principal(\"customer\")), in.OrderId)",
 		"\"github.com/modelcontextprotocol/go-sdk/mcp\"",
 		"\"github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost\"",
 		"type toolRegistrar interface {",

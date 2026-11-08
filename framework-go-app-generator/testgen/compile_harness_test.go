@@ -33,8 +33,9 @@ import (
 
 type Host struct{}
 type Principal struct {
-	Subject string
-	Roles   []string
+	Subject    string
+	Roles      []string
+	OnBehalfOf string
 }
 type Worker interface{}
 type Workflows struct{ Register func(Worker) }
@@ -61,6 +62,37 @@ func (h *Host) ResourceAccessContext(t *testing.T, key string) fwra.Context {
 }
 func (h *Host) EngineContext(t *testing.T) fwe.Context   { return fwe.Context{Context: t.Context()} }
 func (h *Host) ManagerContext(t *testing.T) fwm.Context  { return fwm.Context{Context: t.Context()} }
+// ProbeCalls mirrors scenariohost.ProbeCalls; the stub's probe deadline is 200ms (STUB_PROBE_DEADLINE
+// overrides it), so a test of a hung read does not wait ten seconds.
+type ProbeCalls struct{ ctx context.Context }
+
+func (h *Host) ProbeContext(t *testing.T) ProbeCalls {
+	d := 200 * time.Millisecond
+	if v, err := time.ParseDuration(os.Getenv("STUB_PROBE_DEADLINE")); err == nil {
+		d = v
+	}
+	ctx, cancel := context.WithTimeout(t.Context(), d)
+	t.Cleanup(cancel)
+	return ProbeCalls{ctx}
+}
+func (p ProbeCalls) Context(t *testing.T) context.Context { return p.ctx }
+func (p ProbeCalls) PrincipalContext(t *testing.T, pr Principal) context.Context {
+	return security.WithPrincipal(p.ctx, security.Principal{Kind: security.PrincipalUser, Subject: pr.Subject, Roles: pr.Roles})
+}
+func (p ProbeCalls) ResourceAccessContext(t *testing.T, key string) fwra.Context {
+	return fwra.Context{Context: p.ctx, IdempotencyKey: fwra.IdempotencyKey(key)}
+}
+func (p ProbeCalls) ResourceAccessContextAs(t *testing.T, pr Principal, key string) fwra.Context {
+	return fwra.Context{Context: p.PrincipalContext(t, pr), IdempotencyKey: fwra.IdempotencyKey(key)}
+}
+func (p ProbeCalls) EngineContext(t *testing.T) fwe.Context { return fwe.Context{Context: p.ctx} }
+func (p ProbeCalls) EngineContextAs(t *testing.T, pr Principal) fwe.Context {
+	return fwe.Context{Context: p.PrincipalContext(t, pr)}
+}
+func (p ProbeCalls) ManagerContext(t *testing.T) fwm.Context { return fwm.Context{Context: p.ctx} }
+func (p ProbeCalls) ManagerContextAs(t *testing.T, pr Principal) fwm.Context {
+	return fwm.Context{Context: p.PrincipalContext(t, pr)}
+}
 func (h *Host) AdvanceClock(t *testing.T, d time.Duration) {}
 func (h *Host) FailNext(t *testing.T, component, op, errorCode string) {}
 func (h *Host) SeedResource(t *testing.T, resource string, fixture json.RawMessage) {}

@@ -50,9 +50,8 @@ holds the result to zero Error findings, with no waiver. Every judgement made:
 ### Test plans
 
 - `principals`: `team-member` runs as subject `alice` (role `member`), `team-agent` as
-  `agent-1` (role `agent`), on every plan whose Client an actor calls. TestPrincipal has
-  no delegation claims, so the agent's delegation from `alice` is not expressed; the
-  agent happy paths will be Refused at run time until the principal can carry it.
+  `agent-1` (role `agent`, `onBehalfOf` `alice`: TP-PRINCIPAL-DELEGATION, Task 2.13c), on
+  every plan whose Client an actor calls.
 - Browser steps are `{kind, model}` UIAction envelopes over design element ids; the
   observations are UIObservable envelopes. `MarkTodo` is a `check` (it was a `click`),
   so the generated spec asserts `toBeChecked(immediate)` under injected latency.
@@ -86,6 +85,47 @@ holds the result to zero Error findings, with no waiver. Every judgement made:
 - testgen warns that reword-a-todo-P1's `n3` output is Immediate and no observable is joined
   to it; the join is not implemented.
 
+## Rebinding for the strong proof (FPC plan 2, Task 2.13c)
+
+Run over the harvested bodies, the 2.13 bindings failed for reasons the null build hid. Every
+change, by cause:
+
+- Engines carry `expect` only. A pure Engine's step probed its own operation with its own inputs
+  (TP-PROBE-SELF), so those probes are gone; a step on a read-only operation that asserts a result
+  discharges the outputs it reaches (TP-STATE), and its falsifiability is the null run's.
+- The store is shared by every scenario of a package. `todoListAccess` scenarios assumed seeded
+  state that no longer exists (no hooks): each builds it with `RecordTodo`/`SetCompletion`
+  arranges (an operation that is the scenario's own stimulus cannot be arranged, TP-HOOK, so
+  `add-a-todo-P1` starts from an empty list) and the `RecallList` read steps no longer probe
+  themselves. The three chains (`drive-the-list-from-agent-tooling-P1`, `work-the-list-P1/P2`)
+  remove the todo that exists (`true`), then complete the removed one (refused, `NotFound`); the
+  last step's probe names the owner by the step's own result, since the list is empty before and
+  after it. The cause of the "arrange does not take effect" failures in the `listManager` plan was
+  not owner mismatch but shared state: `RecordTodo` is `ON CONFLICT DO NOTHING`, so a todo id (and
+  list) left by an earlier scenario won. Every `listManager` binding now opens by emptying
+  `alice` and `bob` (`SetAllCompletion(true)` then `PurgeCompleted`).
+- A `listManager` stimulus is called by a Client, not an actor, so the plan's principals did not
+  apply and every step ran anonymous (the access engine refused it as `incompleteQuestion`). The
+  plan now names who each Client acts for, keyed by the caller as the derivation writes it
+  (`todo-web-app`, `todo-mcp-server`, `todo-api`): all three run as `alice`. The harvested
+  ListManager reads its agent's delegation from `Claims["delegations"]` (grantor and intents),
+  which `onBehalfOf` does not produce, so the Manager scenarios drive the agent surfaces as the
+  delegating member; the delegation claim is exercised from the machine clients (`todoApi`,
+  `todoMcpServer`), whose `team-agent` principal now declares `onBehalfOf` `alice`.
+- `messageBus`: the `Subscribe` probes stay (the contract has no non-blocking read) and are
+  bounded; their pre-state read times out and counts as not held. `resume-the-list-P3` (a
+  `Subscribe` step) arranges one `Publish` first so it returns, and drops the probes that repeated
+  its own call.
+- `listManager` `add-a-todo-P2` (a refused add changes nothing) declares the list as its `before`
+  state in place of the vacuity check.
+- Contract and body adaptation (the one change to a harvested body): the harvest answered a
+  refused title (`accepted:false,title:""`) and an all-completed toggle (`markCompleted:false`)
+  with the zero value, which a null subject also returns, so no binding could tell the ruling from
+  its absence. `ListRulingEngine`'s `TitleRuling` gains `reason` (`blank` when refused) and
+  `ToggleTarget` gains `basis` (`someActive` / `allCompleted`); the engine reports them and the
+  bindings assert them. The final tally of `work-the-list-P1` is bound over a list with one
+  active todo (count 1), not zero.
+
 ## Harvested implementation bodies (`impl/`, FPC plan 2, Task 2.13b)
 
 `impl/` holds the RUN-021 harvest's hand-written component bodies, the non-generated,
@@ -106,4 +146,7 @@ Adaptations to the harvest (the complete list):
 - `cmd/server/hooks.go` gains `MCPMount` (and the `mcp` import): the generated composition
   root now asks the app for it, and the harvest predates the seam. It returns the
   authenticated handler unchanged.
+- Task 2.13c: `engine/listruling/listrulingengine.go` reports the new `TitleRuling.reason` and
+  `ToggleTarget.basis` (see "Rebinding for the strong proof"); the matching fields are added to the
+  fixture's `listRulingEngine` contract.
 - Nothing else is changed; no interface of a component moved between binding model v1 and v2.

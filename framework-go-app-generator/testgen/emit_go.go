@@ -91,7 +91,7 @@ func newGoEmit(cfg Config, goPkg string, plans []componentPlan, contracts map[st
 }
 
 func samePrincipal(a, b methodcheck.TestPrincipal) bool {
-	return a.Subject == b.Subject && slices.Equal(a.Roles, b.Roles)
+	return a.Subject == b.Subject && slices.Equal(a.Roles, b.Roles) && a.OnBehalfOf == b.OnBehalfOf
 }
 
 // fail records the first generation error; later ones are dropped.
@@ -301,10 +301,22 @@ func stepPrincipal(plan componentPlan, st boundStep) string {
 	return ""
 }
 
+// hostRecv and probeRecv are the receivers of the generated call-context methods: the scenario host,
+// and the bounded probe context a probe closure opens (probeOpen).
+const (
+	hostRecv  = "h"
+	probeRecv = "pc"
+)
+
+// probeOpen is the first statement of every probe closure: the context all of that probe's calls are
+// made with, bounded by the host's probe deadline so a read that never returns cannot hang the test.
+const probeOpen = probeRecv + " := h.ProbeContext(t)"
+
 // ctxExpr is the layer call context a call into a component of the given layer is made with:
 // the principal's when the step runs as one, the host's anonymous one otherwise. key makes a
-// ResourceAccess call's idempotency key distinct per call site.
-func (g *goEmit) ctxExpr(layer, principalName, key string) string {
+// ResourceAccess call's idempotency key distinct per call site. recv is hostRecv, or probeRecv inside
+// a probe closure.
+func (g *goEmit) ctxExpr(recv, layer, principalName, key string) string {
 	as := ""
 	if principalName != "" {
 		g.usesAs = true
@@ -312,17 +324,17 @@ func (g *goEmit) ctxExpr(layer, principalName, key string) string {
 	}
 	switch layer {
 	case "manager":
-		return ctxCall("ManagerContext", as, "")
+		return ctxCall(recv, "ManagerContext", as, "")
 	case "engine":
-		return ctxCall("EngineContext", as, "")
+		return ctxCall(recv, "EngineContext", as, "")
 	case "resourceaccess", "utility":
-		return ctxCall("ResourceAccessContext", as, strconv.Quote(key))
+		return ctxCall(recv, "ResourceAccessContext", as, strconv.Quote(key))
 	}
 	g.fail(fmt.Errorf("testgen: %s: layer %q has no framework call context", g.goPkg, layer))
 	return "nil"
 }
 
-func ctxCall(name, as, key string) string {
+func ctxCall(recv, name, as, key string) string {
 	args := []string{"t"}
 	if as != "" {
 		name += "As"
@@ -331,7 +343,7 @@ func ctxCall(name, as, key string) string {
 	if key != "" {
 		args = append(args, key)
 	}
-	return "h." + name + "(" + strings.Join(args, ", ") + ")"
+	return recv + "." + name + "(" + strings.Join(args, ", ") + ")"
 }
 
 // ---- generated file ----
@@ -436,7 +448,7 @@ func (d goDialect) stepCall(plan componentPlan, bs boundScenario, st boundStep, 
 	seq := st.Bind.Seq
 	call := directCall{
 		recv: "subject", alias: g.pkg, sc: plan.Contract, op: st.Op, inputs: st.Bind.Inputs,
-		ctx:   g.ctxExpr(layerKey(plan.Contract), stepPrincipal(plan, st), strconv.Itoa(seq)),
+		ctx:   g.ctxExpr(hostRecv, layerKey(plan.Contract), stepPrincipal(plan, st), strconv.Itoa(seq)),
 		inVar: fmt.Sprintf("in%d", seq), inType: g.inputName(plan, bs.Scenario.ID, seq),
 		scenario: bs.Scenario.ID, seq: seq,
 	}
@@ -459,10 +471,10 @@ func (d goDialect) probeBody(plan componentPlan, bs boundScenario, st boundStep,
 	}
 	call := directCall{
 		recv: recv, alias: tgt.alias, sc: tgt.sc, op: op, inputs: pr.Inputs,
-		ctx:   g.ctxExpr(tgt.layer, stepPrincipal(plan, st), fmt.Sprintf("%d.%d", st.Bind.Seq, n)),
+		ctx:   g.ctxExpr(probeRecv, tgt.layer, stepPrincipal(plan, st), fmt.Sprintf("%d.%d", st.Bind.Seq, n)),
 		inVar: "in", scenario: bs.Scenario.ID, seq: st.Bind.Seq,
 	}
-	return g.directLines(call, func(c string) string { return returnStmt(op, c) })
+	return append([]string{probeOpen}, g.directLines(call, func(c string) string { return returnStmt(op, c) })...)
 }
 
 // probeTarget is the component a probe reads and the expression calling it: the subject when it is the
@@ -724,7 +736,7 @@ func (g *goEmit) generatedImports() map[string]string {
 	if !g.subject {
 		return imps
 	}
-	for _, p := range []string{"encoding/json", "errors", "fmt", "reflect", "strings"} {
+	for _, p := range []string{"context", "encoding/json", "errors", "fmt", "reflect", "strings"} {
 		imps[p] = ""
 	}
 	imps[g.layer.path] = g.layer.alias
@@ -803,7 +815,11 @@ func writePrincipalTable(b *bytes.Buffer, principals map[string]methodcheck.Test
 			}
 			roles = ", Roles: []string{" + strings.Join(quoted, ", ") + "}"
 		}
-		fmt.Fprintf(b, "\t%s: {Subject: %s%s},\n", strconv.Quote(name), strconv.Quote(pr.Subject), roles)
+		onBehalfOf := ""
+		if pr.OnBehalfOf != "" {
+			onBehalfOf = ", OnBehalfOf: " + strconv.Quote(pr.OnBehalfOf)
+		}
+		fmt.Fprintf(b, "\t%s: {Subject: %s%s%s},\n", strconv.Quote(name), strconv.Quote(pr.Subject), roles, onBehalfOf)
 	}
 	b.WriteString("}\n\n")
 	b.WriteString(principalLookup)
@@ -871,10 +887,30 @@ func expect(t *testing.T, scenario string, seq int, out any, err error, expectJS
 	}
 }
 
+// probeTimedOut reports a probe read that ran past its deadline: a read that does not return is
+// neither a result nor an expected error, so no expectation is judged against it.
+func probeTimedOut(err error) bool {
+	return err != nil && (errors.Is(err, context.DeadlineExceeded) || strings.Contains(err.Error(), "deadline exceeded"))
+}
+
+// expectProbe is expect for a probe's read: a read that timed out fails the step with that, instead
+// of being judged against the expectation (an expected error would otherwise accept the timeout).
+func expectProbe(t *testing.T, scenario string, seq int, out any, err error, expectJSON string) {
+	t.Helper()
+	if probeTimedOut(err) {
+		t.Fatalf("%%s step %%d: probe timed out: %%v", scenario, seq, err)
+	}
+	expect(t, scenario, seq, out, err, expectJSON)
+}
+
 // held reports whether the outcome of run already meets expectJSON: the pre-state
-// reading of the differential.
+// reading of the differential. A read that timed out held nothing: it does not count as the
+// expectation already being true.
 func held(scenario string, seq int, run func() (any, error), expectJSON string) bool {
 	out, err := run()
+	if probeTimedOut(err) {
+		return false
+	}
 	return check(scenario, seq, out, err, expectJSON) == ""
 }
 

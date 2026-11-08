@@ -219,7 +219,8 @@ func (d toolDialect) probeBody(plan componentPlan, bs boundScenario, st boundSte
 			g.fail(err)
 			return nil
 		}
-		return append(lines, fmt.Sprintf("return %s.Call(h.Context(t), %q, args)", sessionVar(stepPrincipal(plan, st)), toolName(op)))
+		lines = append([]string{probeOpen}, lines...)
+		return append(lines, fmt.Sprintf("return %s.Call(%s.Context(t), %q, args)", sessionVar(stepPrincipal(plan, st)), probeRecv, toolName(op)))
 	}
 	return goDialect{g: g}.probeBody(plan, bs, st, n, pr)
 }

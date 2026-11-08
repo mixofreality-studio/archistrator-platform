@@ -18,7 +18,7 @@ func newListRulingEngine() ListRulingEngine {
 func (e *listRulingEngine) JudgeTitle(_ fweng.Context, wording string) (TitleRuling, error) {
 	t := strings.TrimSpace(wording)
 	if t == "" {
-		return TitleRuling{Accepted: false, Title: ""}, nil
+		return TitleRuling{Accepted: false, Title: "", Reason: "blank"}, nil
 	}
 	return TitleRuling{Accepted: true, Title: t}, nil
 }
@@ -28,10 +28,10 @@ func (e *listRulingEngine) JudgeTitle(_ fweng.Context, wording string) (TitleRul
 func (e *listRulingEngine) JudgeToggleTarget(_ fweng.Context, todos []RuledTodo) (ToggleTarget, error) {
 	for _, t := range todos {
 		if !t.Completed {
-			return ToggleTarget{MarkCompleted: true}, nil
+			return ToggleTarget{MarkCompleted: true, Basis: "someActive"}, nil
 		}
 	}
-	return ToggleTarget{MarkCompleted: false}, nil
+	return ToggleTarget{MarkCompleted: false, Basis: "allCompleted"}, nil
 }
 
 // SelectView returns the todos visible in the view, preserving list order.

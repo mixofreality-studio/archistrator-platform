@@ -4236,11 +4236,16 @@
             },
             "title": {
               "type": "string"
+            },
+            "reason": {
+              "type": "string",
+              "description": "Why the wording was not accepted: blank. Empty when accepted."
             }
           },
           "required": [
             "accepted",
-            "title"
+            "title",
+            "reason"
           ],
           "type": "object"
         },
@@ -4249,10 +4254,15 @@
           "properties": {
             "markCompleted": {
               "type": "boolean"
+            },
+            "basis": {
+              "type": "string",
+              "description": "What the target rests on: someActive when a todo is still active, allCompleted when every todo (or none) is completed."
             }
           },
           "required": [
-            "markCompleted"
+            "markCompleted",
+            "basis"
           ],
           "type": "object"
         },
@@ -5539,7 +5549,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -5572,7 +5582,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -5605,7 +5615,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -5638,7 +5648,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -5671,7 +5681,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -5713,7 +5723,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -5754,48 +5764,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-agent",
-                    "component": "accessGrantingEngine",
-                    "operation": "DecideAccess",
-                    "inputs": [
-                      {
-                        "name": "question",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": {
-                              "requesterSubject": "agent-1",
-                              "requesterKind": "agent",
-                              "owner": "alice",
-                              "intent": "add",
-                              "delegations": [
-                                {
-                                  "grantor": "alice",
-                                  "intents": [
-                                    "clearCompleted"
-                                  ]
-                                }
-                              ]
-                            }
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"permitted\":false,\"reason\":\"outsideDelegation\"}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"permitted\":false,\"reason\":\"outsideDelegation\"}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": []
@@ -5828,7 +5797,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -5861,67 +5830,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "accessGrantingEngine",
-                    "operation": "DecideAccess",
-                    "inputs": [
-                      {
-                        "name": "question",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": {
-                              "requesterSubject": "bob",
-                              "requesterKind": "member",
-                              "owner": "alice",
-                              "intent": "read"
-                            }
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"permitted\":false,\"reason\":\"notOwner\"}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-agent",
-                    "component": "accessGrantingEngine",
-                    "operation": "DecideAccess",
-                    "inputs": [
-                      {
-                        "name": "question",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": {
-                              "requesterSubject": "bob",
-                              "requesterKind": "member",
-                              "owner": "alice",
-                              "intent": "read"
-                            }
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"permitted\":false,\"reason\":\"notOwner\"}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"permitted\":false,\"reason\":\"notOwner\"}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": []
@@ -5954,7 +5863,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -5987,7 +5896,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -6020,7 +5929,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -6053,7 +5962,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -6086,7 +5995,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -6119,7 +6028,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -6152,7 +6061,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -6185,7 +6094,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -6218,7 +6127,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -6251,7 +6160,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -6284,67 +6193,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "accessGrantingEngine",
-                    "operation": "DecideAccess",
-                    "inputs": [
-                      {
-                        "name": "question",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": {
-                              "requesterSubject": "bob",
-                              "requesterKind": "member",
-                              "owner": "alice",
-                              "intent": "add"
-                            }
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"permitted\":false,\"reason\":\"notOwner\"}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-agent",
-                    "component": "accessGrantingEngine",
-                    "operation": "DecideAccess",
-                    "inputs": [
-                      {
-                        "name": "question",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": {
-                              "requesterSubject": "bob",
-                              "requesterKind": "member",
-                              "owner": "alice",
-                              "intent": "add"
-                            }
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"permitted\":false,\"reason\":\"notOwner\"}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"permitted\":false,\"reason\":\"notOwner\"}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": []
@@ -6387,7 +6236,7 @@
                     "value": {
                       "kind": "literal",
                       "model": {
-                        "json": "req-1"
+                        "json": "add-a-todo-P1-req-1"
                       }
                     },
                     "schemaRef": ""
@@ -6425,6 +6274,122 @@
               }
             ],
             "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
               {
                 "kind": "contractCall",
                 "model": {
@@ -6503,7 +6468,7 @@
                     "value": {
                       "kind": "literal",
                       "model": {
-                        "json": "req-2"
+                        "json": "add-a-todo-P2-req-2"
                       }
                     },
                     "schemaRef": ""
@@ -6537,10 +6502,131 @@
                       "errorCode": ""
                     }
                   }
-                ]
+                ],
+                "before": {
+                  "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false}]}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
               }
             ],
             "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
               {
                 "kind": "contractCall",
                 "model": {
@@ -6637,6 +6723,122 @@
               }
             ],
             "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
               {
                 "kind": "contractCall",
                 "model": {
@@ -6808,6 +7010,122 @@
               }
             ],
             "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
               {
                 "kind": "contractCall",
                 "model": {
@@ -7006,6 +7324,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -7124,7 +7558,7 @@
                     "value": {
                       "kind": "literal",
                       "model": {
-                        "json": "req-1"
+                        "json": "drive-the-list-from-agent-tooling-P1-req-1"
                       }
                     },
                     "schemaRef": ""
@@ -7326,6 +7760,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -7488,7 +8038,7 @@
                     "value": {
                       "kind": "literal",
                       "model": {
-                        "json": "req-1"
+                        "json": "drive-the-list-from-agent-tooling-P2-req-1"
                       }
                     },
                     "schemaRef": ""
@@ -7690,6 +8240,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -7806,6 +8472,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -7889,6 +8671,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -7968,6 +8866,122 @@
               }
             ],
             "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
               {
                 "kind": "contractCall",
                 "model": {
@@ -8187,6 +9201,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -8402,6 +9532,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -8606,6 +9852,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -8722,6 +10084,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -8801,6 +10279,122 @@
               }
             ],
             "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
               {
                 "kind": "contractCall",
                 "model": {
@@ -9033,6 +10627,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -9261,6 +10971,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -9423,7 +11249,7 @@
                     "value": {
                       "kind": "literal",
                       "model": {
-                        "json": "req-1"
+                        "json": "work-the-list-P1-req-1"
                       }
                     },
                     "schemaRef": ""
@@ -9621,6 +11447,122 @@
               }
             ],
             "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
               {
                 "kind": "contractCall",
                 "model": {
@@ -9787,7 +11729,7 @@
                     "value": {
                       "kind": "literal",
                       "model": {
-                        "json": "req-1"
+                        "json": "work-the-list-P2-req-1"
                       }
                     },
                     "schemaRef": ""
@@ -9989,6 +11931,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -10151,7 +12209,7 @@
                     "value": {
                       "kind": "literal",
                       "model": {
-                        "json": "req-1"
+                        "json": "work-the-list-P3-req-1"
                       }
                     },
                     "schemaRef": ""
@@ -10353,6 +12411,122 @@
                 "kind": "contractCall",
                 "model": {
                   "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetAllCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "PurgeCompleted",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
                   "operation": "RecordTodo",
                   "inputs": [
                     {
@@ -10396,7 +12570,26 @@
             ]
           }
         ],
-        "principals": {}
+        "principals": {
+          "todo-web-app": {
+            "subject": "alice",
+            "roles": [
+              "member"
+            ]
+          },
+          "todo-mcp-server": {
+            "subject": "alice",
+            "roles": [
+              "member"
+            ]
+          },
+          "todo-api": {
+            "subject": "alice",
+            "roles": [
+              "member"
+            ]
+          }
+        }
       },
       "listRulingEngine": {
         "component": "listRulingEngine",
@@ -10420,11 +12613,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"accepted\": true, \"title\": \"Buy milk\"}",
+                  "result": "{\"accepted\":true,\"title\":\"Buy milk\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -10448,39 +12641,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"accepted\": false, \"title\": \"\"}",
+                  "result": "{\"accepted\":false,\"title\":\"\",\"reason\":\"blank\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "listRulingEngine",
-                    "operation": "JudgeTitle",
-                    "inputs": [
-                      {
-                        "name": "wording",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "   \t "
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"accepted\": false, \"title\": \"\"}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"accepted\": false, \"title\": \"\"}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": []
@@ -10504,11 +12669,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"accepted\": true, \"title\": \"Write report\"}",
+                  "result": "{\"accepted\":true,\"title\":\"Write report\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               },
               {
                 "seq": 2,
@@ -10537,11 +12702,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"markCompleted\": true}",
+                  "result": "{\"markCompleted\":true,\"basis\":\"someActive\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -10591,11 +12756,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"todos\": [{\"id\": \"t1\", \"title\": \"A\", \"completed\": false}, {\"id\": \"t3\", \"title\": \"C\", \"completed\": false}]}",
+                  "result": "{\"todos\":[{\"id\":\"t1\",\"title\":\"A\",\"completed\":false},{\"id\":\"t3\",\"title\":\"C\",\"completed\":false}]}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               },
               {
                 "seq": 2,
@@ -10629,93 +12794,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"count\": 2}",
+                  "result": "{\"count\":2}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "listRulingEngine",
-                    "operation": "TallyItemsLeft",
-                    "inputs": [
-                      {
-                        "name": "todos",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": [
-                              {
-                                "id": "t1",
-                                "title": "A",
-                                "completed": false
-                              },
-                              {
-                                "id": "t2",
-                                "title": "B",
-                                "completed": true
-                              },
-                              {
-                                "id": "t3",
-                                "title": "C",
-                                "completed": false
-                              }
-                            ]
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"count\": 2}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-agent",
-                    "component": "listRulingEngine",
-                    "operation": "TallyItemsLeft",
-                    "inputs": [
-                      {
-                        "name": "todos",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": [
-                              {
-                                "id": "t1",
-                                "title": "A",
-                                "completed": false
-                              },
-                              {
-                                "id": "t2",
-                                "title": "B",
-                                "completed": true
-                              },
-                              {
-                                "id": "t3",
-                                "title": "C",
-                                "completed": false
-                              }
-                            ]
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"count\": 2}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"count\": 2}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": []
@@ -10765,104 +12848,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"todos\": [{\"id\": \"t2\", \"title\": \"B\", \"completed\": true}, {\"id\": \"t3\", \"title\": \"C\", \"completed\": true}]}",
+                  "result": "{\"todos\":[{\"id\":\"t2\",\"title\":\"B\",\"completed\":true},{\"id\":\"t3\",\"title\":\"C\",\"completed\":true}]}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "n2",
-                    "component": "listRulingEngine",
-                    "operation": "SelectView",
-                    "inputs": [
-                      {
-                        "name": "todos",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": [
-                              {
-                                "id": "t1",
-                                "title": "A",
-                                "completed": false
-                              },
-                              {
-                                "id": "t2",
-                                "title": "B",
-                                "completed": true
-                              },
-                              {
-                                "id": "t3",
-                                "title": "C",
-                                "completed": true
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "name": "view",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "completed"
-                          }
-                        }
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"todos\": [{\"id\": \"t2\", \"title\": \"B\", \"completed\": true}, {\"id\": \"t3\", \"title\": \"C\", \"completed\": true}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-member",
-                    "component": "listRulingEngine",
-                    "operation": "SelectView",
-                    "inputs": [
-                      {
-                        "name": "todos",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": [
-                              {
-                                "id": "t1",
-                                "title": "A",
-                                "completed": false
-                              },
-                              {
-                                "id": "t2",
-                                "title": "B",
-                                "completed": true
-                              },
-                              {
-                                "id": "t3",
-                                "title": "C",
-                                "completed": true
-                              }
-                            ]
-                          }
-                        }
-                      },
-                      {
-                        "name": "view",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "completed"
-                          }
-                        }
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"todos\": [{\"id\": \"t2\", \"title\": \"B\", \"completed\": true}, {\"id\": \"t3\", \"title\": \"C\", \"completed\": true}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ]
+                "probes": []
               }
             ],
             "arrange": []
@@ -10886,11 +12876,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"accepted\": true, \"title\": \"Water the plants\"}",
+                  "result": "{\"accepted\":true,\"title\":\"Water the plants\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -10914,11 +12904,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"accepted\": false, \"title\": \"\"}",
+                  "result": "{\"accepted\":false,\"title\":\"\",\"reason\":\"blank\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -10963,96 +12953,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"count\": 3}",
+                  "result": "{\"count\":3}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "n2",
-                    "component": "listRulingEngine",
-                    "operation": "TallyItemsLeft",
-                    "inputs": [
-                      {
-                        "name": "todos",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": [
-                              {
-                                "id": "t1",
-                                "title": "A",
-                                "completed": false
-                              },
-                              {
-                                "id": "t2",
-                                "title": "B",
-                                "completed": true
-                              },
-                              {
-                                "id": "t3",
-                                "title": "C",
-                                "completed": false
-                              },
-                              {
-                                "id": "t4",
-                                "title": "D",
-                                "completed": false
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"count\": 3}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-member",
-                    "component": "listRulingEngine",
-                    "operation": "TallyItemsLeft",
-                    "inputs": [
-                      {
-                        "name": "todos",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": [
-                              {
-                                "id": "t1",
-                                "title": "A",
-                                "completed": false
-                              },
-                              {
-                                "id": "t2",
-                                "title": "B",
-                                "completed": true
-                              },
-                              {
-                                "id": "t3",
-                                "title": "C",
-                                "completed": false
-                              },
-                              {
-                                "id": "t4",
-                                "title": "D",
-                                "completed": false
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"count\": 3}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ]
+                "probes": []
               }
             ],
             "arrange": []
@@ -11087,44 +12992,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"markCompleted\": false}",
+                  "result": "{\"markCompleted\":false,\"basis\":\"allCompleted\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "n2",
-                    "component": "listRulingEngine",
-                    "operation": "JudgeToggleTarget",
-                    "inputs": [
-                      {
-                        "name": "todos",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": [
-                              {
-                                "id": "t1",
-                                "title": "A",
-                                "completed": true
-                              },
-                              {
-                                "id": "t2",
-                                "title": "B",
-                                "completed": true
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"markCompleted\": false}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ]
+                "probes": []
               }
             ],
             "arrange": []
@@ -11159,44 +13031,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"markCompleted\": true}",
+                  "result": "{\"markCompleted\":true,\"basis\":\"someActive\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "n2",
-                    "component": "listRulingEngine",
-                    "operation": "JudgeToggleTarget",
-                    "inputs": [
-                      {
-                        "name": "todos",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": [
-                              {
-                                "id": "t1",
-                                "title": "A",
-                                "completed": true
-                              },
-                              {
-                                "id": "t2",
-                                "title": "B",
-                                "completed": false
-                              }
-                            ]
-                          }
-                        }
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"markCompleted\": true}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ]
+                "probes": []
               }
             ],
             "arrange": []
@@ -11220,11 +13059,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"accepted\": true, \"title\": \"Pay rent\"}",
+                  "result": "{\"accepted\":true,\"title\":\"Pay rent\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               },
               {
                 "seq": 2,
@@ -11248,11 +13087,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"markCompleted\": true}",
+                  "result": "{\"markCompleted\":true,\"basis\":\"someActive\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               },
               {
                 "seq": 3,
@@ -11260,6 +13099,7 @@
                 "inputs": [
                   {
                     "name": "todos",
+                    "schemaRef": "",
                     "value": {
                       "kind": "literal",
                       "model": {
@@ -11268,81 +13108,23 @@
                             "id": "t1",
                             "title": "Pay rent",
                             "completed": true
+                          },
+                          {
+                            "id": "t2",
+                            "title": "Book flights",
+                            "completed": false
                           }
                         ]
                       }
-                    },
-                    "schemaRef": ""
+                    }
                   }
                 ],
                 "expect": {
-                  "result": "{\"count\": 0}",
+                  "result": "{\"count\":1}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "listRulingEngine",
-                    "operation": "TallyItemsLeft",
-                    "inputs": [
-                      {
-                        "name": "todos",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": [
-                              {
-                                "id": "t1",
-                                "title": "Pay rent",
-                                "completed": true
-                              }
-                            ]
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"count\": 0}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-agent",
-                    "component": "listRulingEngine",
-                    "operation": "TallyItemsLeft",
-                    "inputs": [
-                      {
-                        "name": "todos",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": [
-                              {
-                                "id": "t1",
-                                "title": "Pay rent",
-                                "completed": true
-                              }
-                            ]
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"count\": 0}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"count\": 0}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": []
@@ -11366,11 +13148,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"accepted\": true, \"title\": \"Book flights\"}",
+                  "result": "{\"accepted\":true,\"title\":\"Book flights\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               },
               {
                 "seq": 2,
@@ -11399,11 +13181,11 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"markCompleted\": false}",
+                  "result": "{\"markCompleted\":false,\"basis\":\"allCompleted\"}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
             "arrange": []
@@ -11892,77 +13674,37 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "messageBus",
-                    "operation": "Subscribe",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "member-resume"
-                          }
-                        },
-                        "schemaRef": ""
-                      },
-                      {
-                        "name": "afterSequence",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": 0
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"member-resume\",\"sequence\":1}",
-                      "errorExpected": false
-                    }
-                  },
-                  {
-                    "for": "out-team-agent",
-                    "component": "messageBus",
-                    "operation": "Subscribe",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "member-resume"
-                          }
-                        },
-                        "schemaRef": ""
-                      },
-                      {
-                        "name": "afterSequence",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": 0
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"member-resume\",\"sequence\":1}",
-                      "errorExpected": false
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"owner\":\"member-resume\",\"sequence\":1}",
-                  "errorExpected": false
-                }
+                "probes": []
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "messageBus",
+                  "operation": "Publish",
+                  "inputs": [
+                    {
+                      "name": "event",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "owner": "member-resume"
+                          }
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "reword-a-todo-P2",
@@ -15084,7 +16826,8 @@
             "subject": "agent-1",
             "roles": [
               "agent"
-            ]
+            ],
+            "onBehalfOf": "alice"
           }
         }
       },
@@ -15152,7 +16895,7 @@
                       }
                     ],
                     "expect": {
-                      "result": "{\"owner\":\"add-owner\",\"todos\":[{\"id\":\"add-1\",\"title\":\"Existing\",\"completed\":false},{\"id\":\"add-2\",\"title\":\"Buy milk\",\"completed\":false}]}",
+                      "result": "{\"owner\":\"add-owner\",\"todos\":[{\"id\":\"add-2\",\"title\":\"Buy milk\",\"completed\":false}]}",
                       "errorExpected": false,
                       "errorCode": ""
                     }
@@ -15211,7 +16954,140 @@
                 ]
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "clr-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "c1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Keep"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"c1\",\"title\":\"Keep\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "clr-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "c2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Done"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"c2\",\"title\":\"Done\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "clr-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "c2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"c2\",\"title\":\"Done\",\"completed\":true}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "come-back-to-an-intact-list-P1",
@@ -15236,55 +17112,143 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "n2",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "intact-owner"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"intact-owner\",\"todos\":[{\"id\":\"i1\",\"title\":\"First\",\"completed\":false},{\"id\":\"i2\",\"title\":\"Second\",\"completed\":true}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-member",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "intact-owner"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"intact-owner\",\"todos\":[{\"id\":\"i1\",\"title\":\"First\",\"completed\":false},{\"id\":\"i2\",\"title\":\"Second\",\"completed\":true}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ]
+                "probes": []
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "intact-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "i1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "First"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"i1\",\"title\":\"First\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "intact-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "i2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Second"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"i2\",\"title\":\"Second\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "intact-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "i2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"i2\",\"title\":\"Second\",\"completed\":true}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "discard-a-todo-P1",
@@ -15345,7 +17309,96 @@
                 ]
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "disc-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "d1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "One"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"d1\",\"title\":\"One\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "disc-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "d2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Two"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"d2\",\"title\":\"Two\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "drive-the-list-from-agent-tooling-P1",
@@ -15462,27 +17515,27 @@
                 "inputs": [
                   {
                     "name": "owner",
+                    "schemaRef": "",
                     "value": {
                       "kind": "literal",
                       "model": {
                         "json": "agent-owner"
                       }
-                    },
-                    "schemaRef": ""
+                    }
                   },
                   {
                     "name": "todoId",
+                    "schemaRef": "",
                     "value": {
                       "kind": "literal",
                       "model": {
-                        "json": "agent-owner-absent"
+                        "json": "agent-owner-t1"
                       }
-                    },
-                    "schemaRef": ""
+                    }
                   }
                 ],
                 "expect": {
-                  "result": "false",
+                  "result": "true",
                   "errorExpected": false,
                   "errorCode": ""
                 },
@@ -15524,9 +17577,9 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"id\":\"agent-owner-t1\",\"title\":\"Alpha v2\",\"completed\":true}",
-                  "errorExpected": false,
-                  "errorCode": ""
+                  "result": "",
+                  "errorExpected": true,
+                  "errorCode": "NotFound"
                 },
                 "probes": null
               },
@@ -15556,7 +17609,7 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"owner\":\"agent-owner\",\"todos\":[{\"id\":\"agent-owner-t1\",\"title\":\"Alpha v2\",\"completed\":true}]}",
+                  "result": "{\"owner\":\"agent-owner\",\"todos\":[]}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
@@ -15590,13 +17643,14 @@
                     "inputs": [
                       {
                         "name": "owner",
+                        "schemaRef": "",
                         "value": {
-                          "kind": "literal",
+                          "kind": "ref",
                           "model": {
-                            "json": "agent-owner"
+                            "step": 7,
+                            "path": "owner"
                           }
-                        },
-                        "schemaRef": ""
+                        }
                       }
                     ],
                     "expect": {
@@ -15679,7 +17733,52 @@
                 ]
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "mark-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "m1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Task"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"m1\",\"title\":\"Task\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "resume-the-list-P2",
@@ -15704,33 +17803,143 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "n5",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "res-owner"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"res-owner\",\"todos\":[{\"id\":\"r1\",\"title\":\"Read\",\"completed\":false},{\"id\":\"r2\",\"title\":\"Write\",\"completed\":true}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ]
+                "probes": []
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "res-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "r1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Read"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"r1\",\"title\":\"Read\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "res-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "r2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Write"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"r2\",\"title\":\"Write\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "res-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "r2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"r2\",\"title\":\"Write\",\"completed\":true}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "review-the-list-in-a-chosen-view-P1",
@@ -15755,10 +17964,143 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "view-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "v1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Active one"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"v1\",\"title\":\"Active one\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "view-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "v2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Done one"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"v2\",\"title\":\"Done one\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "view-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "v2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"v2\",\"title\":\"Done one\",\"completed\":true}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "reword-a-todo-P2",
@@ -15829,7 +18171,96 @@
                 ]
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "rw-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "w1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Old title"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"w1\",\"title\":\"Old title\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "rw-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "w1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"w1\",\"title\":\"Old title\",\"completed\":true}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "reword-a-todo-P3",
@@ -15890,7 +18321,52 @@
                 ]
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "rw3-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "w3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Doomed"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"w3\",\"title\":\"Doomed\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "see-how-many-todos-are-left-P1",
@@ -15915,10 +18391,187 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": null
+                "probes": []
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "left-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "l1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "One"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"l1\",\"title\":\"One\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "left-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "l2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Two"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"l2\",\"title\":\"Two\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "left-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "l3"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Three"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"l3\",\"title\":\"Three\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "left-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "l2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"l2\",\"title\":\"Two\",\"completed\":true}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "toggle-all-todos-P1",
@@ -16001,7 +18654,184 @@
                 ]
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "tg1-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "a1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "A"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"a1\",\"title\":\"A\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "tg1-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "a2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "B"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"a2\",\"title\":\"B\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "tg1-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "a1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"a1\",\"title\":\"A\",\"completed\":true}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "tg1-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "a2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"a2\",\"title\":\"B\",\"completed\":true}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "toggle-all-todos-P2",
@@ -16084,7 +18914,140 @@
                 ]
               }
             ],
-            "arrange": []
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "tg2-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "b1"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "A"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"b1\",\"title\":\"A\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "RecordTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "tg2-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "b2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "title",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "B"
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"b2\",\"title\":\"B\",\"completed\":false}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "todoListAccess",
+                  "operation": "SetCompletion",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "tg2-owner"
+                        }
+                      }
+                    },
+                    {
+                      "name": "todoId",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "b2"
+                        }
+                      }
+                    },
+                    {
+                      "name": "completed",
+                      "schemaRef": "",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": true
+                        }
+                      }
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"id\":\"b2\",\"title\":\"B\",\"completed\":true}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
           },
           {
             "scenario": "work-the-list-P1",
@@ -16201,27 +19164,27 @@
                 "inputs": [
                   {
                     "name": "owner",
+                    "schemaRef": "",
                     "value": {
                       "kind": "literal",
                       "model": {
                         "json": "work1-owner"
                       }
-                    },
-                    "schemaRef": ""
+                    }
                   },
                   {
                     "name": "todoId",
+                    "schemaRef": "",
                     "value": {
                       "kind": "literal",
                       "model": {
-                        "json": "work1-owner-absent"
+                        "json": "work1-owner-t1"
                       }
-                    },
-                    "schemaRef": ""
+                    }
                   }
                 ],
                 "expect": {
-                  "result": "false",
+                  "result": "true",
                   "errorExpected": false,
                   "errorCode": ""
                 },
@@ -16263,9 +19226,9 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"id\":\"work1-owner-t1\",\"title\":\"Alpha v2\",\"completed\":true}",
-                  "errorExpected": false,
-                  "errorCode": ""
+                  "result": "",
+                  "errorExpected": true,
+                  "errorCode": "NotFound"
                 },
                 "probes": null
               },
@@ -16295,7 +19258,7 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"owner\":\"work1-owner\",\"todos\":[{\"id\":\"work1-owner-t1\",\"title\":\"Alpha v2\",\"completed\":true}]}",
+                  "result": "{\"owner\":\"work1-owner\",\"todos\":[]}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
@@ -16329,13 +19292,14 @@
                     "inputs": [
                       {
                         "name": "owner",
+                        "schemaRef": "",
                         "value": {
-                          "kind": "literal",
+                          "kind": "ref",
                           "model": {
-                            "json": "work1-owner"
+                            "step": 7,
+                            "path": "owner"
                           }
-                        },
-                        "schemaRef": ""
+                        }
                       }
                     ],
                     "expect": {
@@ -16464,27 +19428,27 @@
                 "inputs": [
                   {
                     "name": "owner",
+                    "schemaRef": "",
                     "value": {
                       "kind": "literal",
                       "model": {
                         "json": "work2-owner"
                       }
-                    },
-                    "schemaRef": ""
+                    }
                   },
                   {
                     "name": "todoId",
+                    "schemaRef": "",
                     "value": {
                       "kind": "literal",
                       "model": {
-                        "json": "work2-owner-absent"
+                        "json": "work2-owner-t1"
                       }
-                    },
-                    "schemaRef": ""
+                    }
                   }
                 ],
                 "expect": {
-                  "result": "false",
+                  "result": "true",
                   "errorExpected": false,
                   "errorCode": ""
                 },
@@ -16526,9 +19490,9 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"id\":\"work2-owner-t1\",\"title\":\"Alpha v2\",\"completed\":true}",
-                  "errorExpected": false,
-                  "errorCode": ""
+                  "result": "",
+                  "errorExpected": true,
+                  "errorCode": "NotFound"
                 },
                 "probes": null
               },
@@ -16558,7 +19522,7 @@
                   }
                 ],
                 "expect": {
-                  "result": "{\"owner\":\"work2-owner\",\"todos\":[{\"id\":\"work2-owner-t1\",\"title\":\"Alpha v2\",\"completed\":true}]}",
+                  "result": "{\"owner\":\"work2-owner\",\"todos\":[]}",
                   "errorExpected": false,
                   "errorCode": ""
                 },
@@ -16592,13 +19556,14 @@
                     "inputs": [
                       {
                         "name": "owner",
+                        "schemaRef": "",
                         "value": {
-                          "kind": "literal",
+                          "kind": "ref",
                           "model": {
-                            "json": "work2-owner"
+                            "step": 7,
+                            "path": "owner"
                           }
-                        },
-                        "schemaRef": ""
+                        }
                       }
                     ],
                     "expect": {
@@ -20569,7 +23534,8 @@
             "subject": "agent-1",
             "roles": [
               "agent"
-            ]
+            ],
+            "onBehalfOf": "alice"
           }
         }
       },

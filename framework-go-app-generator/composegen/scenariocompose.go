@@ -502,10 +502,16 @@ func (g *scenarioGen) componentDep(comp scenarioComp, dep projectmodel.Dep, zero
 	if _, gone := g.refused[dep.Component]; gone {
 		return "", policyDepError{Refusal{Manager: comp.key, Dependency: dep.Name, Reason: fmt.Sprintf("depends on manager %q, which the generated test subject does not build", dep.Component)}}
 	}
-	if _, built := g.byKey[dep.Component]; !built {
+	built, ok := g.byKey[dep.Component]
+	if !ok {
 		return "", fmt.Errorf("composegen: scenariocompose: manager %q dependency %q: component %q has no constructor (needs a binding or an engine contract)", comp.key, dep.Name, dep.Component)
 	}
 	if zero {
+		// A replay executes the workflow code, which calls a pure dependency (an Engine takes no
+		// substrate) in process; only what is reached through an activity is never run.
+		if built.kind == scenarioPure {
+			return ctorCall(built.alias+".New"+built.iface, nil), nil
+		}
 		return "nil", nil
 	}
 	return buildFuncName(dep.Component) + "(s)", nil

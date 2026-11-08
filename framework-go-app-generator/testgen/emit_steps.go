@@ -45,7 +45,7 @@ func (g *goEmit) emitStep(d stepDialect, plan componentPlan, bs boundScenario, s
 	for i, pr := range st.Bind.Probes {
 		n := i + 1
 		line("pout%d_%d, perr%d_%d = run%d_%d()", seq, n, seq, n, seq, n)
-		line("expect(t, %q, %d, pout%d_%d, perr%d_%d, %s)", fmt.Sprintf("%s probe %d.%d", id, seq, n), seq, seq, n, seq, n, rawString(expectJSON(pr.Expect)))
+		line("expectProbe(t, %q, %d, pout%d_%d, perr%d_%d, %s)", fmt.Sprintf("%s probe %d.%d", id, seq, n), seq, seq, n, seq, n, rawString(expectJSON(pr.Expect)))
 	}
 	if differential && strings.Join(pre, "") != strings.Repeat("false", len(pre)) {
 		line("differential(t, %q, %d, %s)", id, seq, strings.Join(pre, ", "))
@@ -81,7 +81,7 @@ func (g *goEmit) emitPreState(id string, st boundStep, differential bool) []stri
 		switch {
 		case i == 0 && st.Bind.Before != nil:
 			line("pout%d_%d, perr%d_%d = run%d_%d()", seq, n, seq, n, seq, n)
-			line("expect(t, %q, %d, pout%d_%d, perr%d_%d, %s)", label+" before", seq, seq, n, seq, n, rawString(expectJSON(*st.Bind.Before)))
+			line("expectProbe(t, %q, %d, pout%d_%d, perr%d_%d, %s)", label+" before", seq, seq, n, seq, n, rawString(expectJSON(*st.Bind.Before)))
 			pre = append(pre, "false")
 		case !differential || readsStep(pr.Inputs, seq):
 			pre = append(pre, "false")

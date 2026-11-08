@@ -119,6 +119,31 @@ func TestScenarioCompose_EveryContractHasConstructor(t *testing.T) {
 	}
 }
 
+// TestScenarioCompose_WorkflowsBuildPureDependencies: a Manager's workflow code calls its Engines in
+// process, so a replay of its history executes them. Workflows() therefore builds every pure
+// dependency (an Engine takes no substrate) for real; only what a workflow reaches through an
+// activity (ResourceAccess, Utility, the Temporal client) is nil.
+func TestScenarioCompose_WorkflowsBuildPureDependencies(t *testing.T) {
+	m, _ := loadConformance(t, "todomvc")
+	src, _, err := composegen.EmitScenarioCompose(m, scenarioCfg)
+	if err != nil {
+		t.Fatalf("EmitScenarioCompose: %v", err)
+	}
+	s := string(src)
+	start := strings.Index(s, "func Workflows() scenariohost.Workflows {")
+	if start < 0 {
+		t.Fatal("no Workflows()")
+	}
+	body := s[start:]
+	if end := strings.Index(body, "\n}\n"); end >= 0 {
+		body = body[:end]
+	}
+	want := "list.RegisterManagerWorker(w, list.NewListManager(nil, messagebus.NewMessageBus(), accessgranting.NewAccessGrantingEngine(), listruling.NewListRulingEngine(), nil))"
+	if !strings.Contains(body, want) {
+		t.Errorf("Workflows() must build the Engines and nil the rest; want %q in\n%s", want, body)
+	}
+}
+
 // TestScenarioCompose_ClientConstructorHasRealPolicy: each MCP and REST client contract of the todomvc
 // fixture gets a New<ClientIface> returning its generated Handler over the real Manager, authorized
 // by a policy built from the generated authorization rows - never a permit-all one.

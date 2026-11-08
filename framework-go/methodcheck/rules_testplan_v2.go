@@ -39,6 +39,7 @@ const (
 // and the committed System. Both are empty before the architecture is committed.
 type tpEnv struct {
 	actors map[string]bool
+	agents map[string]bool // the actors a use case classifies as agents (isAgentActor)
 	sys    System
 	sysOK  bool
 }
@@ -46,9 +47,18 @@ type tpEnv struct {
 // newTPEnv reads the design context once per validation. A malformed slot leaves the
 // matching half empty: the slot's own rules report it.
 func newTPEnv(p Project) tpEnv {
-	env := tpEnv{actors: map[string]bool{}}
+	env := tpEnv{actors: map[string]bool{}, agents: map[string]bool{}}
 	if in, err := ScenarioInput(p); err == nil {
 		env.actors = in.Actors
+	}
+	if cu, ok, err := p.coreUseCases(); err == nil && ok {
+		for _, d := range cu.Decisions {
+			for _, a := range d.UseCase.Actors {
+				if isAgentActor(a) {
+					env.agents[a.ID] = true
+				}
+			}
+		}
 	}
 	if sys, ok, err := p.system(); err == nil && ok {
 		env.sys, env.sysOK = sys, true
@@ -508,6 +518,9 @@ func principalFindings(env tpEnv, comp string, rec TestPlanRecord, live []scenar
 			out = append(out, tpFinding(ruleTPPrincipal, l, "%s: actor %q originates stimuli but the plan has no principal for it; record who the test runs as", comp, a))
 		case pr.Subject == "":
 			out = append(out, tpFinding(ruleTPPrincipal, l, "%s: the principal for actor %q has an empty subject", comp, a))
+		case env.agents[a] && pr.OnBehalfOf == "":
+			out = append(out, tpFinding(ruleTPPrincipalDelegation, l,
+				"%s: actor %q is an agent, so its principal must say whose behalf it acts on: set onBehalfOf to the delegating human's subject (an agent call with no delegation is refused at run time)", comp, a))
 		}
 	}
 	return out

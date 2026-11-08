@@ -149,7 +149,7 @@ func TestGo_RefThreading(t *testing.T) {
 		// a probe's argument reads a path of step 1's result
 		"\"id\", &in.InvoiceId)",
 		// the cross-component probe is a direct call on the other component, as the step's principal
-		"scenariocompose.NewBillingManager(t, h).GetInvoice(h.ManagerContextAs(t, principal(\"customer\")), in.InvoiceId)",
+		"scenariocompose.NewBillingManager(t, h).GetInvoice(pc.ManagerContextAs(t, principal(\"customer\")), in.InvoiceId)",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("missing %q in\n%s", want, src)
@@ -300,10 +300,15 @@ import (
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost"
 )
 
-type subject struct{ paid, null bool }
+type subject struct{ paid, null, blocking, hung bool }
 
 func (s *subject) RecordPayment(fwm.Context, string, int64) error { s.paid = true; return nil }
-func (s *subject) GetInvoice(fwm.Context, string) (billing.Invoice, error) {
+func (s *subject) GetInvoice(ctx fwm.Context, _ string) (billing.Invoice, error) {
+	// a read that long-polls: "blocking" waits until the invoice is paid, "hung" never returns
+	if s.hung || (s.blocking && !s.paid) {
+		<-ctx.Done()
+		return billing.Invoice{}, ctx.Err()
+	}
 	if s.paid || s.null {
 		return billing.Invoice{ID: "inv-o-2", State: "paid"}, nil
 	}
@@ -311,7 +316,8 @@ func (s *subject) GetInvoice(fwm.Context, string) (billing.Invoice, error) {
 }
 
 func NewBillingManager(t *testing.T, h *scenariohost.Host) billing.BillingManager {
-	return &subject{null: os.Getenv("STUB_SUBJECT") == "null"}
+	mode := os.Getenv("STUB_SUBJECT")
+	return &subject{null: mode == "null", blocking: mode == "blocking", hung: mode == "hung"}
 }
 
 func NullBillingManager(inner billing.BillingManager, ops ...string) billing.BillingManager { return inner }
@@ -367,7 +373,7 @@ func TestMCP_NoPermitAll(t *testing.T) {
 		"scenariocompose.NewShopTools(t, h)",
 		"serveTools(h.PrincipalContext(t, principal(\"customer\")), t, h, handlers)",
 		// the cross-component probe is a direct call, not a hook
-		"scenariocompose.NewOrderManager(t, h).GetOrder(h.ManagerContextAs(t, principal(\"customer\")), in.OrderId)",
+		"scenariocompose.NewOrderManager(t, h).GetOrder(pc.ManagerContextAs(t, principal(\"customer\")), in.OrderId)",
 	} {
 		if !strings.Contains(src, want) {
 			t.Errorf("missing %q in\n%s", want, src)

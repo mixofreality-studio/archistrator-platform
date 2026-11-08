@@ -241,6 +241,9 @@ type UseCase struct {
 type Actor struct {
 	ID   string `json:"id"`
 	Role string `json:"role"`
+	// Kind classifies the actor ("agent" for an automated actor that acts on someone's behalf);
+	// empty is a human. TP-PRINCIPAL-DELEGATION reads it, and the actor's role when it is empty.
+	Kind string `json:"kind,omitempty"`
 }
 
 // ActivityDiagram mirrors a use-case activity diagram.
@@ -752,6 +755,9 @@ type TestPlanRecord struct {
 type TestPrincipal struct {
 	Subject string   `json:"subject"`
 	Roles   []string `json:"roles"`
+	// OnBehalfOf is the subject of the human this identity acts for: the delegation claim an
+	// agent's calls carry. TP-PRINCIPAL-DELEGATION requires it of every agent actor.
+	OnBehalfOf string `json:"onBehalfOf,omitempty"`
 }
 
 // ScenarioBinding binds one derived scenario to concrete steps, or skips it until a

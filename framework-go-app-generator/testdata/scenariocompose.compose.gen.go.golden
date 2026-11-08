@@ -423,8 +423,8 @@ func (n nullPricingEngine) Price(rc fweng.Context, p0 pricing.Order) (pricing.Pr
 // are built with nil collaborators: a replay never executes an activity.
 func Workflows() scenariohost.Workflows {
 	return scenariohost.Workflows{Register: func(w scenariohost.Worker) {
-		managerbilling.RegisterManagerWorker(w, managerbilling.NewBillingManager(nil, nil, nil))
+		managerbilling.RegisterManagerWorker(w, managerbilling.NewBillingManager(nil, enginebilling.NewBillingEngine(), nil))
 		fulfillment.RegisterManagerWorker(w, fulfillment.NewFulfillmentManager(nil))
-		order.RegisterManagerWorker(w, order.NewOrderManager(nil, nil, nil, 3, time.Duration(20000000000), false, ":8080"))
+		order.RegisterManagerWorker(w, order.NewOrderManager(nil, nil, pricing.NewPricingEngine(), 3, time.Duration(20000000000), false, ":8080"))
 	}}
 }

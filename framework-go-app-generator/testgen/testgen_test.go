@@ -78,7 +78,7 @@ func TestGenerate_GoScenarioFileShape(t *testing.T) {
 		t.Errorf("a probe is a closure of direct calls, not a hook:\n%s", src)
 	}
 	// the same-component probe is a call on the subject itself
-	if !strings.Contains(string(src), "return subject.GetInvoice(h.ManagerContextAs(t, principal(\"customer\")), in.InvoiceId)") {
+	if !strings.Contains(string(src), "return subject.GetInvoice(pc.ManagerContextAs(t, principal(\"customer\")), in.InvoiceId)") {
 		t.Errorf("same-component probe call missing in\n%s", src)
 	}
 	if _, err := format.Source(src); err != nil {
@@ -98,7 +98,7 @@ func TestGenerate_GoScenarioFileShape(t *testing.T) {
 func TestGenerate_CrossComponentProbeIsADirectCall(t *testing.T) {
 	out := generate(t)
 	src := string(out.Generated[orderGen])
-	if !strings.Contains(src, "return scenariocompose.NewBillingManager(t, h).GetInvoice(h.ManagerContextAs(t, principal(\"customer\")), in.InvoiceId)") {
+	if !strings.Contains(src, "return scenariocompose.NewBillingManager(t, h).GetInvoice(pc.ManagerContextAs(t, principal(\"customer\")), in.InvoiceId)") {
 		t.Errorf("probe on billingManager from orderManager must be a direct call on the generated component:\n%s", src)
 	}
 	// The probe's parameters are builtin types, so the call goes through scenariocompose alone: importing the
