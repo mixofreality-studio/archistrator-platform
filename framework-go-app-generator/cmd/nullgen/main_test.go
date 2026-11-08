@@ -11,7 +11,7 @@ import (
 	"sync"
 	"testing"
 
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/conformance"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/testfixtures"
 )
 
 func freshApp(t *testing.T) (root, project string) {
@@ -20,10 +20,7 @@ func freshApp(t *testing.T) (root, project string) {
 	if err := os.WriteFile(filepath.Join(root, "go.mod"), []byte("module example.com/todomvc\n\ngo 1.26.0\n"), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	raw, err := conformance.Fixture("todomvc")
-	if err != nil {
-		t.Fatal(err)
-	}
+	raw := testfixtures.Fixture(t, "todomvc")
 	project = filepath.Join(root, "project.json")
 	if err := os.WriteFile(project, raw, 0o600); err != nil {
 		t.Fatal(err)

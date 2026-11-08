@@ -19,7 +19,6 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
-	github.com/mixofreality-studio/archistrator-platform/method-assets v0.24.0
 	github.com/nexus-rpc/sdk-go v0.6.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
@@ -50,11 +49,8 @@ require (
 //   - framework-go-http-generator: transportgen consumes its exported route
 //     planner (httpgen.PlanOps) as the single source of route/verb/param truth.
 //   - framework-go-projectmodel: the typed project.json model every emitter reads.
-//   - method-assets: the conformance package seats the scaffold a project is born with
-//     (methodassets.ScaffoldFiles) and runs the chain against it.
 replace (
 	github.com/mixofreality-studio/archistrator-platform/framework-go => ../framework-go
 	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator => ../framework-go-http-generator
 	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel => ../framework-go-projectmodel
-	github.com/mixofreality-studio/archistrator-platform/method-assets => ../method-assets
 )

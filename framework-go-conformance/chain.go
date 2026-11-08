@@ -53,7 +53,7 @@ func platformRoot() (string, error) {
 	if !ok {
 		return "", errors.New("conformance: cannot locate the platform checkout (runtime.Caller)")
 	}
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), "..", ".."))
+	root := filepath.Clean(filepath.Join(filepath.Dir(file), ".."))
 	if _, err := os.Stat(filepath.Join(root, "framework-go-app-generator", "go.mod")); err != nil {
 		return "", fmt.Errorf("conformance: %s is not the platform checkout: %w", root, err)
 	}

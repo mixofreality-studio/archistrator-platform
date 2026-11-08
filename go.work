@@ -2,6 +2,7 @@ go 1.25.4
 
 use (
 	./framework-go
+	./framework-go-conformance
 	./framework-go-infrastructure-github
 	./framework-go-infrastructure-keycloak
 	./framework-go-infrastructure-llm

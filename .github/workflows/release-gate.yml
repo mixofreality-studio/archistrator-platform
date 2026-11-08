@@ -17,6 +17,7 @@ on:
     tags:
       - 'framework-go/v*'
       - 'framework-go-app-generator/v*'
+      - 'framework-go-conformance/v*'
       - 'method-assets/v*'
 
 jobs:

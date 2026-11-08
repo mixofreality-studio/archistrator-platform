@@ -14,8 +14,9 @@ Edits applied to the harvest by Plan 1 (the complete list of that step):
 - `slots`, `serviceContracts` and `reviewPolicy` kept verbatim. The harvest has
   no top-level `moduleDir` key, so none is carried.
 
-Fixtures live under `conformance/testdata/` (not `testdata/conformance/`)
-because `go:embed` cannot reference parent directories.
+Fixtures live under `framework-go-conformance/testdata/` (not a `testdata/conformance/`
+elsewhere) because `go:embed` cannot reference parent directories. The app-generator unit
+tests read them by relative path (internal/testfixtures).
 
 ## Rebinding to binding model v2 (FPC plan 2, Task 2.13)
 

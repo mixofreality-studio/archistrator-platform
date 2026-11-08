@@ -12,7 +12,7 @@ import (
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/conformance"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/testfixtures"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/nullgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
@@ -25,10 +25,7 @@ var scenarioCfg = composegen.Config{ContainerKey: "server", ModulePath: "example
 // it with (the authored one, else the default), the model composegen is handed.
 func loadConformance(t *testing.T, name string) (*projectmodel.Model, []byte) {
 	t.Helper()
-	raw, err := conformance.Fixture(name)
-	if err != nil {
-		t.Fatalf("fixture %q: %v", name, err)
-	}
+	raw := testfixtures.Fixture(t, name)
 	m, err := projectmodel.Load(raw)
 	if err != nil {
 		t.Fatalf("load %q: %v", name, err)

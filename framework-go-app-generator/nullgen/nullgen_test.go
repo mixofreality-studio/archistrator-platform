@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/conformance"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/testfixtures"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/nullgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
@@ -27,7 +27,7 @@ type fixtureCase struct {
 // exercised.
 var cases = []fixtureCase{
 	{name: "todomvc", module: "example.com/todomvc"},
-	// The greenfield fixture is self-contained (conformance/testdata/greenfield/README.md lists the
+	// The greenfield fixture is self-contained (framework-go-conformance/testdata/greenfield/README.md lists the
 	// hand-written dependencies of the original golden that were folded into the model), so no
 	// stubs are needed.
 	{name: "greenfield", module: "example.com/greenfield/server"},
@@ -35,10 +35,7 @@ var cases = []fixtureCase{
 
 func (fc fixtureCase) raw(t *testing.T) []byte {
 	t.Helper()
-	raw, err := conformance.Fixture(fc.name)
-	if err != nil {
-		t.Fatalf("Fixture(%q): %v", fc.name, err)
-	}
+	raw := testfixtures.Fixture(t, fc.name)
 	return raw
 }
 
