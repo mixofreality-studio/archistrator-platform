@@ -196,7 +196,7 @@ func TestDesignWorkflow_SpecResolvesOnTheUnmergedTipBeforeTheRefresh(t *testing.
 	tip := strings.Index(doc, "      - name: Check out the session branch tip\n")
 	spec := strings.Index(doc, "      - name: Resolve the task spec\n")
 	refresh := strings.Index(doc, "      - name: Refresh the session branch from main\n")
-	if tip < 0 || spec < 0 || refresh < 0 || !(tip < spec && spec < refresh) {
+	if tip < 0 || spec < 0 || refresh < 0 || tip >= spec || spec >= refresh {
 		t.Fatalf("order must be tip checkout < spec < refresh (got %d, %d, %d)", tip, spec, refresh)
 	}
 	// Neither the merge nor the self-heal reset may appear before the spec step.

@@ -226,21 +226,26 @@ func overlayImpl(dir string, impl fs.FS) error {
 		if err != nil || d.IsDir() {
 			return err
 		}
-		body, err := fs.ReadFile(impl, path)
-		if err != nil {
-			return err
-		}
-		dest := filepath.Join(dir, filepath.FromSlash(path))
-		if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
-			return err
-		}
-		if strings.HasSuffix(path, ".go") {
-			if err := removeNullImpl(filepath.Join(filepath.Dir(dest), modelgen.NullFile)); err != nil {
-				return err
-			}
-		}
-		return os.WriteFile(dest, body, 0o600)
+		return overlayFile(dir, impl, path)
 	})
+}
+
+// overlayFile writes one impl file into dir, first removing the null.gen.go beside a Go file.
+func overlayFile(dir string, impl fs.FS, path string) error {
+	body, err := fs.ReadFile(impl, path)
+	if err != nil {
+		return err
+	}
+	dest := filepath.Join(dir, filepath.FromSlash(path))
+	if err := os.MkdirAll(filepath.Dir(dest), 0o750); err != nil {
+		return err
+	}
+	if strings.HasSuffix(path, ".go") {
+		if err := removeNullImpl(filepath.Join(filepath.Dir(dest), modelgen.NullFile)); err != nil {
+			return err
+		}
+	}
+	return os.WriteFile(dest, body, 0o600)
 }
 
 // removeNullImpl deletes path when nullgen wrote it. A null.gen.go with any other header is

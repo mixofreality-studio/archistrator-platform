@@ -52,11 +52,7 @@ func MethodSpecFor(lifecycleKey, taskID string, args []string) (MethodSpec, erro
 		Phase: task.Phase, Command: task.Command, Agent: task.WorkerClass, WorkerClass: task.WorkerClass,
 		ArtifactKind: artifactKindOf(l, *task),
 	}
-	for _, p := range l.Phases {
-		if p.ID == task.Phase {
-			s.ExitCriterion = p.ExitCriterion
-		}
-	}
+	s.ExitCriterion = exitCriterionOf(l, task.Phase)
 	if task.Command == "" {
 		return s, nil
 	}
@@ -91,6 +87,16 @@ func RenderCommand(command string, args []string) (string, error) {
 		return "", fmt.Errorf("no command %q", command)
 	}
 	return strings.ReplaceAll(string(body), "$ARGUMENTS", strings.Join(args, " ")), nil
+}
+
+// exitCriterionOf is the exit criterion of the lifecycle phase with the given id, "" when none.
+func exitCriterionOf(l Lifecycle, phase string) string {
+	for _, p := range l.Phases {
+		if p.ID == phase {
+			return p.ExitCriterion
+		}
+	}
+	return ""
 }
 
 func stripFrontmatter(body string) string {
