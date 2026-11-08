@@ -47,23 +47,32 @@ type tpEnv struct {
 // newTPEnv reads the design context once per validation. A malformed slot leaves the
 // matching half empty: the slot's own rules report it.
 func newTPEnv(p Project) tpEnv {
-	env := tpEnv{actors: map[string]bool{}, agents: map[string]bool{}}
+	env := tpEnv{actors: map[string]bool{}}
 	if in, err := ScenarioInput(p); err == nil {
 		env.actors = in.Actors
 	}
-	if cu, ok, err := p.coreUseCases(); err == nil && ok {
-		for _, d := range cu.Decisions {
-			for _, a := range d.UseCase.Actors {
-				if isAgentActor(a) {
-					env.agents[a.ID] = true
-				}
-			}
-		}
-	}
+	env.agents = agentActors(p)
 	if sys, ok, err := p.system(); err == nil && ok {
 		env.sys, env.sysOK = sys, true
 	}
 	return env
+}
+
+// agentActors is the set of actor ids the core use cases classify as agents (isAgentActor).
+func agentActors(p Project) map[string]bool {
+	agents := map[string]bool{}
+	cu, ok, err := p.coreUseCases()
+	if err != nil || !ok {
+		return agents
+	}
+	for _, d := range cu.Decisions {
+		for _, a := range d.UseCase.Actors {
+			if isAgentActor(a) {
+				agents[a.ID] = true
+			}
+		}
+	}
+	return agents
 }
 
 // component resolves a plan's (or contract's) component to its System component by

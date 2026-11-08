@@ -150,3 +150,23 @@ Adaptations to the harvest (the complete list):
   `ToggleTarget.basis` (see "Rebinding for the strong proof"); the matching fields are added to the
   fixture's `listRulingEngine` contract.
 - Nothing else is changed; no interface of a component moved between binding model v1 and v2.
+
+## Review follow-ups (Task 2.13c, round 1)
+
+- `TitleRuling.reason` (`"" | "blank"`) and `ToggleTarget.basis` (`someActive | allCompleted`) are
+  declared as `enum` in `serviceContracts.listRulingEngine.$defs`, like `View` and `Intent`.
+- Owed to the app (Task 2.11's follow-up; this task does not edit the app): the `$defs` mirror of
+  `TestPrincipal.onBehalfOf`, an `enum` (`agent`) for `methodcheck.Actor.kind`, the two agent
+  principals in archistrator's own `project.json`, and the prompt updates for TP-EXPECT-ZERO,
+  TP-PRINCIPAL-DELEGATION, TP-PROBE-SELF and the relaxed TP-STATE.
+- Needs a lead ruling: TP-STATE is relaxed for any read-only operation whose step asserts a result
+  or error (Managers and ResourceAccess reads as well as Engines), while decision 2 scoped the
+  probe-less proof to pure Engines. Narrowing it to Engine-layer contracts plus ResourceAccess reads
+  is the alternative. The `ListRulingEngine` body and contract change (`reason`, `basis`) widens the
+  plan's "fix the binding or the harness, never the body"; TP-EXPECT-ZERO is the justification.
+- `TestGo_TypeChecksAgainstTheRealHost` (framework-go-app-generator/testgen) fails for a cause that
+  is not the module cache: the realHost module replaces only `../framework-go-scenariohost`, whose
+  HEAD consumes `projectmodel.Substrate`, `SubstrateTemporal` and `InfraEnvName`, which the released
+  framework-go-projectmodel v0.4.0 lacks. It passes only after projectmodel is released and pinned
+  (the Step-3 release), or once `moduleOpts{realHost: true}` also replaces framework-go-projectmodel
+  with the local tree.

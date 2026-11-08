@@ -196,18 +196,24 @@ func zeroResult(schema json.RawMessage, defs map[string]json.RawMessage, depth i
 	case "array":
 		return []any{}, true
 	case "object", "":
-		if len(n.Properties) == 0 {
-			return nil, false
-		}
-		obj := make(map[string]any, len(n.Properties))
-		for name, sub := range n.Properties {
-			if z, ok := zeroResult(sub, defs, depth+1); ok {
-				obj[name] = z
-			}
-		}
-		return obj, true
+		return zeroObject(n.Properties, defs, depth)
 	}
 	return nil, false
+}
+
+// zeroObject is the zero result of an object schema: a map of its properties' zeros. ok is false
+// when the object states no properties.
+func zeroObject(props map[string]json.RawMessage, defs map[string]json.RawMessage, depth int) (any, bool) {
+	if len(props) == 0 {
+		return nil, false
+	}
+	obj := make(map[string]any, len(props))
+	for name, sub := range props {
+		if z, ok := zeroResult(sub, defs, depth+1); ok {
+			obj[name] = z
+		}
+	}
+	return obj, true
 }
 
 // zeroSatisfies reports whether the zero result is a JSON superset of want, with the generated
@@ -215,28 +221,39 @@ func zeroResult(schema json.RawMessage, defs map[string]json.RawMessage, depth i
 func zeroSatisfies(want, zero any) bool {
 	switch w := want.(type) {
 	case map[string]any:
-		z, ok := zero.(map[string]any)
-		if !ok {
-			return false
-		}
-		for k, wv := range w {
-			zv, ok := z[k]
-			if !ok || !zeroSatisfies(wv, zv) {
-				return false
-			}
-		}
-		return true
+		return zeroSatisfiesObject(w, zero)
 	case []any:
-		z, ok := zero.([]any)
-		return ok && len(z) == len(w) && func() bool {
-			for i := range w {
-				if !zeroSatisfies(w[i], z[i]) {
-					return false
-				}
-			}
-			return true
-		}()
+		return zeroSatisfiesArray(w, zero)
 	default:
 		return reflect.DeepEqual(want, zero)
 	}
+}
+
+// zeroSatisfiesObject is zeroSatisfies for an expected object: every expected member present and matching.
+func zeroSatisfiesObject(w map[string]any, zero any) bool {
+	z, ok := zero.(map[string]any)
+	if !ok {
+		return false
+	}
+	for k, wv := range w {
+		zv, ok := z[k]
+		if !ok || !zeroSatisfies(wv, zv) {
+			return false
+		}
+	}
+	return true
+}
+
+// zeroSatisfiesArray is zeroSatisfies for an expected array: same length, element-wise.
+func zeroSatisfiesArray(w []any, zero any) bool {
+	z, ok := zero.([]any)
+	if !ok || len(z) != len(w) {
+		return false
+	}
+	for i := range w {
+		if !zeroSatisfies(w[i], z[i]) {
+			return false
+		}
+	}
+	return true
 }

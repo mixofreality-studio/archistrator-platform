@@ -4239,6 +4239,10 @@
             },
             "reason": {
               "type": "string",
+              "enum": [
+                "",
+                "blank"
+              ],
               "description": "Why the wording was not accepted: blank. Empty when accepted."
             }
           },
@@ -4257,6 +4261,10 @@
             },
             "basis": {
               "type": "string",
+              "enum": [
+                "someActive",
+                "allCompleted"
+              ],
               "description": "What the target rests on: someActive when a todo is still active, allCompleted when every todo (or none) is completed."
             }
           },
