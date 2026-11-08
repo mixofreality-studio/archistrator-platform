@@ -92,10 +92,12 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 		cmd("service-test-plan"): {
 			"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-ARG-REF", "TP-ARRANGE", "TP-PROBE", "TP-STATE",
 			"TP-ACTOR-OBSERVED", "TP-PRINCIPAL", "vacuous",
+			"TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "onBehalfOf", "read-only",
 		},
 		cmd("frontend-test-plan"): {
 			"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-UI-TARGET", "TP-UI-ACTION", "UID-ROUTE", "TP-ARG-REF",
 			"TP-ARRANGE", "TP-ACTOR-OBSERVED", "TP-PRINCIPAL",
+			"TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "onBehalfOf",
 		},
 		cmd("frontend-detailed-design"): {"UID-ROLE", "UID-NAME", "UID-ID-UNIQUE", "UID-WITHIN", "UID-ROUTE", "surface check", "latency"},
 		cmd("service-integration"):      {"ARCH-TEST-COMPOSE", "TP-DISCRIMINATE"},
@@ -106,9 +108,9 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 			"UC-START-NOT-ACTION", "UC-PATH-OUTCOME", "UC-OUTCOME-AT-ASKING-SURFACE", "CC-DECIDED-BY-ACTOR-STEP",
 			"SCN-UNADDRESSED", "SCN-ACTOR-PATH-CLIENT", "TP-CLIENT-CONTRACTED",
 		},
-		".claude/skills/the-method-testing/SKILL.md":        {"writes no test code", "ARCH-TEST-COMPOSE", "TP-DISCRIMINATE"},
+		".claude/skills/the-method-testing/SKILL.md":        {"writes no test code", "ARCH-TEST-COMPOSE", "TP-DISCRIMINATE", "TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-STATE"},
 		".claude/skills/the-method-review-routing/SKILL.md": {"TP-HOOK", "vacuous"},
-		".claude/agents/test-engineer.md":                   {"TP-HOOK", "TP-EXPECT-REQUIRED"},
+		".claude/agents/test-engineer.md":                   {"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO"},
 	} {
 		body := string(files[path])
 		for _, want := range wants {

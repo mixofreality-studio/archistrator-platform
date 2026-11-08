@@ -68,7 +68,7 @@ or a Phase-1/2 slot. A perf *rig* still goes through `recordTestingState`
    `[TP-ARG-REF]`, never a literal or prose; every step asserts a real value, never a blank placeholder `[TP-EXPECT-REQUIRED]`; a value the contract's error model
    refuses is bound as `errorExpected` with its code; and observe what the stimulus
    changes, because a step whose every probe already held before it ran fails as
-   vacuous. An output no probe can observe has no escape hatch — it is a
+   vacuous. A probe never repeats the step's own stimulus on the same component with the same inputs `[TP-PROBE-SELF]`, and never reads a long poll (`Subscribe`, `Await`, `Wait*`) `[TP-PROBE-POLLING]`; probe a non-blocking read, since every probe runs under a deadline. An agent actor's principal declares `onBehalfOf`, the delegating human's subject `[TP-PRINCIPAL-DELEGATION]`. An expectation equal to the operation's zero result is almost certainly vacuous `[TP-EXPECT-ZERO]`: bind the discriminating fields. A read-only stimulus is its own observation and needs no probe; a mutating one needs a probe per expected state or output. An output no probe can observe has no escape hatch — it is a
    design defect (`[TP-STATE]`) to flag. A browser surface's steps target design
    element ids and observe what the user sees `[TP-UI-TARGET]`.
 2. **The tests are not an activity.** The platform generates the scenario tests

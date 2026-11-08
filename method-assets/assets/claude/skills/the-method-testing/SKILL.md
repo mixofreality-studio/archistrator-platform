@@ -161,7 +161,7 @@ for an agent to fill. The full design is
 `docs/superpowers/specs/2026-10-02-deterministic-component-testing-design.md`
 (archistrator repo); the mechanical rules are `framework-go/scenario`
 (derivation), the TP-* and UID-* methodcheck rules (binding and UI-design
-completeness; `TP-HOOK` refuses any hook or escape hatch) and the
+completeness; `TP-HOOK` refuses any hook or escape hatch; `TP-STATE` requires a probe per expected state or output of a mutating stimulus, while a read-only stimulus's result is its own observation; `TP-PROBE-SELF` refuses a probe that repeats the step's own stimulus, proving a step with no probes by the null-subject run (`TP-DISCRIMINATE`); `TP-PROBE-POLLING` warns on probing a long-polling read, and every probe runs under a deadline; `TP-PRINCIPAL-DELEGATION` requires an agent actor's principal to declare `onBehalfOf`; `TP-EXPECT-ZERO` warns on an expectation equal to the op's zero result) and the
 `scenario-tests-only` and `ARCH-TEST-COMPOSE` arch gates (no other test may
 exist in component code, and no test is composed by hand).
 
