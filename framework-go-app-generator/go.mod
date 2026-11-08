@@ -4,9 +4,9 @@ go 1.25.0
 
 require (
 	github.com/google/jsonschema-go v0.4.3
-	github.com/mixofreality-studio/archistrator-platform/framework-go v0.21.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.22.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator v0.5.0
-	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.4.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.5.0
 	go.temporal.io/sdk v1.44.0
 	gopkg.in/yaml.v3 v3.0.1
 )
@@ -19,7 +19,7 @@ require (
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware/v2 v2.3.2 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.28.0 // indirect
-	github.com/mixofreality-studio/archistrator-platform/method-assets v0.23.0
+	github.com/mixofreality-studio/archistrator-platform/method-assets v0.24.0
 	github.com/nexus-rpc/sdk-go v0.6.0 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
