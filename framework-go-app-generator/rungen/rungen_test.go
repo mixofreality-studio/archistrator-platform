@@ -123,6 +123,16 @@ func TestLauncherRemovesThePostgresVolume(t *testing.T) {
 	}
 }
 
+// The launcher names a missing Temporal CLI instead of dying on an opaque exec error.
+func TestLauncherNamesTheMissingTemporalCLI(t *testing.T) {
+	src := generate(t, freshModel(t, freshProject))
+	for _, want := range []string{`exec.LookPath("temporal")`, "devstack needs the Temporal CLI on PATH: https://docs.temporal.io/cli"} {
+		if !strings.Contains(src, want) {
+			t.Errorf("generated launcher lacks %q", want)
+		}
+	}
+}
+
 // The generated launcher is a stdlib-only command that builds and vets on its own.
 func TestLauncherBuilds(t *testing.T) {
 	if testing.Short() {

@@ -204,6 +204,9 @@ func provision(ctx context.Context, stack *cleanups) (map[string]string, error) 
 
 // startTemporal runs a Temporal dev server on free local ports.
 func startTemporal(ctx context.Context, stack *cleanups) (string, error) {
+	if _, err := exec.LookPath("temporal"); err != nil {
+		return "", errors.New("devstack needs the Temporal CLI on PATH: https://docs.temporal.io/cli")
+	}
 	port, err := freePort()
 	if err != nil {
 		return "", err

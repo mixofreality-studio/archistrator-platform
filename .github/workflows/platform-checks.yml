@@ -84,6 +84,16 @@ jobs:
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
+      # The generated devstack launcher starts `temporal server start-dev`; the
+      # runner image does not carry the Temporal CLI. Pinned, bump deliberately.
+      - uses: temporalio/setup-temporal@v0
+        with:
+          version: '1.10.0'
+      - name: Toolchain the boot needs (temporal, git, docker)
+        run: |
+          temporal --version
+          git --version
+          docker info --format '{{.ServerVersion}}'
       - name: Conformance chain, boot and probe
         working-directory: framework-go-conformance
         run: GOWORK=off go test -tags conformance ./ -v -timeout 40m

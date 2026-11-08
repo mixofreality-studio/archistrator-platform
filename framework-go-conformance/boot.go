@@ -1,7 +1,6 @@
 package conformance
 
 import (
-	"bufio"
 	"bytes"
 	"context"
 	"encoding/json"
@@ -52,12 +51,12 @@ func Boot(ctx context.Context, dir string) (Booted, error) {
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	var stderr tailBuffer
-	cmd.Stderr = &stderr
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return Booted{}, err
-	}
+	// One combined log for stdout and stderr; as the writer exec copies the streams
+	// through, cmd.Wait returns only after every byte the launcher printed is in it.
+	var log tailBuffer
+	lines := make(chan string, 1)
+	cmd.Stdout = &readyScanner{log: &log, found: lines}
+	cmd.Stderr = &log
 	if err := cmd.Start(); err != nil {
 		return Booted{}, fmt.Errorf("start devstack: %w", err)
 	}
@@ -72,21 +71,8 @@ func Boot(ctx context.Context, dir string) (Booted, error) {
 	}
 	fail := func(err error) (Booted, error) {
 		_ = stop()
-		return Booted{}, fmt.Errorf("%w\ndevstack stderr:\n%s", err, stderr.String())
+		return Booted{}, fmt.Errorf("%w\ndevstack output (last %d lines):\n%s", err, logTailLines, lastLines(log.String(), logTailLines))
 	}
-
-	lines := make(chan string, 1)
-	go func() {
-		sc := bufio.NewScanner(stdout)
-		for sc.Scan() {
-			var rl readyLine
-			if json.Unmarshal(sc.Bytes(), &rl) == nil && rl.Devstack == "ready" && rl.URL != "" {
-				lines <- rl.URL
-				break
-			}
-		}
-		_, _ = io.Copy(io.Discard, stdout)
-	}()
 
 	base, err := awaitReadyLine(ctx, lines, exited)
 	if err != nil {
@@ -325,6 +311,52 @@ func DockerLeftovers(_ context.Context, before, after []string) []string {
 		}
 	}
 	return left
+}
+
+// logTailLines is how much of the launcher's output a boot failure carries.
+const logTailLines = 40
+
+// lastLines is the last n lines of s.
+func lastLines(s string, n int) string {
+	ls := strings.Split(strings.TrimRight(s, "\n"), "\n")
+	if len(ls) > n {
+		ls = ls[len(ls)-n:]
+	}
+	return strings.Join(ls, "\n")
+}
+
+// readyScanner passes the launcher's stdout to the log and reports the URL on its
+// ready line, once.
+type readyScanner struct {
+	log   *tailBuffer
+	found chan<- string
+	mu    sync.Mutex
+	part  []byte
+	done  bool
+}
+
+func (r *readyScanner) Write(p []byte) (int, error) {
+	_, _ = r.log.Write(p)
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.done {
+		return len(p), nil
+	}
+	r.part = append(r.part, p...)
+	for {
+		i := bytes.IndexByte(r.part, '\n')
+		if i < 0 {
+			break
+		}
+		var rl readyLine
+		if json.Unmarshal(r.part[:i], &rl) == nil && rl.Devstack == "ready" && rl.URL != "" {
+			r.found <- rl.URL
+			r.done, r.part = true, nil
+			break
+		}
+		r.part = r.part[i+1:]
+	}
+	return len(p), nil
 }
 
 // tailBuffer keeps the end of what is written to it.
