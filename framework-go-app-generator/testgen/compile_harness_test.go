@@ -1,10 +1,13 @@
 package testgen
 
 import (
+	"errors"
+	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 )
@@ -125,9 +128,13 @@ func writeModule(t *testing.T, files map[string]string, opts moduleOpts) string 
 	all := map[string]string{}
 	sumFrom := []string{"framework-go-app-generator", "framework-go-mcp-generator"}
 	if opts.realHost {
-		gomod.WriteString("replace " + base + "framework-go-scenariohost => " + filepath.Join(platform, "framework-go-scenariohost") + "\n")
-		for _, dep := range []string{"framework-go-infrastructure-github", "framework-go-infrastructure-postgres", "framework-go-infrastructure-temporal"} {
-			gomod.WriteString("replace " + base + dep + " => " + filepath.Join(platform, dep) + "\n")
+		for _, dep := range platformClosure(t, platform, "framework-go-scenariohost") {
+			if dep != "framework-go" { // replaced above
+				gomod.WriteString("replace " + base + dep + " => " + filepath.Join(platform, dep) + "\n")
+			}
+			if dep != "framework-go-scenariohost" {
+				sumFrom = append(sumFrom, dep)
+			}
 		}
 		sumFrom = append(sumFrom, "framework-go-scenariohost")
 	} else {
@@ -149,6 +156,9 @@ func writeModule(t *testing.T, files map[string]string, opts moduleOpts) string 
 	var sums []byte
 	for _, mod := range sumFrom {
 		raw, err := os.ReadFile(filepath.Join(platform, mod, "go.sum"))
+		if errors.Is(err, fs.ErrNotExist) {
+			continue // a module with no dependencies of its own has no sums
+		}
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -167,4 +177,32 @@ func goIn(root string, env []string, args ...string) (string, error) {
 	cmd.Env = append(append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GOPROXY=off"), env...)
 	raw, err := cmd.CombinedOutput()
 	return string(raw), err
+}
+
+// platformClosure returns mod and every platform sibling it transitively requires (read from each go.mod in the
+// local checkout), so a typecheck against the real host needs neither the module cache nor the network.
+func platformClosure(t *testing.T, platform, mod string) []string {
+	t.Helper()
+	const base = "github.com/mixofreality-studio/archistrator-platform/"
+	seen := map[string]bool{}
+	queue := []string{mod}
+	for len(queue) > 0 {
+		cur := queue[0]
+		queue = queue[1:]
+		if seen[cur] {
+			continue
+		}
+		seen[cur] = true
+		raw, err := os.ReadFile(filepath.Join(platform, cur, "go.mod"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, line := range strings.Split(string(raw), "\n") {
+			f := strings.Fields(line)
+			if len(f) >= 2 && strings.HasPrefix(f[0], base) && f[1] != "=>" {
+				queue = append(queue, strings.TrimPrefix(f[0], base))
+			}
+		}
+	}
+	return slices.Sorted(maps.Keys(seen))
 }
