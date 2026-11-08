@@ -21,9 +21,11 @@ import (
 
 // proofRoot is where a proof tree is generated: inside this module, so its packages resolve
 // the real framework and SDK at the versions this module pins, with no module of their own.
+// It is a sibling of internal/sample, never under it: other tests build ./internal/sample/...
+// and would race the cleanup of these trees.
 const (
-	proofRoot   = "../internal/sample"
-	proofModule = "github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/sample"
+	proofRoot   = "../internal/proofscratch"
+	proofModule = "github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/proofscratch"
 )
 
 // proofContracts is one small project: a Manager with a dependency and machine and REST
@@ -216,11 +218,14 @@ func buildProofTree(t *testing.T, root string) map[string]string {
 
 func proofTree(t *testing.T) string {
 	t.Helper()
+	if err := os.MkdirAll(proofRoot, 0o755); err != nil {
+		t.Fatal(err)
+	}
 	root, err := os.MkdirTemp(proofRoot, "zproof")
 	if err != nil {
 		t.Fatal(err)
 	}
-	t.Cleanup(func() { _ = os.RemoveAll(root) })
+	t.Cleanup(func() { _ = os.RemoveAll(root); _ = os.Remove(proofRoot) })
 	return root
 }
 

@@ -51,7 +51,7 @@ func TestSampleInSync(t *testing.T) {
 		checkGolden(t, filepath.Join("..", "internal", "sample", "order", name), src)
 	}
 
-	cmd := exec.Command("go", "build", "./internal/sample/...")
+	cmd := exec.Command("go", "build", "./internal/sample/order/...", "./internal/sample/internal/...")
 	cmd.Dir = ".."
 	cmd.Env = append(os.Environ(), "GOWORK=off")
 	if out, err := cmd.CombinedOutput(); err != nil {
