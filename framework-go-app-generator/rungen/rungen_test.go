@@ -92,6 +92,29 @@ func TestLauncherCoversTheLocalConfigBothWays(t *testing.T) {
 	}
 }
 
+// A caller that supplies a substrate's variables keeps the launcher from provisioning it
+// (scenariohost launches devstack into its own substrates), and a listen address the caller
+// preset is the one the server runs on.
+func TestLauncherHonoursPresetSubstratesAndListenAddr(t *testing.T) {
+	src := generate(t, freshModel(t, freshProject))
+	for _, want := range []string{
+		`if os.Getenv(p.Env) != ""`,
+		"from the environment",
+		`if preset := os.Getenv(plan.ListenEnv); preset != ""`,
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the launcher lacks %q:\n%s", want, src)
+		}
+	}
+	p, err := rungen.Derive(freshModel(t, freshProject), cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if slices.Contains(p.Required, configgen.DevPrincipalEnv("APP")) {
+		t.Errorf("the framework's own inputs are neither provisioned nor required: %+v", p)
+	}
+}
+
 // A design with no Postgres, no ExternalHTTP and no browser surface provisions only Temporal and
 // builds no web project.
 func TestLauncherProvisionsOnlyWhatTheModelDeclares(t *testing.T) {

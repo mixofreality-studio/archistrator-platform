@@ -1,0 +1,4 @@
+# Written by the devstack launch tests: the scenario host's Temporal dev server database and
+# the results index its Main flushes.
+.temporal/
+test-results/

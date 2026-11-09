@@ -83,6 +83,13 @@ type Host struct {
 	gitMu    sync.Mutex
 	gitRepos map[string]ghtestinfra.LocalGitRepo
 
+	// launchMu guards the counters of what LaunchDevstack gives each launch (devstack.go,
+	// postgres.go): databases are the launch databases created on the Postgres server, in
+	// creation order, and launches counts the Temporal namespaces registered.
+	launchMu  sync.Mutex
+	databases []string
+	launches  int
+
 	// stops tears the doubles down, in boot order; Main runs them reversed.
 	stops []func()
 }

@@ -28,13 +28,3 @@ func TestBoot_ExitBeforeReadyCarriesTheLauncherLog(t *testing.T) {
 		}
 	}
 }
-
-func TestLastLines(t *testing.T) {
-	var b strings.Builder
-	for i := range 100 {
-		b.WriteString(strings.Repeat("x", i%3+1) + "\n")
-	}
-	if n := len(strings.Split(lastLines(b.String(), 40), "\n")); n != 40 {
-		t.Errorf("lines = %d, want 40", n)
-	}
-}

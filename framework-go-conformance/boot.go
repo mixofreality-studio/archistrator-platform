@@ -8,25 +8,12 @@ import (
 	"fmt"
 	"io"
 	"net/http"
-	"os"
-	"os/exec"
-	"sort"
 	"strings"
-	"sync"
-	"syscall"
-	"time"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/devstack"
 )
 
-const (
-	// readyzTimeout bounds the wait for GET /readyz once the launcher printed its
-	// ready line.
-	readyzTimeout = 120 * time.Second
-	// launcherTimeout bounds the launcher up to its ready line: it provisions
-	// Postgres and Temporal and builds the SPA and the server first.
-	launcherTimeout = 10 * time.Minute
-	stopGrace       = 90 * time.Second
-	mcpProtocol     = "2025-06-18"
-)
+const mcpProtocol = "2025-06-18"
 
 // Booted is a running composed app.
 type Booted struct {
@@ -36,110 +23,25 @@ type Booted struct {
 	Stop func() error
 }
 
-// readyLine is the one JSON line the generated launcher prints on stdout.
-type readyLine struct {
-	Devstack string `json:"devstack"`
-	URL      string `json:"url"`
-}
-
 // Boot runs the app's own run contract, `go run ./cmd/devstack`, in dir and waits
-// for it to print its ready line and for GET /readyz to answer 200. The launcher
-// runs in its own process group so Stop reaches the server it spawned, and it
-// removes the Postgres container with its data volume on SIGTERM.
+// for it to print its ready line and for GET /readyz to answer 200 (devstack.Launch,
+// the launcher the scenario host wraps). The launcher provisions its own substrates
+// and removes the Postgres container with its data volume on SIGTERM.
 func Boot(ctx context.Context, dir string) (Booted, error) {
-	cmd := exec.Command("go", "run", "./cmd/devstack") // #nosec G204 -- the app's own run contract
-	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off")
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	// One combined log for stdout and stderr; as the writer exec copies the streams
-	// through, cmd.Wait returns only after every byte the launcher printed is in it.
-	var log tailBuffer
-	lines := make(chan string, 1)
-	cmd.Stdout = &readyScanner{log: &log, found: lines}
-	cmd.Stderr = &log
-	if err := cmd.Start(); err != nil {
-		return Booted{}, fmt.Errorf("start devstack: %w", err)
-	}
-	exited := make(chan error, 1)
-	go func() { exited <- cmd.Wait() }()
-
-	var once sync.Once
-	var stopErr error
-	stop := func() error {
-		once.Do(func() { stopErr = terminate(cmd, exited) })
-		return stopErr
-	}
-	fail := func(err error) (Booted, error) {
-		_ = stop()
-		return Booted{}, fmt.Errorf("%w\ndevstack output (last %d lines):\n%s", err, logTailLines, lastLines(log.String(), logTailLines))
-	}
-
-	base, err := awaitReadyLine(ctx, lines, exited)
+	app, err := devstack.Launch(ctx, dir, nil, nil)
 	if err != nil {
-		return fail(err)
+		return Booted{}, err
 	}
-	if err := waitReadyz(ctx, base); err != nil {
-		return fail(err)
-	}
-	return Booted{BaseURL: base, Stop: stop}, nil
+	return Booted{BaseURL: app.BaseURL, Stop: app.Stop}, nil
 }
 
-// awaitReadyLine waits for the launcher's ready line, its exit, the timeout or the context.
-// An exit is put back on the channel so the later stop still sees it.
-func awaitReadyLine(ctx context.Context, lines <-chan string, exited chan error) (string, error) {
-	select {
-	case base := <-lines:
-		return base, nil
-	case err := <-exited:
-		exited <- err
-		return "", fmt.Errorf("devstack exited before it was ready: %v", err)
-	case <-time.After(launcherTimeout):
-		return "", fmt.Errorf("devstack printed no ready line within %s", launcherTimeout)
-	case <-ctx.Done():
-		return "", ctx.Err()
-	}
-}
+// DockerInventory lists the containers and volumes docker holds now, as
+// "container:<name>" and "volume:<name>".
+func DockerInventory(ctx context.Context) ([]string, error) { return devstack.DockerInventory(ctx) }
 
-// terminate sends SIGTERM to the launcher's process group, waits for it and its
-// cleanups (the Postgres removal runs in the launcher's deferred stack), then kills
-// the group if it outlives the grace period.
-func terminate(cmd *exec.Cmd, exited chan error) error {
-	pgid := cmd.Process.Pid
-	select {
-	case <-exited:
-		return nil
-	default:
-	}
-	_ = syscall.Kill(-pgid, syscall.SIGTERM)
-	select {
-	case <-exited:
-		return nil
-	case <-time.After(stopGrace):
-		_ = syscall.Kill(-pgid, syscall.SIGKILL)
-		<-exited
-		return fmt.Errorf("devstack did not stop within %s and was killed", stopGrace)
-	}
-}
-
-func waitReadyz(ctx context.Context, base string) error {
-	deadline := time.Now().Add(readyzTimeout)
-	var last error
-	for time.Now().Before(deadline) {
-		status, _, err := get(ctx, base+"/readyz")
-		if err == nil && status == http.StatusOK {
-			return nil
-		}
-		last = err
-		if err == nil {
-			last = fmt.Errorf("status %d", status)
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Second):
-		}
-	}
-	return fmt.Errorf("GET /readyz did not return 200 within %s: %v", readyzTimeout, last)
+// DockerLeftovers is the names in after that were not in before.
+func DockerLeftovers(ctx context.Context, before, after []string) []string {
+	return devstack.DockerLeftovers(ctx, before, after)
 }
 
 func get(ctx context.Context, url string) (int, []byte, error) {
@@ -272,111 +174,4 @@ func decodeReply(contentType string, body []byte) (rpcReply, error) {
 		return reply, fmt.Errorf("decode reply %.300q: %w", body, err)
 	}
 	return reply, nil
-}
-
-// DockerInventory lists the containers and volumes docker holds now, as
-// "container:<name>" and "volume:<name>".
-func DockerInventory(ctx context.Context) ([]string, error) {
-	var out []string
-	for _, q := range []struct {
-		kind string
-		argv []string
-	}{
-		{"container", []string{"ps", "-a", "--format", "{{.Names}}"}},
-		{"volume", []string{"volume", "ls", "-q"}},
-	} {
-		b, err := exec.CommandContext(ctx, "docker", q.argv...).Output() // #nosec G204 -- fixed argv
-		if err != nil {
-			return nil, fmt.Errorf("docker %s: %w", strings.Join(q.argv, " "), err)
-		}
-		for _, name := range strings.Fields(string(b)) {
-			out = append(out, q.kind+":"+name)
-		}
-	}
-	sort.Strings(out)
-	return out, nil
-}
-
-// DockerLeftovers is the names in after that were not in before. The context is
-// accepted for symmetry with DockerInventory; the comparison is pure.
-func DockerLeftovers(_ context.Context, before, after []string) []string {
-	seen := make(map[string]bool, len(before))
-	for _, n := range before {
-		seen[n] = true
-	}
-	var left []string
-	for _, n := range after {
-		if !seen[n] {
-			left = append(left, n)
-		}
-	}
-	return left
-}
-
-// logTailLines is how much of the launcher's output a boot failure carries.
-const logTailLines = 40
-
-// lastLines is the last n lines of s.
-func lastLines(s string, n int) string {
-	ls := strings.Split(strings.TrimRight(s, "\n"), "\n")
-	if len(ls) > n {
-		ls = ls[len(ls)-n:]
-	}
-	return strings.Join(ls, "\n")
-}
-
-// readyScanner passes the launcher's stdout to the log and reports the URL on its
-// ready line, once.
-type readyScanner struct {
-	log   *tailBuffer
-	found chan<- string
-	mu    sync.Mutex
-	part  []byte
-	done  bool
-}
-
-func (r *readyScanner) Write(p []byte) (int, error) {
-	_, _ = r.log.Write(p)
-	r.mu.Lock()
-	defer r.mu.Unlock()
-	if r.done {
-		return len(p), nil
-	}
-	r.part = append(r.part, p...)
-	for {
-		i := bytes.IndexByte(r.part, '\n')
-		if i < 0 {
-			break
-		}
-		var rl readyLine
-		if json.Unmarshal(r.part[:i], &rl) == nil && rl.Devstack == "ready" && rl.URL != "" {
-			r.found <- rl.URL
-			r.done, r.part = true, nil
-			break
-		}
-		r.part = r.part[i+1:]
-	}
-	return len(p), nil
-}
-
-// tailBuffer keeps the end of what is written to it.
-type tailBuffer struct {
-	mu  sync.Mutex
-	buf []byte
-}
-
-func (t *tailBuffer) Write(p []byte) (int, error) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	t.buf = append(t.buf, p...)
-	if len(t.buf) > stderrTail {
-		t.buf = t.buf[len(t.buf)-stderrTail:]
-	}
-	return len(p), nil
-}
-
-func (t *tailBuffer) String() string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return string(t.buf)
 }

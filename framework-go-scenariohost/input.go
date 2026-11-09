@@ -108,13 +108,21 @@ func (h *Host) gitRepo(t reporter, infraKey string) ghtestinfra.LocalGitRepo {
 // not provisioned locally contributes nothing.
 func (h *Host) Env(t *testing.T, prefix string, d *projectmodel.Deployment) []string {
 	t.Helper()
+	return h.env(prefix, d, func(decl projectmodel.InfraDecl, input string) string {
+		return h.Input(t, decl.Key, decl.Substrate, input)
+	})
+}
+
+// env is Env with the value of each input answered by value: Env answers from Input, and
+// LaunchDevstack answers a database and a namespace of the launch's own.
+func (h *Host) env(prefix string, d *projectmodel.Deployment, value func(decl projectmodel.InfraDecl, input string) string) []string {
 	var out []string
 	for _, decl := range d.Infrastructure {
 		if !provisionedLocally(decl) {
 			continue
 		}
 		for _, in := range decl.Substrate.Inputs() {
-			out = append(out, projectmodel.InfraEnvName(prefix, decl, in.Name)+"="+h.Input(t, decl.Key, decl.Substrate, in.Name))
+			out = append(out, projectmodel.InfraEnvName(prefix, decl, in.Name)+"="+value(decl, in.Name))
 		}
 	}
 	return out

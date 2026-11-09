@@ -5,6 +5,7 @@ go 1.25.4
 require (
 	github.com/go-git/go-git/v5 v5.19.1
 	github.com/mixofreality-studio/archistrator-platform/framework-go v0.22.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.24.1
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github v0.1.6
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres v0.1.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-temporal v0.2.0
@@ -98,7 +99,7 @@ require (
 	google.golang.org/genproto/googleapis/api v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20260401024825-9d38bb4040a9 // indirect
 	google.golang.org/grpc v1.80.0 // indirect
-	google.golang.org/protobuf v1.36.11 // indirect
+	google.golang.org/protobuf v1.36.11
 	gopkg.in/warnings.v0 v0.1.2 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
@@ -107,8 +108,12 @@ require (
 // The replaces make the standalone module build (GOWORK=off, as CI runs it)
 // resolve them from the local checkout instead of a stale published tag, the
 // same way framework-go-infrastructure-temporal resolves framework-go.
+// framework-go-app-generator holds the T-free devstack launcher LaunchDevstack
+// wraps; framework-go-http-generator is beneath it.
 replace (
 	github.com/mixofreality-studio/archistrator-platform/framework-go => ../framework-go
+	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator => ../framework-go-app-generator
+	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator => ../framework-go-http-generator
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github => ../framework-go-infrastructure-github
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres => ../framework-go-infrastructure-postgres
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-temporal => ../framework-go-infrastructure-temporal

@@ -86,7 +86,7 @@ func run() error {
 		}
 		env[plan.WebDistEnv] = dist
 	}
-	addr, err := freeAddr()
+	addr, err := listenAddr()
 	if err != nil {
 		return err
 	}
@@ -171,17 +171,19 @@ func checkRequired() error {
 	return nil
 }
 
-// provision starts the substrates the plan needs and returns the variables they set.
+// provision starts the substrates the plan needs and returns the variables they set. A substrate
+// whose variables the caller already set is not started: a host that owns the substrates (the
+// scenario host launches this stack into its own) supplies them, and a variable it set is kept.
 func provision(ctx context.Context, stack *cleanups) (map[string]string, error) {
 	values := map[string]string{}
-	if plan.Temporal {
+	if plan.Temporal && unset("temporal.") {
 		hostport, err := startTemporal(ctx, stack)
 		if err != nil {
 			return nil, err
 		}
 		values["temporal.hostport"], values["temporal.namespace"] = hostport, "default"
 	}
-	if plan.Postgres {
+	if plan.Postgres && unset("postgres.") {
 		url, err := startPostgres(ctx, stack)
 		if err != nil {
 			return nil, err
@@ -189,6 +191,9 @@ func provision(ctx context.Context, stack *cleanups) (map[string]string, error) 
 		values["postgres.url"] = url
 	}
 	for _, key := range plan.GitRepos {
+		if !unset("git-repo." + key + ".") {
+			continue
+		}
 		url, err := startGitRepo(ctx, key, stack)
 		if err != nil {
 			return nil, err
@@ -197,9 +202,33 @@ func provision(ctx context.Context, stack *cleanups) (map[string]string, error) 
 	}
 	env := map[string]string{}
 	for _, p := range plan.Provisioned {
+		if os.Getenv(p.Env) != "" {
+			env[p.Env] = os.Getenv(p.Env)
+			fmt.Fprintf(os.Stderr, "devstack: %s from the environment (%s)\n", p.From, p.Env)
+			continue
+		}
 		env[p.Env] = values[p.From]
 	}
 	return env, nil
+}
+
+// unset reports whether some variable provisioned from a substrate whose provision starts with
+// prefix is empty in the environment: the launcher must then start that substrate.
+func unset(prefix string) bool {
+	for _, p := range plan.Provisioned {
+		if strings.HasPrefix(p.From, prefix) && os.Getenv(p.Env) == "" {
+			return true
+		}
+	}
+	return false
+}
+
+// listenAddr is the address the server runs on: the caller's when it set one, else a free local port.
+func listenAddr() (string, error) {
+	if preset := os.Getenv(plan.ListenEnv); preset != "" {
+		return preset, nil
+	}
+	return freeAddr()
 }
 
 // startTemporal runs a Temporal dev server on free local ports.
