@@ -68,8 +68,11 @@ jobs:
   # command chain (gen-models, gen, gen-null, gen-tests, webgen, go build, go vet,
   # npm typecheck), then the composed todomvc app is booted and probed (GET /,
   # POST /mcp initialize + tools/list) and a double boot must leave no Docker
-  # orphans. Docker is preinstalled on ubuntu-latest. The job name is load-bearing:
-  # release-gate.yml requires a green check run named `conformance` on the tagged SHA.
+  # orphans. Docker is preinstalled on ubuntu-latest. The job names are load-bearing:
+  # release-gate.yml requires green check runs named `conformance` AND
+  # `conformance-proof` on the tagged SHA. The two run in parallel because the
+  # RUN-021 proof alone (null-build and real-body discrimination) takes ~35 minutes
+  # locally and longer on the runner.
   conformance:
     needs: go
     runs-on: ubuntu-latest
@@ -96,7 +99,34 @@ jobs:
           docker info --format '{{.ServerVersion}}'
       - name: Conformance chain, boot and probe
         working-directory: framework-go-conformance
-        run: GOWORK=off go test -tags conformance ./ -v -timeout 40m
+        run: GOWORK=off go test -tags conformance ./ -run 'TestConformance_(Chain|Boot|BootTwice_NoOrphans)$' -v -timeout 50m
+  conformance-proof:
+    needs: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 110
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: temporalio/setup-temporal@v0
+        with:
+          version: '1.10.0'
+      - name: Toolchain the proof needs (temporal, git, docker)
+        run: |
+          temporal --version
+          git --version
+          docker info --format '{{.ServerVersion}}'
+      # RUN-021 replayed through the chain: derive, methodcheck, testgen, chain, vet,
+      # discriminate (null build), vacuous, discriminate_impl (harvested bodies).
+      - name: RUN-021 proof
+        working-directory: framework-go-conformance
+        run: GOWORK=off go test -tags conformance ./ -run 'TestConformance_RUN021Proof$' -v -timeout 100m
   web:
     runs-on: ubuntu-latest
     permissions:
