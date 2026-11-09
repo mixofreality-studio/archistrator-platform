@@ -809,27 +809,28 @@ func writePrincipalTable(b *bytes.Buffer, principals map[string]methodcheck.Test
 		pr := principals[name]
 		roles := ""
 		if len(pr.Roles) > 0 {
-			quoted := make([]string, len(pr.Roles))
-			for i, r := range pr.Roles {
-				quoted[i] = strconv.Quote(r)
-			}
-			roles = ", Roles: []string{" + strings.Join(quoted, ", ") + "}"
+			roles = ", Roles: " + quotedStringList(pr.Roles)
 		}
 		onBehalfOf := ""
 		if pr.OnBehalfOf != "" {
 			onBehalfOf = ", OnBehalfOf: " + strconv.Quote(pr.OnBehalfOf)
 		}
 		if len(pr.Intents) > 0 {
-			quoted := make([]string, len(pr.Intents))
-			for i, in := range pr.Intents {
-				quoted[i] = strconv.Quote(in)
-			}
-			onBehalfOf += ", Intents: []string{" + strings.Join(quoted, ", ") + "}"
+			onBehalfOf += ", Intents: " + quotedStringList(pr.Intents)
 		}
 		fmt.Fprintf(b, "\t%s: {Subject: %s%s%s},\n", strconv.Quote(name), strconv.Quote(pr.Subject), roles, onBehalfOf)
 	}
 	b.WriteString("}\n\n")
 	b.WriteString(principalLookup)
+}
+
+// quotedStringList spells items as a Go []string literal.
+func quotedStringList(items []string) string {
+	quoted := make([]string, len(items))
+	for i, s := range items {
+		quoted[i] = strconv.Quote(s)
+	}
+	return "[]string{" + strings.Join(quoted, ", ") + "}"
 }
 
 // principalLookup is the lookup of a plan principal by actor name.
