@@ -17,18 +17,69 @@ import (
 // have carried - never an anonymous call.
 //
 // OnBehalfOf is the subject of the human an agent acts for (the plan's
-// onBehalfOf): the delegation claim.
+// onBehalfOf): the delegation claim. Intents is what that human lets the agent
+// do, in the app's own vocabulary (the plan's intents); it is read only when
+// OnBehalfOf is set.
 type Principal struct {
 	Subject    string
 	Roles      []string
 	OnBehalfOf string
+	Intents    []string
 }
 
-// ClaimOnBehalfOf is the key of the delegation claim in security.Principal.Claims: the subject of
-// the human the principal acts for. security.Principal has no delegation field of its own, so a
-// delegated principal is a PrincipalApplication identity carrying this claim; an app's policy reads
-// it from rc.Principal.Claims.
-const ClaimOnBehalfOf = "onBehalfOf"
+// ClaimDelegations is the key of the delegation claim in security.Principal.Claims. security.Principal
+// has no delegation field of its own (Claims is its escape hatch), so a delegated principal is a
+// PrincipalApplication identity whose Claims[ClaimDelegations] is a list of grants, each
+// {"grantor": <the human's subject>, "intents": [<what the human allows>]}. The shape is the one
+// the apps' policies read from rc.Principal.Claims; a grant with no intents has no reach.
+const ClaimDelegations = "delegations"
+
+// Delegation is one grant in the delegation claim: the human who delegated and what they allowed.
+type Delegation struct {
+	Grantor string   `json:"grantor"`
+	Intents []string `json:"intents"`
+}
+
+// DelegationsOf decodes the delegation claim of p: the one reader of the shape securityPrincipal
+// writes. It accepts the generic JSON form ([]any of map[string]any, with intents as []any or
+// []string) a principal rebuilt from a token carries, and []Delegation. A principal with no
+// delegation claim, or a malformed one, has no delegations.
+func DelegationsOf(p security.Principal) []Delegation {
+	switch raw := p.Claims[ClaimDelegations].(type) {
+	case []Delegation:
+		return append([]Delegation(nil), raw...)
+	case []any:
+		var out []Delegation
+		for _, item := range raw {
+			switch g := item.(type) {
+			case Delegation:
+				out = append(out, g)
+			case map[string]any:
+				grantor, _ := g["grantor"].(string)
+				out = append(out, Delegation{Grantor: grantor, Intents: stringsOf(g["intents"])})
+			}
+		}
+		return out
+	}
+	return nil
+}
+
+// stringsOf is v as a string list: []string as is, []any keeping its string elements.
+func stringsOf(v any) []string {
+	switch s := v.(type) {
+	case []string:
+		return append([]string(nil), s...)
+	case []any:
+		var out []string
+		for _, e := range s {
+			if str, ok := e.(string); ok {
+				out = append(out, str)
+			}
+		}
+		return out
+	}
+	return nil
+}
 
 // securityPrincipal is p as the framework's principal. A Principal with no Subject fails the test: a
 // call with no identity is not a call made as someone.
@@ -42,9 +93,16 @@ func securityPrincipal(t *testing.T, p Principal) security.Principal {
 		Subject: p.Subject,
 		Roles:   append([]string(nil), p.Roles...),
 	}
+	if p.OnBehalfOf == "" && len(p.Intents) > 0 {
+		t.Fatalf("scenariohost: Principal %q declares intents but no OnBehalfOf", p.Subject)
+	}
 	if p.OnBehalfOf != "" {
+		intents := make([]any, len(p.Intents))
+		for i, in := range p.Intents {
+			intents[i] = in
+		}
 		sp.Kind = security.PrincipalApplication
-		sp.Claims = map[string]any{ClaimOnBehalfOf: p.OnBehalfOf}
+		sp.Claims = map[string]any{ClaimDelegations: []any{map[string]any{"grantor": p.OnBehalfOf, "intents": intents}}}
 	}
 	return sp
 }

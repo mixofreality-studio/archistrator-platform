@@ -109,10 +109,14 @@ change, by cause:
   apply and every step ran anonymous (the access engine refused it as `incompleteQuestion`). The
   plan now names who each Client acts for, keyed by the caller as the derivation writes it
   (`todo-web-app`, `todo-mcp-server`, `todo-api`): all three run as `alice`. The harvested
-  ListManager reads its agent's delegation from `Claims["delegations"]` (grantor and intents),
-  which `onBehalfOf` does not produce, so the Manager scenarios drive the agent surfaces as the
-  delegating member; the delegation claim is exercised from the machine clients (`todoApi`,
-  `todoMcpServer`), whose `team-agent` principal now declares `onBehalfOf` `alice`.
+  ListManager reads its agent's delegation from `Claims["delegations"]` (grantor and intents).
+  The scenario host (FPC plan 3, Task 3.0) now writes the claim in exactly that shape: a
+  principal with `onBehalfOf` carries one grant `{grantor, intents}` built from `onBehalfOf` and
+  the new `TestPrincipal.intents`, and `onBehalfOf` without intents has no reach (a grant with no
+  intents permits nothing). The `team-agent` principal of the machine clients (`todoApi`,
+  `todoMcpServer`) declares `onBehalfOf` `alice` and the seven `Intent` values its scenarios use
+  (`read`, `add`, `reword`, `discard`, `mark`, `toggleAll`, `clearCompleted`). The Manager
+  scenarios still drive the agent surfaces as the delegating member.
 - `messageBus`: the `Subscribe` probes stay (the contract has no non-blocking read) and are
   bounded; their pre-state read times out and counts as not held. `resume-the-list-P3` (a
   `Subscribe` step) arranges one `Publish` first so it returns, and drops the probes that repeated

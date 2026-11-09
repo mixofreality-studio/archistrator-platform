@@ -49,3 +49,37 @@ func TestLayerContextsAsCarryThePrincipal(t *testing.T) {
 		t.Errorf("ManagerContextAs principal = %+v, %v", got, ok)
 	}
 }
+
+func TestPrincipalContext_DelegationClaimShape(t *testing.T) {
+	h := Start(t)
+	p := Principal{Subject: "agent-1", Roles: []string{"agent"}, OnBehalfOf: "alice", Intents: []string{"read", "add"}}
+	got, _ := security.PrincipalFrom(h.PrincipalContext(t, p))
+	if got.Kind != security.PrincipalApplication {
+		t.Errorf("kind = %q, want application", got.Kind)
+	}
+	if _, stale := got.Claims["onBehalfOf"]; stale {
+		t.Error(`Claims["onBehalfOf"] must no longer be written`)
+	}
+	raw, ok := got.Claims[ClaimDelegations].([]any)
+	if !ok || len(raw) != 1 {
+		t.Fatalf("Claims[%q] = %#v, want one grant", ClaimDelegations, got.Claims[ClaimDelegations])
+	}
+	grant := raw[0].(map[string]any)
+	if grant["grantor"] != "alice" {
+		t.Errorf("grantor = %v", grant["grantor"])
+	}
+	if intents, _ := grant["intents"].([]any); len(intents) != 2 || intents[0] != "read" || intents[1] != "add" {
+		t.Errorf("intents = %v", grant["intents"])
+	}
+	ds := DelegationsOf(got)
+	if len(ds) != 1 || ds[0].Grantor != "alice" || !slices.Equal(ds[0].Intents, []string{"read", "add"}) {
+		t.Errorf("DelegationsOf = %+v", ds)
+	}
+	human, has := security.PrincipalFrom(h.PrincipalContext(t, Principal{Subject: "alice"}))
+	if !has {
+		t.Fatal("human principal lost")
+	}
+	if human.Claims != nil {
+		t.Errorf("a human carries no claims, got %v", human.Claims)
+	}
+}

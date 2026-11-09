@@ -129,3 +129,20 @@ func TestGo_PrincipalOnBehalfOfIsEmitted(t *testing.T) {
 		t.Errorf("the principal table must carry the delegation:\n%s", src)
 	}
 }
+
+// intents travel with onBehalfOf into the generated principal table, in the plan's order.
+func TestGo_PrincipalTableCarriesIntents(t *testing.T) {
+	out := generateMutated(t, func(doc map[string]any) {
+		plans := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)
+		for _, rec := range plans {
+			for _, pr := range rec.(map[string]any)["principals"].(map[string]any) {
+				pr.(map[string]any)["onBehalfOf"] = "alice"
+				pr.(map[string]any)["intents"] = []any{"read", "add"}
+			}
+		}
+	})
+	src := string(out.Generated[billingGen])
+	if !strings.Contains(src, `OnBehalfOf: "alice", Intents: []string{"read", "add"}`) {
+		t.Errorf("the principal table must carry the intents:\n%s", src)
+	}
+}

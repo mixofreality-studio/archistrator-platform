@@ -95,7 +95,7 @@ func TestLayerContextsAs_SetThePrincipalField(t *testing.T) {
 		"probe EngineContextAs":         pc.EngineContextAs(t, p).Principal,
 		"probe ResourceAccessContextAs": pc.ResourceAccessContextAs(t, p, "k").Principal,
 	} {
-		if got.Subject != "agent-1" || got.Kind != security.PrincipalApplication || got.Claims[ClaimOnBehalfOf] != "alice" || len(got.Roles) != 1 {
+		if got.Subject != "agent-1" || got.Kind != security.PrincipalApplication || !grantedBy(got, "alice") || len(got.Roles) != 1 {
 			t.Errorf("%s: Principal = %+v, want agent-1 acting for alice", name, got)
 		}
 	}
@@ -120,19 +120,25 @@ func TestPrincipalContext_OnBehalfOfIsTheDelegationClaim(t *testing.T) {
 	if agent.Kind != security.PrincipalApplication {
 		t.Errorf("a delegated principal is an application identity, got %q", agent.Kind)
 	}
-	if got := agent.Claims[ClaimOnBehalfOf]; got != "alice" {
-		t.Errorf("Claims[%q] = %v, want alice", ClaimOnBehalfOf, got)
+	if !grantedBy(agent, "alice") {
+		t.Errorf("Claims[%q] = %v, want one grant from alice", ClaimDelegations, agent.Claims[ClaimDelegations])
 	}
 	human, _ := security.PrincipalFrom(h.PrincipalContext(t, Principal{Subject: "alice"}))
 	if human.Kind != security.PrincipalUser {
 		t.Errorf("a principal with no delegation is a user, got %q", human.Kind)
 	}
-	if _, has := human.Claims[ClaimOnBehalfOf]; has {
+	if _, has := human.Claims[ClaimDelegations]; has {
 		t.Error("a principal with no delegation carries no delegation claim")
 	}
 	// the probe variant carries it too
 	pa, _ := security.PrincipalFrom((&Host{}).ProbeContext(t).PrincipalContext(t, Principal{Subject: "agent-1", OnBehalfOf: "alice"}))
-	if pa.Claims[ClaimOnBehalfOf] != "alice" {
+	if !grantedBy(pa, "alice") {
 		t.Errorf("probe principal lost the delegation: %+v", pa)
 	}
+}
+
+// grantedBy reports whether p carries exactly one delegation, from grantor.
+func grantedBy(p security.Principal, grantor string) bool {
+	ds := DelegationsOf(p)
+	return len(ds) == 1 && ds[0].Grantor == grantor
 }

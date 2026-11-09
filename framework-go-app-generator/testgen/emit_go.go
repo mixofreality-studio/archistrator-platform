@@ -819,6 +819,13 @@ func writePrincipalTable(b *bytes.Buffer, principals map[string]methodcheck.Test
 		if pr.OnBehalfOf != "" {
 			onBehalfOf = ", OnBehalfOf: " + strconv.Quote(pr.OnBehalfOf)
 		}
+		if len(pr.Intents) > 0 {
+			quoted := make([]string, len(pr.Intents))
+			for i, in := range pr.Intents {
+				quoted[i] = strconv.Quote(in)
+			}
+			onBehalfOf += ", Intents: []string{" + strings.Join(quoted, ", ") + "}"
+		}
 		fmt.Fprintf(b, "\t%s: {Subject: %s%s%s},\n", strconv.Quote(name), strconv.Quote(pr.Subject), roles, onBehalfOf)
 	}
 	b.WriteString("}\n\n")

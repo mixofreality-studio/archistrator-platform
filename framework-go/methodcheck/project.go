@@ -758,6 +758,9 @@ type TestPrincipal struct {
 	// OnBehalfOf is the subject of the human this identity acts for: the delegation claim an
 	// agent's calls carry. TP-PRINCIPAL-DELEGATION requires it of every agent actor.
 	OnBehalfOf string `json:"onBehalfOf,omitempty"`
+	// Intents is what the delegating human lets this agent do, in the app's own vocabulary. It is
+	// read only when OnBehalfOf is set: TP-PRINCIPAL-DELEGATION refuses intents with no delegator.
+	Intents []string `json:"intents,omitempty"`
 }
 
 // ScenarioBinding binds one derived scenario to concrete steps, or skips it until a

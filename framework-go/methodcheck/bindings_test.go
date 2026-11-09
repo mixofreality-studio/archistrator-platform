@@ -170,3 +170,34 @@ func TestBindings_AuthoredAtStampIsCarried(t *testing.T) {
 		t.Error("an unknown field must still be refused")
 	}
 }
+
+func TestBindings_PrincipalIntentsDecode(t *testing.T) {
+	var pr TestPrincipal
+	if err := json.Unmarshal([]byte(`{"subject":"a","roles":["agent"],"onBehalfOf":"alice","intents":["read"]}`), &pr); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(pr.Intents) != 1 || pr.Intents[0] != "read" {
+		t.Errorf("Intents = %v, want [read]", pr.Intents)
+	}
+	raw := `{"phaseArtifacts":{"testPlan":{"c":{"component":"c","principals":{"a":{"subject":"a","roles":[],"onBehalfOf":"alice","intents":["read"],"hook":true}},"bindings":[]}}}}`
+	if _, _, err := DecodeProject([]byte(raw)); err == nil || !strings.Contains(err.Error(), "hook") {
+		t.Fatalf("an unknown principal field must still be refused naming it, got %v", err)
+	}
+}
+
+func TestTP_PrincipalDelegation_IntentsNeedOnBehalfOf(t *testing.T) {
+	p := loadProject(t, "tp2_clean.json")
+	wantRules(t, runTP(t, p), ruleTPPrincipalDelegation, 0)
+	rec := p.PhaseArtifacts.TestPlan["orderManager"]
+	pr := rec.Principals["customer"]
+	pr.Intents = []string{"read"}
+	rec.Principals["customer"] = pr
+	p.PhaseArtifacts.TestPlan["orderManager"] = rec
+	fs := runTP(t, p)
+	wantRules(t, fs, ruleTPPrincipalDelegation, 1)
+	for _, f := range fs {
+		if f.RuleID == ruleTPPrincipalDelegation && (f.Severity != SeverityError || !strings.Contains(f.Message, "customer") || !strings.Contains(f.Message, "intents")) {
+			t.Errorf("want an Error naming the principal and intents: %+v", f)
+		}
+	}
+}

@@ -530,6 +530,9 @@ func principalFindings(env tpEnv, comp string, rec TestPlanRecord, live []scenar
 		case env.agents[a] && pr.OnBehalfOf == "":
 			out = append(out, tpFinding(ruleTPPrincipalDelegation, l,
 				"%s: actor %q is an agent, so its principal must say whose behalf it acts on: set onBehalfOf to the delegating human's subject (an agent call with no delegation is refused at run time)", comp, a))
+		case len(pr.Intents) > 0 && pr.OnBehalfOf == "":
+			out = append(out, tpFinding(ruleTPPrincipalDelegation, l,
+				"%s: the principal for actor %q declares intents but no onBehalfOf: intents are what a delegating human lets the agent do, so name the human in onBehalfOf or drop the intents", comp, a))
 		}
 	}
 	return out
