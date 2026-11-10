@@ -58,8 +58,9 @@ func bootBuilt(t *testing.T, dir string) Booted {
 	return b
 }
 
-// TestConformance_Boot proves the composed todomvc app boots, answers /readyz, serves
-// the SPA at / and lists at least one tool over /mcp.
+// TestConformance_Boot proves the composed todomvc app boots through its run contract and
+// passes the smoke every integration runs (Probe is devstack.Smoke): it answers /readyz, serves
+// the SPA at / and lists every tool the model generates over /mcp.
 func TestConformance_Boot(t *testing.T) {
 	dir := t.TempDir()
 	buildFixture(t, dir)

@@ -1,23 +1,22 @@
 package conformance
 
 import (
-	"bytes"
 	"context"
-	"encoding/json"
-	"errors"
 	"fmt"
-	"io"
-	"net/http"
-	"strings"
+	"path/filepath"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/devstack"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
-const mcpProtocol = "2025-06-18"
+const mcpProtocol = devstack.MCPProtocol
 
 // Booted is a running composed app.
 type Booted struct {
 	BaseURL string
+	// Dir is the built app's module directory; Probe derives the tools /mcp must list from the
+	// model it holds.
+	Dir string
 	// Stop terminates the app and the substrates its launcher provisioned, and waits
 	// for them to be gone.
 	Stop func() error
@@ -32,7 +31,7 @@ func Boot(ctx context.Context, dir string) (Booted, error) {
 	if err != nil {
 		return Booted{}, err
 	}
-	return Booted{BaseURL: app.BaseURL, Stop: app.Stop}, nil
+	return Booted{BaseURL: app.BaseURL, Dir: dir, Stop: app.Stop}, nil
 }
 
 // DockerInventory lists the containers and volumes docker holds now, as
@@ -44,134 +43,19 @@ func DockerLeftovers(ctx context.Context, before, after []string) []string {
 	return devstack.DockerLeftovers(ctx, before, after)
 }
 
-func get(ctx context.Context, url string) (int, []byte, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
-	if err != nil {
-		return 0, nil, err
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return 0, nil, err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	return resp.StatusCode, body, err
+// rpc posts one JSON-RPC message to an MCP endpoint (devstack.RPC).
+func rpc(ctx context.Context, url, session string, msg map[string]any) (devstack.Reply, string, error) {
+	return devstack.RPC(ctx, url, session, msg)
 }
 
-// Probe holds the booted app to what a client sees: the SPA at / and a working
-// MCP door at /mcp that lists at least one tool.
+// Probe holds the booted app to what a client sees (devstack.Smoke, the check every integration
+// runs): /readyz, the SPA at /, and a working MCP door at /mcp that lists every tool the model
+// generates.
 func Probe(ctx context.Context, b Booted) error {
-	status, body, err := get(ctx, b.BaseURL+"/")
+	m, err := projectmodel.LoadFile(filepath.Join(b.Dir, statePath))
 	if err != nil {
-		return fmt.Errorf("GET /: %w", err)
+		return fmt.Errorf("probe: load the built app's model: %w", err)
 	}
-	if status != http.StatusOK {
-		return fmt.Errorf("GET / = %d, want 200", status)
-	}
-	if !strings.Contains(strings.ToLower(string(body)), "<html") {
-		return fmt.Errorf("GET / body has no <html: %.200q", body)
-	}
-	return probeMCP(ctx, b.BaseURL+"/mcp")
-}
-
-// probeMCP drives streamable-HTTP MCP: initialize, the initialized notification,
-// then tools/list.
-func probeMCP(ctx context.Context, url string) error {
-	init, session, err := rpc(ctx, url, "", map[string]any{
-		"jsonrpc": "2.0", "id": 1, "method": "initialize",
-		"params": map[string]any{
-			"protocolVersion": mcpProtocol, "capabilities": map[string]any{},
-			"clientInfo": map[string]any{"name": "conformance-probe", "version": "0"},
-		},
-	})
-	if err != nil {
-		return fmt.Errorf("mcp initialize: %w", err)
-	}
-	if init.Error != nil {
-		return fmt.Errorf("mcp initialize: %s", init.Error.Message)
-	}
-	if _, _, err := rpc(ctx, url, session, map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"}); err != nil {
-		return fmt.Errorf("mcp initialized notification: %w", err)
-	}
-	list, _, err := rpc(ctx, url, session, map[string]any{"jsonrpc": "2.0", "id": 2, "method": "tools/list"})
-	if err != nil {
-		return fmt.Errorf("mcp tools/list: %w", err)
-	}
-	if list.Error != nil {
-		return fmt.Errorf("mcp tools/list: %s", list.Error.Message)
-	}
-	var res struct {
-		Tools []json.RawMessage `json:"tools"`
-	}
-	if err := json.Unmarshal(list.Result, &res); err != nil {
-		return fmt.Errorf("mcp tools/list result: %w", err)
-	}
-	if len(res.Tools) == 0 {
-		return errors.New("mcp tools/list returned no tools")
-	}
-	return nil
-}
-
-type rpcReply struct {
-	Result json.RawMessage `json:"result"`
-	Error  *struct {
-		Message string `json:"message"`
-	} `json:"error"`
-}
-
-// rpc posts one JSON-RPC message and returns the reply (zero for a notification) and
-// the session id the server assigned.
-func rpc(ctx context.Context, url, session string, msg map[string]any) (rpcReply, string, error) {
-	payload, err := json.Marshal(msg)
-	if err != nil {
-		return rpcReply{}, "", err
-	}
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(payload))
-	if err != nil {
-		return rpcReply{}, "", err
-	}
-	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json, text/event-stream")
-	if session != "" {
-		req.Header.Set("Mcp-Session-Id", session)
-		req.Header.Set("MCP-Protocol-Version", mcpProtocol)
-	}
-	resp, err := http.DefaultClient.Do(req)
-	if err != nil {
-		return rpcReply{}, "", err
-	}
-	defer func() { _ = resp.Body.Close() }()
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4<<20))
-	if err != nil {
-		return rpcReply{}, "", err
-	}
-	if resp.StatusCode/100 != 2 {
-		return rpcReply{}, "", fmt.Errorf("status %d: %.300q", resp.StatusCode, body)
-	}
-	sid := resp.Header.Get("Mcp-Session-Id")
-	if sid == "" {
-		sid = session
-	}
-	if _, isCall := msg["id"]; !isCall {
-		return rpcReply{}, sid, nil
-	}
-	reply, err := decodeReply(resp.Header.Get("Content-Type"), body)
-	return reply, sid, err
-}
-
-// decodeReply reads a JSON body or the first data event of an event stream.
-func decodeReply(contentType string, body []byte) (rpcReply, error) {
-	var reply rpcReply
-	if strings.HasPrefix(contentType, "text/event-stream") {
-		for line := range strings.SplitSeq(string(body), "\n") {
-			if data, ok := strings.CutPrefix(line, "data:"); ok {
-				body = []byte(strings.TrimSpace(data))
-				break
-			}
-		}
-	}
-	if err := json.Unmarshal(body, &reply); err != nil {
-		return reply, fmt.Errorf("decode reply %.300q: %w", body, err)
-	}
-	return reply, nil
+	app := &devstack.App{BaseURL: b.BaseURL, MCPURL: b.BaseURL + "/mcp", Stop: b.Stop}
+	return devstack.Smoke(ctx, app, devstack.SmokeSpec{SPA: true, Tools: devstack.ToolNames(m, nil)})
 }

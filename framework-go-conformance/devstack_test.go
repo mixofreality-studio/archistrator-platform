@@ -94,7 +94,7 @@ func TestDevstackLaunch_UsesHostSubstrates(t *testing.T) {
 	}
 	pctx, cancel := context.WithTimeout(ctx, 2*time.Minute)
 	defer cancel()
-	if err := Probe(pctx, Booted{BaseURL: app.BaseURL}); err != nil {
+	if err := Probe(pctx, Booted{BaseURL: app.BaseURL, Dir: dir}); err != nil {
 		t.Fatalf("Probe: %v\n%s", err, app.Log())
 	}
 }
