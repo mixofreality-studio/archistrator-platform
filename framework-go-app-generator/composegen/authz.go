@@ -31,6 +31,27 @@ func authzRows(r *resolved) ([]authzRow, error) {
 	return rows, nil
 }
 
+// clientAuthzRows is the authorization rows of every Manager a machine client's generated handler
+// fronts, de-duplicated: the same derivation (httpgen.PlanOps) authz.gen.go reads, reached by way
+// of the clients (Task 3.4's generated policy is held to it). It is empty for a model whose clients
+// front no built Manager.
+func (g *scenarioGen) clientAuthzRows() ([]authzRow, error) {
+	seen := map[string]bool{}
+	var rows []authzRow
+	for _, cl := range g.classifyClients() {
+		if seen[cl.manager.key] {
+			continue
+		}
+		seen[cl.manager.key] = true
+		mgrRows, err := managerAuthzRows(managerComp{key: cl.manager.key, iface: cl.manager.iface, doc: cl.manager.contract.Doc}, g.r.cfg.ExposedOps)
+		if err != nil {
+			return nil, err
+		}
+		rows = append(rows, mgrRows...)
+	}
+	return rows, nil
+}
+
 // managerAuthzRows is one Manager's rows: every operation its transports serve, narrowed by
 // exposed as clientgen narrows them (a nil entry or no entry is the whole interface).
 func managerAuthzRows(mc managerComp, exposed map[string][]string) ([]authzRow, error) {

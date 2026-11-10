@@ -23,8 +23,9 @@
 // design's roles and names, from which every locator is derived), the shared
 // runtime, a surface check, the generated Playwright config + results
 // reporter (emit_playwright.go); an MCP or REST client — one op per generated
-// tool or route — gets the Go pair in its goPackage, whose scenarios call the
-// tools on an in-process server. Nothing testgen emits is agent-owned.
+// tool or route — gets the Go pair in its goPackage, whose scenarios launch
+// the built app and call the tools or routes over the wire as the plan's
+// principals. Nothing testgen emits is agent-owned.
 //
 // Grouping is by goPackage, not by contract: several contracts can share one
 // Go package, and one generated file unions every contract's bindings. A
@@ -235,7 +236,6 @@ func routePlan(out *Output, cfg Config, web webEnv, plan componentPlan) (string,
 			out.skipDiscrimination(plan, reasonWeb)
 			return "", emitPlaywright(out, cfg, web, plan)
 		}
-		out.skipDiscrimination(plan, reasonClient)
 		what = plan.Key + " is an MCP client with"
 	}
 	if plan.Contract.GoPackage == "" {

@@ -64,9 +64,8 @@ type scenarioGen struct {
 	r   *resolved
 	imp *importSet
 
-	comps   []scenarioComp
-	byKey   map[string]scenarioComp
-	clients []scenarioClient
+	comps []scenarioComp
+	byKey map[string]scenarioComp
 	// refused is the Managers left unbuilt, by contract key (see Refusal).
 	refused map[string]Refusal
 
@@ -80,10 +79,9 @@ type scenarioGen struct {
 // constructor calls main.gen.go makes (ctorCall) over the substrates the scenario host boots
 // (h.TemporalHostPort, h.PostgresURL), a Null<Iface>(inner, ops...) wrapper that makes the
 // named operations return their zero result (the null-subject run), and Workflows(), every
-// Manager's workflows for the replay gate. For every client contract whose generated handler
-// package exists (a REST or MCP transport) it also renders a New<ClientIface> returning that
-// Handler over the real Manager and a policy built from the generated authorization rows: the
-// subject of a machine-client scenario.
+// Manager's workflows for the replay gate. A machine client has no constructor: its scenario runs
+// over the wire against the launched server (scenariohost.LaunchDevstack), whose authorization is
+// the composition root's own.
 //
 // m carries the deployment the app composes with (the authored one, else the default - what
 // appgen hands Generate). Where main.gen.go asks the app's hand Hooks, a test subject has
@@ -146,10 +144,11 @@ func (e policyDepError) Error() string {
 	return fmt.Sprintf("composegen: scenariocompose: manager %q dependency %q: %s", e.Manager, e.Dependency, e.Reason)
 }
 
-// build sequences the emission: classify the components and the machine clients, then render
-// the component constructors, the client constructors and the workflow list, in that order.
+// build sequences the emission: classify the components, then render the component constructors
+// and the workflow list, in that order. A machine client has no constructor here: its scenario runs
+// over the wire against the launched server (Plan 3 Task 3.3).
 func (g *scenarioGen) build() error {
-	steps := []func() error{g.classify, g.refuseUnbuildable, g.classifyClients, g.emitComponents, g.emitClients, g.emitWorkflows}
+	steps := []func() error{g.classify, g.refuseUnbuildable, g.emitComponents, g.emitWorkflows}
 	for _, step := range steps {
 		if err := step(); err != nil {
 			return err
@@ -951,8 +950,9 @@ func (s *subject) temporal() client.Client {
 
 `
 
-const postgresSource = `// postgres is the pool every Postgres-backed component shares. The host boots Postgres
-// outside -short only; under -short the test is skipped, never run against nothing.
+const postgresSource = `// postgres is the pool every Postgres-backed component shares, over the database the scenario's
+// state lives in (the launched app's, once the test launched one; see Host.PostgresDSN). The host
+// boots Postgres outside -short only; under -short the test is skipped, never run against nothing.
 func (s *subject) postgres() *pgxpool.Pool {
 	s.t.Helper()
 	if s.pool != nil {
@@ -961,7 +961,7 @@ func (s *subject) postgres() *pgxpool.Pool {
 	if s.h.PostgresURL == "" {
 		s.t.Skip("scenariocompose: postgres is not booted under -short")
 	}
-	pool, err := postgresinfra.NewPool(s.t.Context(), s.h.PostgresURL)
+	pool, err := postgresinfra.NewPool(s.t.Context(), s.h.PostgresDSN())
 	if err != nil {
 		s.t.Fatalf("scenariocompose: open postgres pool: %v", err)
 	}

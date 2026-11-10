@@ -56,12 +56,19 @@ func Inputs(m *projectmodel.Model, cfg Config) ([]Input, error) {
 	for _, f := range settings {
 		out = append(out, Input{Env: f.Env, Field: f.GoName, Setting: f.Name, Default: f.Default})
 	}
-	out = append(out, Input{Env: DevPrincipalEnv(cfg.EnvPrefix), Field: devPrincipalField})
+	out = append(out,
+		Input{Env: DevPrincipalEnv(cfg.EnvPrefix), Field: devPrincipalField},
+		Input{Env: DevPrincipalsEnv(cfg.EnvPrefix), Field: devPrincipalsField})
 	return out, nil
 }
 
 // DevPrincipalEnv is the variable the framework's local-profile dev principal is read from.
 func DevPrincipalEnv(prefix string) string { return prefix + "_DEV_PRINCIPAL" }
+
+// DevPrincipalsEnv is the variable the framework's local-profile principal allowlist is read from:
+// a JSON list of {subject, kind, roles, claims}, each an identity a request may name in the
+// X-Dev-Principal header (see Config.LocalDevPrincipals in the generated file).
+func DevPrincipalsEnv(prefix string) string { return prefix + "_DEV_PRINCIPALS" }
 
 // UndeclaredEnvReads is the gate on the hand half of a composition root (FIX-049): every
 // string literal in srcs (file name -> Go source) spelled like a <prefix>_* variable must be one

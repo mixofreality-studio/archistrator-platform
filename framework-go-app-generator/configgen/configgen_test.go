@@ -76,7 +76,7 @@ func TestCompileSandbox(t *testing.T) {
 	}
 
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte("module configsandbox\n\ngo 1.25\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(dir, "go.mod"), []byte(sandboxGoMod(t)), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if err := os.WriteFile(filepath.Join(dir, "config.gen.go"), out["config.gen.go"], 0o644); err != nil {
@@ -185,7 +185,7 @@ func contains(s, sub string) bool {
 }
 `
 	for name, body := range map[string][]byte{
-		"go.mod":               []byte("module configsandbox\n\ngo 1.25\n"),
+		"go.mod":               []byte(sandboxGoMod(t)),
 		"config.gen.go":        out["config.gen.go"],
 		"devprincipal_test.go": []byte(probe),
 	} {

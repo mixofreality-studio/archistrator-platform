@@ -113,6 +113,11 @@ func Derive(m *projectmodel.Model, cfg Config) (Plan, error) {
 			p.DevPrincipalEnv = in.Env
 			continue
 		}
+		// The framework's own local input, set by a caller that launches the app with several
+		// principals (scenariohost.LaunchDevstack): neither provisioned nor required.
+		if in.Env == configgen.DevPrincipalsEnv(cfg.EnvPrefix) {
+			continue
+		}
 		if err := p.take(in); err != nil {
 			return Plan{}, err
 		}

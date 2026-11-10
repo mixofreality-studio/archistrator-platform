@@ -40,7 +40,10 @@ const (
 // prefix, the host answers each local input (Env), and the launcher provisions none of them.
 // Isolation is per launch: a Postgres database (PostgresDatabase) and a Temporal namespace
 // (TemporalNamespaceFor) of the launch's own, so two apps launched into one host share neither
-// rows nor task queues. The app runs as principals[0] ("scenario" with none); the host's Stop is
+// rows nor task queues. The app runs as principals[0] ("scenario" with none) and allowlists every
+// principal given, so a request carrying X-Dev-Principal naming one is served as it (MCPSession,
+// RESTClient); the components the test builds in-process afterwards read the launch's database
+// (PostgresDSN). The host's Stop is
 // registered on t and a Stop that leaves anything behind fails the test.
 func (h *Host) LaunchDevstack(t *testing.T, moduleDir string, principals ...Principal) *App {
 	t.Helper()
@@ -81,8 +84,39 @@ func (h *Host) launchEnv(t *testing.T, moduleDir string, principals []Principal)
 	subject := defaultPrincipal
 	if len(principals) > 0 {
 		subject = principals[0].Subject
+		env = append(env, configgen.DevPrincipalsEnv(cfg.EnvPrefix)+"="+devPrincipalsJSON(t, principals))
 	}
 	return append(env, configgen.DevPrincipalEnv(cfg.EnvPrefix)+"="+subject)
+}
+
+// devPrincipalsJSON is principals as the <PREFIX>_DEV_PRINCIPALS list the launched app's Config
+// reads (configgen's LocalDevPrincipals): each as the framework principal a call in-process as it
+// would carry (securityPrincipal), so a delegated agent is an application principal holding its
+// delegation claim, and a request naming it in X-Dev-Principal reaches the Manager as that agent.
+// A subject listed twice fails the test: the app refuses to boot on one.
+func devPrincipalsJSON(t *testing.T, principals []Principal) string {
+	t.Helper()
+	type entry struct {
+		Subject string         `json:"subject"`
+		Kind    string         `json:"kind"`
+		Roles   []string       `json:"roles"`
+		Claims  map[string]any `json:"claims,omitempty"`
+	}
+	entries := make([]entry, 0, len(principals))
+	seen := map[string]bool{}
+	for _, p := range principals {
+		sp := securityPrincipal(t, p)
+		if seen[sp.Subject] {
+			t.Fatalf("scenariohost: LaunchDevstack: principal %q is listed twice", sp.Subject)
+		}
+		seen[sp.Subject] = true
+		entries = append(entries, entry{Subject: sp.Subject, Kind: string(sp.Kind), Roles: sp.Roles, Claims: sp.Claims})
+	}
+	raw, err := json.Marshal(entries)
+	if err != nil {
+		t.Fatalf("scenariohost: LaunchDevstack: encode the principals: %v", err)
+	}
+	return string(raw)
 }
 
 // launchInputs answers the inputs of one launch: the host's Input, except that the Postgres URL
@@ -100,6 +134,7 @@ func (l *launchInputs) value(decl projectmodel.InfraDecl, input string) string {
 	case decl.Substrate == projectmodel.SubstratePostgres && input == "URL":
 		if l.database == "" {
 			l.database = l.h.PostgresDatabase(l.t)
+			l.h.followLaunch(l.t, l.database)
 		}
 		return l.database
 	case decl.Substrate == projectmodel.SubstrateTemporal && input == "NAMESPACE":

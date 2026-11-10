@@ -34,7 +34,11 @@ func writeSecurity(b *strings.Builder) {
 	// FIX-039: a dev principal configured under any profile but local is refused by name
 	// before the edge is built — it would authenticate every request.
 	b.WriteString("\tif _, err := cfg.LocalDevPrincipal(hooks.ResolveProfile(cfg)); err != nil {\n\t\treturn err\n\t}\n")
-	b.WriteString("\tdev := hooks.DevConfig(cfg)\n\n")
+	b.WriteString("\tdev := hooks.DevConfig(cfg)\n")
+	// Plan 3 Task 3.3: the local-profile allowlist the X-Dev-Principal header may name. It is
+	// the framework's, set here and not by the hook, so the identities a launch declares reach
+	// the edge in every app; the Config rule refuses it under any profile but local.
+	b.WriteString("\tif dev.Principals, err = cfg.LocalDevPrincipals(hooks.ResolveProfile(cfg)); err != nil {\n\t\treturn err\n\t}\n\n")
 }
 
 // writeWebManagersBundle assembles the WebManagers bundle + applies the logging

@@ -777,3 +777,21 @@ func TestDevPrincipalIsTheFrameworksHook(t *testing.T) {
 		}
 	}
 }
+
+// TestCompose_WiresDevPrincipalsUnderLocal (Plan 3 Task 3.3, spec 4b): the composition root hands
+// the auth edge the local-profile allowlist of principals the X-Dev-Principal header may name,
+// read through the generated Config rule that refuses it under any other profile, right after
+// the hook's DevConfig and before the edge is built.
+func TestCompose_WiresDevPrincipalsUnderLocal(t *testing.T) {
+	m := loadGreenfield(t)
+	got, err := composegen.Generate(m, greenfieldCfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	main := string(got["main.gen.go"])
+	set := "if dev.Principals, err = cfg.LocalDevPrincipals(hooks.ResolveProfile(cfg)); err != nil {\n\t\treturn err\n\t}"
+	i, j, k := strings.Index(main, "dev := hooks.DevConfig(cfg)"), strings.Index(main, set), strings.Index(main, "web.NewServer(dev,")
+	if i < 0 || j < i || k < j {
+		t.Fatalf("the allowlist must be set after DevConfig and before the server is built (%d %d %d):\n%s", i, j, k, main)
+	}
+}

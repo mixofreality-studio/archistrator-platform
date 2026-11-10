@@ -27,6 +27,7 @@ func emitFile(d *projectmodel.Deployment, cfg Config, infra []infraField, settin
 	writeMissingFor(&b, d, infra)
 	writeDormantWarnings(&b, infra)
 	writeDevPrincipal(&b, cfg)
+	writeDevPrincipals(&b, cfg)
 	writeHelpers(&b, infra, settings)
 
 	src, err := format.Source(b.Bytes())
@@ -67,7 +68,7 @@ func writeDocHeader(b *bytes.Buffer, cfg Config) {
 // writeImports emits the import block; strconv/time are pulled in only when a
 // setting needs them.
 func writeImports(b *bytes.Buffer, infra []infraField, settings []settingField) {
-	imps := []string{"fmt", "os", "strings"}
+	imps := []string{"encoding/json", "fmt", "os", "strings"}
 	if anyKind(settings, "bool") || anyKind(settings, "int") {
 		imps = append(imps, "strconv")
 	}
@@ -79,6 +80,8 @@ func writeImports(b *bytes.Buffer, infra []infraField, settings []settingField) 
 	for _, p := range imps {
 		fmt.Fprintf(b, "\t%q\n", p)
 	}
+	// The local-profile principal allowlist is read as the framework's own principal.
+	fmt.Fprintf(b, "\n\t%q\n", securityImport)
 	b.WriteString(")\n\n")
 }
 
@@ -104,6 +107,9 @@ func writeStruct(b *bytes.Buffer, infra []infraField, settings []settingField) {
 	b.WriteString("\n\t// DevPrincipal is the framework's local-profile edge principal (devPrincipalEnv):\n")
 	b.WriteString("\t// read it through LocalDevPrincipal, never directly.\n")
 	fmt.Fprintf(b, "\t%s string\n", devPrincipalField)
+	b.WriteString("\n\t// DevPrincipals is the framework's local-profile principal allowlist (devPrincipalsEnv):\n")
+	b.WriteString("\t// read it through LocalDevPrincipals, never directly.\n")
+	fmt.Fprintf(b, "\t%s string\n", devPrincipalsField)
 	b.WriteString("}\n\n")
 }
 
@@ -124,6 +130,7 @@ func writeLoadConfig(b *bytes.Buffer, cfg Config, infra []infraField, settings [
 		fmt.Fprintf(b, "\t\t%s: %s(%q, %q),\n", f.GoName, loaderFor(f.Kind), f.Env, f.Default)
 	}
 	fmt.Fprintf(b, "\t\t%s: getenv(devPrincipalEnv),\n", devPrincipalField)
+	fmt.Fprintf(b, "\t\t%s: getenv(devPrincipalsEnv),\n", devPrincipalsField)
 	b.WriteString("\t}\n\n")
 	b.WriteString("\tvar missing []string\n")
 	for _, f := range infra {
@@ -223,6 +230,62 @@ func writeDevPrincipal(b *bytes.Buffer, cfg Config) {
 	b.WriteString("\t}\n")
 	fmt.Fprintf(b, "\treturn c.%s, nil\n}\n\n", devPrincipalField)
 }
+
+// devPrincipalsField is the Config field the local-profile principal allowlist is read into.
+const devPrincipalsField = "DevPrincipals"
+
+// securityImport is the framework security package the allowlist's principals are made of.
+const securityImport = "github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
+
+// writeDevPrincipals emits the allowlist's env name and its one reader (Plan 3 Task 3.3, spec 4b):
+// a JSON list of {subject, kind, roles, claims} naming every identity the local auth edge may serve a
+// request as (the X-Dev-Principal header picks one). Like the single dev principal it is local-only:
+// under any other profile a set value is REFUSED by name, never ignored, since it would let a header
+// mint an identity.
+func writeDevPrincipals(b *bytes.Buffer, cfg Config) {
+	fmt.Fprintf(b, "// devPrincipalsEnv names the variable Config.DevPrincipals is read from.\nconst devPrincipalsEnv = %q\n\n", DevPrincipalsEnv(cfg.EnvPrefix))
+	b.WriteString(strings.NewReplacer("{{profile}}", devPrincipalProfile, "{{field}}", devPrincipalsField).Replace(localDevPrincipalsSource))
+}
+
+const localDevPrincipalsSource = `// LocalDevPrincipals is the allowlist of identities the auth edge may serve a request as under
+// profile, by subject: the entries of the configured JSON list ([{"subject":"","kind":"user",
+// "roles":[],"claims":{}}]; kind is "user" unless "application") under the "{{profile}}" profile, nil
+// when unset. Set under any other profile, malformed, or naming a subject twice or none, it is an
+// error naming the variable: the app must refuse to boot.
+func (c *Config) LocalDevPrincipals(profile string) (map[string]security.Principal, error) {
+	if c.{{field}} == "" {
+		return nil, nil
+	}
+	if profile != "{{profile}}" {
+		return nil, fmt.Errorf("%s is set under the %q profile: the dev principals let a request header choose its identity and are honoured only under the {{profile}} profile; unset it", devPrincipalsEnv, profile)
+	}
+	var entries []struct {
+		Subject string         ` + "`json:\"subject\"`" + `
+		Kind    string         ` + "`json:\"kind\"`" + `
+		Roles   []string       ` + "`json:\"roles\"`" + `
+		Claims  map[string]any ` + "`json:\"claims\"`" + `
+	}
+	if err := json.Unmarshal([]byte(c.{{field}}), &entries); err != nil {
+		return nil, fmt.Errorf("%s is not a JSON list of principals: %w", devPrincipalsEnv, err)
+	}
+	out := make(map[string]security.Principal, len(entries))
+	for _, e := range entries {
+		if e.Subject == "" {
+			return nil, fmt.Errorf("%s: an entry has no subject", devPrincipalsEnv)
+		}
+		if _, dup := out[e.Subject]; dup {
+			return nil, fmt.Errorf("%s names subject %q twice", devPrincipalsEnv, e.Subject)
+		}
+		kind := security.PrincipalUser
+		if e.Kind != "" {
+			kind = security.PrincipalKind(e.Kind)
+		}
+		out[e.Subject] = security.Principal{Kind: kind, Subject: e.Subject, Roles: e.Roles, Claims: e.Claims}
+	}
+	return out, nil
+}
+
+`
 
 // writeHelpers emits the env-reading helpers actually used.
 func writeHelpers(b *bytes.Buffer, infra []infraField, settings []settingField) {

@@ -85,10 +85,9 @@ func TestScenarioCompose_EveryContractHasConstructor(t *testing.T) {
 			if strings.Contains(s, "Null"+iface+"(") {
 				t.Errorf("%s: a client/package-less contract must get no Null wrapper", key)
 			}
-			handlerCtor := regexp.MustCompile(`(?m)^func New` + iface + `\(t \*testing\.T, h \*scenariohost\.Host\) \*\w+\.Handler \{$`)
-			wantHandler := strings.EqualFold(c.Layer, "client") && c.GoPackage != ""
-			if wantHandler != handlerCtor.MatchString(s) {
-				t.Errorf("%s: a client with a generated handler package gets `func New%s(t, h) *<pkg>.Handler` and a package-less one none (want constructor: %v)", key, iface, wantHandler)
+			// A machine client's scenario runs over the wire (Plan 3 Task 3.3): no constructor either.
+			if strings.Contains(s, "func New"+iface+"(") {
+				t.Errorf("%s: a client contract gets no New%s constructor", key, iface)
 			}
 			continue
 		}
@@ -141,53 +140,26 @@ func TestScenarioCompose_WorkflowsBuildPureDependencies(t *testing.T) {
 	}
 }
 
-// TestScenarioCompose_ClientConstructorHasRealPolicy: each MCP and REST client contract of the todomvc
-// fixture gets a New<ClientIface> returning its generated Handler over the real Manager, authorized
-// by a policy built from the generated authorization rows - never a permit-all one.
-func TestScenarioCompose_ClientConstructorHasRealPolicy(t *testing.T) {
+// TestScenarioCompose_EmitsNoClientConstructors: a machine client's scenario runs over the wire
+// against the launched devstack (Plan 3 Task 3.3), so scenariocompose builds no in-process
+// handlers for it: no New<ClientIface>, no edge policy of its own, no client handler import.
+func TestScenarioCompose_EmitsNoClientConstructors(t *testing.T) {
 	m, _ := loadConformance(t, "todomvc")
 	src, _, err := composegen.EmitScenarioCompose(m, scenarioCfg)
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
 	s := string(src)
-	for _, want := range []string{
-		"func NewTodoMcpServerList(t *testing.T, h *scenariohost.Host) *todomcpserverlistclient.Handler {",
-		"func NewTodoApiList(t *testing.T, h *scenariohost.Host) *weblistclient.Handler {",
-		"&todomcpserverlistclient.Handler{Manager: buildListManager(subjectFor(t, h)), Security: edgeSecurity()}",
-		"&weblistclient.Handler{Manager: buildListManager(subjectFor(t, h)), Security: edgeSecurity()}",
-		"security.New(security.WithPolicyDecisionPoint(generatedPolicy{}))",
-		"generatedAuthorizations[authzKey{verb: a.Verb, scope: r.Kind}]",
-		"r.ID == p.Subject",
-		`"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"`,
+	for _, banned := range []string{
+		"func NewTodoApiList", "func NewTodoMcpServerList", "generatedPolicy", "edgeSecurity", "edgePolicySource",
+		"authzKey", "internal/client/",
 	} {
-		if !strings.Contains(s, want) {
-			t.Errorf("compose.gen.go lacks %q", want)
-		}
-	}
-	if strings.Count(s, "{verb: \"") == 0 {
-		t.Error("the policy table holds no generated authorization rows")
-	}
-	for _, banned := range []string{"permitAll", "return true, nil", "Security: nil", "PolicyDecisionPoint()"} {
 		if strings.Contains(s, banned) {
-			t.Errorf("the client policy must be deny-by-default and generated: contains %q", banned)
+			t.Errorf("compose.gen.go must not carry %q", banned)
 		}
 	}
-}
-
-// TestScenarioCompose_EmitsMachineClientConstructors: the todomvc fixture's REST and MCP client
-// contracts, whose packages hold only generated files, each get a constructor. testgen's
-// client_scenarios.gen_test.go calls these by name, so a model that lacks one fails go vet.
-func TestScenarioCompose_EmitsMachineClientConstructors(t *testing.T) {
-	m, _ := loadConformance(t, "todomvc")
-	src, _, err := composegen.EmitScenarioCompose(m, scenarioCfg)
-	if err != nil {
-		t.Fatalf("EmitScenarioCompose: %v", err)
-	}
-	for _, name := range []string{"NewTodoApiList", "NewTodoMcpServerList"} {
-		if !regexp.MustCompile(`(?m)^func ` + name + `\(t \*testing\.T, h \*scenariohost\.Host\) \*\w+\.Handler \{$`).Match(src) {
-			t.Errorf("compose.gen.go has no machine-client constructor %s", name)
-		}
+	if !strings.Contains(s, "func NewListManager(") {
+		t.Error("the built Managers keep their constructors")
 	}
 }
 
@@ -438,10 +410,11 @@ func TestScenarioCompose_RefusalCascadesToDependentManagers(t *testing.T) {
 	}
 }
 
-// TestScenarioCompose_FacetClientContractIsServed: a client contract that is a facet of a System
+// TestScenarioCompose_FacetClientContractBuildsNothing: a client contract that is a facet of a System
 // component (its own key differs from the component's contractKey, as mcpClientBilling facets
-// mcpClient) gets a constructor too; the component it names carries the relationship to the Manager.
-func TestScenarioCompose_FacetClientContractIsServed(t *testing.T) {
+// mcpClient) emits no constructor either, and does not disturb the emission: a machine client's
+// subject is the launched server, never a handler built here.
+func TestScenarioCompose_FacetClientContractBuildsNothing(t *testing.T) {
 	m, _ := loadConformance(t, "todomvc")
 	base := m.Contracts["todoMcpServer"]
 	if base == nil || base.Doc == nil {
@@ -458,7 +431,7 @@ func TestScenarioCompose_FacetClientContractIsServed(t *testing.T) {
 	if err != nil {
 		t.Fatalf("EmitScenarioCompose: %v", err)
 	}
-	if !regexp.MustCompile(`(?m)^func NewTodoMcpServerFacet\(t \*testing\.T, h \*scenariohost\.Host\) \*\w+\.Handler \{$`).Match(src) {
-		t.Error("a facet client contract has no constructor")
+	if strings.Contains(string(src), "NewTodoMcpServerFacet") {
+		t.Error("a facet client contract must have no constructor")
 	}
 }

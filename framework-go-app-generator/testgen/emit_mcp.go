@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"go/format"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -87,16 +88,13 @@ func isWebAction(op methodcheck.ContractOperation) bool {
 // toolName is the MCP tool an MCP client op calls.
 func toolName(op methodcheck.ContractOperation) string { return projectmodel.LowerFirst(op.Name) }
 
-// mcpSDKImport is the MCP SDK the generated tools server and client run on —
-// the one the generated tools packages register with.
-const mcpSDKImport = "github.com/modelcontextprotocol/go-sdk/mcp"
-
 // emitMCP emits one machine client package's generated scenarios file. One
 // package serves one tools surface, so it hosts exactly one machine client
-// contract. Its subject is the client's generated handlers, built by the
-// scenariocompose package (composegen's New<ClientIface>) over the app's generated
-// authorization rows (never a policy that permits everything), served in-process and called as the principal the plan
-// records for each step's actor.
+// contract. Its subject is the app itself, launched by the test (LaunchDevstack) with every
+// principal of the plan allowlisted, and the client a session on that server as the principal the
+// plan records for each step's actor: MCP tool calls or REST requests over the wire, authorized by
+// the composition root's own policy. A run of the null-subject discrimination nulls the Manager
+// operation a step reaches in the launched process.
 func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componentPlan, routes map[string]restRoute, contracts map[string]methodcheck.ServiceContract) error {
 	if len(plans) != 1 {
 		return fmt.Errorf("testgen: %s hosts several MCP client contracts (%s); a package serves one tools surface", goPkg, plansLabel(plans))
@@ -107,31 +105,71 @@ func emitMCP(out *Output, cfg Config, goPkg, stereotype string, plans []componen
 		return err
 	}
 	g.tools = true
-	// A machine client's file never imports its own package (scenariocompose hands it the handlers), so its
+	// A machine client's file never imports its own package (it reaches the app over the wire), so its
 	// name is free for a component package of the same name: a tool table is named after the Manager it
 	// fronts, and a probe on that Manager imports it.
 	delete(g.aliases, g.pkg)
 	if err := g.claimPlan(plan); err != nil {
 		return err
 	}
+	rest, err := isRESTPlan(plan)
+	if err != nil {
+		return err
+	}
 	for _, bs := range plan.Scenarios {
 		if bs.Binding.Skip == nil {
 			g.subject = true
 		}
-		g.emitToolScenario(plan, bs)
+		g.emitToolScenario(plan, bs, rest)
 	}
 	if g.err != nil {
 		return g.err
 	}
-	src, err := g.toolsFile(plan, routes)
+	src, err := g.toolsFile(plan, rest, routes)
 	if err != nil {
 		return err
 	}
 	out.Generated[path.Join(goPkg, stereotype+"_scenarios.gen_test.go")] = src
+	g.clientDiscriminations(out, plan, routes)
 	return nil
 }
 
-// sessionVar names the in-process session a principal's steps call through.
+// clientDiscriminations lists the null-subject runs of a machine client's scenarios: per scenario,
+// one per distinct operation its steps call, nulling the Manager operation that call reaches
+// ("<Iface>.<Op>", the name the composed server's applyNullOps matches) in the launched process,
+// which inherits AIARCH_NULL_OPS from the test. A call that reaches no generated Manager operation
+// names nothing to null, so it is a recorded skip and never a silent one.
+func (g *goEmit) clientDiscriminations(out *Output, plan componentPlan, routes map[string]restRoute) {
+	for _, bs := range plan.Scenarios {
+		if bs.runnable() {
+			g.clientScenarioRuns(out, plan, bs, routes)
+		}
+	}
+}
+
+// clientScenarioRuns is one runnable machine client scenario's runs: one per distinct operation its
+// steps call, in step order.
+func (g *goEmit) clientScenarioRuns(out *Output, plan componentPlan, bs boundScenario, routes map[string]restRoute) {
+	var seen []string
+	for _, st := range bs.Steps {
+		if slices.Contains(seen, st.Op.Name) {
+			continue
+		}
+		seen = append(seen, st.Op.Name)
+		route, ok := routes[st.Op.Name]
+		if !ok {
+			out.Skipped = append(out.Skipped, DiscriminationSkip{Component: plan.Key, Scenario: bs.Scenario.ID, Reason: reasonClientOp + ": " + st.Op.Name})
+			continue
+		}
+		out.Discriminate = append(out.Discriminate, Discrimination{
+			Component: plan.Key, Scenario: bs.Scenario.ID, Op: st.Op.Name,
+			Package: g.goPkg, Test: g.testName(plan, bs.Scenario.ID),
+			NullOp: route.Manager + "." + route.Op,
+		})
+	}
+}
+
+// sessionVar names the session a principal's steps call through.
 func sessionVar(principalName string) string {
 	if principalName == "" {
 		return "subject"
@@ -139,10 +177,14 @@ func sessionVar(principalName string) string {
 	return "subjectAs" + exportName(ident(principalName))
 }
 
-// emitToolScenario emits one binding as a test: build the client's handlers,
-// serve them once per principal the steps act as, run the arrange calls, then
-// per step call the tool and check the expectation and probes.
-func (g *goEmit) emitToolScenario(plan componentPlan, bs boundScenario) {
+// anonymousPrincipal is the identity a step runs as when the plan records none for its actor: the
+// one the launched app serves a request as when the launch names no principal.
+const anonymousPrincipal = "scenariohost.Principal{Subject: \"scenario\"}"
+
+// emitToolScenario emits one binding as a test: launch the app with every principal the plan
+// declares allowlisted, open a session on it once per principal the steps act as, run the arrange
+// calls, then per step call the tool or route over the wire and check the expectation and probes.
+func (g *goEmit) emitToolScenario(plan componentPlan, bs boundScenario, rest bool) {
 	name := g.testName(plan, bs.Scenario.ID)
 	fmt.Fprintf(&g.body, "// %s — %s (use case %s; path %s).\n", name, bs.Scenario.Title, bs.Scenario.UseCase, strings.Join(bs.Scenario.Path, " → "))
 	fmt.Fprintf(&g.body, "func %s(t *testing.T) {\n", name)
@@ -152,12 +194,11 @@ func (g *goEmit) emitToolScenario(plan componentPlan, bs boundScenario) {
 	case bs.Binding.Skip != nil:
 		fmt.Fprintf(&g.body, "\t\tt.Skip(%q)\n", bs.Binding.Skip.Reason+" (until "+bs.Binding.Skip.Until+")")
 	default:
-		g.imports[g.cfg.ModulePath+"/"+scenarioComposeDir] = true
-		fmt.Fprintf(&g.body, "\t\thandlers := %s\n", g.ownTarget(plan).construct())
+		fmt.Fprintf(&g.body, "\t\tapp := h.LaunchDevstack(t, \"\"%s)\n", g.launchArgs(plan, bs))
 		if len(bs.Steps) == 0 {
-			g.body.WriteString("\t\t_ = handlers // the binding carries no steps\n")
+			g.body.WriteString("\t\t_ = app // the binding carries no steps\n")
 		}
-		g.serveSessions(plan, bs)
+		g.openSessions(plan, bs, rest)
 		g.emitArrange(plan, bs)
 		d := toolDialect{g: g}
 		for _, st := range bs.Steps {
@@ -167,8 +208,31 @@ func (g *goEmit) emitToolScenario(plan componentPlan, bs boundScenario) {
 	g.body.WriteString("\t})\n}\n\n")
 }
 
-// serveSessions serves the handlers once per principal the scenario's steps act as, in step order.
-func (g *goEmit) serveSessions(plan componentPlan, bs boundScenario) {
+// launchArgs is the principals the app is launched with, as extra LaunchDevstack arguments: every
+// principal the plan declares, in name order (the first is the process principal), and the
+// anonymous identity when some step's actor has none. The launch allowlists them all, so a session
+// can be opened as any.
+func (g *goEmit) launchArgs(plan componentPlan, bs boundScenario) string {
+	var args []string
+	for _, name := range sortedKeys(plan.Principals) {
+		g.usesAs = true
+		args = append(args, "principal("+strconv.Quote(name)+")")
+	}
+	for _, st := range bs.Steps {
+		if stepPrincipal(plan, st) == "" {
+			args = append(args, anonymousPrincipal)
+			break
+		}
+	}
+	if len(args) == 0 {
+		return ""
+	}
+	return ", " + strings.Join(args, ", ")
+}
+
+// openSessions opens a session on the launched app once per principal the scenario's steps act as,
+// in step order: MCP tool calls, or the routes of the REST client.
+func (g *goEmit) openSessions(plan componentPlan, bs boundScenario, rest bool) {
 	seen := map[string]bool{}
 	for _, st := range bs.Steps {
 		p := stepPrincipal(plan, st)
@@ -176,12 +240,16 @@ func (g *goEmit) serveSessions(plan componentPlan, bs boundScenario) {
 			continue
 		}
 		seen[p] = true
-		ctx := "h.Context(t)"
+		who := anonymousPrincipal
 		if p != "" {
 			g.usesAs = true
-			ctx = "h.PrincipalContext(t, principal(" + strconv.Quote(p) + "))"
+			who = "principal(" + strconv.Quote(p) + ")"
 		}
-		fmt.Fprintf(&g.body, "\t\t%s := serveTools(%s, t, h, handlers)\n", sessionVar(p), ctx)
+		if rest {
+			fmt.Fprintf(&g.body, "\t\t%s := scenariohost.RESTClient(t, app, %s, clientRoutes)\n", sessionVar(p), who)
+			continue
+		}
+		fmt.Fprintf(&g.body, "\t\t%s := scenariohost.MCPSession(t, app, %s)\n", sessionVar(p), who)
 	}
 }
 
@@ -240,17 +308,13 @@ func (g *goEmit) toolArgs(sc methodcheck.ServiceContract, op methodcheck.Contrac
 
 // toolsFile assembles the machine client's generated file: header, package
 // clause, imports, TestMain (plain: a client runs no workflow of its own), the
-// scenario tests and, when any runs, the tools server and assertion helpers.
-func (g *goEmit) toolsFile(plan componentPlan, routes map[string]restRoute) ([]byte, error) {
-	rest, err := isRESTPlan(plan)
-	if err != nil {
-		return nil, err
-	}
+// scenario tests and, when any runs, the principals, the route table and assertion helpers.
+func (g *goEmit) toolsFile(plan componentPlan, rest bool, routes map[string]restRoute) ([]byte, error) {
 	var b bytes.Buffer
 	b.WriteString(genHeader + "\n")
 	fmt.Fprintf(&b, "// Source: project.json .phaseArtifacts.testPlan.%s × scenario.ForComponent(%q)\n", plan.Key, plan.Key)
 	fmt.Fprintf(&b, "\npackage %s_test\n\n", g.pkg)
-	g.writeImports(&b, g.toolsImports(rest))
+	g.writeImports(&b, g.toolsImports())
 	fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %s) }\n\n", strconv.Quote(plan.Key))
 	b.Write(g.body.Bytes())
 	if g.subject {
@@ -265,14 +329,15 @@ func (g *goEmit) toolsFile(plan componentPlan, routes map[string]restRoute) ([]b
 	return src, nil
 }
 
-// toolsImports is the machine client file's import set: the test essentials always, the transport's,
-// the compose package's and the called components' when any binding runs.
-func (g *goEmit) toolsImports(rest bool) map[string]string {
+// toolsImports is the machine client file's import set: the test essentials always, the assertion
+// helpers' and the called components' (the compose package among them) when any binding runs. The
+// transport is the scenario host's, so no MCP SDK or HTTP package is imported.
+func (g *goEmit) toolsImports() map[string]string {
 	imps := map[string]string{"testing": "", scenarioHostImport: ""}
 	if !g.subject {
 		return imps
 	}
-	for _, p := range append(transportImports(rest), "fmt") {
+	for _, p := range []string{"context", "encoding/json", "errors", "fmt", "reflect", "strings"} {
 		imps[p] = ""
 	}
 	if g.usesTime {
@@ -284,7 +349,7 @@ func (g *goEmit) toolsImports(rest bool) map[string]string {
 	return imps
 }
 
-// writeToolHelpers writes the principals, the in-process server and the assertion helpers.
+// writeToolHelpers writes the principals, the route table of a REST client and the assertion helpers.
 func (g *goEmit) writeToolHelpers(b *bytes.Buffer, plan componentPlan, rest bool, routes map[string]restRoute) error {
 	transport, err := transportHelpers(plan, rest, routes)
 	if err != nil {
@@ -300,73 +365,6 @@ func (g *goEmit) writeToolHelpers(b *bytes.Buffer, plan componentPlan, rest bool
 	b.WriteString(matchHelpers)
 	return nil
 }
-
-// toolsHelpers is the in-process tools server the generated MCP file runs:
-// scenariocompose hands it the generated tools packages' handlers (built over
-// the app's real authorization), it serves them on a fresh server and connects
-// a client over an in-memory transport.
-const toolsHelpers = `// toolRegistrar is the Handler of one generated MCP tools package: it adds
-// that package's tools to a server.
-type toolRegistrar interface {
-	Register(srv *mcp.Server)
-}
-
-// toolSession is every scenario's subject: an MCP client session on the
-// in-process server.
-type toolSession struct {
-	cs *mcp.ClientSession
-}
-
-// serveTools registers every handler on a fresh server, connects a client to
-// it over an in-memory transport, and closes both when the test ends. The
-// server serves its calls under ctx, the principal the session acts as; a ctx
-// carrying none is served as one scenario principal, as the server's auth
-// middleware authenticates every call.
-func serveTools(ctx context.Context, t *testing.T, h *scenariohost.Host, handlers ...toolRegistrar) *toolSession {
-	t.Helper()
-	if _, ok := security.PrincipalFrom(ctx); !ok {
-		ctx = security.WithPrincipal(ctx, security.Principal{Subject: "scenario"})
-	}
-	server := mcp.NewServer(&mcp.Implementation{Name: "scenario-tools", Version: "testgen"}, nil)
-	for _, r := range handlers {
-		r.Register(server)
-	}
-	clientEnd, serverEnd := mcp.NewInMemoryTransports()
-	ss, err := server.Connect(ctx, serverEnd, nil)
-	if err != nil {
-		t.Fatalf("testgen: serve tools: %v", err)
-	}
-	t.Cleanup(func() { _ = ss.Close() })
-	cs, err := mcp.NewClient(&mcp.Implementation{Name: "scenario", Version: "testgen"}, nil).Connect(h.Context(t), clientEnd, nil)
-	if err != nil {
-		t.Fatalf("testgen: connect to tools: %v", err)
-	}
-	t.Cleanup(func() { _ = cs.Close() })
-	return &toolSession{cs: cs}
-}
-
-// Call calls tool name with args (a JSON object) and returns its structured
-// output. A protocol error (an unknown tool, arguments the tool's input schema
-// rejects) and a result flagged isError are both the call's error, carrying
-// the tool's text.
-func (s *toolSession) Call(ctx context.Context, name, args string) (any, error) {
-	res, err := s.cs.CallTool(ctx, &mcp.CallToolParams{Name: name, Arguments: json.RawMessage(args)})
-	if err != nil {
-		return nil, err
-	}
-	if res.IsError {
-		var text []string
-		for _, c := range res.Content {
-			if tc, ok := c.(*mcp.TextContent); ok {
-				text = append(text, tc.Text)
-			}
-		}
-		return nil, errors.New(name + ": " + strings.Join(text, "\n"))
-	}
-	return res.StructuredContent, nil
-}
-
-`
 
 // toolsErrorHasCode is the MCP dialect's code match: a tool error reaches the
 // client as text, so the code is matched in it.

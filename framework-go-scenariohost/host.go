@@ -89,6 +89,10 @@ type Host struct {
 	launchMu  sync.Mutex
 	databases []string
 	launches  int
+	// appDatabase is the URL of the database the latest launched app runs on ("" before any):
+	// what the components a scenario builds in-process read, so an arrange call or a probe on
+	// another component sees the state the launched app wrote (PostgresDSN).
+	appDatabase string
 
 	// stops tears the doubles down, in boot order; Main runs them reversed.
 	stops []func()

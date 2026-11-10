@@ -259,6 +259,9 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 		return err
 	}
 	dev := hooks.DevConfig(cfg)
+	if dev.Principals, err = cfg.LocalDevPrincipals(hooks.ResolveProfile(cfg)); err != nil {
+		return err
+	}
 
 	webManagers := WebManagers{
 		FulfillmentManager: fulfillmentManager,

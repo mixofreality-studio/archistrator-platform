@@ -99,12 +99,11 @@ func generateShopTools(t *testing.T) Output {
 	return out
 }
 
-// TestGenerate_MCPClientCallsToolsInProcess pins B1's MCP dialect: a client
-// contract whose operations are tools gets a Go scenarios file in its
-// goPackage that serves the hooks' generated tools handlers on an in-process
-// MCP server and calls each bound op as the tool LowerFirst(op) over an
-// in-memory transport — never a Playwright spec.
-func TestGenerate_MCPClientCallsToolsInProcess(t *testing.T) {
+// TestGenerate_MCPClientCallsToolsOverTheWire pins B1's MCP dialect (Plan 3 Task 3.3): a client
+// contract whose operations are tools gets a Go scenarios file in its goPackage that launches the
+// built app and calls each bound op as the tool LowerFirst(op) through an MCP session on it, as the
+// plan's principal — never a Playwright spec, never an in-process server.
+func TestGenerate_MCPClientCallsToolsOverTheWire(t *testing.T) {
 	out := generateShopTools(t)
 	src, ok := out.Generated[toolsGen]
 	if !ok {
@@ -116,8 +115,8 @@ func TestGenerate_MCPClientCallsToolsInProcess(t *testing.T) {
 		"func TestMain(m *testing.M) { scenariohost.Main(m, \"shopTools\") }",
 		"func TestScenario_track_order_P1(t *testing.T) {",
 		"h.RunScenario(t, \"shopTools\", \"track-order-P1\", func(t *testing.T) {",
-		"handlers := scenariocompose.NewShopTools(t, h)",
-		"subjectAsCustomer := serveTools(h.PrincipalContext(t, principal(\"customer\")), t, h, handlers)",
+		"app := h.LaunchDevstack(t, \"\", principal(\"customer\"))",
+		"subjectAsCustomer := scenariohost.MCPSession(t, app, principal(\"customer\"))",
 		"// step 1: OrderGetOrder → tool orderGetOrder (node ask-order)",
 		"args1 := `{\"orderId\":\"o-1\"}`",
 		"out1, err1 = subjectAsCustomer.Call(h.Context(t), \"orderGetOrder\", args1)",
@@ -126,25 +125,20 @@ func TestGenerate_MCPClientCallsToolsInProcess(t *testing.T) {
 		"return subjectAsCustomer.Call(pc.Context(t), \"orderGetOrder\", args)",
 		// a probe on another component is a direct call on the generated component
 		"return scenariocompose.NewOrderManager(t, h).GetOrder(pc.ManagerContextAs(t, principal(\"customer\")), in.OrderId)",
-		"\"github.com/modelcontextprotocol/go-sdk/mcp\"",
 		"\"github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost\"",
-		"type toolRegistrar interface {",
-		"Register(srv *mcp.Server)",
-		"type toolSession struct {",
-		"func (s *toolSession) Call(ctx context.Context, name, args string) (any, error) {",
-		"mcp.NewInMemoryTransports()",
-		"res.IsError",
-		"res.StructuredContent",
-		// FIX-047: the generated tools authorize, so every call is served as an authenticated
-		// principal, as the server's middleware does; the policy is the app's generated one
-		// (scenariocompose), never one that permits everything.
-		"ctx = security.WithPrincipal(ctx, security.Principal{Subject: \"scenario\"})",
+		// FIX-047: the calls are authorized by the launched app's own policy (the composition root's,
+		// generated), never by one the test file spells.
+		"func errorHasCode(err error, code string) bool {",
 	} {
 		if !strings.Contains(string(src), want) {
 			t.Errorf("missing %q in\n%s", want, src)
 		}
 	}
-	for _, bad := range []string{"example.com/app/server/internal/client/mcp\"", "callContext", "MainWithWorkflows", "permitAll"} {
+	for _, bad := range []string{
+		"example.com/app/server/internal/client/mcp\"", "callContext", "MainWithWorkflows", "permitAll",
+		"serveTools", "toolSession", "modelcontextprotocol", "security.", "handlers",
+		"scenariocompose.NewShopTools",
+	} {
 		if strings.Contains(string(src), bad) {
 			t.Errorf("an MCP client file must not carry %q:\n%s", bad, src)
 		}
@@ -380,8 +374,11 @@ func TestRESTTransportHelpers(t *testing.T) {
 	if !strings.Contains(helpers, routes["ListAddTodo"].Path) || !strings.Contains(helpers, `"listAddTodo"`) {
 		t.Errorf("no route for the operation:\n%s", helpers)
 	}
-	if slices.Contains(transportImports(true), mcpSDKImport) {
-		t.Error("the REST dialect must not import the MCP SDK")
+	if routes["ListAddTodo"].Manager != "ListManager" || routes["ListAddTodo"].Op != "AddTodo" {
+		t.Errorf("a route names the Manager operation it serves, which the null run nulls: %+v", routes["ListAddTodo"])
+	}
+	if mcpHelpers, err := transportHelpers(plan, false, routes); err != nil || mcpHelpers != "" {
+		t.Errorf("an MCP client carries no transport code: %q, %v", mcpHelpers, err)
 	}
 	if got := errorHasCodeHelper(true); !strings.Contains(got, `"NotFound":           "not_found"`) {
 		t.Errorf("the REST dialect must match a Manager's error kind by its wire code:\n%s", got)

@@ -452,8 +452,9 @@ import (
 )
 
 type DevConfig struct {
-	Enabled   bool
-	Principal security.Principal
+	Enabled    bool
+	Principal  security.Principal
+	Principals map[string]security.Principal
 }
 
 type Registrar interface {

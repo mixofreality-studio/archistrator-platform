@@ -77,7 +77,7 @@ func TestScenarioCompose_HostInputCompilesAgainstTheRealHost(t *testing.T) {
 	gomod.WriteString("module example.com/greenfield/server\n\ngo 1.25\n\nrequire (\n" +
 		"\t" + platformBase + "framework-go v0.0.0\n" +
 		"\t" + platformBase + "framework-go-scenariohost v0.0.0\n)\n\n")
-	for _, mod := range []string{"framework-go", "framework-go-scenariohost", "framework-go-projectmodel",
+	for _, mod := range []string{"framework-go", "framework-go-scenariohost", "framework-go-projectmodel", "framework-go-app-generator",
 		"framework-go-infrastructure-github", "framework-go-infrastructure-postgres", "framework-go-infrastructure-temporal"} {
 		gomod.WriteString("replace " + platformBase + mod + " => " + filepath.Join(platform, mod) + "\n")
 	}

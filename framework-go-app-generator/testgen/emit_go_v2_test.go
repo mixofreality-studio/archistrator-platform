@@ -370,8 +370,8 @@ func TestMCP_NoPermitAll(t *testing.T) {
 		}
 	}
 	for _, want := range []string{
-		"scenariocompose.NewShopTools(t, h)",
-		"serveTools(h.PrincipalContext(t, principal(\"customer\")), t, h, handlers)",
+		"app := h.LaunchDevstack(t, \"\", principal(\"customer\"))",
+		"scenariohost.MCPSession(t, app, principal(\"customer\"))",
 		// the cross-component probe is a direct call, not a hook
 		"scenariocompose.NewOrderManager(t, h).GetOrder(pc.ManagerContextAs(t, principal(\"customer\")), in.OrderId)",
 	} {
@@ -475,28 +475,10 @@ const stubBillingCtor = `package billing
 func NewBillingManager() BillingManager { return nil }
 `
 
-// stubToolsHandler stands in for clientgen's generated tool table: the Handler type composegen's
-// constructor builds (Manager + Security fields, Register on an MCP server). composegen's own compile
-// test builds the real clientgen output against the same constructor.
-const stubToolsHandler = `package order
-
-import (
-	mgr "example.com/app/server/internal/manager/order"
-	"github.com/mixofreality-studio/archistrator-platform/framework-go/utilities/security"
-	"github.com/modelcontextprotocol/go-sdk/mcp"
-)
-
-type Handler struct {
-	Manager  mgr.OrderManager
-	Security security.Security
-}
-
-func (h *Handler) Register(srv *mcp.Server) {}
-`
-
-// The generated MCP file type-checks against the REAL composegen output for the same model: the
-// scenariocompose package is composegen.EmitScenarioCompose over the fixture, not a stand-in, so a
-// constructor the emitter calls that composegen does not produce, or one of another shape, fails here.
+// The generated MCP file type-checks against the REAL composegen output for the same model and the real
+// scenario host: the scenariocompose package is composegen.EmitScenarioCompose over the fixture, not a
+// stand-in, and LaunchDevstack and MCPSession are the host's own, so a constructor or a session call the
+// emitter writes that they do not provide, or one of another shape, fails here.
 func TestMCP_GeneratedFileCompiles(t *testing.T) {
 	if testing.Short() {
 		t.Skip("compiles a module")
@@ -521,20 +503,19 @@ func TestMCP_GeneratedFileCompiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("composegen.EmitScenarioCompose: %v", err)
 	}
-	if !strings.Contains(string(compose), "func NewShopTools(t *testing.T, h *scenariohost.Host) *") {
-		t.Fatalf("composegen emits no constructor for the shopTools client:\n%s", compose)
+	if strings.Contains(string(compose), "NewShopTools") {
+		t.Fatalf("composegen emits a constructor for the shopTools client, which now runs over the wire:\n%s", compose)
 	}
 	root := writeModule(t, map[string]string{
 		"internal/manager/order/order.go":     stubOrder,
 		"internal/manager/order/ctor.go":      stubOrderCtor,
 		"internal/manager/billing/billing.go": stubBilling,
 		"internal/manager/billing/ctor.go":    stubBillingCtor,
-		conventionalToolsPkg + "/tools.go":    stubToolsHandler,
 		"internal/scenariocompose/compose.go": string(compose),
 		conventionalToolsGen:                  string(out.Generated[conventionalToolsGen]),
-	}, moduleOpts{mcp: true})
+	}, moduleOpts{realHost: true})
 	if msg, err := goIn(root, nil, "vet", "./..."); err != nil {
-		t.Fatalf("the generated MCP file does not type-check against composegen's scenariocompose: %v\n%s", err, msg)
+		t.Fatalf("the generated MCP file does not type-check against composegen's scenariocompose and the real host: %v\n%s", err, msg)
 	}
 }
 

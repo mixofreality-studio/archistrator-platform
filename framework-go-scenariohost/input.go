@@ -45,7 +45,7 @@ func (h *Host) input(t reporter, infraKey string, s projectmodel.Substrate, inpu
 			if h.PostgresURL == "" {
 				t.Skip("scenariohost: postgres is not booted under -short")
 			}
-			return h.PostgresURL
+			return h.PostgresDSN()
 		}
 	case projectmodel.SubstrateGitRepo:
 		if input == "URL" {

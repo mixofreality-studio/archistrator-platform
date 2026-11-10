@@ -181,7 +181,7 @@ func (h *Host) seedPostgres(ctx context.Context, fixture json.RawMessage) error 
 	if h.PostgresURL == "" {
 		return fmt.Errorf("the host has no Postgres (booted with -short)")
 	}
-	pool, err := fwpg.NewPool(ctx, h.PostgresURL)
+	pool, err := fwpg.NewPool(ctx, h.PostgresDSN())
 	if err != nil {
 		return fmt.Errorf("open pool: %w", err)
 	}

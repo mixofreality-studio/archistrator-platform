@@ -182,7 +182,19 @@ func addFrameworkGoStub(files map[string]string) {
 
 import "context"
 
-type Principal struct{ Subject string }
+type PrincipalKind string
+
+const (
+	PrincipalUser        PrincipalKind = "user"
+	PrincipalApplication PrincipalKind = "application"
+)
+
+type Principal struct {
+	Kind    PrincipalKind
+	Subject string
+	Roles   []string
+	Claims  map[string]any
+}
 
 type Action struct{ Verb string }
 

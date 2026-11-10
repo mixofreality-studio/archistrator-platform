@@ -52,6 +52,35 @@ func (h *Host) LaunchDatabases() []string {
 	return append([]string(nil), h.databases...)
 }
 
+// PostgresDSN is the Postgres URL the components a scenario builds in-process connect to: the
+// database of the app the test launched (LaunchDevstack) once it has, the host's own URL before.
+// A machine client's scenario drives the launched app over the wire and arranges and probes other
+// components in-process; both must see one set of rows, so they share the launch's database. With
+// several launches the latest one is the answer. "" under -short, as PostgresURL.
+func (h *Host) PostgresDSN() string {
+	h.launchMu.Lock()
+	defer h.launchMu.Unlock()
+	if h.appDatabase != "" {
+		return h.appDatabase
+	}
+	return h.PostgresURL
+}
+
+// followLaunch makes dsn the database in-process components connect to (PostgresDSN) until t ends.
+// The host is shared by every test of the package, so the previous answer comes back with the
+// launch's database dropped: a later test never reads one that is gone.
+func (h *Host) followLaunch(t *testing.T, dsn string) {
+	h.launchMu.Lock()
+	prev := h.appDatabase
+	h.appDatabase = dsn
+	h.launchMu.Unlock()
+	t.Cleanup(func() {
+		h.launchMu.Lock()
+		h.appDatabase = prev
+		h.launchMu.Unlock()
+	})
+}
+
 // adminExec runs one statement against the host's server (its maintenance database).
 func (h *Host) adminExec(stmt string) error {
 	ctx, cancel := context.WithTimeout(context.Background(), pgTimeout)

@@ -112,12 +112,12 @@ func collect(m *projectmodel.Model, cfg Config) ([]infraField, []settingField, e
 // framework emits itself (the local-profile dev principal).
 func refuseReservedNames(infra []infraField, settings []settingField) error {
 	for _, f := range infra {
-		if f.GoName == devPrincipalField {
+		if f.GoName == devPrincipalField || f.GoName == devPrincipalsField {
 			return fmt.Errorf("configgen: infra input %s: the name is reserved for the framework's local-profile dev principal", f.GoName)
 		}
 	}
 	for _, f := range settings {
-		if f.GoName == devPrincipalField {
+		if f.GoName == devPrincipalField || f.GoName == devPrincipalsField {
 			return fmt.Errorf("configgen: setting %q: the name is reserved for the framework's local-profile dev principal (%s_DEV_PRINCIPAL)", f.GoName, "<prefix>")
 		}
 	}

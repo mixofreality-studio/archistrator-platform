@@ -50,8 +50,11 @@ type DiscriminationSkip struct {
 
 // Reasons a runnable scenario is not part of the Go run.
 const (
-	reasonWeb    = "a web scenario runs against the booted server, which the Playwright half wires in plan 3"
-	reasonClient = "a machine client's subject is a served tools surface; its null run needs the booted server (plan 3)"
+	reasonWeb = "a web scenario runs against the booted server, which the Playwright half wires in plan 3"
+	// reasonClientOp is a machine client's call that reaches no generated Manager operation: the
+	// null run of a client scenario nulls the Manager operation in the launched server, so a call
+	// with none names nothing to null.
+	reasonClientOp = "a machine client's call reaches no generated Manager operation, so there is nothing to null"
 )
 
 // nullSubjectFunc is the generated function that returns plan's subject, nulled when asked to.
