@@ -255,3 +255,22 @@ func runGo(t *testing.T, dir string, args ...string) {
 	t.Helper()
 	run(t, dir, "go", args...)
 }
+
+// The null hooks.go seeds no authorization policy: the composition root's policy is generated
+// from the model (Plan 3 Task 3.4), so there is neither a permit-all nor a hook to answer.
+func TestNullgen_SeedsNoPolicy(t *testing.T) {
+	for _, fc := range cases {
+		t.Run(fc.name, func(t *testing.T) {
+			out, _ := fc.emit(t)
+			hooks, ok := out.Files[nullgen.HooksPath]
+			if !ok {
+				t.Fatal("no " + nullgen.HooksPath + " emitted")
+			}
+			for _, banned := range []string{"permitAll", "PolicyDecisionPoint"} {
+				if bytes.Contains(hooks, []byte(banned)) {
+					t.Errorf("hooks.go contains %q:\n%s", banned, hooks)
+				}
+			}
+		})
+	}
+}

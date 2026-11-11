@@ -43,9 +43,7 @@ func TestAuthzTableNamesEveryGeneratedRequest(t *testing.T) {
 	test := string(got[composegen.AuthzTestFile])
 	for _, w := range []string{
 		"func TestPolicyAdmitsEveryGeneratedRequest(t *testing.T) {",
-		"var hooks Hooks = new(appHooks)",
-		"principal := hooks.DevConfig(cfg).Principal",
-		"sec := edgeSecurity(hooks)",
+		"sec := edgeSecurity()",
 		"security.ResourceRef{Kind: row.Scope, ID: principal.Subject})",
 	} {
 		if !strings.Contains(test, w) {
@@ -53,7 +51,7 @@ func TestAuthzTableNamesEveryGeneratedRequest(t *testing.T) {
 		}
 	}
 	main := string(got[composegen.MainFile])
-	for _, w := range []string{"sec := edgeSecurity(hooks)", "hooks.ExtraMounts(root, cfg, dev, validator, sec, webManagers)"} {
+	for _, w := range []string{"sec := edgeSecurity()", "hooks.ExtraMounts(root, cfg, dev, validator, sec, webManagers)"} {
 		if !strings.Contains(main, w) {
 			t.Errorf("main.gen.go lacks %q: the server must serve with the policy the test holds, and hand MCP mounts the same sec", w)
 		}
@@ -96,6 +94,9 @@ func TestAuthzTableNamesEveryGeneratedRequest(t *testing.T) {
 	}
 	if _, ok := got[composegen.AuthzTestFile]; ok {
 		t.Error("a worker-only container got a policy test")
+	}
+	if _, ok := got[composegen.PolicyFile]; ok {
+		t.Error("a worker-only container got a policy")
 	}
 }
 

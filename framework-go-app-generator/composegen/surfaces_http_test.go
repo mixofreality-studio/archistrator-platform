@@ -54,7 +54,7 @@ func TestComposedServerServesMCPAndSurfacesOverHTTP(t *testing.T) {
 		files[name] = string(src)
 	}
 	files["config.gen.go"] = string(cfgFile["config.gen.go"])
-	files["hooks.go"] = ownScopeHooks(t, string(seed))
+	files["hooks.go"] = string(seed) // the policy is generated: nothing of the seed is left to fill
 	files["internal/client/web/middleware.gen.go"] = string(wiring.MiddlewareGo)
 	files["internal/client/web/server.gen.go"] = string(wiring.ServerGo)
 	writeTree(t, dir, files)
@@ -101,23 +101,6 @@ func TestComposedServerServesMCPAndSurfacesOverHTTP(t *testing.T) {
 			t.Fatalf("tools/call listGreet with the op nulled = %s, want the zero result", got)
 		}
 	})
-}
-
-// ownScopeHooks is the seeded hooks.go with the one decision only the app can make filled in:
-// a policy admitting every verb on the principal's own scope.
-func ownScopeHooks(t *testing.T, seed string) string {
-	t.Helper()
-	const fill = `panic("FILL: PolicyDecisionPoint")`
-	if !strings.Contains(seed, fill) {
-		t.Fatalf("the seed no longer asks for the policy:\n%s", seed)
-	}
-	return strings.Replace(seed, fill, "return ownScope{}", 1) + `
-type ownScope struct{}
-
-func (ownScope) Decide(_ context.Context, p security.Principal, _ security.Action, r security.ResourceRef) (bool, error) {
-	return p.Subject != "" && r.ID == p.Subject, nil
-}
-`
 }
 
 // freshHTTPSandbox is the sandbox module: the real framework-go, OTel satellite and MCP SDK, a

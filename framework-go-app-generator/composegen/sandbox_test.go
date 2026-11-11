@@ -4,7 +4,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
@@ -43,7 +42,10 @@ func TestCompileSandbox(t *testing.T) {
 	writeTree(t, dir, files)
 
 	buildSandbox(t, dir)
-	requirePolicyTest(t, dir, files["main.go"], main)
+	// The generated policy and its generated tests run in TestPolicyGen_CompilesAndPasses.
+	if out, err := sandboxGo(dir, "test", "-count=1", "-run", "TestPolicy", "."); err != nil {
+		t.Fatalf("the generated policy tests fail: %v\n%s", err, out)
+	}
 	requireNullOpsLocalOnly(t, dir)
 
 	// The once-seeded hooks.go is the composition root's other half: it too must compile
@@ -55,23 +57,6 @@ func TestCompileSandbox(t *testing.T) {
 	}
 	writeTree(t, dir, map[string]string{"main.go": string(seed)})
 	buildSandbox(t, dir)
-}
-
-// requirePolicyTest runs the generated TestPolicyAdmitsEveryGeneratedRequest in the sandbox: a
-// policy admitting every verb on the principal's own scope passes it, and the same policy
-// refusing one generated verb fails it, naming the request (FIX-046).
-func requirePolicyTest(t *testing.T, dir, handMain string, generated map[string][]byte) {
-	t.Helper()
-	if out, err := sandboxGo(dir, "test", "-run", "TestPolicyAdmitsEveryGeneratedRequest", "."); err != nil {
-		t.Fatalf("the generated policy test refuses an own-scope policy: %v\n%s", err, out)
-	}
-	verb := firstGeneratedVerb(t, generated[composegen.AuthzTableFile])
-	writeTree(t, dir, map[string]string{"main.go": strings.Replace(handMain, `const deniedVerb = ""`, `const deniedVerb = "`+verb+`"`, 1)})
-	out, err := sandboxGo(dir, "test", "-run", "TestPolicyAdmitsEveryGeneratedRequest", ".")
-	if err == nil || !strings.Contains(out, `verb "`+verb+`"`) {
-		t.Fatalf("the generated policy test passed a policy refusing the generated verb %q: %v\n%s", verb, err, out)
-	}
-	writeTree(t, dir, map[string]string{"main.go": handMain})
 }
 
 // requireNullOpsLocalOnly runs the generated applyNullOps in the sandbox: unset, the managers pass
@@ -111,16 +96,6 @@ func TestApplyNullOps(t *testing.T) {
 	if out, err := sandboxGo(dir, "test", "-count=1", "-run", "TestApplyNullOps", "."); err != nil {
 		t.Fatalf("the generated null-op switch misbehaves in the sandbox: %v\n%s", err, out)
 	}
-}
-
-func firstGeneratedVerb(t *testing.T, table []byte) string {
-	t.Helper()
-	_, rest, ok := strings.Cut(string(table), `Verb: "`)
-	verb, _, _ := strings.Cut(rest, `"`)
-	if !ok || verb == "" {
-		t.Fatalf("no generated verb in the table:\n%s", table)
-	}
-	return verb
 }
 
 func sandboxGo(dir string, args ...string) (string, error) {
@@ -217,20 +192,10 @@ type appHooks struct{}
 
 func (appHooks) ResolveProfile(cfg *Config) string                   { return "local" }
 func (appHooks) TemporalLogger(logger *slog.Logger) tlog.Logger      { return nil }
-func (appHooks) PolicyDecisionPoint() security.PolicyDecisionPoint    { return ownScopePolicy{} }
 func (appHooks) DevConfig(cfg *Config) web.DevConfig {
 	return web.DevConfig{Enabled: true, Principal: security.Principal{Subject: cfg.DevPrincipal}}
 }
 
-// ownScopePolicy admits an authenticated principal every verb on its own scope, but the verb
-// deniedVerb names (the sandbox's mutation seam).
-type ownScopePolicy struct{}
-
-const deniedVerb = ""
-
-func (ownScopePolicy) Decide(_ context.Context, p security.Principal, a security.Action, r security.ResourceRef) (bool, error) {
-	return p.Subject != "" && r.ID == p.Subject && a.Verb != deniedVerb, nil
-}
 func (appHooks) WrapManagers(m WebManagers) WebManagers               { return m }
 func (appHooks) TokenValidator(ctx context.Context, cfg *Config) (security.Validator, error) {
 	return nil, nil

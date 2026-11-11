@@ -151,6 +151,11 @@ Adaptations to the harvest (the complete list):
 - `cmd/server/hooks.go` gains `MCPMount` (and the `mcp` import): the generated composition
   root now asks the app for it, and the harvest predates the seam. It returns the
   authenticated handler unchanged.
+- Plan 3 Task 3.4: `cmd/server/hooks.go` loses `PolicyDecisionPoint`, `listVerbs` and
+  `listPolicy`. The composition root's authorization policy is generated from the model
+  (`policy.gen.go`: an authenticated principal may take exactly the verbs the generated transports
+  send, on its own `listCatalog` scope); whose list an operation touches stays the ListManager's
+  decision through AccessGrantingEngine.
 - Task 2.13c: `engine/listruling/listrulingengine.go` reports the new `TitleRuling.reason` and
   `ToggleTarget.basis` (see "Rebinding for the strong proof"); the matching fields are added to the
   fixture's `listRulingEngine` contract.

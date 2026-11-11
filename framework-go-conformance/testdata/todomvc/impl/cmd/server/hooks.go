@@ -38,28 +38,6 @@ func (appHooks) TemporalLogger(logger *slog.Logger) tlog.Logger {
 	return tlog.NewStructuredLogger(logger)
 }
 
-func (appHooks) PolicyDecisionPoint() security.PolicyDecisionPoint {
-	return listPolicy{}
-}
-
-// listVerbs are the verbs the generated ListManager transports ask the policy.
-var listVerbs = map[string]bool{
-	"add-todo": true, "reword-todo": true, "discard-todo": true, "mark-todo": true,
-	"toggle-all": true, "clear-completed": true, "open-list": true,
-}
-
-// listPolicy admits an authenticated principal's ListManager verbs on its own
-// listCatalog scope. Whose list an operation touches (owner, delegation) is
-// ListManager's decision through AccessGrantingEngine, keyed on rc.Principal.
-type listPolicy struct{}
-
-func (listPolicy) Decide(_ context.Context, p security.Principal, a security.Action, r security.ResourceRef) (bool, error) {
-	if p.Subject == "" || r.Kind != "listCatalog" || r.ID != p.Subject || r.Organization != "" {
-		return false, nil
-	}
-	return listVerbs[a.Verb], nil
-}
-
 func (appHooks) TokenValidator(ctx context.Context, cfg *Config) (security.Validator, error) {
 	return nil, nil
 }

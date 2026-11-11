@@ -28,7 +28,7 @@ func writeWorkerOnlyWait(b *strings.Builder) {
 // writeSecurity builds the security Utility + validator + dev config.
 func writeSecurity(b *strings.Builder) {
 	b.WriteString("\t// Security Utility + auth boundary.\n")
-	b.WriteString("\tsec := edgeSecurity(hooks)\n")
+	b.WriteString("\tsec := edgeSecurity()\n")
 	b.WriteString("\tvalidator, err := hooks.TokenValidator(ctx, cfg)\n")
 	b.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n")
 	// FIX-039: a dev principal configured under any profile but local is refused by name
@@ -104,17 +104,17 @@ func writeShutdown(b *strings.Builder) {
 }
 
 // writeEdgeSecurity emits the one constructor of the security Utility every generated
-// transport authorizes against. RunGenerated builds sec here, and so does the generated
-// TestPolicyAdmitsEveryGeneratedRequest (authz.gen_test.go), so the policy the test holds to
-// the generated requests is the one the server really serves with.
+// transport authorizes against. RunGenerated builds sec here, and so do the generated
+// policy tests (authz.gen_test.go), so the policy the tests hold to the generated requests is
+// the one the server really serves with: generatedPolicy (policy.gen.go), derived from the model.
 func writeEdgeSecurity(b *strings.Builder, r *resolved) {
 	if len(r.webMgrs) == 0 {
 		return
 	}
 	b.WriteString("// edgeSecurity is the security Utility every generated transport (the REST handlers\n")
-	b.WriteString("// and the MCP tool tables at /mcp) authorizes against, built from the composition\n")
-	b.WriteString("// root's policy. TestPolicyAdmitsEveryGeneratedRequest builds it the same way.\n")
-	b.WriteString("func edgeSecurity(hooks Hooks) security.Security {\n")
-	b.WriteString("\treturn security.New(security.WithPolicyDecisionPoint(hooks.PolicyDecisionPoint()))\n")
+	b.WriteString("// and the MCP tool tables at /mcp) authorizes against, built from the policy generated\n")
+	b.WriteString("// from the model. The generated policy tests build it the same way.\n")
+	b.WriteString("func edgeSecurity() security.Security {\n")
+	b.WriteString("\treturn security.New(security.WithPolicyDecisionPoint(generatedPolicy{}))\n")
 	b.WriteString("}\n\n")
 }

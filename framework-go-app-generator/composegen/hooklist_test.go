@@ -26,8 +26,8 @@ func TestHookList_IsTheHooksInterface(t *testing.T) {
 	if got := byName["TokenValidator"]; !slices.Equal(got.Results, []string{"security.Validator", "error"}) {
 		t.Errorf("TokenValidator results = %v", got.Results)
 	}
-	if got := byName["PolicyDecisionPoint"]; got.Seed != "" {
-		t.Errorf("PolicyDecisionPoint has a seed %q; only the app can answer it", got.Seed)
+	if got, ok := byName["PolicyDecisionPoint"]; ok {
+		t.Errorf("the authorization policy is generated, not a hook: %+v", got)
 	}
 	fin, ok := byName["FinalizeOrderStateAccess"]
 	if !ok || fin.Finalizes == nil {
@@ -52,8 +52,8 @@ func TestHooksSeedWith_ReplacesBodies(t *testing.T) {
 	got, err := composegen.HooksSeedWith(m, greenfieldCfg, composegen.SeedOptions{
 		Header: "// header\n\n",
 		Body: func(h composegen.Hook) string {
-			if h.Name == "PolicyDecisionPoint" {
-				return "return nil"
+			if h.Name == "ResolveProfile" {
+				return `return "replaced"`
 			}
 			return ""
 		},
@@ -64,8 +64,8 @@ func TestHooksSeedWith_ReplacesBodies(t *testing.T) {
 	if !bytes.HasPrefix(got, []byte("// header\n\npackage main")) {
 		t.Errorf("no header:\n%.80s", got)
 	}
-	if bytes.Contains(got, []byte(`panic("FILL: PolicyDecisionPoint")`)) || !bytes.Contains(got, []byte("return nil")) {
-		t.Errorf("PolicyDecisionPoint body not replaced:\n%s", got)
+	if bytes.Contains(got, []byte(`return "local"`)) || !bytes.Contains(got, []byte(`return "replaced"`)) {
+		t.Errorf("ResolveProfile body not replaced:\n%s", got)
 	}
 }
 

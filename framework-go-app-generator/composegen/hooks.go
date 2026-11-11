@@ -26,9 +26,10 @@ type hookMethod struct {
 //     binding switches key off of).
 //   - TemporalLogger: when temporal infrastructure is declared (the SDK logger
 //     adapter is cmd-local policy).
-//   - PolicyDecisionPoint / TokenValidator / DevConfig / WrapManagers /
-//     ExtraMounts: when the container has ≥1 web-exposed Manager (the auth
-//     boundary + the logging wrap + composition-root-only routes).
+//   - TokenValidator / DevConfig / WrapManagers / ExtraMounts: when the
+//     container has ≥1 web-exposed Manager (the auth boundary + the logging
+//     wrap + composition-root-only routes). The authorization policy is not a
+//     seam: it is generated from the model (policy.gen.go).
 //   - one method per distinct unmatched plain manager dep, typed at its
 //     concrete dep.GoType (a resolver seam, e.g. the design PR-rail func-typed
 //     repo resolvers, or a scalar/interface dep with no setting/binding link,
@@ -47,7 +48,7 @@ func deriveHooks(r *resolved) []hookMethod {
 		hs = append(hs, hookTemporalLogger())
 	}
 	if len(r.webMgrs) > 0 {
-		hs = append(hs, hookPDP(), hookTokenValidator(), hookDevConfig(), hookWrapManagers(), hookExtraMounts())
+		hs = append(hs, hookTokenValidator(), hookDevConfig(), hookWrapManagers(), hookExtraMounts())
 	}
 	if len(r.mcpMounts) > 0 {
 		hs = append(hs, hookMCPMount())
@@ -211,22 +212,6 @@ func hookTemporalLogger() hookMethod {
 		},
 		line: "TemporalLogger(logger *slog.Logger) tlog.Logger",
 		seed: "return tlog.NewStructuredLogger(logger)",
-	}
-}
-
-func hookPDP() hookMethod {
-	return hookMethod{
-		doc: []string{
-			"PolicyDecisionPoint is the authorization PDP the security Utility is built",
-			"with (application policy — not model-derivable). It decides verbs for the",
-			"authenticated principal's own scope: every generated REST handler and MCP",
-			"tool asks it one row of generatedAuthorizations (authz.gen.go), a verb on",
-			"ResourceRef{Kind: <manager>Catalog, ID: principal.Subject}, and it must",
-			"permit the local dev principal every row (TestPolicyAdmitsEveryGeneratedRequest",
-			"holds it, through a zero appHooks). Ownership of a data-held resource an",
-			"operation names is the Manager's to enforce, never this policy's.",
-		},
-		line: "PolicyDecisionPoint() security.PolicyDecisionPoint",
 	}
 }
 
