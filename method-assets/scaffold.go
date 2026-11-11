@@ -24,11 +24,14 @@ const (
 	// analyzer-based `go fix -diff` gate; runners resolve it via the go.mod
 	// toolchain directive / setup-go.
 	GoVersion            = "1.26.0"
-	FrameworkGoVersion   = "v0.22.0"
-	AppGeneratorVersion  = "v0.24.1"
-	HTTPGeneratorVersion = "v0.5.0"
+	FrameworkGoVersion   = "v0.23.0"
+	AppGeneratorVersion  = "v0.25.0"
+	HTTPGeneratorVersion = "v0.6.0"
 	MCPGeneratorVersion  = "v0.3.0"
 	ProjectModelVersion  = "v0.5.0"
+	// ScenarioHostVersion is the release that ships cmd/webscenarios, the tool every web
+	// scenario batch and the surface check run under.
+	ScenarioHostVersion = "v0.6.0"
 
 	// The composition root's own dependencies; see compositionPins.
 	InfraOtelVersion     = "v0.1.0"
@@ -51,6 +54,7 @@ func ScaffoldTools() []string {
 		AppGeneratorModulePath + "/cmd/webgen",
 		platformModule + "framework-go-http-generator/cmd/httpgen",
 		platformModule + "framework-go-mcp-generator/cmd/mcpgen",
+		platformModule + "framework-go-scenariohost/cmd/webscenarios",
 	}
 }
 
@@ -80,6 +84,7 @@ func ScaffoldRequires() map[string]string {
 		platformModule + "framework-go-http-generator": HTTPGeneratorVersion,
 		platformModule + "framework-go-mcp-generator":  MCPGeneratorVersion,
 		platformModule + "framework-go-projectmodel":   ProjectModelVersion,
+		platformModule + "framework-go-scenariohost":   ScenarioHostVersion,
 	}
 	maps.Copy(out, compositionPins())
 	return out
