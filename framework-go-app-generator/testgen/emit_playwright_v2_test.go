@@ -137,9 +137,11 @@ func TestPlaywright_LayerA_ImmediateUnderLatency(t *testing.T) {
 		"X-Dev-Principal",
 		"default:\n      return assertNever(",
 	)
-	// the scenario host's endpoint is never called: the composed server answers every unknown POST
-	// with 405, so a runtime that probed for it would fail a scenario instead of skipping it
-	requireAbsent(t, "runtime.gen.ts", rt, "callHost", "/__scenariohost/")
+	// the arrange kinds the scenario host performs reach its endpoint (the local profile serves
+	// /__scenariohost, forwarding to the host a web scenario run serves), and nothing skips a scenario
+	// for want of it
+	requireContains(t, "runtime.gen.ts", rt, "'/__scenariohost/'", "case 'advanceClock':", "case 'failNext':", "case 'seedResource':")
+	requireAbsent(t, "runtime.gen.ts", rt, "skipUntilScenarioHost", "test.skip")
 }
 
 func TestPlaywright_UncheckAndSelectAreLayerA(t *testing.T) {
@@ -260,7 +262,6 @@ func TestPlaywright_ArrangeOverRESTAndProbes(t *testing.T) {
 			"inputs": []any{map[string]any{"name": "orderId", "value": lit(json.RawMessage(`"o-1"`))}},
 			"expect": map[string]any{"result": `{"id":"o-1"}`, "errorExpected": false},
 		}},
-		map[string]any{"kind": "advanceClock", "model": map[string]any{"duration": "36h"}},
 		map[string]any{"kind": "failNext", "model": map[string]any{"component": "billingManager", "operation": "GetInvoice", "errorCode": "NotFound"}},
 		map[string]any{"kind": "seedResource", "model": map[string]any{"resource": "ordersDB", "fixture": map[string]any{"rows": 2}}},
 	}
@@ -275,14 +276,32 @@ func TestPlaywright_ArrangeOverRESTAndProbes(t *testing.T) {
 		"await arrange(testInfo, { kind: 'contractCall',",
 		"await probe(testInfo, { verb: ",
 		"inv-o-1",
-		// the scenario host serves no endpoint yet (the composed server answers an unknown POST with
-		// 405): a scenario that arranges through it is skipped, by name, before it does anything
-		"test.skip(true, 'arrange advanceClock, failNext, seedResource needs the local-profile /__scenariohost endpoint, which no generated server serves yet');",
+		// the host's kinds are performed through the local profile's /__scenariohost endpoint
+		"await arrange(testInfo, { kind: 'failNext', component: 'billingManager', operation: 'GetInvoice', errorCode: 'NotFound' });",
+		"await arrange(testInfo, { kind: 'seedResource', resource: 'ordersDB', fixture: {\"rows\":2} });",
 	)
-	requireAbsent(t, "spec", spec, "kind: 'advanceClock'", "kind: 'failNext'", "kind: 'seedResource'")
-	// the skip precedes every action and every arrange call; arrange precedes the first action, probes follow it
-	if sk, a, n, p := strings.Index(spec, "test.skip(true"), strings.Index(spec, "await arrange("), strings.Index(spec, "page.goto("), strings.Index(spec, "await probe("); sk < 0 || sk > a || a > n || p < n {
-		t.Errorf("order wrong (skip %d, arrange %d, goto %d, probe %d):\n%s", sk, a, n, p, spec)
+	requireAbsent(t, "spec", spec, "test.skip(true", "skipped until")
+	// arrange precedes the first action, probes follow it, and the arrange calls keep the plan's order
+	c, f, sd := strings.Index(spec, "kind: 'contractCall'"), strings.Index(spec, "kind: 'failNext'"), strings.Index(spec, "kind: 'seedResource'")
+	if n, p := strings.Index(spec, "page.goto("), strings.Index(spec, "await probe("); c < 0 || c >= f || f >= sd || sd >= n || n >= p {
+		t.Errorf("order wrong (contractCall %d, failNext %d, seedResource %d, goto %d, probe %d):\n%s", c, f, sd, n, p, spec)
+	}
+}
+
+// advanceClock moves only the host's clock; the booted server's components read real time, so a web
+// binding that arranges it cannot do what it says. It is refused at generation, naming the scenario,
+// never skipped and never emitted (earmark E17: a model-declared clock for the composition root).
+func TestPlaywright_AdvanceClockRefused(t *testing.T) {
+	doc := shopDoc(t)
+	shopBinding(doc)["arrange"] = []any{map[string]any{"kind": "advanceClock", "model": map[string]any{"duration": "36h"}}}
+	_, err := generateDoc(t, doc)
+	if err == nil {
+		t.Fatal("a web binding arranging advanceClock generated, want a refusal")
+	}
+	for _, want := range []string{"advanceClock", shopBinding(doc)["scenario"].(string), "E17"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Errorf("error %q does not name %q", err, want)
+		}
 	}
 }
 

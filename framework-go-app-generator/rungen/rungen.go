@@ -98,6 +98,13 @@ func Generate(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
 	return map[string][]byte{File: src}, nil
 }
 
+// isCallerInput reports one of the framework's own local inputs, set by a caller that launches the app
+// with several principals (scenariohost.LaunchDevstack) or with a scenario host's arrange server (go
+// tool webscenarios): neither provisioned nor required.
+func isCallerInput(env, prefix string) bool {
+	return env == configgen.DevPrincipalsEnv(prefix) || env == configgen.ScenariohostURLEnv(prefix)
+}
+
 // Derive is the local run contract for m: every input the generated Config requires under the
 // local profile is either provisioned or required from the caller, and every variable the
 // launcher sets is one the Config reads.
@@ -113,9 +120,7 @@ func Derive(m *projectmodel.Model, cfg Config) (Plan, error) {
 			p.DevPrincipalEnv = in.Env
 			continue
 		}
-		// The framework's own local input, set by a caller that launches the app with several
-		// principals (scenariohost.LaunchDevstack): neither provisioned nor required.
-		if in.Env == configgen.DevPrincipalsEnv(cfg.EnvPrefix) {
+		if isCallerInput(in.Env, cfg.EnvPrefix) {
 			continue
 		}
 		if err := p.take(in); err != nil {

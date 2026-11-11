@@ -58,7 +58,8 @@ func Inputs(m *projectmodel.Model, cfg Config) ([]Input, error) {
 	}
 	out = append(out,
 		Input{Env: DevPrincipalEnv(cfg.EnvPrefix), Field: devPrincipalField},
-		Input{Env: DevPrincipalsEnv(cfg.EnvPrefix), Field: devPrincipalsField})
+		Input{Env: DevPrincipalsEnv(cfg.EnvPrefix), Field: devPrincipalsField},
+		Input{Env: ScenariohostURLEnv(cfg.EnvPrefix), Field: scenariohostURLField})
 	return out, nil
 }
 
@@ -69,6 +70,12 @@ func DevPrincipalEnv(prefix string) string { return prefix + "_DEV_PRINCIPAL" }
 // a JSON list of {subject, kind, roles, claims}, each an identity a request may name in the
 // X-Dev-Principal header (see Config.LocalDevPrincipals in the generated file).
 func DevPrincipalsEnv(prefix string) string { return prefix + "_DEV_PRINCIPALS" }
+
+// ScenariohostURLEnv is the variable the framework's local-profile scenario host address is read
+// from: the base URL of the arrange server a web scenario run (go tool webscenarios) serves, to which
+// the composed server forwards POST /__scenariohost/<kind> and from which its fault wrapper takes the
+// faults a scenario registered (see Config.LocalScenariohostURL in the generated file).
+func ScenariohostURLEnv(prefix string) string { return prefix + "_SCENARIOHOST_URL" }
 
 // UndeclaredEnvReads is the gate on the hand half of a composition root (FIX-049): every
 // string literal in srcs (file name -> Go source) spelled like a <prefix>_* variable must be one

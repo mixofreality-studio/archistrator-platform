@@ -233,7 +233,7 @@ func routePlan(out *Output, cfg Config, web webEnv, plan componentPlan) (string,
 			return "", err
 		}
 		if d == dialectWeb {
-			out.skipDiscrimination(plan, reasonWeb)
+			out.webDiscriminations(cfg, web, plan)
 			return "", emitPlaywright(out, cfg, web, plan)
 		}
 		what = plan.Key + " is an MCP client with"

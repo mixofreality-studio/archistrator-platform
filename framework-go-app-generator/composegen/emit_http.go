@@ -50,6 +50,13 @@ func writeWebManagersBundle(b *strings.Builder, r *resolved) {
 	}
 	b.WriteString("\t}\n")
 	b.WriteString("\twebManagers = hooks.WrapManagers(webManagers)\n")
+	// Plan 3 Task 3.5: a web scenario run points the server at the scenario host's arrange server,
+	// whose registered faults the Managers take. Innermost of the test instruments, so the null
+	// wrapper below stays outermost. Local profile only: the Config rule refuses the address elsewhere.
+	b.WriteString("\tscenariohostURL, err := cfg.LocalScenariohostURL(hooks.ResolveProfile(cfg))\n")
+	b.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n")
+	b.WriteString("\twebManagers, err = applyFaults(hooks.ResolveProfile(cfg), scenariohostURL, webManagers)\n")
+	b.WriteString("\tif err != nil {\n\t\treturn err\n\t}\n")
 	// The null-subject run (testgen -discriminate) stubs named operations out here, outermost, so the
 	// generated REST handlers and MCP tools never reach the Manager for them. Local profile only.
 	b.WriteString("\twebManagers, err = applyNullOps(hooks.ResolveProfile(cfg), webManagers)\n")

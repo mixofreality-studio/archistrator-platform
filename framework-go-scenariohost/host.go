@@ -118,7 +118,7 @@ var (
 // failure fails every caller, not just the first.
 func Start(t *testing.T) *Host {
 	t.Helper()
-	once.Do(func() { shared, startErr = boot(context.Background()) })
+	once.Do(func() { shared, startErr = boot(context.Background(), testing.Short()) })
 	if startErr != nil {
 		t.Fatalf("scenariohost: %v", startErr)
 	}
@@ -202,9 +202,25 @@ func newHost() *Host {
 	}
 }
 
+// Boot starts every downstream double and returns the host: the T-free half of Start, for a
+// production job binary (go tool webscenarios) that has no testing.T and no TestMain. Postgres is
+// booted (a job binary is never -short). The caller owns the host and ends it with Close; on a boot
+// failure whatever came up has been stopped and the error names the double that did not.
+func Boot(ctx context.Context) (*Host, error) { return boot(ctx, false) }
+
+// Close tears down what Boot started, in reverse order of boot, after flushing the host's results
+// (a web scenario run records none, so the flush only reports a replay or write failure on stderr).
+func (h *Host) Close() {
+	if err := h.Flush(); err != nil {
+		fmt.Fprintf(os.Stderr, "scenariohost: %v\n", err)
+	}
+	h.stopAll()
+}
+
 // boot starts the doubles in dependency-free order; on any failure the ones
-// already up are stopped and the error names the one that did not come up.
-func boot(ctx context.Context) (*Host, error) {
+// already up are stopped and the error names the one that did not come up. short
+// leaves Postgres out (Start passes testing.Short()).
+func boot(ctx context.Context, short bool) (*Host, error) {
 	h := newHost()
 	fail := func(err error) (*Host, error) {
 		for i := len(h.stops) - 1; i >= 0; i-- {
@@ -227,7 +243,7 @@ func boot(ctx context.Context) (*Host, error) {
 	h.replay = packageGate
 	h.declare(packageComponents...)
 
-	if !testing.Short() {
+	if !short {
 		url, stop, pgErr := startPostgres(ctx)
 		if pgErr != nil {
 			return fail(fmt.Errorf("postgres: %w", pgErr))

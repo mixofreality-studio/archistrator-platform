@@ -39,10 +39,10 @@ func managerRoutes(projectJSON []byte) (map[string]restRoute, error) {
 // the same route planner as managerRoutes.
 func componentRoutes(projectJSON []byte) (map[string]map[string]restRoute, error) {
 	routes := map[string]map[string]restRoute{}
-	err := eachManagerPlan(projectJSON, func(key string, _ *projectmodel.Doc, plans []httpgen.OpPlan) {
+	err := eachManagerPlan(projectJSON, func(key string, parsed *projectmodel.Doc, plans []httpgen.OpPlan) {
 		routes[key] = map[string]restRoute{}
 		for _, p := range plans {
-			routes[key][p.Name] = restRoute{Verb: p.Verb, Path: p.PathTemplate}
+			routes[key][p.Name] = restRoute{Verb: p.Verb, Path: p.PathTemplate, Manager: parsed.Interface.Name, Op: p.Name}
 		}
 	})
 	return routes, err

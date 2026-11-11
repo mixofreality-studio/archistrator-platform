@@ -257,8 +257,9 @@ func TestDiscriminate_NoTestFilesIsInconclusive(t *testing.T) {
 	}
 }
 
-// The web half is skipped with a printed notice until Plan 3 boots the server.
-func TestDiscriminate_WebHalfIsSkippedWithNotice(t *testing.T) {
+// A web scenario whose operation reaches no single generated Manager operation has nothing to null:
+// it is announced as skipped with that reason, never dropped silently.
+func TestDiscriminate_WebOpWithNoManagerRouteIsSkippedWithNotice(t *testing.T) {
 	args := discriminateArgs(t)
 	r := &recorder{answer: func(nullOps, test string) (string, error) {
 		if nullOps == "" {
@@ -270,8 +271,182 @@ func TestDiscriminate_WebHalfIsSkippedWithNotice(t *testing.T) {
 	if err := runWith(args, &out, &errOut, r.run); err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(out.String(), "shopClient") || !strings.Contains(out.String(), "skipped") {
+	if !strings.Contains(out.String(), "shopClient") || !strings.Contains(out.String(), "skipped") || !strings.Contains(out.String(), "nothing to null") {
 		t.Errorf("the skipped web scenarios are not announced: %q", out.String())
+	}
+	for _, c := range r.calls {
+		if strings.Contains(c, "webscenarios") {
+			t.Errorf("a web scenario with nothing to null was run: %s", c)
+		}
+	}
+}
+
+// webArgs discriminates the testgen fixture with its web client's operation renamed to the Manager
+// operation it drives (GetOrder), so the web scenario has an operation to null.
+func webArgs(t *testing.T) []string {
+	t.Helper()
+	args := discriminateArgs(t)
+	raw, err := os.ReadFile(args[1])
+	if err != nil {
+		t.Fatal(err)
+	}
+	project := filepath.Join(t.TempDir(), "project.json")
+	if err := os.WriteFile(project, []byte(strings.ReplaceAll(string(raw), "OpenOrders", "GetOrder")), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args[1] = project
+	return args
+}
+
+// withWeb is a runner that answers the Go scenarios as the real subject passes and every null run
+// kills (the recorder's rule), and a `go tool webscenarios` run with web, given the run's environment.
+func withWeb(web func(env []string) (string, error)) goTestRunner {
+	goRuns := &recorder{answer: func(nullOps, test string) (string, error) {
+		if nullOps == "" {
+			return passedRun(test)
+		}
+		return failedRun(test)
+	}}
+	return func(dir string, env []string, args ...string) (string, error) {
+		if len(args) >= 2 && args[0] == "tool" && args[1] == "webscenarios" {
+			return web(env)
+		}
+		return goRuns.run(dir, env, args...)
+	}
+}
+
+// nullOpsOf is the AIARCH_NULL_OPS a run's environment carries ("" when unset or empty).
+func nullOpsOf(env []string) string {
+	v := ""
+	for _, e := range env {
+		if s, ok := strings.CutPrefix(e, "AIARCH_NULL_OPS="); ok {
+			v = s
+		}
+	}
+	return v
+}
+
+// webRun is one run of the stub: the arguments and environment of a command.
+type webRun struct {
+	args []string
+	env  []string
+}
+
+// Web scenarios run through the scenario host: once against the real subject, then once per stimulus
+// operation with that Manager operation nulled in the launched server, each as
+// `go tool webscenarios -C <uitests> -config generated/<contract>/playwright.config.gen.ts -grep <id>`
+// with AIARCH_NULL_OPS in the environment the launched app inherits. A pass with the operation nulled
+// is a survivor, as it is for Go.
+func TestDiscriminate_WebRunsThroughWebscenarios(t *testing.T) {
+	var runs []webRun
+	run := withWeb(func(env []string) (string, error) {
+		runs = append(runs, webRun{env: env})
+		if nullOpsOf(env) == "" {
+			return "  1 passed (2.1s)\n", nil
+		}
+		return "  1 failed\n", errors.New("exit status 1")
+	})
+	capture := func(dir string, env []string, args ...string) (string, error) {
+		if len(args) >= 2 && args[0] == "tool" {
+			out, err := run(dir, env, args...)
+			runs[len(runs)-1].args = args
+			return out, err
+		}
+		return run(dir, env, args...)
+	}
+	var out, errOut bytes.Buffer
+	if err := runWith(webArgs(t), &out, &errOut, capture); err != nil {
+		t.Fatalf("every null run failed, so nothing survived: %v\n%s", err, out.String())
+	}
+	if len(runs) < 2 {
+		t.Fatalf("want a real-subject run and a null run of the web scenario, got %d runs", len(runs))
+	}
+	first := runs[0]
+	joined := strings.Join(first.args, " ")
+	for _, want := range []string{"tool webscenarios -C uitests -config generated/shopClient/playwright.config.gen.ts -grep ", "browse-orders-P1", " — "} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("the run is %q, want it to contain %q", joined, want)
+		}
+	}
+	var nulled bool
+	for _, r := range runs[1:] {
+		for _, e := range r.env {
+			if e == "AIARCH_NULL_OPS=OrderManager.GetOrder" {
+				nulled = true
+			}
+		}
+	}
+	if !nulled {
+		t.Errorf("no run nulled OrderManager.GetOrder: %+v", runs)
+	}
+	if strings.Contains(out.String(), "TP-DISCRIMINATE shopClient") {
+		t.Errorf("a failing null run is a kill, not a survivor:\n%s", out.String())
+	}
+}
+
+// A web scenario that still passes with its operation nulled is a survivor, and one that fails against
+// the real subject is broken, exactly as for Go; a run that did not execute the scenario is the tool's
+// error.
+func TestDiscriminate_WebVerdicts(t *testing.T) {
+	cases := map[string]struct {
+		real, null string
+		realErr    error
+		want       string
+		wantErr    error
+	}{
+		"survivor": {real: "  1 passed (1s)\n", null: "  1 passed (1s)\n", want: "TP-DISCRIMINATE shopClient browse-orders-P1", wantErr: errSurvivors},
+		"broken":   {real: "  1 failed\n", realErr: errors.New("exit status 1"), want: "TP-BROKEN shopClient browse-orders-P1", wantErr: errBroken},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			run := withWeb(func(env []string) (string, error) {
+				if nullOpsOf(env) == "" {
+					return c.real, c.realErr
+				}
+				return c.null, nil
+			})
+			var out, errOut bytes.Buffer
+			err := runWith(webArgs(t), &out, &errOut, run)
+			if !errors.Is(err, c.wantErr) || !strings.Contains(out.String(), c.want) {
+				t.Errorf("err = %v, out = %q; want %v and %q", err, out.String(), c.wantErr, c.want)
+			}
+		})
+	}
+	for name, output := range map[string]string{
+		"nothing matched": "Error: No tests found\n",
+		"skipped":         "  1 skipped\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			run := withWeb(func([]string) (string, error) { return output, nil })
+			var out, errOut bytes.Buffer
+			err := runWith(webArgs(t), &out, &errOut, run)
+			if err == nil || errors.Is(err, errSurvivors) || errors.Is(err, errBroken) {
+				t.Errorf("err = %v, want an inconclusive-run error", err)
+			}
+		})
+	}
+}
+
+// A launch failure of the scenario host is retried like a Go scenario's, and is never the scenario's
+// failure.
+func TestDiscriminate_WebLaunchFlakeIsRetried(t *testing.T) {
+	attempts := 0
+	run := withWeb(func(env []string) (string, error) {
+		attempts++
+		if attempts == 1 {
+			return "webscenarios: launch: temporal: dev server did not start\n", errors.New("exit status 1")
+		}
+		if nullOpsOf(env) == "" {
+			return "  1 passed (1s)\n", nil
+		}
+		return "  1 failed\n", errors.New("exit status 1")
+	})
+	var out, errOut bytes.Buffer
+	if err := runWith(webArgs(t), &out, &errOut, run); err != nil {
+		t.Fatalf("a launch flake must be retried, got %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "TP-BROKEN") {
+		t.Errorf("a launch failure is not the scenario's failure:\n%s", out.String())
 	}
 }
 

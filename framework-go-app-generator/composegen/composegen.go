@@ -169,10 +169,23 @@ func Generate(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
 	if out[PolicyFile], err = emitPolicy(r); err != nil {
 		return nil, err
 	}
-	if out[NullFile], err = emitNullWeb(m, r); err != nil {
+	if err := emitTestInstruments(m, r, out); err != nil {
 		return nil, err
 	}
 	return out, nil
+}
+
+// emitTestInstruments adds the local-profile test instruments of a container that serves web-exposed
+// Managers: the null-operation middleware, the fault wrapper and the arrange forwarder.
+func emitTestInstruments(m *projectmodel.Model, r *resolved, out map[string][]byte) (err error) {
+	if out[NullFile], err = emitNullWeb(m, r); err != nil {
+		return err
+	}
+	if out[FaultsFile], err = emitFaults(m, r); err != nil {
+		return err
+	}
+	out[ArrangeFile], err = emitArrangeHTTP(r)
+	return err
 }
 
 // validateConfig checks the required Config fields + that the deployment exists

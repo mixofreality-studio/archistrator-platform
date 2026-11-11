@@ -134,4 +134,10 @@ func TestDockerLeftovers(t *testing.T) {
 	if left := DockerLeftovers(context.Background(), []string{"container:a"}, []string{"container:a"}); len(left) != 0 {
 		t.Errorf("no change must leave nothing, got %v", left)
 	}
+	// testcontainers' reaper appears with the first container a process starts and goes with the
+	// process: it is the guard against a leak, not one.
+	got = DockerLeftovers(context.Background(), []string{"container:a"}, []string{"container:a", "container:reaper_0123abcd", "container:postgres-1"})
+	if want := []string{"container:postgres-1"}; !slices.Equal(got, want) {
+		t.Errorf("leftovers = %v, want only %v (the reaper is not one)", got, want)
+	}
 }

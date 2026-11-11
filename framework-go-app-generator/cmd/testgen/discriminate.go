@@ -82,6 +82,36 @@ func testFailed(output, test string) bool {
 	return regexp.MustCompile(`(?m)^--- FAIL: ` + regexp.QuoteMeta(test) + `( |$)`).MatchString(output)
 }
 
+// Playwright's list reporter ends a run with one summary line per outcome ("  1 passed (2.1s)").
+var (
+	pwPassed = regexp.MustCompile(`(?m)^\s+\d+ passed\b`)
+	pwFailed = regexp.MustCompile(`(?m)^\s+\d+ (failed|flaky|timed out|interrupted)\b`)
+)
+
+// webLaunchFailure is the line `go tool webscenarios` fails with when the scenario host or the app it
+// launches does not come up.
+var webLaunchFailure = regexp.MustCompile(`(?m)^webscenarios: launch:`)
+
+// classifyWeb reads one `go tool webscenarios` run of a web scenario. As for Go, only a run that
+// executed the scenario counts: a launch that failed is reported as a failure so the host-boot retry
+// sees it (and a host that never boots is inconclusive); a -grep that matched nothing, or a scenario
+// that skipped itself, proves nothing either way.
+func classifyWeb(output string, err error) runOutcome {
+	switch {
+	case webLaunchFailure.MatchString(output):
+		return ranFailed{}
+	case strings.Contains(output, "No tests found"):
+		return ranInconclusive{"no test matched"}
+	case err == nil && pwPassed.MatchString(output):
+		return ranPassed{}
+	case err == nil:
+		return ranInconclusive{"the scenario skipped itself or reported nothing"}
+	case pwFailed.MatchString(output):
+		return ranFailed{}
+	}
+	return ranInconclusive{fmt.Sprintf("webscenarios ended before the scenario reported a result: %v", err)}
+}
+
 // hostBootAttempts is how many times a scenario run is made when the scenario host (the Temporal dev
 // server, the database, the repository, the launched devstack) does not come up.
 const hostBootAttempts = 3
@@ -91,19 +121,36 @@ const hostBootAttempts = 3
 // a port or a SQLite lock to another local process, the launched app missing its readiness window.
 // That says nothing about the scenario, and counting it as the scenario's failure makes a clean
 // scenario TP-BROKEN, or a stimulus whose null run never executed look killed.
-var hostBootFailure = regexp.MustCompile(`(?m)^\s*\S+\.go:\d+: scenariohost: (temporal|postgres|git|mkdir|LaunchDevstack):`)
+var hostBootFailure = regexp.MustCompile(`(?m)^\s*\S+\.go:\d+: scenariohost: (temporal|postgres|git|mkdir|LaunchDevstack):|^webscenarios: launch:`)
 
-// goTest runs the test of d, with the operations nullOps nulled ("" runs the real subject: the
-// variable is set empty so an inherited value cannot leak into the run), and classifies it. A run
-// whose host did not boot is made again, up to hostBootAttempts times in all; a host that never boots
-// is inconclusive, never a verdict on the scenario.
+// scenarioArgs is the `go` command that runs d's scenario: its package's test, or, for a web scenario,
+// the Playwright project through the scenario host.
+func scenarioArgs(d testgen.Discrimination) []string {
+	if d.Web() {
+		return []string{"tool", "webscenarios", "-C", d.UIDir, "-config", d.UIConfig, "-grep", d.UIGrep}
+	}
+	return []string{"test", "-count=1", "-v", "-run", "^" + d.Test + "$", "./" + d.Package + "/"}
+}
+
+// classifyRun reads one run of d.
+func classifyRun(d testgen.Discrimination, output string, err error) runOutcome {
+	if d.Web() {
+		return classifyWeb(output, err)
+	}
+	return classify(output, err, d.Test)
+}
+
+// goTest runs the scenario of d (a Go test, or a web scenario through the scenario host), with the
+// operations nullOps nulled ("" runs the real subject: the variable is set empty so an inherited value
+// cannot leak into the run, nor into the server a web run launches), and classifies it. A run whose
+// host did not boot is made again, up to hostBootAttempts times in all; a host that never boots is
+// inconclusive, never a verdict on the scenario.
 func goTest(o options, d testgen.Discrimination, nullOps string, run goTestRunner) (runOutcome, string) {
 	var output string
 	for range hostBootAttempts {
 		var runErr error
-		output, runErr = run(o.root, []string{"GOWORK=off", "AIARCH_NULL_OPS=" + nullOps},
-			"test", "-count=1", "-v", "-run", "^"+d.Test+"$", "./"+d.Package+"/")
-		out := classify(output, runErr, d.Test)
+		output, runErr = run(o.root, []string{"GOWORK=off", "AIARCH_NULL_OPS=" + nullOps}, scenarioArgs(d)...)
+		out := classifyRun(d, output, runErr)
 		if _, failed := out.(ranFailed); !failed || !hostBootFailure.MatchString(output) {
 			return out, output
 		}
@@ -130,7 +177,7 @@ type scenarioRuns struct {
 func groupByScenario(runs []testgen.Discrimination) []scenarioRuns {
 	var out []scenarioRuns
 	for _, d := range runs {
-		if n := len(out); n > 0 && out[n-1].test.Package == d.Package && out[n-1].test.Test == d.Test {
+		if n := len(out); n > 0 && out[n-1].test.Package == d.Package && out[n-1].test.UIConfig == d.UIConfig && out[n-1].test.Test == d.Test {
 			out[n-1].runs = append(out[n-1].runs, d)
 			continue
 		}
@@ -211,12 +258,13 @@ func discriminateScenario(o options, sc scenarioRuns, out io.Writer, run goTestR
 	return nil
 }
 
-// discriminate runs every Go scenario once against its real subject and, when that passes, once per
-// stimulus operation with that operation nulled (AIARCH_NULL_OPS). It prints
+// discriminate runs every scenario (Go, and web through the scenario host) once against its real
+// subject and, when that passes, once per stimulus operation with that operation nulled
+// (AIARCH_NULL_OPS). It prints
 // `TP-DISCRIMINATE <component> <scenario> <op>` for each pair that still passes, and
 // `TP-BROKEN <component> <scenario>` for each scenario that does not pass against the real subject
-// (its null runs would prove nothing). Scenarios the run cannot execute yet (web and machine
-// clients, which need the booted server) are announced, not silently dropped.
+// (its null runs would prove nothing). Scenarios the run cannot execute, because a step reaches no
+// generated Manager operation to null, are announced, not silently dropped.
 func discriminate(o options, gen testgen.Output, out io.Writer, run goTestRunner) error {
 	if err := announceSkipped(out, gen.Skipped); err != nil {
 		return err

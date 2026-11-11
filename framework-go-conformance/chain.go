@@ -25,6 +25,7 @@ const (
 	platformModulePrefix = "github.com/mixofreality-studio/archistrator-platform/"
 	appGeneratorModule   = platformModulePrefix + "framework-go-app-generator"
 	nullgenTool          = appGeneratorModule + "/cmd/nullgen"
+	webscenariosTool     = platformModulePrefix + "framework-go-scenariohost/cmd/webscenarios"
 	statePath            = ".aiarch/state/project.json"
 	webDir               = "webApp"
 	stderrTail           = 16 << 10
@@ -284,8 +285,8 @@ func tail(s string) string {
 
 // scaffold seats the managed app scaffold (the same file set a project is born with),
 // the fixture as its project.json, and points every platform module the app requires at
-// the checkout under test, adding the nullgen tool the published scaffold lacks until
-// the release carrying cmd/nullgen.
+// the checkout under test, adding the nullgen and webscenarios tools the published
+// scaffold lacks until the release carrying cmd/nullgen and cmd/webscenarios.
 func scaffold(dir, fixture string, raw []byte, platform string) error {
 	files, err := methodassets.ScaffoldFiles(methodassets.ScaffoldData{
 		ModulePath: "example.com/conformance/" + fixture, AppSlug: "aiarch-app",
@@ -337,7 +338,7 @@ func localizeModule(dir, platform string) error {
 	if err != nil {
 		return err
 	}
-	args := []string{"mod", "edit", "-tool=" + nullgenTool}
+	args := []string{"mod", "edit", "-tool=" + nullgenTool, "-tool=" + webscenariosTool}
 	for _, m := range replacedModules(string(gomod), platform) {
 		local := filepath.Join(platform, strings.TrimPrefix(m, platformModulePrefix))
 		if _, err := os.Stat(filepath.Join(local, "go.mod")); err != nil { // #nosec G703 -- a sibling of this checkout, named by the scaffold's own go.mod

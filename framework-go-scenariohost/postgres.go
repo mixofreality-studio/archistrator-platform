@@ -18,7 +18,10 @@ const pgTimeout = 30 * time.Second
 // still open to it) when t ends. A launched app's migrations and data land there, so two apps
 // launched into one host see none of each other's rows. The test is skipped where Postgres is
 // not booted (-short), as Input is.
-func (h *Host) PostgresDatabase(t *testing.T) string {
+func (h *Host) PostgresDatabase(t *testing.T) string { return h.postgresDatabase(t) }
+
+// postgresDatabase is PostgresDatabase over the part of a test a launch uses (launchT).
+func (h *Host) postgresDatabase(t launchT) string {
 	t.Helper()
 	if h.PostgresURL == "" {
 		t.Skip("scenariohost: postgres is not booted under -short")
@@ -69,7 +72,7 @@ func (h *Host) PostgresDSN() string {
 // followLaunch makes dsn the database in-process components connect to (PostgresDSN) until t ends.
 // The host is shared by every test of the package, so the previous answer comes back with the
 // launch's database dropped: a later test never reads one that is gone.
-func (h *Host) followLaunch(t *testing.T, dsn string) {
+func (h *Host) followLaunch(t launchT, dsn string) {
 	h.launchMu.Lock()
 	prev := h.appDatabase
 	h.appDatabase = dsn

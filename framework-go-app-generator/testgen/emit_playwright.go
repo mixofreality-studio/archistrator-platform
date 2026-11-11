@@ -9,7 +9,6 @@ import (
 	"regexp"
 	"slices"
 	"strings"
-	"time"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
 )
@@ -41,21 +40,45 @@ func emitPlaywright(out *Output, cfg Config, web webEnv, plan componentPlan) err
 		return err
 	}
 	for _, bs := range plan.Scenarios {
-		if plan.Design == nil && bs.Binding.Skip == nil && len(bs.Steps) > 0 {
-			return fmt.Errorf("testgen: %s %s: no uiDesign is recorded for the surface, so no element can be located: record its UI design (screens and elements) first", plan.Key, bs.Scenario.ID)
+		if err := emitScenarioSpec(out, dir, web, plan, design, bs); err != nil {
+			return err
 		}
-		spec, warnings, err := playwrightSpec(plan, bs, design, web)
-		if err != nil {
-			return fmt.Errorf("testgen: %s %s: %w", plan.Key, bs.Scenario.ID, err)
-		}
-		out.Warnings = append(out.Warnings, warnings...)
-		out.Generated[path.Join(dir, bs.Scenario.ID+".spec.gen.ts")] = []byte(spec)
 	}
 	out.Generated[path.Join(dir, "elements.gen.ts")] = []byte(elementsTS(plan.Key, design))
 	out.Generated[path.Join(dir, "runtime.gen.ts")] = []byte(genHeader + "\n" + tsRuntimeSource)
 	out.Generated[path.Join(dir, "surface.spec.gen.ts")] = []byte(surfaceSpecTS(plan.Key, design))
 	out.Generated[path.Join(dir, "playwright.config.gen.ts")] = []byte(playwrightConfig(playwrightResultsDir(plan.Key)))
 	out.Generated[path.Join(dir, "reporter.gen.ts")] = []byte(playwrightReporter)
+	return nil
+}
+
+// emitScenarioSpec emits one binding's spec under dir.
+func emitScenarioSpec(out *Output, dir string, web webEnv, plan componentPlan, design methodcheck.UIDesignRecord, bs boundScenario) error {
+	if plan.Design == nil && bs.Binding.Skip == nil && len(bs.Steps) > 0 {
+		return fmt.Errorf("testgen: %s %s: no uiDesign is recorded for the surface, so no element can be located: record its UI design (screens and elements) first", plan.Key, bs.Scenario.ID)
+	}
+	if err := refuseAdvanceClock(plan.Key, bs); err != nil {
+		return err
+	}
+	spec, warnings, err := playwrightSpec(plan, bs, design, web)
+	if err != nil {
+		return fmt.Errorf("testgen: %s %s: %w", plan.Key, bs.Scenario.ID, err)
+	}
+	out.Warnings = append(out.Warnings, warnings...)
+	out.Generated[path.Join(dir, bs.Scenario.ID+".spec.gen.ts")] = []byte(spec)
+	return nil
+}
+
+// refuseAdvanceClock refuses a web binding that arranges advanceClock. The clock moves only on the
+// scenario host; the booted server's components read real time, so the arrange would do nothing to
+// the app under test and the scenario would assert against a world it did not set up. Never skipped,
+// never emitted: earmark E17 is a model-declared clock for the composition root.
+func refuseAdvanceClock(key string, bs boundScenario) error {
+	for _, a := range bs.Binding.Arrange {
+		if _, ok := a.(methodcheck.AdvanceClock); ok {
+			return fmt.Errorf("testgen: %s scenario %q arranges advanceClock, which a booted server cannot honour yet (E17); arrange state through a contract call or seedResource instead", key, bs.Scenario.ID)
+		}
+	}
 	return nil
 }
 
@@ -157,19 +180,11 @@ func (w *specWriter) file() string {
 
 // arrange emits the binding's typed setup, in the plan's order, ahead of the first action. The switch is
 // exhaustive over the sealed ArrangeCall and has no default, so gochecksumtype fails the build of a
-// fifth kind nobody emits. A contract call goes to the component's generated REST route. The other
-// three are the scenario host's, and no generated server serves its endpoint yet (the composed server
-// answers an unknown POST with 405, so the endpoint cannot be probed for): a scenario that needs one is
-// skipped, with that reason, before it does anything, until Plan 3 adds /__scenariohost.
+// fifth kind nobody emits. A contract call goes to the component's generated REST route; failNext and
+// seedResource are the scenario host's, performed through the local profile's /__scenariohost endpoint
+// (tsruntime's arrange). advanceClock never reaches here: refuseAdvanceClock refused it.
 func (w *specWriter) arrange(bs boundScenario) error {
-	if kinds := hostArrangeKinds(bs.Binding.Arrange); len(kinds) > 0 {
-		w.line("// arrange %s needs the scenario host: skipped until the local profile serves /__scenariohost", strings.Join(kinds, ", "))
-		w.line("test.skip(true, %s);", tsStr(scenarioHostSkipReason(kinds)))
-	}
 	for i, a := range bs.Binding.Arrange {
-		if isHostArrange(a) {
-			continue
-		}
 		w.line("// arrange %d: %s", i+1, a.Kind())
 		w.use("arrange")
 		literal, err := w.arrangeLiteral(a)
@@ -179,29 +194,6 @@ func (w *specWriter) arrange(bs boundScenario) error {
 		w.line("await arrange(testInfo, %s);", literal)
 	}
 	return nil
-}
-
-// isHostArrange reports whether the arrange step is one the scenario host performs rather than a
-// contract call.
-func isHostArrange(a methodcheck.ArrangeCall) bool {
-	_, contract := a.(methodcheck.ContractCall)
-	return !contract
-}
-
-// hostArrangeKinds is the distinct kinds of the scenario host's arrange steps, in plan order.
-func hostArrangeKinds(calls []methodcheck.ArrangeCall) []string {
-	var kinds []string
-	for _, a := range calls {
-		if isHostArrange(a) && !slices.Contains(kinds, string(a.Kind())) {
-			kinds = append(kinds, string(a.Kind()))
-		}
-	}
-	return kinds
-}
-
-// scenarioHostSkipReason is the reason a scenario arranging kinds is skipped.
-func scenarioHostSkipReason(kinds []string) string {
-	return "arrange " + strings.Join(kinds, ", ") + " needs the local-profile /__scenariohost endpoint, which no generated server serves yet"
 }
 
 // arrangeLiteral is one ArrangeCall as the runtime's ArrangeCall literal.
@@ -214,10 +206,7 @@ func (w *specWriter) arrangeLiteral(a methodcheck.ArrangeCall) (string, error) {
 		}
 		return "{ kind: 'contractCall', " + call + " }", nil
 	case methodcheck.AdvanceClock:
-		if _, err := time.ParseDuration(v.Duration); err != nil {
-			return "", fmt.Errorf("advanceClock duration %q: %w", v.Duration, err)
-		}
-		return "{ kind: 'advanceClock', duration: " + tsStr(v.Duration) + " }", nil
+		return "", fmt.Errorf("advanceClock (%s) is refused for a web scenario (E17)", v.Duration)
 	case methodcheck.FailNext:
 		return "{ kind: 'failNext', component: " + tsStr(v.Component) + ", operation: " + tsStr(v.Operation) + ", errorCode: " + tsStr(v.ErrorCode) + " }", nil
 	case methodcheck.SeedResource:

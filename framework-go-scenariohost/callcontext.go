@@ -81,9 +81,16 @@ func stringsOf(v any) []string {
 	return nil
 }
 
+// fataler is the part of *testing.T the principal mapping uses; the T-free launch (LaunchWeb)
+// satisfies it too.
+type fataler interface {
+	Helper()
+	Fatalf(format string, args ...any)
+}
+
 // securityPrincipal is p as the framework's principal. A Principal with no Subject fails the test: a
 // call with no identity is not a call made as someone.
-func securityPrincipal(t *testing.T, p Principal) security.Principal {
+func securityPrincipal(t fataler, p Principal) security.Principal {
 	t.Helper()
 	if p.Subject == "" {
 		t.Fatalf("scenariohost: Principal has no Subject")

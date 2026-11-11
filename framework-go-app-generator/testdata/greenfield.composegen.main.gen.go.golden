@@ -221,6 +221,14 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 		OrderManager:       orderManager,
 	}
 	webManagers = hooks.WrapManagers(webManagers)
+	scenariohostURL, err := cfg.LocalScenariohostURL(hooks.ResolveProfile(cfg))
+	if err != nil {
+		return err
+	}
+	webManagers, err = applyFaults(hooks.ResolveProfile(cfg), scenariohostURL, webManagers)
+	if err != nil {
+		return err
+	}
 	webManagers, err = applyNullOps(hooks.ResolveProfile(cfg), webManagers)
 	if err != nil {
 		return err
@@ -232,6 +240,9 @@ func RunGenerated(cfg *Config, hooks Hooks, logger *slog.Logger) error {
 	)
 	root := http.NewServeMux()
 	root.Handle("/", genServer)
+	if scenariohostURL != "" {
+		root.Handle("/__scenariohost/", arrangeForwarder(scenariohostURL))
+	}
 	hooks.ExtraMounts(root, cfg, dev, validator, sec, webManagers)
 	handler := otelhttp.NewHandler(root, serviceName)
 	srv := &http.Server{

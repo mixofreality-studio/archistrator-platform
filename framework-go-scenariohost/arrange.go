@@ -67,17 +67,27 @@ func (h *Host) Clock() Clock { return h }
 // reads Host.Now - the RA contexts the generated constructors build.
 func (h *Host) AdvanceClock(t *testing.T, d time.Duration) {
 	t.Helper()
+	undo, err := h.advanceClock(d)
+	if err != nil {
+		t.Fatalf("scenariohost: AdvanceClock: %v", err)
+	}
+	t.Cleanup(undo)
+}
+
+// advanceClock is AdvanceClock without a testing.T (the arrange server's core): it moves the host
+// clock forward by d and returns what undoes the shift. A negative d is refused.
+func (h *Host) advanceClock(d time.Duration) (undo func(), err error) {
 	if d < 0 {
-		t.Fatalf("scenariohost: AdvanceClock: negative duration %v", d)
+		return nil, fmt.Errorf("negative duration %v", d)
 	}
 	h.arrange.mu.Lock()
 	h.arrange.clockOffset += d
 	h.arrange.mu.Unlock()
-	t.Cleanup(func() {
+	return func() {
 		h.arrange.mu.Lock()
 		h.arrange.clockOffset -= d
 		h.arrange.mu.Unlock()
-	})
+	}, nil
 }
 
 // FailNext registers a one-shot fault: the next call of component's op fails
@@ -87,19 +97,29 @@ func (h *Host) AdvanceClock(t *testing.T, d time.Duration) {
 // TakeFault before each call.
 func (h *Host) FailNext(t *testing.T, component, op, errorCode string) {
 	t.Helper()
+	undo, err := h.failNext(component, op, errorCode)
+	if err != nil {
+		t.Fatalf("scenariohost: FailNext: %v", err)
+	}
+	t.Cleanup(undo)
+}
+
+// failNext is FailNext without a testing.T (the arrange server's core): it registers the fault and
+// returns what drops it if nothing consumed it.
+func (h *Host) failNext(component, op, errorCode string) (undo func(), err error) {
 	if component == "" || op == "" || errorCode == "" {
-		t.Fatalf("scenariohost: FailNext needs a component, an operation and an error code (got %q, %q, %q)", component, op, errorCode)
+		return nil, fmt.Errorf("needs a component, an operation and an error code (got %q, %q, %q)", component, op, errorCode)
 	}
 	h.arrange.mu.Lock()
 	h.arrange.nextFaultID++
 	id := h.arrange.nextFaultID
 	h.arrange.faults = append(h.arrange.faults, fault{id: id, component: component, op: op, errorCode: errorCode})
 	h.arrange.mu.Unlock()
-	t.Cleanup(func() {
+	return func() {
 		h.arrange.mu.Lock()
 		defer h.arrange.mu.Unlock()
 		h.arrange.faults = slices.DeleteFunc(h.arrange.faults, func(f fault) bool { return f.id == id })
-	})
+	}, nil
 }
 
 // TakeFault consumes the oldest fault registered for (component, op) and

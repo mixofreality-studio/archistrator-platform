@@ -38,6 +38,10 @@ type Config struct {
 	// DevPrincipals is the framework's local-profile principal allowlist (devPrincipalsEnv):
 	// read it through LocalDevPrincipals, never directly.
 	DevPrincipals string
+
+	// ScenariohostURL is the framework's local-profile scenario host address (scenariohostURLEnv):
+	// read it through LocalScenariohostURL, never directly.
+	ScenariohostURL string
 }
 
 // LoadConfig reads the environment into a Config, returning a single error
@@ -48,6 +52,7 @@ func LoadConfig() (*Config, error) {
 		ListenAddr:             getenvString("APP_LISTEN_ADDR", ":8080"),
 		DevPrincipal:           getenv(devPrincipalEnv),
 		DevPrincipals:          getenv(devPrincipalsEnv),
+		ScenariohostURL:        getenv(scenariohostURLEnv),
 	}
 
 	var missing []string
@@ -142,6 +147,22 @@ func (c *Config) LocalDevPrincipals(profile string) (map[string]security.Princip
 		out[e.Subject] = security.Principal{Kind: kind, Subject: e.Subject, Roles: e.Roles, Claims: e.Claims}
 	}
 	return out, nil
+}
+
+// scenariohostURLEnv names the variable Config.ScenariohostURL is read from.
+const scenariohostURLEnv = "APP_SCENARIOHOST_URL"
+
+// LocalScenariohostURL is the address of the scenario host's arrange server under profile: the
+// configured one under the "local" profile, "" when unset. Set under any other profile it is an
+// error naming the variable: the app must refuse to boot.
+func (c *Config) LocalScenariohostURL(profile string) (string, error) {
+	if c.ScenariohostURL == "" {
+		return "", nil
+	}
+	if profile != "local" {
+		return "", fmt.Errorf("%s is set under the %q profile: the scenario host address is honoured only under the local profile; unset it", scenariohostURLEnv, profile)
+	}
+	return c.ScenariohostURL, nil
 }
 
 // getenv reads and trims an environment variable.

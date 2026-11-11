@@ -49,6 +49,7 @@ func TestInputsAreTheVariablesTheConfigReads(t *testing.T) {
 	}
 	read["APP_DEV_PRINCIPAL"] = strings.Contains(src, `const devPrincipalEnv = "APP_DEV_PRINCIPAL"`)
 	read["APP_DEV_PRINCIPALS"] = strings.Contains(src, `const devPrincipalsEnv = "APP_DEV_PRINCIPALS"`)
+	read["APP_SCENARIOHOST_URL"] = strings.Contains(src, `const scenariohostURLEnv = "APP_SCENARIOHOST_URL"`)
 	var names []string
 	for _, in := range inputs {
 		names = append(names, in.Env)

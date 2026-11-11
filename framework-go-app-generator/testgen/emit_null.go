@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"fmt"
 	"go/format"
+	"path"
+	"regexp"
 	"slices"
 	"strconv"
 	"strings"
@@ -31,15 +33,26 @@ const nullFileName = "null.gen_test.go"
 const nullOpsEnv = "AIARCH_NULL_OPS"
 
 // Discrimination is one null-subject run: the scenario's test, in its package, with the operation
-// NullOp ("<Iface>.<Op>") nulled.
+// NullOp ("<Iface>.<Op>") nulled. A Go scenario names its Package and Test; a web scenario names its
+// Playwright project instead (UIDir, UIConfig, UIGrep) and is run through the scenario host
+// (go tool webscenarios), with Test the scenario id.
 type Discrimination struct {
 	Component string // the serviceContracts key the scenario belongs to
 	Scenario  string // the scenario id
 	Op        string // the stimulus operation
-	Package   string // the module-relative Go package holding the test
-	Test      string // the Go test function
+	Package   string // the module-relative Go package holding the test ("" for a web scenario)
+	Test      string // the Go test function (the scenario id for a web scenario)
 	NullOp    string // the AIARCH_NULL_OPS value
+	// UIDir is the Playwright project directory relative to the module root, and UIConfig the
+	// generated config relative to it; both are "" for a Go scenario. UIGrep selects the scenario's
+	// Playwright test by its title.
+	UIDir    string
+	UIConfig string
+	UIGrep   string
 }
+
+// Web reports whether the run is a Playwright scenario run through the scenario host.
+func (d Discrimination) Web() bool { return d.UIConfig != "" }
 
 // DiscriminationSkip is a scenario the run cannot execute yet, so it is neither killed nor a survivor.
 type DiscriminationSkip struct {
@@ -50,7 +63,10 @@ type DiscriminationSkip struct {
 
 // Reasons a runnable scenario is not part of the Go run.
 const (
-	reasonWeb = "a web scenario runs against the booted server, which the Playwright half wires in plan 3"
+	// reasonWebOp is a web client's operation that reaches no single generated Manager operation:
+	// the null run of a web scenario nulls the Manager operation in the launched server, so an
+	// operation with none, or with several candidates, names nothing to null.
+	reasonWebOp = "a web client's operation reaches no single generated Manager operation, so there is nothing to null"
 	// reasonClientOp is a machine client's call that reaches no generated Manager operation: the
 	// null run of a client scenario nulls the Manager operation in the launched server, so a call
 	// with none names nothing to null.
@@ -63,19 +79,71 @@ func nullSubjectFunc(plan componentPlan) string { return "nullSubject" + ifaceNa
 // runnable reports whether the scenario has steps the run can null.
 func (bs boundScenario) runnable() bool { return bs.Binding.Skip == nil && len(bs.Steps) > 0 }
 
-// skipDiscrimination records every runnable scenario of plan as not executed, with why.
-func (o *Output) skipDiscrimination(plan componentPlan, reason string) {
+// webDiscriminations lists the null-subject runs of a web client's runnable scenarios: per scenario,
+// one per distinct operation its steps drive, nulling the Manager operation that operation reaches
+// ("<Iface>.<Op>", the name the composed server's applyNullOps matches) in the server the run
+// launches, which inherits AIARCH_NULL_OPS from `go tool webscenarios`. An operation that reaches no
+// single generated Manager operation names nothing to null, so it is a recorded skip, never a silent one.
+func (o *Output) webDiscriminations(cfg Config, web webEnv, plan componentPlan) {
+	uiDir := path.Dir(cfg.UITestsDir)
+	uiConfig := path.Join(path.Base(cfg.UITestsDir), plan.Key, "playwright.config.gen.ts")
 	for _, bs := range plan.Scenarios {
 		if bs.runnable() {
-			o.Skipped = append(o.Skipped, DiscriminationSkip{Component: plan.Key, Scenario: bs.Scenario.ID, Reason: reason})
+			o.webScenarioRuns(web, plan, bs, uiDir, uiConfig)
 		}
 	}
+}
+
+// webScenarioRuns is one runnable web scenario's runs: one per distinct operation its steps drive, in
+// step order.
+func (o *Output) webScenarioRuns(web webEnv, plan componentPlan, bs boundScenario, uiDir, uiConfig string) {
+	var seen []string
+	for _, st := range bs.Steps {
+		if slices.Contains(seen, st.Op.Name) {
+			continue
+		}
+		seen = append(seen, st.Op.Name)
+		route, ok := web.managerOp(st.Op.Name)
+		if !ok {
+			o.Skipped = append(o.Skipped, DiscriminationSkip{Component: plan.Key, Scenario: bs.Scenario.ID, Reason: reasonWebOp + ": " + st.Op.Name})
+			continue
+		}
+		o.Discriminate = append(o.Discriminate, Discrimination{
+			Component: plan.Key, Scenario: bs.Scenario.ID, Op: st.Op.Name,
+			Test: bs.Scenario.ID, NullOp: route.Manager + "." + route.Op,
+			UIDir: uiDir, UIConfig: uiConfig, UIGrep: webScenarioGrep(bs.Scenario.ID),
+		})
+	}
+}
+
+// managerOp is the generated Manager operation a web client's operation of that name drives: the one
+// route of that operation name over every Manager. Several Managers with an operation of the name, or
+// none, resolve to nothing.
+func (w webEnv) managerOp(op string) (restRoute, bool) {
+	var found []restRoute
+	for _, key := range sortedKeys(w.routes) {
+		if r, ok := w.routes[key][op]; ok {
+			found = append(found, r)
+		}
+	}
+	if len(found) != 1 {
+		return restRoute{}, false
+	}
+	return found[0], true
+}
+
+// webScenarioGrep selects one scenario's Playwright test. Playwright matches --grep against the test's
+// title path joined with spaces, and a generated title is "<id> — <title>": the id is anchored on the
+// left by the space before the title (or the subject's start) and on the right by the " — " separator,
+// so x-P1 selects neither y-x-P1 nor x-P10.
+func webScenarioGrep(id string) string {
+	return "(?:^|\\s)" + regexp.QuoteMeta(id) + " — "
 }
 
 // sortDiscriminations puts the run list in a stable order.
 func sortDiscriminations(o *Output) {
 	slices.SortStableFunc(o.Discriminate, func(a, b Discrimination) int {
-		return strings.Compare(a.Package+"\x00"+a.Test+"\x00"+a.NullOp, b.Package+"\x00"+b.Test+"\x00"+b.NullOp)
+		return strings.Compare(a.Package+"\x00"+a.UIConfig+"\x00"+a.Test+"\x00"+a.NullOp, b.Package+"\x00"+b.UIConfig+"\x00"+b.Test+"\x00"+b.NullOp)
 	})
 	slices.SortStableFunc(o.Skipped, func(a, b DiscriminationSkip) int {
 		return strings.Compare(a.Component+"\x00"+a.Scenario, b.Component+"\x00"+b.Scenario)

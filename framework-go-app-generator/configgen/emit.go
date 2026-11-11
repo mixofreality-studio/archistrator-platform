@@ -28,6 +28,7 @@ func emitFile(d *projectmodel.Deployment, cfg Config, infra []infraField, settin
 	writeDormantWarnings(&b, infra)
 	writeDevPrincipal(&b, cfg)
 	writeDevPrincipals(&b, cfg)
+	writeScenariohostURL(&b, cfg)
 	writeHelpers(&b, infra, settings)
 
 	src, err := format.Source(b.Bytes())
@@ -110,6 +111,9 @@ func writeStruct(b *bytes.Buffer, infra []infraField, settings []settingField) {
 	b.WriteString("\n\t// DevPrincipals is the framework's local-profile principal allowlist (devPrincipalsEnv):\n")
 	b.WriteString("\t// read it through LocalDevPrincipals, never directly.\n")
 	fmt.Fprintf(b, "\t%s string\n", devPrincipalsField)
+	b.WriteString("\n\t// ScenariohostURL is the framework's local-profile scenario host address (scenariohostURLEnv):\n")
+	b.WriteString("\t// read it through LocalScenariohostURL, never directly.\n")
+	fmt.Fprintf(b, "\t%s string\n", scenariohostURLField)
 	b.WriteString("}\n\n")
 }
 
@@ -131,6 +135,7 @@ func writeLoadConfig(b *bytes.Buffer, cfg Config, infra []infraField, settings [
 	}
 	fmt.Fprintf(b, "\t\t%s: getenv(devPrincipalEnv),\n", devPrincipalField)
 	fmt.Fprintf(b, "\t\t%s: getenv(devPrincipalsEnv),\n", devPrincipalsField)
+	fmt.Fprintf(b, "\t\t%s: getenv(scenariohostURLEnv),\n", scenariohostURLField)
 	b.WriteString("\t}\n\n")
 	b.WriteString("\tvar missing []string\n")
 	for _, f := range infra {
@@ -288,6 +293,33 @@ func (c *Config) LocalDevPrincipals(profile string) (map[string]security.Princip
 		out[e.Subject] = security.Principal{Kind: kind, Subject: e.Subject, Roles: e.Roles, Claims: e.Claims}
 	}
 	return out, nil
+}
+
+`
+
+// scenariohostURLField is the Config field the local-profile scenario host address is read into.
+const scenariohostURLField = "ScenariohostURL"
+
+// writeScenariohostURL emits the scenario host address's env name and its one reader (Plan 3 Task
+// 3.5). Like the dev principal it is local-only: a web scenario run points the composed server at the
+// arrange server it serves, and a process that is told to under any other profile REFUSES by name,
+// since a deployed binary must never forward requests to, or take faults from, a test host.
+func writeScenariohostURL(b *bytes.Buffer, cfg Config) {
+	fmt.Fprintf(b, "// scenariohostURLEnv names the variable Config.ScenariohostURL is read from.\nconst scenariohostURLEnv = %q\n\n", ScenariohostURLEnv(cfg.EnvPrefix))
+	b.WriteString(strings.NewReplacer("{{profile}}", devPrincipalProfile, "{{field}}", scenariohostURLField).Replace(localScenariohostURLSource))
+}
+
+const localScenariohostURLSource = `// LocalScenariohostURL is the address of the scenario host's arrange server under profile: the
+// configured one under the "{{profile}}" profile, "" when unset. Set under any other profile it is an
+// error naming the variable: the app must refuse to boot.
+func (c *Config) LocalScenariohostURL(profile string) (string, error) {
+	if c.{{field}} == "" {
+		return "", nil
+	}
+	if profile != "{{profile}}" {
+		return "", fmt.Errorf("%s is set under the %q profile: the scenario host address is honoured only under the {{profile}} profile; unset it", scenariohostURLEnv, profile)
+	}
+	return c.{{field}}, nil
 }
 
 `

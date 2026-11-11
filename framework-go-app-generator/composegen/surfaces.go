@@ -130,6 +130,11 @@ func writeRootMounts(b *strings.Builder, r *resolved) {
 	} else {
 		b.WriteString("\troot.Handle(\"/\", genServer)\n")
 	}
+	// Plan 3 Task 3.5: the arrange endpoint of web scenarios, mounted only when the scenario host's
+	// address is configured (local profile alone), forwarding to the host's arrange server.
+	b.WriteString("\tif scenariohostURL != \"\" {\n")
+	b.WriteString("\t\troot.Handle(\"/__scenariohost/\", arrangeForwarder(scenariohostURL))\n")
+	b.WriteString("\t}\n")
 	if len(r.mcpMounts) == 0 {
 		return
 	}

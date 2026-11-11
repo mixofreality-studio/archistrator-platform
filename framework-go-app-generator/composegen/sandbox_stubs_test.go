@@ -234,12 +234,33 @@ func (s *service) Authorize(ctx context.Context, p Principal, a Action, r Resour
 	return Decision{Permit: permit && err == nil}, err
 }
 `
-	// The call Context of a Manager interface method, which the generated Null wrappers repeat.
+	// The call Context of a Manager interface method, which the generated Null wrappers repeat, and the
+	// error kinds the generated fault wrapper answers with.
 	files["_stubs/framework-go/manager/manager.go"] = `package manager
 
 import "context"
 
 type Context struct{ context.Context }
+
+type Kind int
+
+const (
+	Unknown Kind = iota
+	ContractMisuse
+	NotFound
+	Unauthorized
+	FailedPrecondition
+	Infrastructure
+)
+
+type Error struct {
+	Kind   Kind
+	Detail string
+}
+
+func New(kind Kind, detail string) *Error { return &Error{Kind: kind, Detail: detail} }
+
+func (e *Error) Error() string { return e.Detail }
 `
 	files["_stubs/framework-go/utilities/telemetry/telemetry.go"] = `package telemetry
 

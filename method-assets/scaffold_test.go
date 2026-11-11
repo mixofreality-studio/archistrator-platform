@@ -360,8 +360,8 @@ func TestScaffoldDescribesTheDeclarativeTestGates(t *testing.T) {
 	mk := string(out["Makefile.scenarios.mk"])
 	for _, want := range []string{
 		"-discriminate", "TP-DISCRIMINATE",
-		"surface.spec.gen.ts", "--project=surface",
-		"PHONY: gen-models gen-models-check gen-null gen-tests gen-tests-check test-scenarios test-discriminate surface-check run-local",
+		"surface.spec.gen.ts", "-project surface", "go tool webscenarios",
+		"PHONY: gen-models gen-models-check gen-null gen-tests gen-tests-check test-scenarios test-discriminate surface-check test-web run-local",
 	} {
 		if !strings.Contains(mk, want) {
 			t.Errorf("Makefile.scenarios.mk missing %q:\n%s", want, mk)

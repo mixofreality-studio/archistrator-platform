@@ -28,9 +28,13 @@
 //	          B broken`. A run that did not execute the scenario (the package does not
 //	          build, the test skipped, no test matched, `[no test files]` with exit 0, or
 //	          the test binary died before reporting) is inconclusive: it is the tool's
-//	          error (exit 1, no survivor or broken line), never a kill or a pass. Web and
-//	          machine-client scenarios need the booted server (plan 3) and are announced
-//	          as skipped. Run it on a current tree (-check first); it does not write.
+//	          error (exit 1, no survivor or broken line), never a kill or a pass. Machine-client
+//	          scenarios null the Manager operation a call reaches in the app the test launches;
+//	          web scenarios run through the scenario host (go tool webscenarios, which boots the
+//	          app and serves the arrange endpoint) with that Manager operation nulled in the
+//	          server it launches. A step that reaches no single generated Manager operation has
+//	          nothing to null and is announced as skipped. Run it on a current tree (-check
+//	          first); it does not write.
 //
 // Without -check it rewrites every generated file (nothing testgen emits is agent-owned: a
 // scenario's subject, probes and arrange calls, and a browser spec's locators, are all

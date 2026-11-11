@@ -1,6 +1,7 @@
 package scenariohost
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -47,14 +48,7 @@ const (
 // registered on t and a Stop that leaves anything behind fails the test.
 func (h *Host) LaunchDevstack(t *testing.T, moduleDir string, principals ...Principal) *App {
 	t.Helper()
-	if moduleDir == "" {
-		moduleDir = moduleRoot()
-	}
-	env := h.launchEnv(t, moduleDir, principals)
-	app, err := devstack.Launch(t.Context(), moduleDir, env, nil)
-	if err != nil {
-		t.Fatalf("scenariohost: LaunchDevstack: %v", err)
-	}
+	app := h.launchApp(t, moduleDir, principals, "")
 	t.Cleanup(func() {
 		if t.Failed() {
 			t.Logf("scenariohost: devstack output for %s:\n%s", app.BaseURL, app.Log())
@@ -66,10 +60,37 @@ func (h *Host) LaunchDevstack(t *testing.T, moduleDir string, principals ...Prin
 	return app
 }
 
+// launchT is the part of a test a launch uses: a *testing.T, or the session of a production job
+// binary (LaunchWeb), which has no testing.T. Fatalf and Skip end the launch, Cleanup registers what
+// gives the launch's database and namespace back.
+type launchT interface {
+	fataler
+	Skip(args ...any)
+	Errorf(format string, args ...any)
+	Cleanup(func())
+	Context() context.Context
+}
+
+// launchApp launches the app at moduleDir ("" = the host's module root) with the environment of one
+// launch (launchEnv) plus, when arrangeURL is set, the address of the arrange server the app forwards
+// /__scenariohost to and takes faults from. The caller owns the returned app's Stop.
+func (h *Host) launchApp(t launchT, moduleDir string, principals []Principal, arrangeURL string) *App {
+	t.Helper()
+	if moduleDir == "" {
+		moduleDir = moduleRoot()
+	}
+	env := h.launchEnv(t, moduleDir, principals, arrangeURL)
+	app, err := devstack.Launch(t.Context(), moduleDir, env, nil)
+	if err != nil {
+		t.Fatalf("scenariohost: LaunchDevstack: %v", err)
+	}
+	return app
+}
+
 // launchEnv is the environment one launch of the app at moduleDir runs with: the host's answer
 // to every local input of the app's deployment (a database and a namespace of this launch's own
 // in place of the host's shared ones) and the dev principal.
-func (h *Host) launchEnv(t *testing.T, moduleDir string, principals []Principal) []string {
+func (h *Host) launchEnv(t launchT, moduleDir string, principals []Principal, arrangeURL string) []string {
 	t.Helper()
 	m, err := projectmodel.LoadFile(filepath.Join(moduleDir, filepath.FromSlash(projectFile)))
 	if err != nil {
@@ -81,6 +102,9 @@ func (h *Host) launchEnv(t *testing.T, moduleDir string, principals []Principal)
 	}
 	inputs := &launchInputs{h: h, t: t}
 	env := h.env(cfg.EnvPrefix, m.EffectiveDeployment(cfg.Container), inputs.value)
+	if arrangeURL != "" {
+		env = append(env, configgen.ScenariohostURLEnv(cfg.EnvPrefix)+"="+arrangeURL)
+	}
 	subject := defaultPrincipal
 	if len(principals) > 0 {
 		subject = principals[0].Subject
@@ -94,7 +118,7 @@ func (h *Host) launchEnv(t *testing.T, moduleDir string, principals []Principal)
 // would carry (securityPrincipal), so a delegated agent is an application principal holding its
 // delegation claim, and a request naming it in X-Dev-Principal reaches the Manager as that agent.
 // A subject listed twice fails the test: the app refuses to boot on one.
-func devPrincipalsJSON(t *testing.T, principals []Principal) string {
+func devPrincipalsJSON(t fataler, principals []Principal) string {
 	t.Helper()
 	type entry struct {
 		Subject string         `json:"subject"`
@@ -125,7 +149,7 @@ func devPrincipalsJSON(t *testing.T, principals []Principal) string {
 // database, as the launcher's single provisioned server would.
 type launchInputs struct {
 	h                   *Host
-	t                   *testing.T
+	t                   launchT
 	database, namespace string
 }
 
@@ -133,17 +157,17 @@ func (l *launchInputs) value(decl projectmodel.InfraDecl, input string) string {
 	switch {
 	case decl.Substrate == projectmodel.SubstratePostgres && input == "URL":
 		if l.database == "" {
-			l.database = l.h.PostgresDatabase(l.t)
+			l.database = l.h.postgresDatabase(l.t)
 			l.h.followLaunch(l.t, l.database)
 		}
 		return l.database
 	case decl.Substrate == projectmodel.SubstrateTemporal && input == "NAMESPACE":
 		if l.namespace == "" {
-			l.namespace = l.h.TemporalNamespaceFor(l.t)
+			l.namespace = l.h.temporalNamespaceFor(l.t)
 		}
 		return l.namespace
 	}
-	return l.h.Input(l.t, decl.Key, decl.Substrate, input)
+	return l.h.input(l.t, decl.Key, decl.Substrate, input)
 }
 
 // appgenConfig is the part of the app's appgen.json the launch reads.
@@ -180,10 +204,13 @@ func readAppgen(moduleDir string) (appgenConfig, error) {
 // queues and run each other's workflows; one namespace per launch keeps them apart. The dev
 // server keeps the namespace until the process ends, and its database persists across runs, so
 // the name carries the host's boot time as well as a counter.
-func (h *Host) TemporalNamespaceFor(t *testing.T) string {
+func (h *Host) TemporalNamespaceFor(t *testing.T) string { return h.temporalNamespaceFor(t) }
+
+// temporalNamespaceFor is TemporalNamespaceFor over the part of a test a launch uses (launchT).
+func (h *Host) temporalNamespaceFor(t launchT) string {
 	t.Helper()
 	if h.temporal == nil {
-		t.Fatal("scenariohost: TemporalNamespaceFor: the host has no Temporal dev server")
+		t.Fatalf("scenariohost: TemporalNamespaceFor: the host has no Temporal dev server")
 	}
 	h.launchMu.Lock()
 	h.launches++
