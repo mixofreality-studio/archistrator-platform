@@ -180,3 +180,26 @@ Adaptations to the harvest (the complete list):
   framework-go-projectmodel v0.4.0 lacks. It passes only after projectmodel is released and pinned
   (the Step-3 release), or once `moduleOpts{realHost: true}` also replaces framework-go-projectmodel
   with the local tree.
+
+## Machine clients rebound for the wire (FPC plan 3, Task 3.6)
+
+`todoApi` (REST, 8 scenarios) and `todoMcpServer` (MCP, 20) were authored for an in-process subject and
+never ran before Plan 3 drove them against the launched app. They are rebound so that every scenario
+passes over the wire against the harvested bodies (`TestConformance_ClientsOverWire`):
+
+- Each binding takes the `arrange` of the same-id `listManager` binding (the alice and bob lists the
+  scenario starts from), so the list a step reads or changes exists before the first step.
+- Each step takes the `listManager` step's inputs, its error expectation, and its result (the MCP
+  client's wrapped as `{"result": ...}`, the REST client's plain).
+- Each probe reads the stepped owner's list (`todoListAccess.RecallList`) and expects the list the
+  steps up to it leave: add, reword (a blank wording removes the todo), discard, mark, toggle-all and
+  clear-completed change it; a refused step and a read (`OpenList`) leave it as arranged. A read-only
+  step, which would otherwise prove nothing about the world, carries `before`: the state the probe
+  holds first.
+- No second agent principal was needed: the "outside delegation" scenarios act on bob's list as the
+  agent delegated by alice, and the Manager refuses them (the `team-agent` principal carries the
+  seven intents of its own delegation, written by the scenario host as `Claims["delegations"]`).
+
+`TestConformance_Discriminate_Web` runs the browser half of `-discriminate` through the scenario host.
+The fixture's SPA is the generated scaffold (the harvest's hand-written bodies are the server's), so the
+browser scenarios that assert what the user sees are `TP-BROKEN` against it and are never nulled.

@@ -4,8 +4,8 @@ go 1.25.4
 
 require (
 	github.com/go-git/go-git/v5 v5.19.1
-	github.com/mixofreality-studio/archistrator-platform/framework-go v0.22.0
-	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.24.1
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.23.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.25.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github v0.1.6
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres v0.1.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-temporal v0.2.0

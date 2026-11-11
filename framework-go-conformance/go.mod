@@ -3,11 +3,11 @@ module github.com/mixofreality-studio/archistrator-platform/framework-go-conform
 go 1.25.4
 
 require (
-	github.com/mixofreality-studio/archistrator-platform/framework-go v0.22.0
-	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.24.1
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.23.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.25.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.5.0
-	github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost v0.5.0
-	github.com/mixofreality-studio/archistrator-platform/method-assets v0.24.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost v0.6.0
+	github.com/mixofreality-studio/archistrator-platform/method-assets v0.25.0
 )
 
 require (
@@ -106,7 +106,7 @@ require (
 
 require (
 	github.com/google/jsonschema-go v0.4.3 // indirect
-	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator v0.5.0 // indirect
+	github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator v0.6.0 // indirect
 	github.com/modelcontextprotocol/go-sdk v1.6.1 // indirect
 	github.com/segmentio/asm v1.1.3 // indirect
 	github.com/segmentio/encoding v0.5.4 // indirect

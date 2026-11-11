@@ -9,7 +9,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -38,10 +37,12 @@ const run021Fixture = "todomvc"
 //	discriminate_impl
 //	              over the RUN-021 harvest's hand-written bodies (testdata/todomvc/impl, overlaid
 //	              in place of null.gen.go and the nullgen hooks.go) every generated Go scenario
-//	              passes against its real subject (broken == 0 among components; the machine clients fail exactly
-//	              the implBrokenClients set until Plan 3 Task 3.6) and none survives its stimulus
-//	              being nulled (survivors == 0): the proof that the generated tests discriminate
-//	              a real implementation, which the null build alone cannot give
+//	              passes against its real subject (component and machine client alike, the clients over
+//	              the wire) and none survives its stimulus being nulled (survivors == 0): the proof
+//	              that the generated tests discriminate a real implementation, which the null
+//	              build alone cannot give. The browser scenarios run too, through the scenario
+//	              host: the fixture's SPA is the generated scaffold, so they are TP-BROKEN, never
+//	              nulled
 func TestConformance_RUN021Proof(t *testing.T) {
 	raw, err := Fixture(run021Fixture)
 	if err != nil {
@@ -79,15 +80,23 @@ func TestConformance_RUN021Proof(t *testing.T) {
 		if got.survivors != 0 {
 			t.Errorf("null build: %d survivor(s), want 0", got.survivors)
 		}
-		if want := goScenarios(t, built); got.scenarios != want {
-			t.Errorf("null build: %d scenario(s) discriminated, but %d TestScenario_ functions were generated for Go components", got.scenarios, want)
+		if want := goScenarios(t, built) + len(webScenarioIDs(t, built)); got.scenarios != want {
+			t.Errorf("null build: %d scenario(s) discriminated, but %d were generated (Go components and machine clients, and browser scenarios)", got.scenarios, want)
 		}
-		// The null build is all-null: its "real subject" returns zero results, so every scenario
+		// The null build is all-null: its "real subject" returns zero results, so every Go scenario
 		// that asserts behavior fails there (TP-BROKEN) and is not nulled. Only the scenarios whose
 		// assertions the zero results satisfy reach the null runs; pinning the count makes a change
-		// in what the generators emit (or in the fixture) show up here.
-		if got.broken != nullBuildBroken {
-			t.Errorf("null build: %d broken scenario(s), want %d", got.broken, nullBuildBroken)
+		// in what the generators emit (or in the fixture) show up here. The browser scenarios are
+		// judged by the survivor check only: whether a zero-result server leaves one passing is not
+		// what this subtest pins.
+		goBroken := 0
+		for _, b := range got.brokenList {
+			if b.component != webSurface {
+				goBroken++
+			}
+		}
+		if goBroken != nullBuildBroken {
+			t.Errorf("null build: %d broken Go scenario(s), want %d", goBroken, nullBuildBroken)
 		}
 	})
 	t.Run("vacuous", func(t *testing.T) {
@@ -129,82 +138,39 @@ func run021DiscriminateImpl(t *testing.T, raw []byte) {
 	for _, s := range got.list {
 		t.Errorf("%s scenario %s op %s survives the null subject over the real bodies", s.component, s.scenario, s.op)
 	}
-	// Components must all pass; the machine clients must fail exactly the known set, by ID.
-	var unexpected, gone []string
-	seen := map[string]bool{}
+	// Every Go scenario, machine clients included (they run over the wire since Plan 3 Task 3.3), passes
+	// against the harvested bodies. The browser scenarios do not: the fixture's SPA is the generated
+	// scaffold, the harvest's bodies are the server's. So TP-BROKEN names exactly the browser scenarios.
+	web := webScenarioIDs(t, dir)
+	broken := map[string]bool{}
 	for _, b := range got.brokenList {
-		id := b.component + "/" + b.scenario
-		seen[id] = true
-		if !implBrokenClients[id] {
-			unexpected = append(unexpected, id)
+		if b.component != webSurface {
+			t.Errorf("Go scenario %s/%s fails against the harvested bodies (TP-BROKEN)", b.component, b.scenario)
+			continue
 		}
+		broken[b.scenario] = true
 	}
-	for id := range implBrokenClients {
-		if !seen[id] {
-			gone = append(gone, id)
+	for _, id := range web {
+		if !broken[id] {
+			t.Errorf("browser scenario %s passes against the scaffold SPA: pin which browser scenarios are TP-BROKEN again", id)
 		}
-	}
-	sort.Strings(unexpected)
-	sort.Strings(gone)
-	if len(unexpected) > 0 {
-		t.Errorf("%d scenario(s) fail against the harvested bodies (TP-BROKEN) that are not in implBrokenClients:\n  %s", len(unexpected), strings.Join(unexpected, "\n  "))
-	}
-	if len(gone) > 0 {
-		t.Errorf("%d scenario(s) in implBrokenClients now pass; remove them from the set:\n  %s", len(gone), strings.Join(gone, "\n  "))
 	}
 	if got.survivors != 0 {
 		t.Errorf("%d survivor(s), want 0", got.survivors)
 	}
-	if want := goScenarios(t, dir); got.scenarios != want || want == 0 {
-		t.Errorf("%d scenario(s) discriminated, but %d TestScenario_ functions were generated for Go components", got.scenarios, want)
+	if want := goScenarios(t, dir); want != implScenarios {
+		t.Errorf("%d Go scenario(s) generated, want %d: a scenario was dropped or added", want, implScenarios)
 	}
-	if got.scenarios != implScenarios {
-		t.Errorf("%d scenario(s) discriminated over the harvested bodies, want %d: a scenario was dropped or added", got.scenarios, implScenarios)
+	if want := implScenarios + len(web); got.scenarios != want {
+		t.Errorf("%d scenario(s) discriminated over the harvested bodies, want %d (%d Go and %d browser): a scenario was dropped or added", got.scenarios, want, implScenarios, len(web))
 	}
 }
 
 // implScenarios is how many Go scenarios the todomvc fixture generates: 78 of its components and
 // 28 of its machine clients (todoApi 8, todoMcpServer 20, which run over the wire since Plan 3 Task
-// 3.3). Every one passes against the harvested bodies and none survives its stimulus being nulled.
+// 3.3, and pass since the fixture's client bindings were rebound in Task 3.6). Every one passes
+// against the harvested bodies and none survives its stimulus being nulled.
 const implScenarios = 106
-
-// implBrokenClients is the explicit set, by "component/scenario", of the machine client scenarios that
-// fail over the wire against the harvested bodies; no Go component scenario may be in it. EARMARK (Plan
-// 3 Task 3.6, TestConformance_ClientsOverWire): todoApi (8) and todoMcpServer (20) were authored for the
-// in-process subject and never ran before the machine clients were driven against the launched app; the
-// bindings expect a list already holding t1 "Walk dog" / t2 "Pay rent" and record no arrange for it, and
-// the "outside delegation" scenarios expect a refusal for a principal the plan launches with every intent.
-// The fixture's bindings are reworked there (arrange the alice list explicitly; add a second agent
-// principal without intents), and this set goes to empty.
-var implBrokenClients = map[string]bool{
-	"todoApi/drive-the-list-from-agent-tooling-P1":       true,
-	"todoApi/drive-the-list-from-agent-tooling-P2":       true,
-	"todoApi/resume-the-list-P1":                         true,
-	"todoApi/resume-the-list-P2":                         true,
-	"todoApi/resume-the-list-P3":                         true,
-	"todoApi/work-the-list-P1":                           true,
-	"todoApi/work-the-list-P2":                           true,
-	"todoApi/work-the-list-P3":                           true,
-	"todoMcpServer/add-a-todo-P1":                        true,
-	"todoMcpServer/add-a-todo-P2":                        true,
-	"todoMcpServer/clear-completed-todos-P1":             true,
-	"todoMcpServer/come-back-to-an-intact-list-P1":       true,
-	"todoMcpServer/discard-a-todo-P1":                    true,
-	"todoMcpServer/drive-the-list-from-agent-tooling-P1": true,
-	"todoMcpServer/drive-the-list-from-agent-tooling-P2": true,
-	"todoMcpServer/mark-a-todo-completed-or-active-P1":   true,
-	"todoMcpServer/resume-the-list-P2":                   true,
-	"todoMcpServer/resume-the-list-P3":                   true,
-	"todoMcpServer/review-the-list-in-a-chosen-view-P1":  true,
-	"todoMcpServer/reword-a-todo-P2":                     true,
-	"todoMcpServer/reword-a-todo-P3":                     true,
-	"todoMcpServer/see-how-many-todos-are-left-P1":       true,
-	"todoMcpServer/toggle-all-todos-P1":                  true,
-	"todoMcpServer/toggle-all-todos-P2":                  true,
-	"todoMcpServer/work-the-list-P1":                     true,
-	"todoMcpServer/work-the-list-P2":                     true,
-	"todoMcpServer/work-the-list-P3":                     true,
-}
 
 // goScenarios counts the TestScenario_ functions testgen generated for Go components and machine
 // clients under dir (-discriminate runs both).
@@ -357,8 +323,13 @@ type discriminateRun struct {
 // as the vacuous binding, is a survivor.
 func discriminate(t *testing.T, dir string) discriminateRun {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 40*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Minute)
 	defer cancel()
+	// The browser scenarios run in the app's own uitests project, which an app (not the scaffold)
+	// installs Playwright and its browser in.
+	if _, err := os.Stat(filepath.Join(dir, "uitests", "node_modules")); err != nil {
+		seatUITests(t, ctx, dir)
+	}
 	cmd := exec.CommandContext(ctx, "go", "tool", "testgen", "-project", ".aiarch/state/project.json", // #nosec G204 -- fixed argv
 		"-root", ".", "-uitests", "uitests/generated", "-discriminate")
 	cmd.Dir = dir

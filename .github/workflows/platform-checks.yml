@@ -76,7 +76,7 @@ jobs:
   conformance:
     needs: go
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 120
     permissions:
       contents: read
     steps:
@@ -99,7 +99,7 @@ jobs:
           docker info --format '{{.ServerVersion}}'
       - name: Conformance chain, boot and probe
         working-directory: framework-go-conformance
-        run: GOWORK=off go test -tags conformance ./ -run 'TestConformance_(Chain|Boot|BootTwice_NoOrphans)$' -v -timeout 50m
+        run: GOWORK=off go test -tags conformance ./ -run 'TestConformance_(Chain|Boot|BootTwice_NoOrphans|ClientsOverWire|Discriminate_Web)$|TestDevstackLaunch_|TestMCP_OverWire|TestREST_OverWire|TestPlaywright_ArrangeFailNextRoundTrip' -v -timeout 115m
   conformance-proof:
     needs: go
     runs-on: ubuntu-latest
