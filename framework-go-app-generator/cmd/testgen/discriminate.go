@@ -82,12 +82,33 @@ func testFailed(output, test string) bool {
 	return regexp.MustCompile(`(?m)^--- FAIL: ` + regexp.QuoteMeta(test) + `( |$)`).MatchString(output)
 }
 
-// goTest runs the test of d once, with the operations nullOps nulled ("" runs the real subject: the
-// variable is set empty so an inherited value cannot leak into the run), and classifies it.
+// hostBootAttempts is how many times a scenario run is made when the scenario host (the Temporal dev
+// server, the database, the repository, the launched devstack) does not come up.
+const hostBootAttempts = 3
+
+// hostBootFailure matches the line a generated scenario fails with when the host it runs against did
+// not boot (`scenariohost: temporal: ...`, `scenariohost: LaunchDevstack: ...`): the dev server losing
+// a port or a SQLite lock to another local process, the launched app missing its readiness window.
+// That says nothing about the scenario, and counting it as the scenario's failure makes a clean
+// scenario TP-BROKEN, or a stimulus whose null run never executed look killed.
+var hostBootFailure = regexp.MustCompile(`(?m)^\s*\S+\.go:\d+: scenariohost: (temporal|postgres|git|mkdir|LaunchDevstack):`)
+
+// goTest runs the test of d, with the operations nullOps nulled ("" runs the real subject: the
+// variable is set empty so an inherited value cannot leak into the run), and classifies it. A run
+// whose host did not boot is made again, up to hostBootAttempts times in all; a host that never boots
+// is inconclusive, never a verdict on the scenario.
 func goTest(o options, d testgen.Discrimination, nullOps string, run goTestRunner) (runOutcome, string) {
-	output, runErr := run(o.root, []string{"GOWORK=off", "AIARCH_NULL_OPS=" + nullOps},
-		"test", "-count=1", "-v", "-run", "^"+d.Test+"$", "./"+d.Package+"/")
-	return classify(output, runErr, d.Test), output
+	var output string
+	for range hostBootAttempts {
+		var runErr error
+		output, runErr = run(o.root, []string{"GOWORK=off", "AIARCH_NULL_OPS=" + nullOps},
+			"test", "-count=1", "-v", "-run", "^"+d.Test+"$", "./"+d.Package+"/")
+		out := classify(output, runErr, d.Test)
+		if _, failed := out.(ranFailed); !failed || !hostBootFailure.MatchString(output) {
+			return out, output
+		}
+	}
+	return ranInconclusive{fmt.Sprintf("the scenario host did not boot in %d attempts", hostBootAttempts)}, output
 }
 
 // inconclusive is the tool's error for a run that did not execute the scenario.

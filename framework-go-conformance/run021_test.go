@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 	"testing"
 	"time"
@@ -37,7 +38,8 @@ const run021Fixture = "todomvc"
 //	discriminate_impl
 //	              over the RUN-021 harvest's hand-written bodies (testdata/todomvc/impl, overlaid
 //	              in place of null.gen.go and the nullgen hooks.go) every generated Go scenario
-//	              passes against its real subject (broken == 0) and none survives its stimulus
+//	              passes against its real subject (broken == 0 among components; the machine clients fail exactly
+//	              the implBrokenClients set until Plan 3 Task 3.6) and none survives its stimulus
 //	              being nulled (survivors == 0): the proof that the generated tests discriminate
 //	              a real implementation, which the null build alone cannot give
 func TestConformance_RUN021Proof(t *testing.T) {
@@ -63,6 +65,8 @@ func TestConformance_RUN021Proof(t *testing.T) {
 		}
 		built = dir
 	})
+	// Independent of the null build: it builds its own tree from the harvested bodies.
+	t.Run("discriminate_impl", func(t *testing.T) { run021DiscriminateImpl(t, raw) })
 	if built == "" {
 		return
 	}
@@ -100,7 +104,6 @@ func TestConformance_RUN021Proof(t *testing.T) {
 		}
 		t.Error("the old, vacuous discard-a-todo-P1 binding passes a null subject yet was not listed as a survivor")
 	})
-	t.Run("discriminate_impl", func(t *testing.T) { run021DiscriminateImpl(t, raw) })
 }
 
 // nullBuildBroken is how many Go scenarios of the todomvc fixture, components (78) and machine clients
@@ -126,8 +129,28 @@ func run021DiscriminateImpl(t *testing.T, raw []byte) {
 	for _, s := range got.list {
 		t.Errorf("%s scenario %s op %s survives the null subject over the real bodies", s.component, s.scenario, s.op)
 	}
-	if got.broken != implBrokenClients {
-		t.Errorf("%d scenario(s) fail against the harvested bodies (TP-BROKEN), want %d (every Go component's passes; see implBrokenClients)", got.broken, implBrokenClients)
+	// Components must all pass; the machine clients must fail exactly the known set, by ID.
+	var unexpected, gone []string
+	seen := map[string]bool{}
+	for _, b := range got.brokenList {
+		id := b.component + "/" + b.scenario
+		seen[id] = true
+		if !implBrokenClients[id] {
+			unexpected = append(unexpected, id)
+		}
+	}
+	for id := range implBrokenClients {
+		if !seen[id] {
+			gone = append(gone, id)
+		}
+	}
+	sort.Strings(unexpected)
+	sort.Strings(gone)
+	if len(unexpected) > 0 {
+		t.Errorf("%d scenario(s) fail against the harvested bodies (TP-BROKEN) that are not in implBrokenClients:\n  %s", len(unexpected), strings.Join(unexpected, "\n  "))
+	}
+	if len(gone) > 0 {
+		t.Errorf("%d scenario(s) in implBrokenClients now pass; remove them from the set:\n  %s", len(gone), strings.Join(gone, "\n  "))
 	}
 	if got.survivors != 0 {
 		t.Errorf("%d survivor(s), want 0", got.survivors)
@@ -145,13 +168,43 @@ func run021DiscriminateImpl(t *testing.T, raw []byte) {
 // 3.3). Every one passes against the harvested bodies and none survives its stimulus being nulled.
 const implScenarios = 106
 
-// implBrokenClients is how many of the fixture's 28 machine client scenarios fail over the wire against
-// the harvested bodies. EARMARK (Plan 3 Task 3.6, TestConformance_ClientsOverWire): todoApi and
-// todoMcpServer were authored for the in-process subject and never ran before the machine clients were
-// driven against the launched app; most expect a list already holding t1 "Walk dog" / t2 "Pay rent" and
-// record no arrange for it, and the "outside delegation" scenarios expect a refusal for a principal the
-// plan launches with every intent. The fixture's bindings are reworked there, and this goes to 0.
-const implBrokenClients = 27
+// implBrokenClients is the explicit set, by "component/scenario", of the machine client scenarios that
+// fail over the wire against the harvested bodies; no Go component scenario may be in it. EARMARK (Plan
+// 3 Task 3.6, TestConformance_ClientsOverWire): todoApi (8) and todoMcpServer (20) were authored for the
+// in-process subject and never ran before the machine clients were driven against the launched app; the
+// bindings expect a list already holding t1 "Walk dog" / t2 "Pay rent" and record no arrange for it, and
+// the "outside delegation" scenarios expect a refusal for a principal the plan launches with every intent.
+// The fixture's bindings are reworked there (arrange the alice list explicitly; add a second agent
+// principal without intents), and this set goes to empty.
+var implBrokenClients = map[string]bool{
+	"todoApi/drive-the-list-from-agent-tooling-P1":       true,
+	"todoApi/drive-the-list-from-agent-tooling-P2":       true,
+	"todoApi/resume-the-list-P1":                         true,
+	"todoApi/resume-the-list-P2":                         true,
+	"todoApi/resume-the-list-P3":                         true,
+	"todoApi/work-the-list-P1":                           true,
+	"todoApi/work-the-list-P2":                           true,
+	"todoApi/work-the-list-P3":                           true,
+	"todoMcpServer/add-a-todo-P1":                        true,
+	"todoMcpServer/add-a-todo-P2":                        true,
+	"todoMcpServer/clear-completed-todos-P1":             true,
+	"todoMcpServer/come-back-to-an-intact-list-P1":       true,
+	"todoMcpServer/discard-a-todo-P1":                    true,
+	"todoMcpServer/drive-the-list-from-agent-tooling-P1": true,
+	"todoMcpServer/drive-the-list-from-agent-tooling-P2": true,
+	"todoMcpServer/mark-a-todo-completed-or-active-P1":   true,
+	"todoMcpServer/resume-the-list-P2":                   true,
+	"todoMcpServer/resume-the-list-P3":                   true,
+	"todoMcpServer/review-the-list-in-a-chosen-view-P1":  true,
+	"todoMcpServer/reword-a-todo-P2":                     true,
+	"todoMcpServer/reword-a-todo-P3":                     true,
+	"todoMcpServer/see-how-many-todos-are-left-P1":       true,
+	"todoMcpServer/toggle-all-todos-P1":                  true,
+	"todoMcpServer/toggle-all-todos-P2":                  true,
+	"todoMcpServer/work-the-list-P1":                     true,
+	"todoMcpServer/work-the-list-P2":                     true,
+	"todoMcpServer/work-the-list-P3":                     true,
+}
 
 // goScenarios counts the TestScenario_ functions testgen generated for Go components and machine
 // clients under dir (-discriminate runs both).
@@ -293,6 +346,7 @@ type survivor struct{ component, scenario, op string }
 type discriminateRun struct {
 	scenarios, nullRuns, survivors, broken int
 	list                                   []survivor
+	brokenList                             []survivor // component and scenario only; op is empty
 }
 
 // discriminate runs `testgen -discriminate` in the built app dir and returns what it reported. Exit 1
@@ -320,6 +374,7 @@ func discriminate(t *testing.T, dir string) discriminateRun {
 			got.list = append(got.list, survivor{f[1], f[2], f[3]})
 			named++
 		case len(f) == 3 && f[0] == "TP-BROKEN":
+			got.brokenList = append(got.brokenList, survivor{component: f[1], scenario: f[2]})
 			brokenNamed++
 		default:
 			var n [4]int

@@ -161,9 +161,14 @@ func (c *Config) LocalDevPrincipals(profile string) (map[string]security.Princip
 		if _, dup := out[e.Subject]; dup {
 			return nil, fmt.Errorf("%s names subject %q twice", devPrincipalsEnv, e.Subject)
 		}
-		kind := security.PrincipalUser
-		if e.Kind != "" {
-			kind = security.PrincipalKind(e.Kind)
+		var kind security.PrincipalKind
+		switch e.Kind {
+		case "", "user":
+			kind = security.PrincipalUser
+		case "application":
+			kind = security.PrincipalApplication
+		default:
+			return nil, fmt.Errorf("%s: entry %q has kind %q, want user or application", devPrincipalsEnv, e.Subject, e.Kind)
 		}
 		out[e.Subject] = security.Principal{Kind: kind, Subject: e.Subject, Roles: e.Roles, Claims: e.Claims}
 	}

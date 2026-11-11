@@ -274,3 +274,51 @@ func TestDiscriminate_WebHalfIsSkippedWithNotice(t *testing.T) {
 		t.Errorf("the skipped web scenarios are not announced: %q", out.String())
 	}
 }
+
+// bootFailedRun is what a scenario prints when the host it launches does not come up: the test fails
+// on the host's own error, before any step ran.
+func bootFailedRun(test string) (string, error) {
+	return "=== RUN   " + test + "\n    manager_scenarios.gen_test.go:30: scenariohost: temporal: testinfra.StartDevServer: failed connecting after timeout\n--- FAIL: " + test + " (60.10s)\nFAIL\nFAIL\texample.com/app/server/internal/manager/billing\t60.5s\n", errors.New("exit status 1")
+}
+
+// A host that fails to boot once is not the scenario's failure: the run is made again, and the
+// scenario is judged on the run that executed it.
+func TestDiscriminate_HostBootFlakeIsRetried(t *testing.T) {
+	args := discriminateArgs(t)
+	flaked := map[string]bool{}
+	r := &recorder{answer: func(nullOps, test string) (string, error) {
+		key := nullOps + "/" + test
+		if !flaked[key] {
+			flaked[key] = true
+			return bootFailedRun(test) // every distinct run flakes once
+		}
+		if nullOps == "" {
+			return passedRun(test)
+		}
+		return failedRun(test)
+	}}
+	var out, errOut bytes.Buffer
+	if err := runWith(args, &out, &errOut, r.run); err != nil {
+		t.Fatalf("each run's first boot flaked and its retry judged the scenario: %v\n%s", err, out.String())
+	}
+	if strings.Contains(out.String(), "TP-BROKEN") || strings.Contains(out.String(), "TP-DISCRIMINATE") {
+		t.Errorf("a boot flake is neither broken nor a survivor: %q", out.String())
+	}
+}
+
+// A host that never boots is the tool's error, not a verdict: not TP-BROKEN, not a kill.
+func TestDiscriminate_HostThatNeverBootsIsInconclusive(t *testing.T) {
+	args := discriminateArgs(t)
+	r := &recorder{answer: func(_, test string) (string, error) { return bootFailedRun(test) }}
+	var out, errOut bytes.Buffer
+	err := runWith(args, &out, &errOut, r.run)
+	if err == nil || errors.Is(err, errBroken) || errors.Is(err, errSurvivors) || !strings.Contains(err.Error(), "did not boot") {
+		t.Fatalf("err = %v, want the tool's own error naming the host that did not boot", err)
+	}
+	if strings.Contains(out.String(), "TP-BROKEN") {
+		t.Errorf("a host that never boots is not a broken scenario: %q", out.String())
+	}
+	if len(r.calls) != hostBootAttempts {
+		t.Errorf("%d runs, want %d attempts at the first scenario", len(r.calls), hostBootAttempts)
+	}
+}

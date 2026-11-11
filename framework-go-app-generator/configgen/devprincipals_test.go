@@ -48,6 +48,7 @@ func TestLocalDevPrincipals(t *testing.T) {
 		{"not json", "local", 0, "ORDERAPP_DEV_PRINCIPALS"},
 		{` + "`" + `[{"subject":"a"},{"subject":"a"}]` + "`" + `, "local", 0, "twice"},
 		{` + "`" + `[{"subject":""}]` + "`" + `, "local", 0, "subject"},
+		{` + "`" + `[{"subject":"a","kind":"foo"}]` + "`" + `, "local", 0, "want user or application"},
 	} {
 		t.Setenv("ORDERAPP_DEV_PRINCIPALS", c.env)
 		t.Setenv("ORDER_TEMPORAL_ADDR", "localhost:7233")
