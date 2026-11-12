@@ -2,6 +2,7 @@ package testgen
 
 import (
 	"errors"
+	"go/version"
 	"io/fs"
 	"maps"
 	"os"
@@ -10,6 +11,9 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	"golang.org/x/mod/modfile"
+	"golang.org/x/mod/semver"
 )
 
 // The harness compiles (and runs) generated test files in a throwaway module: the real framework-go,
@@ -116,31 +120,40 @@ func writeModule(t *testing.T, files map[string]string, opts moduleOpts) string 
 	if err != nil {
 		t.Fatal(err)
 	}
-	var gomod strings.Builder
-	gomod.WriteString("module example.com/app/server\n\ngo 1.25\n\nrequire (\n" +
-		"\tgithub.com/mixofreality-studio/archistrator-platform/framework-go v0.0.0\n" +
-		"\tgithub.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost v0.0.0\n")
-	if opts.mcp {
-		gomod.WriteString("\tgithub.com/modelcontextprotocol/go-sdk v1.6.1\n")
-	}
 	const base = "github.com/mixofreality-studio/archistrator-platform/"
-	gomod.WriteString(")\n\nreplace " + base + "framework-go => " + filepath.Join(platform, "framework-go") + "\n")
 	all := map[string]string{}
 	sumFrom := []string{"framework-go-app-generator", "framework-go-mcp-generator"}
+	replaces := map[string]string{base + "framework-go": filepath.Join(platform, "framework-go")}
 	if opts.realHost {
 		for _, dep := range platformClosure(t, platform, "framework-go-scenariohost") {
-			if dep != "framework-go" { // replaced above
-				gomod.WriteString("replace " + base + dep + " => " + filepath.Join(platform, dep) + "\n")
-			}
+			replaces[base+dep] = filepath.Join(platform, dep)
 			if dep != "framework-go-scenariohost" {
 				sumFrom = append(sumFrom, dep)
 			}
 		}
 		sumFrom = append(sumFrom, "framework-go-scenariohost")
 	} else {
-		gomod.WriteString("replace " + base + "framework-go-scenariohost => ./stub/scenariohost\n")
+		replaces[base+"framework-go-scenariohost"] = "./stub/scenariohost"
 		all["stub/scenariohost/go.mod"] = "module " + base + "framework-go-scenariohost\n\ngo 1.25\n\nrequire " + base + "framework-go v0.0.0\n"
 		all["stub/scenariohost/scenariohost.go"] = stubScenariohost
+	}
+	var gomod strings.Builder
+	gomod.WriteString("module example.com/app/server\n\ngo " + goDirective(t, platform, sumFrom) + "\n\nrequire (\n")
+	// The throwaway module must be tidy the way a platform module's own go.mod is, or the go tool cannot
+	// resolve the build from go.mod alone, loads the complete module graph, and that walk reaches go.mod files
+	// of old transitive versions (errcheck v1.5.0 behind gogo/protobuf, go-spew v1.1.1 behind
+	// containerd/platforms) that no platform module's own build ever fetched. GOPROXY=off then fails on a
+	// cold module cache (CI) while a developer's warm cache hides it. Tidy here means: a go directive at
+	// least as new as every dependency's (goDirective, since go 1.25 is older than go 1.25.0), and every
+	// module the build touches, platform siblings included, listed at the version the platform modules'
+	// requirements select (selectedRequires). The siblings are replaced by the local checkout, so the version
+	// only has to agree with what the graph selects.
+	for _, mod := range slices.Sorted(maps.Keys(selectedRequires(t, platform, sumFrom, replaces, opts.mcp))) {
+		gomod.WriteString("\t" + mod + "\n")
+	}
+	gomod.WriteString(")\n\n")
+	for _, mod := range slices.Sorted(maps.Keys(replaces)) {
+		gomod.WriteString("replace " + mod + " => " + replaces[mod] + "\n")
 	}
 	all["go.mod"] = gomod.String()
 	maps.Copy(all, files)
@@ -205,4 +218,66 @@ func platformClosure(t *testing.T, platform, mod string) []string {
 		}
 	}
 	return slices.Sorted(maps.Keys(seen))
+}
+
+// selectedRequires returns "path version" for every module the given platform modules require, at the highest
+// version any of them asks for (what minimal version selection picks across them). Platform siblings are kept
+// only when replaced; a replaced sibling nobody requires (the real or stub scenariohost) is listed at v0.0.0.
+func selectedRequires(t *testing.T, platform string, mods []string, replaces map[string]string, mcp bool) map[string]string {
+	t.Helper()
+	const base = "github.com/mixofreality-studio/archistrator-platform/"
+	best := map[string]string{}
+	for mod := range replaces {
+		best[mod] = "v0.0.0"
+	}
+	if mcp {
+		best["github.com/modelcontextprotocol/go-sdk"] = "v1.6.1"
+	}
+	for _, mod := range mods {
+		path := filepath.Join(platform, mod, "go.mod")
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := modfile.ParseLax(path, raw, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, r := range f.Require {
+			_, replaced := replaces[r.Mod.Path]
+			if strings.HasPrefix(r.Mod.Path, base) && !replaced {
+				continue
+			}
+			if cur, ok := best[r.Mod.Path]; !ok || semver.Compare(r.Mod.Version, cur) > 0 {
+				best[r.Mod.Path] = r.Mod.Version
+			}
+		}
+	}
+	out := make(map[string]string, len(best))
+	for path, v := range best {
+		out[path+" "+v] = v
+	}
+	return out
+}
+
+// goDirective returns the newest go directive among the given platform modules, so the throwaway module's
+// own directive is never older than a dependency's (go 1.25 is older than go 1.25.0).
+func goDirective(t *testing.T, platform string, mods []string) string {
+	t.Helper()
+	newest := "1.25.0"
+	for _, mod := range mods {
+		path := filepath.Join(platform, mod, "go.mod")
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			t.Fatal(err)
+		}
+		f, err := modfile.ParseLax(path, raw, nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if f.Go != nil && version.Compare("go"+f.Go.Version, "go"+newest) > 0 {
+			newest = f.Go.Version
+		}
+	}
+	return newest
 }
