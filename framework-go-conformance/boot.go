@@ -9,8 +9,6 @@ import (
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
-const mcpProtocol = devstack.MCPProtocol
-
 // Booted is a running composed app.
 type Booted struct {
 	BaseURL string
@@ -41,11 +39,6 @@ func DockerInventory(ctx context.Context) ([]string, error) { return devstack.Do
 // DockerLeftovers is the names in after that were not in before.
 func DockerLeftovers(ctx context.Context, before, after []string) []string {
 	return devstack.DockerLeftovers(ctx, before, after)
-}
-
-// rpc posts one JSON-RPC message to an MCP endpoint (devstack.RPC).
-func rpc(ctx context.Context, url, session string, msg map[string]any) (devstack.Reply, string, error) {
-	return devstack.RPC(ctx, url, session, msg)
 }
 
 // Probe holds the booted app to what a client sees (devstack.Smoke, the check every integration

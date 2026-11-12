@@ -13,26 +13,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/devstack"
 	scenariohost "github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost"
 )
 
 // callTool drives one streamable-HTTP MCP tool call as the process principal: initialize, the
 // initialized notification, then tools/call. It returns the raw result.
 func callTool(ctx context.Context, url, tool string, args map[string]any) (json.RawMessage, error) {
-	_, session, err := rpc(ctx, url, "", map[string]any{
+	_, session, err := devstack.RPC(ctx, url, "", map[string]any{
 		"jsonrpc": "2.0", "id": 1, "method": "initialize",
 		"params": map[string]any{
-			"protocolVersion": mcpProtocol, "capabilities": map[string]any{},
+			"protocolVersion": devstack.MCPProtocol, "capabilities": map[string]any{},
 			"clientInfo": map[string]any{"name": "devstack-test", "version": "0"},
 		},
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initialize: %w", err)
 	}
-	if _, _, err := rpc(ctx, url, session, map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"}); err != nil {
+	if _, _, err := devstack.RPC(ctx, url, session, map[string]any{"jsonrpc": "2.0", "method": "notifications/initialized"}); err != nil {
 		return nil, fmt.Errorf("initialized: %w", err)
 	}
-	reply, _, err := rpc(ctx, url, session, map[string]any{
+	reply, _, err := devstack.RPC(ctx, url, session, map[string]any{
 		"jsonrpc": "2.0", "id": 2, "method": "tools/call",
 		"params": map[string]any{"name": tool, "arguments": args},
 	})
