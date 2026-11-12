@@ -1,19 +1,13 @@
 package testgen
 
 import (
-	"errors"
-	"go/version"
-	"io/fs"
 	"maps"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"slices"
-	"strings"
 	"testing"
 
-	"golang.org/x/mod/modfile"
-	"golang.org/x/mod/semver"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/modsandbox"
 )
 
 // The harness compiles (and runs) generated test files in a throwaway module: the real framework-go,
@@ -120,42 +114,29 @@ func writeModule(t *testing.T, files map[string]string, opts moduleOpts) string 
 	if err != nil {
 		t.Fatal(err)
 	}
-	const base = "github.com/mixofreality-studio/archistrator-platform/"
+	const base = modsandbox.PlatformBase
 	all := map[string]string{}
-	sumFrom := []string{"framework-go-app-generator", "framework-go-mcp-generator"}
-	replaces := map[string]string{base + "framework-go": filepath.Join(platform, "framework-go")}
+	extra := map[string]string{}
+	if opts.mcp {
+		extra["github.com/modelcontextprotocol/go-sdk"] = "v1.6.1"
+	}
+	var gomod string
+	var sums []byte
 	if opts.realHost {
-		for _, dep := range platformClosure(t, platform, "framework-go-scenariohost") {
-			replaces[base+dep] = filepath.Join(platform, dep)
-			if dep != "framework-go-scenariohost" {
-				sumFrom = append(sumFrom, dep)
-			}
-		}
-		sumFrom = append(sumFrom, "framework-go-scenariohost")
+		gomod, sums, err = modsandbox.RealHost(platform, "example.com/app/server", extra)
 	} else {
-		replaces[base+"framework-go-scenariohost"] = "./stub/scenariohost"
 		all["stub/scenariohost/go.mod"] = "module " + base + "framework-go-scenariohost\n\ngo 1.25\n\nrequire " + base + "framework-go v0.0.0\n"
 		all["stub/scenariohost/scenariohost.go"] = stubScenariohost
+		gomod, sums, err = modsandbox.Render(platform, "example.com/app/server", map[string]string{
+			base + "framework-go":              filepath.Join(platform, "framework-go"),
+			base + "framework-go-scenariohost": "./stub/scenariohost",
+		}, []string{"framework-go-app-generator", "framework-go-mcp-generator"}, extra)
 	}
-	var gomod strings.Builder
-	gomod.WriteString("module example.com/app/server\n\ngo " + goDirective(t, platform, sumFrom) + "\n\nrequire (\n")
-	// The throwaway module must be tidy the way a platform module's own go.mod is, or the go tool cannot
-	// resolve the build from go.mod alone, loads the complete module graph, and that walk reaches go.mod files
-	// of old transitive versions (errcheck v1.5.0 behind gogo/protobuf, go-spew v1.1.1 behind
-	// containerd/platforms) that no platform module's own build ever fetched. GOPROXY=off then fails on a
-	// cold module cache (CI) while a developer's warm cache hides it. Tidy here means: a go directive at
-	// least as new as every dependency's (goDirective, since go 1.25 is older than go 1.25.0), and every
-	// module the build touches, platform siblings included, listed at the version the platform modules'
-	// requirements select (selectedRequires). The siblings are replaced by the local checkout, so the version
-	// only has to agree with what the graph selects.
-	for _, mod := range slices.Sorted(maps.Keys(selectedRequires(t, platform, sumFrom, replaces, opts.mcp))) {
-		gomod.WriteString("\t" + mod + "\n")
+	if err != nil {
+		t.Fatal(err)
 	}
-	gomod.WriteString(")\n\n")
-	for _, mod := range slices.Sorted(maps.Keys(replaces)) {
-		gomod.WriteString("replace " + mod + " => " + replaces[mod] + "\n")
-	}
-	all["go.mod"] = gomod.String()
+	all["go.mod"] = gomod
+	all["go.sum"] = string(sums)
 	maps.Copy(all, files)
 	for p, body := range all {
 		full := filepath.Join(root, filepath.FromSlash(p))
@@ -166,20 +147,6 @@ func writeModule(t *testing.T, files map[string]string, opts moduleOpts) string 
 			t.Fatal(err)
 		}
 	}
-	var sums []byte
-	for _, mod := range sumFrom {
-		raw, err := os.ReadFile(filepath.Join(platform, mod, "go.sum"))
-		if errors.Is(err, fs.ErrNotExist) {
-			continue // a module with no dependencies of its own has no sums
-		}
-		if err != nil {
-			t.Fatal(err)
-		}
-		sums = append(sums, raw...)
-	}
-	if err := os.WriteFile(filepath.Join(root, "go.sum"), sums, 0o600); err != nil {
-		t.Fatal(err)
-	}
 	return root
 }
 
@@ -187,97 +154,7 @@ func writeModule(t *testing.T, files map[string]string, opts moduleOpts) string 
 func goIn(root string, env []string, args ...string) (string, error) {
 	cmd := exec.Command("go", args...)
 	cmd.Dir = root
-	cmd.Env = append(append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GOPROXY=off"), env...)
+	cmd.Env = append(modsandbox.Env(), env...)
 	raw, err := cmd.CombinedOutput()
 	return string(raw), err
-}
-
-// platformClosure returns mod and every platform sibling it transitively requires (read from each go.mod in the
-// local checkout), so a typecheck against the real host needs neither the module cache nor the network.
-func platformClosure(t *testing.T, platform, mod string) []string {
-	t.Helper()
-	const base = "github.com/mixofreality-studio/archistrator-platform/"
-	seen := map[string]bool{}
-	queue := []string{mod}
-	for len(queue) > 0 {
-		cur := queue[0]
-		queue = queue[1:]
-		if seen[cur] {
-			continue
-		}
-		seen[cur] = true
-		raw, err := os.ReadFile(filepath.Join(platform, cur, "go.mod"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, line := range strings.Split(string(raw), "\n") {
-			f := strings.Fields(line)
-			if len(f) >= 2 && strings.HasPrefix(f[0], base) && f[1] != "=>" {
-				queue = append(queue, strings.TrimPrefix(f[0], base))
-			}
-		}
-	}
-	return slices.Sorted(maps.Keys(seen))
-}
-
-// selectedRequires returns "path version" for every module the given platform modules require, at the highest
-// version any of them asks for (what minimal version selection picks across them). Platform siblings are kept
-// only when replaced; a replaced sibling nobody requires (the real or stub scenariohost) is listed at v0.0.0.
-func selectedRequires(t *testing.T, platform string, mods []string, replaces map[string]string, mcp bool) map[string]string {
-	t.Helper()
-	const base = "github.com/mixofreality-studio/archistrator-platform/"
-	best := map[string]string{}
-	for mod := range replaces {
-		best[mod] = "v0.0.0"
-	}
-	if mcp {
-		best["github.com/modelcontextprotocol/go-sdk"] = "v1.6.1"
-	}
-	for _, mod := range mods {
-		path := filepath.Join(platform, mod, "go.mod")
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		f, err := modfile.ParseLax(path, raw, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		for _, r := range f.Require {
-			_, replaced := replaces[r.Mod.Path]
-			if strings.HasPrefix(r.Mod.Path, base) && !replaced {
-				continue
-			}
-			if cur, ok := best[r.Mod.Path]; !ok || semver.Compare(r.Mod.Version, cur) > 0 {
-				best[r.Mod.Path] = r.Mod.Version
-			}
-		}
-	}
-	out := make(map[string]string, len(best))
-	for path, v := range best {
-		out[path+" "+v] = v
-	}
-	return out
-}
-
-// goDirective returns the newest go directive among the given platform modules, so the throwaway module's
-// own directive is never older than a dependency's (go 1.25 is older than go 1.25.0).
-func goDirective(t *testing.T, platform string, mods []string) string {
-	t.Helper()
-	newest := "1.25.0"
-	for _, mod := range mods {
-		path := filepath.Join(platform, mod, "go.mod")
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			t.Fatal(err)
-		}
-		f, err := modfile.ParseLax(path, raw, nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if f.Go != nil && version.Compare("go"+f.Go.Version, "go"+newest) > 0 {
-			newest = f.Go.Version
-		}
-	}
-	return newest
 }

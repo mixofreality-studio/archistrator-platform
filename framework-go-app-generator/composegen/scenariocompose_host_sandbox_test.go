@@ -8,10 +8,9 @@ import (
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/modsandbox"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
-
-const platformBase = "github.com/mixofreality-studio/archistrator-platform/"
 
 // stubOrderState stands in for the orderStateAccess component the fixture's contract names: the
 // interface the null wrapper has to implement, the types its operations carry, and the
@@ -73,24 +72,12 @@ func TestScenarioCompose_HostInputCompilesAgainstTheRealHost(t *testing.T) {
 		t.Fatal(err)
 	}
 	root := t.TempDir()
-	var gomod strings.Builder
-	gomod.WriteString("module example.com/greenfield/server\n\ngo 1.25\n\nrequire (\n" +
-		"\t" + platformBase + "framework-go v0.0.0\n" +
-		"\t" + platformBase + "framework-go-scenariohost v0.0.0\n)\n\n")
-	for _, mod := range []string{"framework-go", "framework-go-scenariohost", "framework-go-projectmodel", "framework-go-app-generator",
-		"framework-go-infrastructure-github", "framework-go-infrastructure-postgres", "framework-go-infrastructure-temporal"} {
-		gomod.WriteString("replace " + platformBase + mod + " => " + filepath.Join(platform, mod) + "\n")
-	}
-	var sums []byte
-	for _, mod := range []string{"framework-go-app-generator", "framework-go-scenariohost"} {
-		raw, readErr := os.ReadFile(filepath.Join(platform, mod, "go.sum"))
-		if readErr != nil {
-			t.Fatal(readErr)
-		}
-		sums = append(sums, raw...)
+	gomod, sums, err := modsandbox.RealHost(platform, "example.com/greenfield/server", nil)
+	if err != nil {
+		t.Fatal(err)
 	}
 	for rel, body := range map[string]string{
-		"go.mod": gomod.String(),
+		"go.mod": gomod,
 		"go.sum": string(sums),
 		"internal/resourceaccess/orderstate/orderstate.go": stubOrderState,
 		"internal/scenariocompose/compose.go":              string(src),
@@ -105,7 +92,7 @@ func TestScenarioCompose_HostInputCompilesAgainstTheRealHost(t *testing.T) {
 	}
 	cmd := exec.Command("go", "vet", "./...")
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "GOWORK=off", "GOFLAGS=-mod=mod", "GOPROXY=off")
+	cmd.Env = modsandbox.Env()
 	if out, runErr := cmd.CombinedOutput(); runErr != nil {
 		t.Fatalf("the emitted scenariocompose does not build and vet against the real scenario host: %v\n%s", runErr, out)
 	}
