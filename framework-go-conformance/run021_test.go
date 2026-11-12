@@ -308,11 +308,12 @@ func run021Vet(t *testing.T, dir string) {
 type survivor struct{ component, scenario, op string }
 
 // discriminateRun is what one `testgen -discriminate` run reported: the counts of its summary line
-// `discriminate: N scenario(s), M null run(s), S survivor(s), B broken`, and the survivors it named.
+// `discriminate: N scenario(s), M null run(s), S survivor(s), B broken[, W web skipped (web project not
+// yet seated)]`, and the survivors it named.
 type discriminateRun struct {
-	scenarios, nullRuns, survivors, broken int
-	list                                   []survivor
-	brokenList                             []survivor // component and scenario only; op is empty
+	scenarios, nullRuns, survivors, broken, webSkipped int
+	list                                               []survivor
+	brokenList                                         []survivor // component and scenario only; op is empty
 }
 
 // discriminate runs `testgen -discriminate` in the built app dir and returns what it reported. Exit 1
@@ -348,9 +349,10 @@ func discriminate(t *testing.T, dir string) discriminateRun {
 			got.brokenList = append(got.brokenList, survivor{component: f[1], scenario: f[2]})
 			brokenNamed++
 		default:
-			var n [4]int
-			if c, _ := fmt.Sscanf(line, "discriminate: %d scenario(s), %d null run(s), %d survivor(s), %d broken", &n[0], &n[1], &n[2], &n[3]); c == 4 {
-				got.scenarios, got.nullRuns, got.survivors, got.broken = n[0], n[1], n[2], n[3]
+			var n [5]int
+			// The web field is present only while the web project is not yet seated.
+			if c, _ := fmt.Sscanf(line, "discriminate: %d scenario(s), %d null run(s), %d survivor(s), %d broken, %d web skipped", &n[0], &n[1], &n[2], &n[3], &n[4]); c >= 4 {
+				got.scenarios, got.nullRuns, got.survivors, got.broken, got.webSkipped = n[0], n[1], n[2], n[3], n[4]
 				summarized = true
 			}
 		}

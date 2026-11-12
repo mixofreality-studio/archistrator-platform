@@ -260,7 +260,7 @@ func TestDiscriminate_NoTestFilesIsInconclusive(t *testing.T) {
 // A web scenario whose operation reaches no single generated Manager operation has nothing to null:
 // it is announced as skipped with that reason, never dropped silently.
 func TestDiscriminate_WebOpWithNoManagerRouteIsSkippedWithNotice(t *testing.T) {
-	args := discriminateArgs(t)
+	args := seatWeb(t, discriminateArgs(t))
 	r := &recorder{answer: func(nullOps, test string) (string, error) {
 		if nullOps == "" {
 			return passedRun(test)
@@ -283,7 +283,10 @@ func TestDiscriminate_WebOpWithNoManagerRouteIsSkippedWithNotice(t *testing.T) {
 
 // webArgs discriminates the testgen fixture with its web client's operation renamed to the Manager
 // operation it drives (GetOrder), so the web scenario has an operation to null.
-func webArgs(t *testing.T) []string {
+func webArgs(t *testing.T) []string { return seatWeb(t, unseatedWebArgs(t)) }
+
+// unseatedWebArgs is webArgs in a module whose web project is not seated.
+func unseatedWebArgs(t *testing.T) []string {
 	t.Helper()
 	args := discriminateArgs(t)
 	raw, err := os.ReadFile(args[1])
@@ -296,6 +299,73 @@ func webArgs(t *testing.T) []string {
 	}
 	args[1] = project
 	return args
+}
+
+// seatWeb seats the web project of the module the args run in (webgen bootstrap writes
+// webApp/package.json), so its web scenarios are discriminated.
+func seatWeb(t *testing.T, args []string) []string {
+	t.Helper()
+	root := args[slices.Index(args, "-root")+1]
+	if err := os.MkdirAll(filepath.Join(root, "webApp"), 0o750); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "webApp", "package.json"), []byte("{}\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return args
+}
+
+// Until the web client's integration seats the web project, `go tool webscenarios` cannot load a
+// browser (the launcher serves no SPA either), so web scenarios are not run: each is recorded as
+// skipped with the reason, and the summary line names how many, so the skip is visible. The Go
+// scenarios are unaffected, and the run is green.
+func TestDiscriminate_WebSkippedUntilSeated(t *testing.T) {
+	var webRuns int
+	run := withWeb(func([]string) (string, error) {
+		webRuns++
+		return "  1 failed\n", errors.New("exit status 1")
+	})
+	var out, errOut bytes.Buffer
+	if err := runWith(unseatedWebArgs(t), &out, &errOut, run); err != nil {
+		t.Fatalf("an unseated web project must not fail the run: %v\n%s", err, out.String())
+	}
+	if webRuns != 0 {
+		t.Errorf("%d web run(s) were made with no seated web project", webRuns)
+	}
+	for _, want := range []string{
+		"discriminate: skipped shopClient browse-orders-P1: web project not yet seated",
+		"1 web skipped (web project not yet seated)",
+	} {
+		if !strings.Contains(out.String(), want) {
+			t.Errorf("output lacks %q:\n%s", want, out.String())
+		}
+	}
+	if strings.Contains(out.String(), "TP-BROKEN") {
+		t.Errorf("unexpected output:\n%s", out.String())
+	}
+}
+
+// Once the web project is seated web discriminations are mandatory again: the web scenario runs
+// through the scenario host and nothing is reported skipped for want of the project.
+func TestDiscriminate_WebRunsWhenSeated(t *testing.T) {
+	var webRuns int
+	run := withWeb(func(env []string) (string, error) {
+		webRuns++
+		if nullOpsOf(env) == "" {
+			return "  1 passed (1s)\n", nil
+		}
+		return "  1 failed\n", errors.New("exit status 1")
+	})
+	var out, errOut bytes.Buffer
+	if err := runWith(seatWeb(t, webArgs(t)), &out, &errOut, run); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if webRuns < 2 {
+		t.Errorf("a seated web project must be discriminated, got %d web run(s)", webRuns)
+	}
+	if strings.Contains(out.String(), "not yet seated") {
+		t.Errorf("nothing is unseated, yet the run says so:\n%s", out.String())
+	}
 }
 
 // withWeb is a runner that answers the Go scenarios as the real subject passes and every null run

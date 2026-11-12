@@ -9,6 +9,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/devstack"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/testgen"
 )
 
@@ -264,8 +265,16 @@ func discriminateScenario(o options, sc scenarioRuns, out io.Writer, run goTestR
 // `TP-DISCRIMINATE <component> <scenario> <op>` for each pair that still passes, and
 // `TP-BROKEN <component> <scenario>` for each scenario that does not pass against the real subject
 // (its null runs would prove nothing). Scenarios the run cannot execute, because a step reaches no
-// generated Manager operation to null, are announced, not silently dropped.
+// generated Manager operation to null, are announced, not silently dropped. Web scenarios run only once
+// the web project is seated (devstack.WebSeated); until then each is announced as skipped and the
+// summary line counts them.
 func discriminate(o options, gen testgen.Output, out io.Writer, run goTestRunner) error {
+	// Web scenarios are discriminated only once the web project is seated: until then no browser can
+	// load the app (the launcher serves no SPA), so each is a recorded skip, counted in the summary.
+	webSkipped := 0
+	if !devstack.WebSeated(o.root) {
+		webSkipped = gen.DeferWeb()
+	}
 	if err := announceSkipped(out, gen.Skipped); err != nil {
 		return err
 	}
@@ -275,7 +284,11 @@ func discriminate(o options, gen testgen.Output, out io.Writer, run goTestRunner
 			return err
 		}
 	}
-	if err := say(out, fmt.Sprintf("discriminate: %d scenario(s), %d null run(s), %d survivor(s), %d broken", t.scenarios, t.runs, t.survivors, t.broken)); err != nil {
+	summary := fmt.Sprintf("discriminate: %d scenario(s), %d null run(s), %d survivor(s), %d broken", t.scenarios, t.runs, t.survivors, t.broken)
+	if webSkipped > 0 {
+		summary += fmt.Sprintf(", %d web skipped (%s)", webSkipped, testgen.ReasonWebUnseated)
+	}
+	if err := say(out, summary); err != nil {
 		return err
 	}
 	var verdicts []error

@@ -116,6 +116,33 @@ func (o *Output) webScenarioRuns(web webEnv, plan componentPlan, bs boundScenari
 	}
 }
 
+// ReasonWebUnseated is why a web scenario is not discriminated yet: the web project it drives has not
+// been seated (the web client's own integration seats it), so no browser can load the app's SPA.
+const ReasonWebUnseated = "web project not yet seated"
+
+// DeferWeb moves every web scenario's runs out of Discriminate into Skipped with ReasonWebUnseated, one
+// skip per scenario, and returns how many scenarios it deferred. The caller counts them in its
+// summary, so the deferral is visible, never silent. Go scenarios are untouched.
+func (o *Output) DeferWeb() int {
+	var kept []Discrimination
+	deferred := map[string]bool{}
+	for _, d := range o.Discriminate {
+		if !d.Web() {
+			kept = append(kept, d)
+			continue
+		}
+		key := d.Component + "\x00" + d.Scenario
+		if deferred[key] {
+			continue
+		}
+		deferred[key] = true
+		o.Skipped = append(o.Skipped, DiscriminationSkip{Component: d.Component, Scenario: d.Scenario, Reason: ReasonWebUnseated})
+	}
+	o.Discriminate = kept
+	sortDiscriminations(o)
+	return len(deferred)
+}
+
 // managerOp is the generated Manager operation a web client's operation of that name drives: the one
 // route of that operation name over every Manager. Several Managers with an operation of the name, or
 // none, resolve to nothing.
