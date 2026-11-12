@@ -8,6 +8,8 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 
@@ -19,11 +21,34 @@ const MCPProtocol = "2025-06-18"
 
 // SmokeSpec is what a booted app must answer.
 type SmokeSpec struct {
-	// SPA: GET / must be 200 and contain "<html" (the model has a built browser surface).
+	// SPA: GET / must be 200 and contain "<html" (the model has a built browser surface whose web
+	// project is seated: see SmokeSpecFor).
 	SPA bool
 	// Tools is every name tools/list must contain. Empty while the app mounts /mcp is an error:
 	// the caller derives the list with ToolNames, so a tool table cannot go unchecked.
 	Tools []string
+}
+
+// WebDir is the web project directory every browser surface shares, module-root-relative.
+const WebDir = "webApp"
+
+// WebSeated reports whether the module at moduleDir has seated its web project (webgen bootstrap
+// writes webApp/package.json). A browser surface with no seated project is not yet built, not
+// broken: the launcher serves the API and MCP only until the web client's integration seats it.
+func WebSeated(moduleDir string) bool {
+	info, err := os.Stat(filepath.Join(moduleDir, WebDir, "package.json"))
+	return err == nil && info.Mode().IsRegular()
+}
+
+// SmokeSpecFor is what the app at moduleDir must answer, derived from m: the SPA iff m has a built
+// browser surface and its web project is seated (a seated project that does not build is a smoke
+// failure; an unseated one is not yet built), and every tool its MCP clients front (ToolNames,
+// narrowed by exposed).
+func SmokeSpecFor(m *projectmodel.Model, moduleDir string, exposed map[string][]string) SmokeSpec {
+	return SmokeSpec{
+		SPA:   m != nil && m.System != nil && m.System.HasBrowserSurface() && WebSeated(moduleDir),
+		Tools: ToolNames(m, exposed),
+	}
 }
 
 // ToolNames is the MCP tool names a composed server for m registers: for every built MCP machine

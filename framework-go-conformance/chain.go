@@ -48,17 +48,24 @@ type StepResult struct {
 
 // platformRoot is the platform checkout this package was built from: the chain
 // builds the scaffolded app against the generators and runtime in the tree under
-// test, never against the published tags (which lack the change being proven).
-func platformRoot() (string, error) {
+// test, never against the published tags (which lack the change being proven). It is
+// ("", false) when the package is consumed from the module cache (an app built under
+// GOWORK=off): there is no checkout, and the chain builds against the published pins.
+func platformRoot() (string, bool) {
 	_, file, _, ok := runtime.Caller(0)
 	if !ok {
-		return "", errors.New("conformance: cannot locate the platform checkout (runtime.Caller)")
+		return "", false
 	}
-	root := filepath.Clean(filepath.Join(filepath.Dir(file), ".."))
+	return platformRootAt(file)
+}
+
+// platformRootAt is the platform checkout the source file chainFile sits in, if it is one.
+func platformRootAt(chainFile string) (string, bool) {
+	root := filepath.Clean(filepath.Join(filepath.Dir(chainFile), ".."))
 	if _, err := os.Stat(filepath.Join(root, "framework-go-app-generator", "go.mod")); err != nil {
-		return "", fmt.Errorf("conformance: %s is not the platform checkout: %w", root, err)
+		return "", false
 	}
-	return root, nil
+	return root, true
 }
 
 // RunChain scaffolds fixture into dir and runs the exact command chain a scaffolded
@@ -106,10 +113,7 @@ func RunChainOn(ctx context.Context, fixture string, raw []byte, dir string, opt
 	if err != nil {
 		return rep, fmt.Errorf("fixture %s does not load: %w", fixture, err)
 	}
-	root, err := platformRoot()
-	if err != nil {
-		return rep, err
-	}
+	root, _ := platformRoot()
 
 	start := time.Now()
 	scaffoldErr := scaffold(dir, fixture, raw, root)
@@ -286,7 +290,9 @@ func tail(s string) string {
 // scaffold seats the managed app scaffold (the same file set a project is born with),
 // the fixture as its project.json, and points every platform module the app requires at
 // the checkout under test, adding the nullgen and webscenarios tools the published
-// scaffold lacks until the release carrying cmd/nullgen and cmd/webscenarios.
+// scaffold lacks until the release carrying cmd/nullgen and cmd/webscenarios. With no
+// checkout (platform is "") the modules stay on the scaffold's published pins and only
+// the tools are added.
 func scaffold(dir, fixture string, raw []byte, platform string) error {
 	files, err := methodassets.ScaffoldFiles(methodassets.ScaffoldData{
 		ModulePath: "example.com/conformance/" + fixture, AppSlug: "aiarch-app",
@@ -332,14 +338,23 @@ func replacedModules(gomod, platform string) []string {
 	return slices.Compact(mods)
 }
 
-// localizeModule rewrites the scaffolded go.mod to build against the platform checkout.
+// localReplaces is the modules to point at the checkout: none without one.
+func localReplaces(gomod, platform string) []string {
+	if platform == "" {
+		return nil
+	}
+	return replacedModules(gomod, platform)
+}
+
+// localizeModule rewrites the scaffolded go.mod to build against the platform checkout, or, with
+// platform "", only adds the tools the chain runs, leaving every module on its published pin.
 func localizeModule(dir, platform string) error {
 	gomod, err := os.ReadFile(filepath.Join(dir, "go.mod")) // #nosec G304 -- the scaffold just written
 	if err != nil {
 		return err
 	}
 	args := []string{"mod", "edit", "-tool=" + nullgenTool, "-tool=" + webscenariosTool}
-	for _, m := range replacedModules(string(gomod), platform) {
+	for _, m := range localReplaces(string(gomod), platform) {
 		local := filepath.Join(platform, strings.TrimPrefix(m, platformModulePrefix))
 		if _, err := os.Stat(filepath.Join(local, "go.mod")); err != nil { // #nosec G703 -- a sibling of this checkout, named by the scaffold's own go.mod
 			continue // a module the checkout does not carry stays at its pinned release

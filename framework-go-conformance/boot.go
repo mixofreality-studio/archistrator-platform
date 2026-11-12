@@ -49,13 +49,13 @@ func rpc(ctx context.Context, url, session string, msg map[string]any) (devstack
 }
 
 // Probe holds the booted app to what a client sees (devstack.Smoke, the check every integration
-// runs): /readyz, the SPA at /, and a working MCP door at /mcp that lists every tool the model
-// generates.
+// runs): /readyz, the SPA at / once the web project is seated, and a working MCP door at /mcp that
+// lists every tool the model generates.
 func Probe(ctx context.Context, b Booted) error {
 	m, err := projectmodel.LoadFile(filepath.Join(b.Dir, statePath))
 	if err != nil {
 		return fmt.Errorf("probe: load the built app's model: %w", err)
 	}
 	app := &devstack.App{BaseURL: b.BaseURL, MCPURL: b.BaseURL + "/mcp", Stop: b.Stop}
-	return devstack.Smoke(ctx, app, devstack.SmokeSpec{SPA: true, Tools: devstack.ToolNames(m, nil)})
+	return devstack.Smoke(ctx, app, devstack.SmokeSpecFor(m, b.Dir, nil))
 }

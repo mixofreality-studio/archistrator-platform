@@ -8,7 +8,8 @@
 //  2. provisions the substrates it knows for the local profile: a Temporal dev server
 //     (temporal server start-dev), a postgres:16-alpine container and a temporary bare git
 //     repo per git-repo infrastructure key;
-//  3. runs the managed web build when the System has a browser surface;
+//  3. runs the managed web build when the System has a browser surface and its web project is
+//     seated (webApp/package.json); until then it serves the API and MCP only;
 //  4. sets the <PREFIX>_* variables, named by configgen.Inputs, and boots cmd/server;
 //  5. waits for /readyz and prints one machine-readable line with the URL.
 //
@@ -44,7 +45,7 @@ type Config struct {
 	// EnvPrefix is the env-var namespace, as configgen's.
 	EnvPrefix string
 	// WebDir is the web project directory, module-root-relative (default "webApp"). It is
-	// built only when the System has a browser surface.
+	// built only when the System has a browser surface and the project is seated.
 	WebDir string
 }
 
@@ -70,6 +71,8 @@ type Plan struct {
 	GitRepos []string
 	// WebDir is the web project to build ("" when there is no browser surface to serve).
 	WebDir string
+	// WebSurfaces is the ids of the built browser surfaces the web project serves.
+	WebSurfaces []string
 	// ListenEnv, WebDistEnv and DevPrincipalEnv are the variables the launcher sets itself.
 	ListenEnv, WebDistEnv, DevPrincipalEnv string
 	// Provisioned maps each variable the launcher sets from what it provisioned.
@@ -130,15 +133,15 @@ func Derive(m *projectmodel.Model, cfg Config) (Plan, error) {
 	if p.ListenEnv == "" {
 		return Plan{}, fmt.Errorf("rungen: the deployment declares no %q setting, so the server has no HTTP address to run on", "listenAddr")
 	}
-	if err := p.web(m.System.HasBrowserSurface(), cfg.WebDir); err != nil {
+	if err := p.web(m.System.BuiltBrowserSurfaces(), cfg.WebDir); err != nil {
 		return Plan{}, err
 	}
 	return p, nil
 }
 
 // web builds and serves the web project only when the System has a browser surface.
-func (p *Plan) web(hasSurface bool, dir string) error {
-	if !hasSurface {
+func (p *Plan) web(surfaces []projectmodel.SystemComponent, dir string) error {
+	if len(surfaces) == 0 {
 		p.WebDistEnv = ""
 		return nil
 	}
@@ -148,6 +151,9 @@ func (p *Plan) web(hasSurface bool, dir string) error {
 	p.WebDir = dir
 	if p.WebDir == "" {
 		p.WebDir = defaultWebDir
+	}
+	for _, s := range surfaces {
+		p.WebSurfaces = append(p.WebSurfaces, s.ID)
 	}
 	return nil
 }
@@ -228,6 +234,14 @@ func render(p Plan) string {
 	}
 	b.WriteString("},\n")
 	fmt.Fprintf(&b, "\tWebDir: %q,\n\tListenEnv: %q,\n\tWebDistEnv: %q,\n\tDevPrincipalEnv: %q,\n", p.WebDir, p.ListenEnv, p.WebDistEnv, p.DevPrincipalEnv)
+	b.WriteString("\tWebSurfaces: []string{")
+	for i, s := range p.WebSurfaces {
+		if i > 0 {
+			b.WriteString(", ")
+		}
+		fmt.Fprintf(&b, "%q", s)
+	}
+	b.WriteString("},\n")
 	b.WriteString("\tProvisioned: []provisionedEnv{\n")
 	for _, e := range p.Provisioned {
 		fmt.Fprintf(&b, "\t\t{Env: %q, From: %q},\n", e.Env, string(e.From))
