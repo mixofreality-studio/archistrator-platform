@@ -36,6 +36,13 @@ const (
 	logTailBytes = 16 << 10
 )
 
+// groupGrace is how long Stop waits, once the process it started has exited, for the rest of the
+// launcher's process group to go. A var so a test can shorten it.
+var groupGrace = StopGrace
+
+// groupPoll is how often Stop looks at whether the group is empty while it waits.
+const groupPoll = 20 * time.Millisecond
+
 // App is a running composed app.
 type App struct {
 	// BaseURL is "http://127.0.0.1:<port>", from the launcher's ready line.
@@ -127,22 +134,20 @@ func awaitReadyLine(ctx context.Context, lines <-chan string, exited chan error)
 	}
 }
 
-// terminate sends SIGTERM to the launcher's process group, waits for it and its cleanups (the
-// Postgres removal runs in the launcher's deferred stack), then kills the group if it outlives
-// the grace period. A group that still has members after the launcher exited is killed and
-// reported.
+// terminate sends SIGTERM to the launcher's process group, waits for the process it started to
+// exit, then for the rest of the group to go (drainGroup), and kills the group if either outlives
+// its grace period.
+//
+// The process it started is `go run`, which a SIGTERM ends at once: the compiled launcher and the
+// server it spawned (whose deferred cleanups, such as the Postgres removal, are what Stop exists to
+// wait for) wind down after it, and a member that has exited stays in the group as a zombie until
+// its new parent reaps it. The exit of that first process is therefore not the exit of the group.
 func terminate(pgid int, exited chan error) error {
-	select {
-	case err := <-exited:
-		exited <- err
-		return reapGroup(pgid)
-	default:
-	}
 	_ = syscall.Kill(-pgid, syscall.SIGTERM)
 	select {
 	case err := <-exited:
 		exited <- err
-		return reapGroup(pgid)
+		return drainGroup(pgid)
 	case <-time.After(StopGrace):
 		_ = syscall.Kill(-pgid, syscall.SIGKILL)
 		<-exited
@@ -150,14 +155,19 @@ func terminate(pgid int, exited chan error) error {
 	}
 }
 
-// reapGroup kills whatever is left of the launcher's process group once the launcher itself has
-// exited: a server that outlived its launcher must not outlive the test.
-func reapGroup(pgid int) error {
-	if syscall.Kill(-pgid, 0) != nil {
-		return nil
+// drainGroup waits up to groupGrace for the launcher's process group to empty once the process
+// Stop started has exited. A group that still has members after the grace is a leak: a server that
+// outlived its launcher must not outlive the test, so it is killed and reported.
+func drainGroup(pgid int) error {
+	deadline := time.Now().Add(groupGrace)
+	for syscall.Kill(-pgid, 0) == nil {
+		if time.Now().After(deadline) {
+			_ = syscall.Kill(-pgid, syscall.SIGKILL)
+			return fmt.Errorf("devstack left processes in its group (pgid %d) %s after it exited; they were killed", pgid, groupGrace)
+		}
+		time.Sleep(groupPoll)
 	}
-	_ = syscall.Kill(-pgid, syscall.SIGKILL)
-	return fmt.Errorf("devstack left processes in its group (pgid %d) after it exited; they were killed", pgid)
+	return nil
 }
 
 func waitReadyz(ctx context.Context, base string) error {

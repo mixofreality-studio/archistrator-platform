@@ -182,11 +182,14 @@ func TestSeedResource_GitHubSeedsTheFake(t *testing.T) {
 
 func TestSeedResource_GitRepoCommitsFiles(t *testing.T) {
 	h := Start(t)
-	h.SeedResource(t, "gitRepo", json.RawMessage(`{"branch":"main","message":"arrange","files":{"docs/a.txt":"hello"}}`))
+	// The host (and its repository) is shared by every run of the test in this process, so the
+	// content is unique to the run: a second -count run seeding identical bytes has nothing to commit.
+	want := uniqueID("hello")
+	h.SeedResource(t, "gitRepo", json.RawMessage(`{"branch":"main","message":"arrange","files":{"docs/a.txt":"`+want+`"}}`))
 
 	out, err := exec.Command("git", "-C", h.Repo.Dir, "show", "main:docs/a.txt").CombinedOutput()
-	if err != nil || string(out) != "hello" {
-		t.Fatalf("show main:docs/a.txt = %q, %v; want hello", out, err)
+	if err != nil || string(out) != want {
+		t.Fatalf("show main:docs/a.txt = %q, %v; want %q", out, err, want)
 	}
 }
 
