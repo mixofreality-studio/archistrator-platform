@@ -203,3 +203,80 @@ passes over the wire against the harvested bodies (`TestConformance_ClientsOverW
 `TestConformance_Discriminate_Web` runs the browser half of `-discriminate` through the scenario host.
 The fixture's SPA is the generated scaffold (the harvest's hand-written bodies are the server's), so the
 browser scenarios that assert what the user sees are `TP-BROKEN` against it and are never nulled.
+(Superseded by "Acceptance plan and the harvested SPA" below: the harvest's SPA is seated.)
+
+## Acceptance plan and the harvested SPA (FPC plan 4, Task 4.5)
+
+### The acceptance plan
+
+`.phaseArtifacts.acceptancePlan` binds the residual use-case paths (`scenario.AcceptanceResidual`): the
+variants no single client's plan covers. Over this fixture that is 14 variants, not the two use cases the
+design sketch named: every variant of `work-the-list` and `resume-the-list` (two actors originate them, so
+the outcome one actor sees on a client the other did not call through belongs to no client plan), and
+`reword-a-todo-P2/P3@todoMcpServer` (a path through two clients, the surface and the MCP server).
+
+- Principals: `team-member` is `alice`, `team-agent` is `agent-1` (`onBehalfOf` `alice`, the seven
+  intents). `browserActor` is `team-member`: the launch runs as `alice`, and the agent's requests name
+  themselves with the per-request `X-Dev-Principal` the launch allowlists.
+- The 10 variants that run: the six `@todoApi` variants (the agent writes over REST; each step is followed
+  by a fresh page load as the member, which shows the write, and a read as the agent), the two
+  `resume-the-list-P2/P3@todoWebApp` variants (the member opens the list in the browser; an MCP read as
+  the agent shows the same list) and `reword-a-todo-P2/P3@todoMcpServer` (the member starts a reword in
+  the browser, the commit is an MCP call, and the browser, which leaves edit mode, shows it).
+- The 4 variants the plan skips, each with `until: U-SPA-todo-web-app` (never expires in the fixture,
+  which holds no execution rows) and a reason the generated Go file reports as the verdict `skip`:
+  `work-the-list-P1/P2@todoWebApp` (the dialect has no type-and-submit, and a reword is three browser acts
+  where the path has one stimulus: the browser cannot drive these paths in the steps the use case has) and
+  `work-the-list-P3@todoWebApp`, `resume-the-list-P1@todoWebApp` (the SPA opens the requester's own list,
+  so a member's browser is never refused another member's: the refused path has no browser driver).
+- Arrange goes through the Manager's routes (a browser spec can reach nothing else): the list is emptied
+  (`ToggleAll`, `ClearCompleted`, twice: the second pair empties a list that was all completed), then built
+  with `AddTodo`. The launch is shared by every spec of the plan, so each spec starts by emptying `alice`'s
+  list. A todo's id is derived from owner and request id (`sha256(owner NUL requestId)[:16]` in hex), so a
+  step names the todo it acts on by that id.
+- `todoApi.ListOpenList`, `todoMcpServer.ListOpenList` and `todoWebApp.OpenList` are marked `readOnly`:
+  an acceptance probe reads through a client and only a read-only operation may be a probe.
+- Slots 9 and 10 carry `N-ATP` and `M-ACCEPT`, and `MEND` depends on `M-ACCEPT`, as the app's derivation
+  now emits them.
+
+### The harvested SPA
+
+`impl/webApp/src/todo-web-app/**` is the RUN-021 harvest's hand-written SPA (`harvest/app/webApp/src/
+todo-web-app/`), overlaid after `webgen generate` and before `npm install`. The scaffold's `api/` and
+`contracts/` are what its imports name, so no import was adapted. The complete list of edits, all to make
+it satisfy the fixture's UI design (the harvest located elements by `data-testid`, which the role-and-name
+dialect does not use):
+
+- `NewTodoInput`: `aria-label` is the design's `What needs to be done?` (was `New todo`).
+- `StatusStrip`: `aria-label="Notice"`. `list-refused`: `role="status"`, `aria-label="List refused"`.
+- `Footer`: the count is `role="status"`, `aria-label="Items left"`.
+- `App`: the list is named for its view, none on `#/`, `Active todos`, `Completed todos`.
+- `TodoItem`: the `li` is `Todo`, the checkbox `Completed`, the edit input `Edit todo`, the delete button
+  `Delete`; the title is a heading (`h2`, `Todo title`) rather than a button, with the double-click handler
+  and a tab stop on it, which `jsx-a11y` refuses for a heading, so the file disables those two rules.
+
+The browser scenarios of the fixture's own web plan were all `TP-BROKEN` against the scaffold SPA. Against
+this one 4 of the 19 pass (`come-back-to-an-intact-list-P1`, `resume-the-list-P2`, `resume-the-list-P3`,
+`see-how-many-todos-are-left-P1`) and are null-discriminated with no survivor; 15 are `TP-BROKEN`
+(`webPasses`, `TestConformance_Discriminate_Web`). The 15 start from a page nothing opened, or assert what
+the plan's single act per step cannot do (add a todo, reword in place), or a refusal the SPA never shows.
+
+### The proof
+
+`TestConformance_Acceptance` builds the fixture with the harvested bodies and SPA, launches it with every
+principal of the plan allowlisted and requires a verdict for every residual variant: `pass` for the 10 that
+run, `skip` for the 4 the plan skips. `TestConformance_Acceptance_RedRoutesToTheClient` builds the same
+fixture with `TodoItem.tsx` changed in memory so a completed todo is never rendered checked, and requires
+the verdict of `work-the-list-P1@todoApi` to be `fail`. `TestDevPrincipals_PerRequestHeaderOnlyWhenAllowlisted`
+holds the header to the launch's allowlist.
+
+### Findings of the first run (fixed in app-generator testgen)
+
+- A hash-only navigation to the route the page is already on is a same-document no-op, so every browser
+  probe after the first showed the page the agent's earlier steps had left. A probe's navigation now leaves
+  the page first (`about:blank`).
+- A variant whose first browser act is not a navigation (a double-click) ran against a blank page. It now
+  opens the surface's entry screen first.
+- `testgen -discriminate` waits the Playwright test timeout (300s) for every browser scenario that cannot
+  pass. `TestConformance_Discriminate_Web` and `TestConformance_ClientsOverWire` set it to 90s
+  (`AIARCH_SCENARIO_TIMEOUT_MS`): with the SPA seated they exceeded the 115 minute budget.

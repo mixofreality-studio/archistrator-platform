@@ -41,8 +41,8 @@ const run021Fixture = "todomvc"
 //	              the wire) and none survives its stimulus being nulled (survivors == 0): the proof
 //	              that the generated tests discriminate a real implementation, which the null
 //	              build alone cannot give. The browser scenarios run too, through the scenario
-//	              host: the fixture's SPA is the generated scaffold, so they are TP-BROKEN, never
-//	              nulled
+//	              host: the fixture's SPA is the harvest's hand-written one, against which
+//	              webPasses pass and are nulled and the rest are TP-BROKEN, never nulled
 func TestConformance_RUN021Proof(t *testing.T) {
 	raw, err := Fixture(run021Fixture)
 	if err != nil {
@@ -139,8 +139,9 @@ func run021DiscriminateImpl(t *testing.T, raw []byte) {
 		t.Errorf("%s scenario %s op %s survives the null subject over the real bodies", s.component, s.scenario, s.op)
 	}
 	// Every Go scenario, machine clients included (they run over the wire since Plan 3 Task 3.3), passes
-	// against the harvested bodies. The browser scenarios do not: the fixture's SPA is the generated
-	// scaffold, the harvest's bodies are the server's. So TP-BROKEN names exactly the browser scenarios.
+	// against the harvested bodies. The browser scenarios mostly do not: the fixture's SPA is the
+	// harvest's hand-written one, against which webPasses pass and the rest are TP-BROKEN. So TP-BROKEN
+	// names exactly the browser scenarios outside webPasses.
 	web := webScenarioIDs(t, dir)
 	broken := map[string]bool{}
 	for _, b := range got.brokenList {
@@ -151,8 +152,8 @@ func run021DiscriminateImpl(t *testing.T, raw []byte) {
 		broken[b.scenario] = true
 	}
 	for _, id := range web {
-		if !broken[id] {
-			t.Errorf("browser scenario %s passes against the scaffold SPA: pin which browser scenarios are TP-BROKEN again", id)
+		if webPasses[id] == broken[id] {
+			t.Errorf("browser scenario %s: pinned as passing = %v but TP-BROKEN = %v against the harvested SPA: pin which browser scenarios are TP-BROKEN again", id, webPasses[id], broken[id])
 		}
 	}
 	if got.survivors != 0 {
@@ -181,6 +182,10 @@ func goScenarios(t *testing.T, dir string) int {
 		base := filepath.Base(path)
 		if err != nil || d.IsDir() || !strings.HasSuffix(base, "_scenarios.gen_test.go") {
 			return err
+		}
+		// The acceptance variants (internal/acceptance) are not null-discriminated (earmark E22).
+		if filepath.Base(filepath.Dir(path)) == acceptanceResults {
+			return nil
 		}
 		src, err := os.ReadFile(path) // #nosec G304 -- the chain's own output
 		if err != nil {
@@ -334,7 +339,10 @@ func discriminate(t *testing.T, dir string) discriminateRun {
 	cmd := exec.CommandContext(ctx, "go", "tool", "testgen", "-project", ".aiarch/state/project.json", // #nosec G204 -- fixed argv
 		"-root", ".", "-uitests", "uitests/generated", "-discriminate")
 	cmd.Dir = dir
-	cmd.Env = append(os.Environ(), "GOWORK=off")
+	// A browser scenario that cannot pass (TP-BROKEN) waits out its Playwright test timeout, 300s by
+	// default and once per scenario: the harvested SPA seated, that alone is most of the budget. A
+	// scenario that passes needs well under a minute.
+	cmd.Env = append(os.Environ(), "GOWORK=off", "AIARCH_SCENARIO_TIMEOUT_MS=90000")
 	out, err := cmd.CombinedOutput()
 	var got discriminateRun
 	summarized := false

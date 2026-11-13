@@ -275,6 +275,21 @@
             ]
           },
           {
+            "activity": "M-ACCEPT",
+            "dependsOn": [
+              "C-todo-api",
+              "C-todo-mcp-server",
+              "N-ATP",
+              "U-SPA-todo-web-app"
+            ]
+          },
+          {
+            "activity": "N-ATP",
+            "dependsOn": [
+              "M0"
+            ]
+          },
+          {
             "activity": "U-SPA-todo-web-app",
             "dependsOn": [
               "C-list-manager"
@@ -299,6 +314,7 @@
           "C-list-ruling-engine",
           "C-todo-api",
           "C-todo-mcp-server",
+          "M-ACCEPT",
           "U-SPA-todo-web-app",
           "architecture",
           "projectDesign",
@@ -340,9 +356,7 @@
             "name": "Project End",
             "public": false,
             "dependsOn": [
-              "C-todo-api",
-              "C-todo-mcp-server",
-              "U-SPA-todo-web-app"
+              "M-ACCEPT"
             ]
           }
         ]
@@ -3713,6 +3727,22 @@
             "title": "Build Todo Web App (SPA)",
             "componentId": "todo-web-app",
             "uiSurface": true
+          },
+          {
+            "name": "N-ATP",
+            "effortDays": 5,
+            "workerClass": "test-engineer",
+            "coding": false,
+            "riskBucket": 2,
+            "title": "Use-case acceptance test plan"
+          },
+          {
+            "name": "M-ACCEPT",
+            "effortDays": 0,
+            "workerClass": "system-architect",
+            "coding": false,
+            "riskBucket": 1,
+            "title": "Use-case acceptance (M-ACCEPT)"
           }
         ]
       },
@@ -4750,7 +4780,8 @@
               "$ref": "#/$defs/ListView",
               "description": "Intent read. RecallList(owner) gives every title and completed state as last kept, and is empty, never an error, for a member who has never added a todo. Then SelectView(todos, view) and TallyItemsLeft(todos) over the whole list. Read-only: publishes nothing and is naturally idempotent. Hosts call it on open and again after every ListChanged notice."
             },
-            "error": true
+            "error": true,
+            "readOnly": true
           }
         ]
       }
@@ -5343,7 +5374,8 @@
               ],
               "additionalProperties": false
             },
-            "error": true
+            "error": true,
+            "readOnly": true
           }
         ]
       }
@@ -5518,7 +5550,8 @@
             "result": {
               "$ref": "#/$defs/UIObservation"
             },
-            "error": false
+            "error": false,
+            "readOnly": true
           }
         ]
       }
@@ -31306,6 +31339,4751 @@
           }
         ]
       }
+    },
+    "acceptancePlan": {
+      "principals": {
+        "team-member": {
+          "subject": "alice",
+          "roles": [
+            "member"
+          ]
+        },
+        "team-agent": {
+          "subject": "agent-1",
+          "roles": [
+            "agent"
+          ],
+          "onBehalfOf": "alice",
+          "intents": [
+            "read",
+            "add",
+            "reword",
+            "discard",
+            "mark",
+            "toggleAll",
+            "clearCompleted"
+          ]
+        }
+      },
+      "browserActor": "team-member",
+      "bindings": [
+        {
+          "scenario": "resume-the-list-P1@todoApi",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "ListOpenList",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "bob"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "view",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "all"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "",
+                "errorExpected": true,
+                "errorCode": "Refused"
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":1}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "listManager",
+                  "operation": "OpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": true,
+                    "errorCode": "Refused"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scenario": "resume-the-list-P1@todoWebApp",
+          "arrange": [],
+          "steps": [],
+          "skip": {
+            "reason": "the SPA opens the requester's own list (owner is empty), so a member's browser is never refused another member's list: the refused path has no browser driver",
+            "until": "U-SPA-todo-web-app"
+          }
+        },
+        {
+          "scenario": "resume-the-list-P2@todoApi",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Pay rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-pay-rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Pay rent\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Call mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-call-mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Call mum\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "MarkTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "todoId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "adf74fef44801a9b143337f40b0f87e3"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "completed",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": true
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"marked\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "ListOpenList",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "view",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "all"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"itemsLeft\":2,\"totalCount\":3,\"view\":\"all\"}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":3}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"2 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Pay rent\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Call mum\"}},{\"kind\":\"checked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":1}}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "listManager",
+                  "operation": "OpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":2,\"totalCount\":3,\"view\":\"all\"}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scenario": "resume-the-list-P2@todoWebApp",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Pay rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-pay-rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Pay rent\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Call mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-call-mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Call mum\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "MarkTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "todoId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "adf74fef44801a9b143337f40b0f87e3"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "completed",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": true
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"marked\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "OpenList",
+              "inputs": [
+                {
+                  "name": "action",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": {
+                        "kind": "navigate",
+                        "model": {
+                          "route": "#/"
+                        }
+                      }
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":3}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"2 items left\"}},{\"kind\":\"checked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":1}}}]",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-agent",
+                  "component": "todoMcpServer",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"result\":{\"itemsLeft\":2,\"totalCount\":3,\"view\":\"all\"}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scenario": "resume-the-list-P3@todoApi",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Pay rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-pay-rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Pay rent\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Call mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-call-mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Call mum\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "MarkTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "todoId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "adf74fef44801a9b143337f40b0f87e3"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "completed",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": true
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"marked\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "ListOpenList",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "view",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "active"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"itemsLeft\":2,\"totalCount\":3,\"view\":\"active\"}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/active"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":2}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Call mum\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "listManager",
+                  "operation": "OpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "active"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":2,\"totalCount\":3,\"view\":\"active\"}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scenario": "resume-the-list-P3@todoWebApp",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Pay rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-pay-rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Pay rent\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Call mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-call-mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Call mum\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "MarkTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "todoId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "adf74fef44801a9b143337f40b0f87e3"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "completed",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": true
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"marked\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "OpenList",
+              "inputs": [
+                {
+                  "name": "action",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": {
+                        "kind": "navigate",
+                        "model": {
+                          "route": "#/active"
+                        }
+                      }
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":2}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Call mum\"}}]",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-agent",
+                  "component": "todoMcpServer",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "active"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"result\":{\"itemsLeft\":2,\"totalCount\":3,\"view\":\"active\"}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scenario": "reword-a-todo-P2@todoMcpServer",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "RewordTodo",
+              "inputs": [
+                {
+                  "name": "action",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": {
+                        "kind": "dblclick",
+                        "model": {
+                          "target": {
+                            "element": "todo-title"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"todo-edit-input\"}}}]",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": []
+            },
+            {
+              "seq": 2,
+              "operation": "RewordTodo",
+              "inputs": [
+                {
+                  "name": "action",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": {
+                        "kind": "fill",
+                        "model": {
+                          "target": {
+                            "element": "todo-edit-input"
+                          },
+                          "value": "Buy oat milk"
+                        }
+                      }
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"todo-edit-input\"}}}]",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": []
+            },
+            {
+              "seq": 3,
+              "operation": "ListRewordTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "a2b30d44c7f73dede758fc9945d1f225"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "wording",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "Buy oat milk"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"result\":{\"outcome\":\"retitled\",\"itemsLeft\":1,\"todo\":{\"title\":\"Buy oat milk\",\"completed\":false}}}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "n6",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "click",
+                            "model": {
+                              "target": {
+                                "element": "page-title"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\"},\"text\":\"Buy oat milk\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "click",
+                            "model": {
+                              "target": {
+                                "element": "page-title"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\"},\"text\":\"Buy oat milk\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scenario": "reword-a-todo-P3@todoMcpServer",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "RewordTodo",
+              "inputs": [
+                {
+                  "name": "action",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": {
+                        "kind": "dblclick",
+                        "model": {
+                          "target": {
+                            "element": "todo-title"
+                          }
+                        }
+                      }
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"todo-edit-input\"}}}]",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": []
+            },
+            {
+              "seq": 2,
+              "operation": "RewordTodo",
+              "inputs": [
+                {
+                  "name": "action",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": {
+                        "kind": "fill",
+                        "model": {
+                          "target": {
+                            "element": "todo-edit-input"
+                          },
+                          "value": ""
+                        }
+                      }
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"todo-edit-input\"}}}]",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": []
+            },
+            {
+              "seq": 3,
+              "operation": "ListRewordTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "a2b30d44c7f73dede758fc9945d1f225"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "wording",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "   "
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"result\":{\"outcome\":\"removed\",\"itemsLeft\":0}}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "n7",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "click",
+                            "model": {
+                              "target": {
+                                "element": "page-title"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":0}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "click",
+                            "model": {
+                              "target": {
+                                "element": "page-title"
+                              }
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":0}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scenario": "work-the-list-P1@todoApi",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Pay rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-pay-rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Pay rent\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Call mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-call-mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Call mum\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "ListAddTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "wording",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "Buy milk"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "requestId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "acc-P1-r1"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"added\",\"itemsLeft\":4,\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":4}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"4 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Pay rent\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Call mum\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":3},\"text\":\"Buy milk\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":4,\"totalCount\":4}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 2,
+              "operation": "ListRewordTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "a2b30d44c7f73dede758fc9945d1f225"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "wording",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "Walk the dog"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"retitled\",\"itemsLeft\":4,\"todo\":{\"title\":\"Walk the dog\",\"completed\":false}}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":4}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"4 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk the dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Pay rent\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Call mum\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":3},\"text\":\"Buy milk\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":4,\"totalCount\":4}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 3,
+              "operation": "ListDiscardTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "adf74fef44801a9b143337f40b0f87e3"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"removed\",\"itemsLeft\":3}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":3}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"3 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk the dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Call mum\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Buy milk\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":3,\"totalCount\":3}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 4,
+              "operation": "ListMarkTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "b88d6c64c243d86d424a816518d8610f"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "completed",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": true
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"marked\",\"itemsLeft\":2,\"todo\":{\"title\":\"Call mum\",\"completed\":true}}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":3}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"2 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk the dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Call mum\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Buy milk\"}},{\"kind\":\"checked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":1}}},{\"kind\":\"unchecked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":0}}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":2,\"totalCount\":3}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 5,
+              "operation": "ListToggleAll",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"toggled\",\"itemsLeft\":0}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":3}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"0 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk the dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Call mum\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Buy milk\"}},{\"kind\":\"checked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":0}}},{\"kind\":\"checked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":2}}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":0,\"totalCount\":3}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 6,
+              "operation": "ListClearCompleted",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"cleared\",\"itemsLeft\":0}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "n4",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":0}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":0}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":0,\"totalCount\":0}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scenario": "work-the-list-P1@todoWebApp",
+          "arrange": [],
+          "steps": [],
+          "skip": {
+            "reason": "the browser cannot add a todo in one action: the dialect has fill and press but no type-and-submit, and the web steps for reword are three actions (dblclick, fill, Enter) where the path has one stimulus",
+            "until": "U-SPA-todo-web-app"
+          }
+        },
+        {
+          "scenario": "work-the-list-P2@todoApi",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Pay rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-pay-rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Pay rent\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Call mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-call-mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Call mum\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "ListAddTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "wording",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "Buy milk"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "requestId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "acc-P2-r1"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"added\",\"itemsLeft\":4,\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":4}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"4 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Pay rent\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Call mum\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":3},\"text\":\"Buy milk\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":4,\"totalCount\":4}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 2,
+              "operation": "ListRewordTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "a2b30d44c7f73dede758fc9945d1f225"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "wording",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "Walk the dog"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"retitled\",\"itemsLeft\":4,\"todo\":{\"title\":\"Walk the dog\",\"completed\":false}}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":4}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"4 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk the dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Pay rent\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Call mum\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":3},\"text\":\"Buy milk\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":4,\"totalCount\":4}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 3,
+              "operation": "ListDiscardTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "adf74fef44801a9b143337f40b0f87e3"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"removed\",\"itemsLeft\":3}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":3}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"3 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk the dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Call mum\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Buy milk\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":3,\"totalCount\":3}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 4,
+              "operation": "ListMarkTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "b88d6c64c243d86d424a816518d8610f"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "completed",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": true
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"marked\",\"itemsLeft\":2,\"todo\":{\"title\":\"Call mum\",\"completed\":true}}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":3}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"2 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk the dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Call mum\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Buy milk\"}},{\"kind\":\"checked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":1}}},{\"kind\":\"unchecked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":0}}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":2,\"totalCount\":3}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 5,
+              "operation": "ListToggleAll",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"toggled\",\"itemsLeft\":0}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":3}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"0 items left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk the dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Call mum\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":2},\"text\":\"Buy milk\"}},{\"kind\":\"checked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":0}}},{\"kind\":\"checked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":2}}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":0,\"totalCount\":3}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 6,
+              "operation": "ListClearCompleted",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "alice"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "{\"outcome\":\"cleared\",\"itemsLeft\":0}",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "n4",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":0}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":0}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"itemsLeft\":0,\"totalCount\":0}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scenario": "work-the-list-P2@todoWebApp",
+          "arrange": [],
+          "steps": [],
+          "skip": {
+            "reason": "the browser cannot add a todo in one action: the dialect has fill and press but no type-and-submit, and the web steps for reword are three actions (dblclick, fill, Enter) where the path has one stimulus",
+            "until": "U-SPA-todo-web-app"
+          }
+        },
+        {
+          "scenario": "work-the-list-P3@todoApi",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "ListAddTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "bob"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "wording",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "Buy milk"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "requestId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "acc-P3-r1"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "",
+                "errorExpected": true,
+                "errorCode": "Refused"
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":1}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": true,
+                    "errorCode": "Refused"
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 2,
+              "operation": "ListRewordTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "bob"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "bob-todo"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "wording",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "Hacked"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "",
+                "errorExpected": true,
+                "errorCode": "Refused"
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":1}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": true,
+                    "errorCode": "Refused"
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 3,
+              "operation": "ListDiscardTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "bob"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "bob-todo"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "",
+                "errorExpected": true,
+                "errorCode": "Refused"
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":1}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": true,
+                    "errorCode": "Refused"
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 4,
+              "operation": "ListMarkTodo",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "bob"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "todoId",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "bob-todo"
+                    }
+                  },
+                  "schemaRef": ""
+                },
+                {
+                  "name": "completed",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": true
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "",
+                "errorExpected": true,
+                "errorCode": "Refused"
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":1}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": true,
+                    "errorCode": "Refused"
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 5,
+              "operation": "ListToggleAll",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "bob"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "",
+                "errorExpected": true,
+                "errorCode": "Refused"
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":1}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": true,
+                    "errorCode": "Refused"
+                  }
+                }
+              ]
+            },
+            {
+              "seq": 6,
+              "operation": "ListClearCompleted",
+              "inputs": [
+                {
+                  "name": "owner",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": "bob"
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "",
+                "errorExpected": true,
+                "errorCode": "Refused"
+              },
+              "probes": [
+                {
+                  "for": "out-team-member",
+                  "component": "todoWebApp",
+                  "operation": "OpenList",
+                  "as": "team-member",
+                  "inputs": [
+                    {
+                      "name": "action",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": {
+                            "kind": "navigate",
+                            "model": {
+                              "route": "#/"
+                            }
+                          }
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":1}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}}]",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                },
+                {
+                  "for": "out-team-agent",
+                  "component": "todoApi",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "bob"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "",
+                    "errorExpected": true,
+                    "errorCode": "Refused"
+                  }
+                }
+              ]
+            }
+          ]
+        },
+        {
+          "scenario": "work-the-list-P3@todoWebApp",
+          "arrange": [],
+          "steps": [],
+          "skip": {
+            "reason": "the SPA opens the requester's own list (owner is empty), so a member's browser is never refused another member's list: the refused path has no browser driver",
+            "until": "U-SPA-todo-web-app"
+          }
+        }
+      ]
     }
   },
   "reviewPolicy": {

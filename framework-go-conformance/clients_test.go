@@ -25,6 +25,14 @@ import (
 // tests, running the 28 client scenarios one `go test` each, and the whole -discriminate run is by far
 // the slowest thing the harness does, and each test only asserts a different half of it.
 
+// webPasses is the browser scenarios of the fixture's web plan that pass against the harvested SPA.
+var webPasses = map[string]bool{
+	"come-back-to-an-intact-list-P1": true,
+	"resume-the-list-P2":             true,
+	"resume-the-list-P3":             true,
+	"see-how-many-todos-are-left-P1": true,
+}
+
 // clientContracts is the machine clients of the fixture and how many scenarios each binds.
 var clientContracts = map[string]int{"todoApi": 8, "todoMcpServer": 20}
 
@@ -195,6 +203,11 @@ func webScenarioIDs(t *testing.T, dir string) []string {
 		if err != nil || d.IsDir() || !strings.HasSuffix(base, ".spec.gen.ts") || base == "surface.spec.gen.ts" {
 			return err
 		}
+		// The acceptance variants are the acceptance plan's, run by TestConformance_Acceptance (they are
+		// not null-discriminated, earmark E22).
+		if filepath.Base(filepath.Dir(path)) == acceptanceResults {
+			return nil
+		}
 		ids = append(ids, strings.TrimSuffix(base, ".spec.gen.ts"))
 		return nil
 	})
@@ -258,10 +271,12 @@ func TestConformance_ClientsOverWire(t *testing.T) {
 // The browser half of the null-subject run: the fixture's todo-web-app scenarios run through the
 // scenario host (go tool webscenarios), each once against its real server and, when that passes, once
 // per stimulus operation with the Manager operation it reaches nulled in the server the host launches.
-// None is dropped or announced as skipped, and none survives. The fixture's SPA is the generated
-// scaffold (the harvest's hand-written bodies are the server's), which cannot satisfy a scenario that
-// asserts what the user sees, so those are TP-BROKEN, never nulled: the proof here is that the run
-// reaches a verdict for every browser scenario through the host and leaves nothing behind.
+// None is dropped or announced as skipped, and none survives. The fixture's SPA is the RUN-021 harvest's
+// hand-written one (FPC plan 4 Task 4.5, README "Acceptance plan and the harvested SPA"). 4 of its 19 web
+// scenarios pass against it (webPasses) and are nulled, and none survives; the other 15 assert what the
+// plan's steps cannot do (a type-and-submit in one act, a refusal the SPA never shows, a reword in one
+// act) or start from a page nothing opened, so they are TP-BROKEN, never nulled. The proof here is that
+// the run reaches a verdict for every browser scenario through the host and leaves nothing behind.
 func TestConformance_Discriminate_Web(t *testing.T) {
 	got := harvested(t)
 	if len(got.webIDs) == 0 {
@@ -289,8 +304,11 @@ func TestConformance_Discriminate_Web(t *testing.T) {
 		t.Errorf("-discriminate counted %d scenario(s), want %d Go and %d browser", got.disc.scenarios, implScenarios, len(got.webIDs))
 	}
 	for _, id := range got.webIDs {
-		if !broken[id] {
-			t.Errorf("browser scenario %s passes against the scaffold SPA: the fixture's browser bindings changed; pin which ones are TP-BROKEN again", id)
+		switch {
+		case webPasses[id] && broken[id]:
+			t.Errorf("browser scenario %s is TP-BROKEN against the harvested SPA: it passed when the SPA was seated and is pinned as passing", id)
+		case !webPasses[id] && !broken[id]:
+			t.Errorf("browser scenario %s passes against the harvested SPA: the fixture's browser bindings or the SPA changed; pin which ones are TP-BROKEN again", id)
 		}
 	}
 	if len(got.left) > 0 {
