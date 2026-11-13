@@ -24,14 +24,14 @@ const (
 	// analyzer-based `go fix -diff` gate; runners resolve it via the go.mod
 	// toolchain directive / setup-go.
 	GoVersion            = "1.26.0"
-	FrameworkGoVersion   = "v0.23.0"
-	AppGeneratorVersion  = "v0.25.2"
+	FrameworkGoVersion   = "v0.24.0"
+	AppGeneratorVersion  = "v0.26.0"
 	HTTPGeneratorVersion = "v0.6.0"
 	MCPGeneratorVersion  = "v0.3.0"
 	ProjectModelVersion  = "v0.5.0"
 	// ScenarioHostVersion is the release that ships cmd/webscenarios, the tool every web
 	// scenario batch and the surface check run under.
-	ScenarioHostVersion = "v0.6.0"
+	ScenarioHostVersion = "v0.7.0"
 
 	// The composition root's own dependencies; see compositionPins.
 	InfraOtelVersion     = "v0.1.0"
