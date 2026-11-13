@@ -49,10 +49,28 @@ func TestMethodSpecForEveryLifecycleTask(t *testing.T) {
 				t.Errorf("%s/%s: %v", l.Type, task.ID, err)
 				continue
 			}
+			if task.Kind == LifecycleTaskJob {
+				continue // a venue job has no agent: TestMethodSpecForJobHasNoPrompt
+			}
 			if task.Command != "" && (s.Model == "" || s.Prompt == "") {
 				t.Errorf("%s/%s: dispatchable task has empty model or prompt", l.Type, task.ID)
 			}
 		}
+	}
+}
+
+// A venue job runs the task spec's checks and records the CheckRun; it never starts an agent, so
+// its method spec is the identity only: no manifest, charter, prompt or model.
+func TestMethodSpecForJobHasNoPrompt(t *testing.T) {
+	s, err := MethodSpecFor("milestone:acceptance", "integration", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Kind != LifecycleTaskJob || s.Command != "acceptance-run" || s.ArtifactKind != "AcceptanceRun" || s.ExitCriterion == "" {
+		t.Fatalf("job identity = %+v", s)
+	}
+	if s.Prompt != "" || s.Charter != "" || s.Agent != "" || s.Model != "" || s.WorkerClass != "" || s.Mode != "" || len(s.MCPTools) != 0 || len(s.BuiltinTools) != 0 || len(s.Skills) != 0 {
+		t.Fatalf("a job must carry no agent configuration: %+v", s)
 	}
 }
 

@@ -83,7 +83,7 @@ func TestTaskSpecStep_RefusesDriftAndUnplainValues(t *testing.T) {
 		}
 		t.Run(name+"/plain spec passes", func(t *testing.T) {
 			t.Parallel()
-			outs, log, err := run(t, `{"model":{"id":"opus"},"tools":{"builtin":["Bash","Read","Skill"]}}`, gateHash, "integration")
+			outs, log, err := run(t, `{"identity":{"kind":"dispatch"},"model":{"id":"opus"},"tools":{"builtin":["Bash","Read","Skill"]}}`, gateHash, "integration")
 			if err != nil {
 				t.Fatalf("a matching, plain spec was refused: %v\n%s", err, log)
 			}
@@ -100,9 +100,29 @@ func TestTaskSpecStep_RefusesDriftAndUnplainValues(t *testing.T) {
 				t.Errorf("the construct spec step must output the base and the integration flag: %v", outs)
 			}
 		})
+		if name == "construct" {
+			// A job task (the acceptance milestone's run) has no agent: its spec carries no model
+			// and no tool list, and the step emits kind=job instead of refusing for their absence.
+			t.Run(name+"/job spec passes with no model", func(t *testing.T) {
+				t.Parallel()
+				outs, log, err := run(t, `{"identity":{"kind":"job"},"checks":[]}`, gateHash, "integration")
+				if err != nil {
+					t.Fatalf("a job spec has no model or tool list and must pass: %v\n%s", err, log)
+				}
+				if outs["kind"] != "job" || outs["model"] != "" || outs["builtin"] != "" || outs["integration"] != "true" {
+					t.Errorf("outputs = %v", outs)
+				}
+			})
+			t.Run(name+"/unknown kind refused", func(t *testing.T) {
+				t.Parallel()
+				if _, _, err := run(t, `{"identity":{"kind":"evil\n--x"},"model":{"id":"opus"},"tools":{"builtin":[]}}`, gateHash, "integration"); err == nil {
+					t.Error("a task kind that is not dispatch, review or job must be refused")
+				}
+			})
+		}
 		t.Run(name+"/empty allowlist passes", func(t *testing.T) {
 			t.Parallel()
-			outs, log, err := run(t, `{"model":{"id":"sonnet"},"tools":{"builtin":[]}}`, gateHash, "construction")
+			outs, log, err := run(t, `{"identity":{"kind":"dispatch"},"model":{"id":"sonnet"},"tools":{"builtin":[]}}`, gateHash, "construction")
 			if err != nil {
 				t.Fatalf("an empty built-in allowlist means none and must pass: %v\n%s", err, log)
 			}
@@ -114,17 +134,17 @@ func TestTaskSpecStep_RefusesDriftAndUnplainValues(t *testing.T) {
 			}
 		})
 		for label, c := range map[string]struct{ spec, hash string }{
-			"drifted hash":         {`{"model":{"id":"opus"},"tools":{"builtin":["Read"]}}`, strings.Repeat("f", 64)},
+			"drifted hash":         {`{"identity":{"kind":"dispatch"},"model":{"id":"opus"},"tools":{"builtin":["Read"]}}`, strings.Repeat("f", 64)},
 			"missing model":        {`{"tools":{"builtin":["Read"]}}`, gateHash},
-			"json null model":      {`{"model":{"id":null},"tools":{"builtin":["Read"]}}`, gateHash},
-			"literal null model":   {`{"model":{"id":"null"},"tools":{"builtin":["Read"]}}`, gateHash},
-			"newline model":        {`{"model":{"id":"opus\n--evil"},"tools":{"builtin":["Read"]}}`, gateHash},
-			"spaced model":         {`{"model":{"id":"opus --x"},"tools":{"builtin":["Read"]}}`, gateHash},
-			"missing builtin":      {`{"model":{"id":"opus"},"tools":{}}`, gateHash},
-			"newline builtin":      {`{"model":{"id":"opus"},"tools":{"builtin":["Read\nx=1"]}}`, gateHash},
-			"quoted builtin":       {`{"model":{"id":"opus"},"tools":{"builtin":["Read' --x '"]}}`, gateHash},
-			"literal null tools":   {`{"model":{"id":"opus"},"tools":{"builtin":["null"]}}`, gateHash},
-			"substitution builtin": {`{"model":{"id":"opus"},"tools":{"builtin":["$(touch PWNED)"]}}`, gateHash},
+			"json null model":      {`{"identity":{"kind":"dispatch"},"model":{"id":null},"tools":{"builtin":["Read"]}}`, gateHash},
+			"literal null model":   {`{"identity":{"kind":"dispatch"},"model":{"id":"null"},"tools":{"builtin":["Read"]}}`, gateHash},
+			"newline model":        {`{"identity":{"kind":"dispatch"},"model":{"id":"opus\n--evil"},"tools":{"builtin":["Read"]}}`, gateHash},
+			"spaced model":         {`{"identity":{"kind":"dispatch"},"model":{"id":"opus --x"},"tools":{"builtin":["Read"]}}`, gateHash},
+			"missing builtin":      {`{"identity":{"kind":"dispatch"},"model":{"id":"opus"},"tools":{}}`, gateHash},
+			"newline builtin":      {`{"identity":{"kind":"dispatch"},"model":{"id":"opus"},"tools":{"builtin":["Read\nx=1"]}}`, gateHash},
+			"quoted builtin":       {`{"identity":{"kind":"dispatch"},"model":{"id":"opus"},"tools":{"builtin":["Read' --x '"]}}`, gateHash},
+			"literal null tools":   {`{"identity":{"kind":"dispatch"},"model":{"id":"opus"},"tools":{"builtin":["null"]}}`, gateHash},
+			"substitution builtin": {`{"identity":{"kind":"dispatch"},"model":{"id":"opus"},"tools":{"builtin":["$(touch PWNED)"]}}`, gateHash},
 		} {
 			t.Run(name+"/"+label, func(t *testing.T) {
 				t.Parallel()
@@ -205,7 +225,7 @@ func runSpecStep(t *testing.T, spec workflowStep, work, tmp, specJSON, printedHa
 
 // plainSpec carries the dispatched hash, as task-spec writes it: the gates
 // re-check it against AIARCH_SPEC_HASH before they read the spec.
-const plainSpec = `{"model":{"id":"opus"},"tools":{"builtin":["Read"]},"hash":"` + gateHash + `"}`
+const plainSpec = `{"identity":{"kind":"dispatch"},"model":{"id":"opus"},"tools":{"builtin":["Read"]},"hash":"` + gateHash + `"}`
 
 // writeGateSpec writes the spec.json the gates read into tmp, carrying hash.
 func writeGateSpec(t *testing.T, tmp, hash string) {

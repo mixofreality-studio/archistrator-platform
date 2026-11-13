@@ -541,6 +541,14 @@ func playwrightResultsDir(component string) string {
 // it, so a built surface that does not match its design fails once, naming the
 // element, before any scenario spends its time failing at its first locator.
 func playwrightConfig(results string) string {
+	return playwrightConfigWith(results, `
+    { name: 'surface', testMatch: /surface\.spec\.gen\.ts$/ },
+    { name: 'scenarios', testMatch: /\.spec\.gen\.ts$/, testIgnore: /surface\.spec\.gen\.ts$/, dependencies: ['surface'] },`)
+}
+
+// playwrightConfigWith is the generated config over the given projects (the entries of the
+// `projects` array, one per line).
+func playwrightConfigWith(results, projects string) string {
 	return genHeader + `
 import { defineConfig } from '@playwright/test';
 
@@ -556,9 +564,7 @@ export default defineConfig({
     ['list'],
     ['./reporter.gen.ts'],
   ],
-  projects: [
-    { name: 'surface', testMatch: /surface\.spec\.gen\.ts$/ },
-    { name: 'scenarios', testMatch: /\.spec\.gen\.ts$/, testIgnore: /surface\.spec\.gen\.ts$/, dependencies: ['surface'] },
+  projects: [` + projects + `
   ],
 });
 `

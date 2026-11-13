@@ -154,17 +154,28 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 	if err != nil {
 		return out, err
 	}
-	byPackage, err := routePlans(&out, cfg, web, p, all)
-	if err != nil {
+	if err := emitPlans(&out, cfg, web, routes, p, all); err != nil {
 		return out, err
-	}
-	for _, goPkg := range sortedKeys(byPackage) {
-		if err := emitPackage(&out, cfg, goPkg, byPackage[goPkg], routes, p.ServiceContracts); err != nil {
-			return out, err
-		}
 	}
 	sortDiscriminations(&out)
 	return out, nil
+}
+
+// emitPlans emits every component's plan, then the acceptance plan when one is recorded.
+func emitPlans(out *Output, cfg Config, web webEnv, routes map[string]restRoute, p methodcheck.Project, all []scenario.Scenario) error {
+	byPackage, err := routePlans(out, cfg, web, p, all)
+	if err != nil {
+		return err
+	}
+	for _, goPkg := range sortedKeys(byPackage) {
+		if err := emitPackage(out, cfg, goPkg, byPackage[goPkg], routes, p.ServiceContracts); err != nil {
+			return err
+		}
+	}
+	if p.PhaseArtifacts.AcceptancePlan == nil {
+		return nil
+	}
+	return emitAcceptance(out, cfg, web, routes, p, all)
 }
 
 // newWebEnv reads the routes and the no-local-subject components the emitters need.

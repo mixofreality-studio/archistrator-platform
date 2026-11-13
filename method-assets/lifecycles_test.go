@@ -14,6 +14,7 @@ var wantLifecycleTypes = []string{
 	"service", "frontend",
 	"testing:harness", "testing:perf", "testing:qaProcess", "testing:acceptancePlan",
 	"deployment", "documentation", "uiDesign", "integration", "machineClient",
+	"milestone:acceptance",
 }
 
 // figureA1TaskIDs are the ten non-conditional Figure A-1 task keys the app's
@@ -67,6 +68,43 @@ func TestLifecycles_AcceptancePlanIsOneDispatchAndOneGate(t *testing.T) {
 	}
 	if problems := ValidateLifecycles(Lifecycles()); len(problems) != 0 {
 		t.Errorf("ValidateLifecycles: %v", problems)
+	}
+}
+
+// The acceptance milestone (Amendment C) is one venue job (no agent, no prompt, no workerClass)
+// and the testing review that judges its recorded run. The task ids are Figure A-1 ledger keys.
+func TestLifecycles_AcceptanceIsAJobAndItsReview(t *testing.T) {
+	l, ok := LifecycleFor("milestone:acceptance")
+	if !ok {
+		t.Fatal("no milestone:acceptance lifecycle")
+	}
+	if len(l.Tasks) != 2 {
+		t.Fatalf("tasks = %+v, want integration then testing", l.Tasks)
+	}
+	job, review := l.Tasks[0], l.Tasks[1]
+	if job.ID != "integration" || job.Kind != LifecycleTaskJob || job.Command != "acceptance-run" || job.ArtifactKind != "AcceptanceRun" || job.WorkerClass != "" || len(job.DependsOn) != 0 {
+		t.Errorf("integration = %+v", job)
+	}
+	if review.ID != "testing" || review.Kind != LifecycleTaskReview || review.Reviews != "integration" || !slices.Equal(review.DependsOn, []string{"integration"}) {
+		t.Errorf("testing = %+v", review)
+	}
+	if len(l.Phases) != 1 || l.Phases[0].ID != "acceptance" || l.Phases[0].Gate != "testing" || l.Phases[0].Weight != 100 {
+		t.Errorf("phases = %+v", l.Phases)
+	}
+	if problems := ValidateLifecycles(Lifecycles()); len(problems) != 0 {
+		t.Errorf("ValidateLifecycles: %v", problems)
+	}
+	for name, mutate := range map[string]func(*LifecycleTask){
+		"a workerClass":   func(j *LifecycleTask) { j.WorkerClass = "test-engineer" },
+		"no artifactKind": func(j *LifecycleTask) { j.ArtifactKind = "" },
+		"no command":      func(j *LifecycleTask) { j.Command = "" },
+	} {
+		bad := l
+		bad.Tasks = slices.Clone(l.Tasks)
+		mutate(&bad.Tasks[0])
+		if len(ValidateLifecycle(bad)) == 0 {
+			t.Errorf("a job with %s must be a ValidateLifecycle defect", name)
+		}
 	}
 }
 
@@ -289,6 +327,9 @@ func TestLifecycles_LinearTypesAreOneDispatchAndOneGatePerPhase(t *testing.T) {
 		}
 		for i, task := range l.Tasks {
 			wantKind, wantDeps := LifecycleTaskDispatch, []string{}
+			if l.Type == "milestone:acceptance" && i == 0 {
+				wantKind = LifecycleTaskJob // a milestone's work is a venue job, not an agent dispatch
+			}
 			if i%2 == 1 {
 				wantKind = LifecycleTaskReview
 			}
@@ -361,6 +402,9 @@ func TestLifecycles_OnlyProjectDesignReviewsNothing(t *testing.T) {
 func TestLifecycles_CommandsAreDispatchableAndNameTheirAgent(t *testing.T) {
 	for _, l := range Lifecycles() {
 		for _, task := range l.Tasks {
+			if task.Kind == LifecycleTaskJob {
+				continue // a job's command is the venue's routing slug, not a slash command
+			}
 			if task.Command == "" {
 				if task.WorkerClass != "" {
 					t.Errorf("%s: task %q has a workerClass but no command", l.Type, task.ID)

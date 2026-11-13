@@ -9,6 +9,7 @@ import (
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-http-generator/httpgen"
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
 )
 
 // emit_rest.go is the REST machine client's dialect. Like an MCP client, every op is one generated
@@ -120,17 +121,23 @@ func isRESTPlan(plan componentPlan) (bool, error) {
 // restRouteTable is the generated map from tool name to route, over the plan's contract: the table
 // scenariohost.RESTClient spells each call's arguments onto.
 func restRouteTable(plan componentPlan, routes map[string]restRoute) (string, error) {
-	lines := make([]string, 0, len(plan.Contract.Interface.Operations))
-	for _, op := range plan.Contract.Interface.Operations {
+	return restRouteTableNamed(plan.Key, plan.Contract, routes, "clientRoutes")
+}
+
+// restRouteTableNamed is the route table of one REST client contract under the variable name
+// varName: an acceptance file reaches several REST clients, so each table carries its client's name.
+func restRouteTableNamed(key string, sc methodcheck.ServiceContract, routes map[string]restRoute, varName string) (string, error) {
+	lines := make([]string, 0, len(sc.Interface.Operations))
+	for _, op := range sc.Interface.Operations {
 		r, ok := routes[op.Name]
 		if !ok {
-			return "", fmt.Errorf("testgen: %s operation %s is no Manager's generated route", plan.Key, op.Name)
+			return "", fmt.Errorf("testgen: %s operation %s is no Manager's generated route", key, op.Name)
 		}
 		lines = append(lines, fmt.Sprintf("\t%q: {Verb: %q, Path: %q},\n", toolName(op), r.Verb, r.Path))
 	}
 	sort.Strings(lines)
 	lines = slices.Compact(lines)
-	return "// clientRoutes is the generated route of each operation.\nvar clientRoutes = map[string]scenariohost.Route{\n" + strings.Join(lines, "") + "}\n\n", nil
+	return "// " + varName + " is the generated route of each operation.\nvar " + varName + " = map[string]scenariohost.Route{\n" + strings.Join(lines, "") + "}\n\n", nil
 }
 
 // restErrorHasCode is the REST dialect's code match. A response carries the wire code of the

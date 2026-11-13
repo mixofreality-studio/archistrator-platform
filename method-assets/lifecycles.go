@@ -27,10 +27,13 @@ import (
 //go:embed lifecycles.json
 var lifecyclesJSON []byte
 
-// The two kinds of task. A dispatch produces an artifact; a review judges one.
+// The three kinds of task. A dispatch produces an artifact through an agent; a review judges
+// one; a job is a venue job: the task spec's checks run and record a CheckRun, with no agent, no
+// prompt and no workerClass, and its command is the venue's routing slug, not a slash command.
 const (
 	LifecycleTaskDispatch = "dispatch"
 	LifecycleTaskReview   = "review"
+	LifecycleTaskJob      = "job"
 )
 
 // LifecyclePhase is a Figure A-2 grouping of tasks: the earned-value unit.
@@ -155,9 +158,9 @@ func (l Lifecycle) clone() Lifecycle {
 // sentence prefixed with its type key; an empty result means it is valid.
 //
 // The rules:
-//   - task ids are non-empty and unique; kinds are dispatch or review; every
+//   - task ids are non-empty and unique; kinds are dispatch, review or job; every
 //     task names a declared phase; a dispatch carries command, workerClass and
-//     artifactKind;
+//     artifactKind; a job carries command and artifactKind and no workerClass;
 //   - a task depends only on tasks authored EARLIER. A cycle cannot be written
 //     with every edge pointing backwards, so this one rule is acyclicity, and
 //     it rejects unknown ids and self-references on the way;
@@ -290,7 +293,9 @@ func (v *lifecycleValidator) checkTasks() {
 }
 
 func (v *lifecycleValidator) checkTaskFields(t LifecycleTask) {
-	if t.Kind != LifecycleTaskDispatch && t.Kind != LifecycleTaskReview {
+	switch t.Kind {
+	case LifecycleTaskDispatch, LifecycleTaskReview, LifecycleTaskJob:
+	default:
 		v.addf("task %q has unknown kind %q", t.ID, t.Kind)
 	}
 	if !v.phaseIDs[t.Phase] {
@@ -302,6 +307,14 @@ func (v *lifecycleValidator) checkTaskFields(t LifecycleTask) {
 	if t.Kind == LifecycleTaskDispatch && !dispatchIsComplete(t) {
 		v.addf("dispatch task %q needs a command, a workerClass and an artifactKind", t.ID)
 	}
+	if t.Kind == LifecycleTaskJob && !jobIsComplete(t) {
+		v.addf("job task %q needs a command and an artifactKind and must carry no workerClass (no agent runs it)", t.ID)
+	}
+}
+
+// jobIsComplete: a job names the venue's routing slug and what its run produces, and no agent charter.
+func jobIsComplete(t LifecycleTask) bool {
+	return t.Command != "" && t.ArtifactKind != "" && t.WorkerClass == ""
 }
 
 func dispatchIsComplete(t LifecycleTask) bool {
@@ -371,7 +384,7 @@ func (v *lifecycleValidator) checkGate(p LifecyclePhase) {
 func (v *lifecycleValidator) checkReviews() {
 	dispatches := 0
 	for _, t := range v.l.Tasks {
-		if t.Kind == LifecycleTaskDispatch {
+		if producesArtifact(t) {
 			dispatches++
 		}
 	}
@@ -426,7 +439,13 @@ func (v *lifecycleValidator) checkReview(t LifecycleTask, dispatches int) {
 		return
 	}
 	target, ok := v.tasks[t.Reviews]
-	if !ok || target.Kind != LifecycleTaskDispatch || !v.ancestors[t.ID][t.Reviews] {
-		v.addf("review task %q reviews %q, which is not an ancestor dispatch task", t.ID, t.Reviews)
+	if !ok || !producesArtifact(target) || !v.ancestors[t.ID][t.Reviews] {
+		v.addf("review task %q reviews %q, which is not an ancestor dispatch task (or venue job)", t.ID, t.Reviews)
 	}
+}
+
+// producesArtifact: a dispatch (through an agent) and a job (through the venue) are the two kinds
+// whose run produces the artifact a review judges.
+func producesArtifact(t LifecycleTask) bool {
+	return t.Kind == LifecycleTaskDispatch || t.Kind == LifecycleTaskJob
 }

@@ -13,7 +13,8 @@
 //     running server, as the process principal (X-Dev-Principal when AIARCH_DEV_PRINCIPAL is set) or,
 //     for a call that names an actor (`as`), as that actor's subject: the launch honours the header
 //     only for a subject its allowlist holds. mcpCall is the same for a tool of the /mcp endpoint,
-//     with one session per (app, actor);
+//     with one session per (app, actor); contractCall is a step of an acceptance spec that is not a
+//     browser action, made the same way;
 //     The three setup actions only the scenario host can perform (advanceClock, failNext,
 //     seedResource) are POSTed to the server's /__scenariohost/<kind> endpoint, which the local
 //     profile forwards to the host serving the run (go tool webscenarios);
@@ -121,6 +122,14 @@ async function callHost(testInfo: TestInfo, call: Exclude<ArrangeCall, { kind: '
 /** Runs one probe: a read-only operation observed after the step. */
 export async function probe(testInfo: TestInfo, call: ContractCall): Promise<void> {
   return callContract(testInfo, call, 'probe');
+}
+
+/**
+ * Runs one acceptance step that is not a browser action: an operation of a generated route called
+ * as the actor it names (as), expecting what the step's expectation says.
+ */
+export async function contractCall(testInfo: TestInfo, call: ContractCall): Promise<void> {
+  return callContract(testInfo, call, 'step');
 }
 
 function baseURL(testInfo: TestInfo): string {

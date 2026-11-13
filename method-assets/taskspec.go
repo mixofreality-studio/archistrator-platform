@@ -12,7 +12,7 @@ import (
 type MethodSpec struct {
 	LifecycleKey  string
 	TaskID        string
-	Kind          string // LifecycleTaskDispatch | LifecycleTaskReview
+	Kind          string // LifecycleTaskDispatch | LifecycleTaskReview | LifecycleTaskJob
 	Title         string
 	Phase         string
 	Command       string // "" for a review task with no command
@@ -31,8 +31,8 @@ type MethodSpec struct {
 
 // MethodSpecFor resolves one lifecycle task. args are the command's
 // $ARGUMENTS tokens (<component_id> <activity_id> for construction commands,
-// none for design commands). A review task with no command resolves to its
-// identity only.
+// none for design commands). A review task with no command, and a job task,
+// resolve to their identity only.
 func MethodSpecFor(lifecycleKey, taskID string, args []string) (MethodSpec, error) {
 	l, ok := LifecycleFor(lifecycleKey)
 	if !ok {
@@ -53,7 +53,9 @@ func MethodSpecFor(lifecycleKey, taskID string, args []string) (MethodSpec, erro
 		ArtifactKind: artifactKindOf(l, *task),
 	}
 	s.ExitCriterion = exitCriterionOf(l, task.Phase)
-	if task.Command == "" {
+	// A review with no command, and a venue job (its command is a routing slug, no agent runs it),
+	// resolve to their identity only: no manifest, charter, prompt or model.
+	if task.Command == "" || task.Kind == LifecycleTaskJob {
 		return s, nil
 	}
 	m, ok := ManifestFor(task.Command)

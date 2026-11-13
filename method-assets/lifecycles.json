@@ -204,6 +204,16 @@
         {"id": "integration", "kind": "dispatch", "title": "Integration", "phase": "integration", "dependsOn": ["stpReview"], "command": "service-integration", "workerClass": "system-architect", "artifactKind": "Integration", "sendsBackTo": "stpReview"},
         {"id": "testing", "kind": "review", "title": "Integration Testing", "phase": "integration", "dependsOn": ["integration"], "reviews": "integration"}
       ]
+    },
+    {
+      "type": "milestone:acceptance",
+      "phases": [
+        {"id": "acceptance", "label": "Acceptance", "weight": 100, "gate": "testing", "exitCriterion": "An acceptance run at the current composed revision covers every residual use-case scenario, all pass, and the results render"}
+      ],
+      "tasks": [
+        {"id": "integration", "kind": "job", "title": "Acceptance run", "phase": "acceptance", "dependsOn": [], "command": "acceptance-run", "artifactKind": "AcceptanceRun"},
+        {"id": "testing", "kind": "review", "title": "Acceptance", "phase": "acceptance", "dependsOn": ["integration"], "reviews": "integration"}
+      ]
     }
   ]
 }

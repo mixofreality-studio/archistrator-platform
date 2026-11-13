@@ -636,3 +636,37 @@ func TestConstructWorkflow_GenTestsRefusesAnUnsafeModuleDir(t *testing.T) {
 		})
 	}
 }
+
+// TestConstructTemplate_JobSkipsTheAgent: a job task (the M-ACCEPT milestone's acceptance run)
+// runs no agent, so every step that exists only for the agent is conditioned on the resolved
+// spec's kind, and the gate/record steps are not.
+func TestConstructTemplate_JobSkipsTheAgent(t *testing.T) {
+	doc := renderedConstructWorkflow(t)
+	const notJob = "steps.spec.outputs.kind != 'job'"
+	for _, name := range []string{
+		"Materialize the .claude prompt surface (runtime-rendered, not repo-committed)",
+		"Write the aiarch-state MCP config",
+		"Generate the component's models",
+		"Run the task's generators",
+		"Run construction step (claude-code-action)",
+	} {
+		if !strings.Contains(stepText(t, doc, name), notJob) {
+			t.Errorf("step %q must carry `%s`", name, notJob)
+		}
+	}
+	for _, name := range []string{"Run the checks", "Record the check run", "Gate the edit scope"} {
+		if strings.Contains(stepText(t, doc, name), notJob) {
+			t.Errorf("step %q must run for a job too", name)
+		}
+	}
+	// A condition on the spec's output is only meaningful once the spec step has run.
+	spec := strings.Index(doc, "      - name: Resolve the task spec\n")
+	for _, name := range []string{"Materialize the .claude prompt surface", "Write the aiarch-state MCP config"} {
+		if at := strings.Index(doc, "- name: "+name); at < spec {
+			t.Errorf("%q is conditioned on the spec's kind, so it must come after the spec step", name)
+		}
+	}
+	if !strings.Contains(stepText(t, doc, "Resolve the task spec"), "kind=${kind}") {
+		t.Error("the spec step must emit the task's kind")
+	}
+}

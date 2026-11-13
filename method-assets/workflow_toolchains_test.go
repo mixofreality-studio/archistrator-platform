@@ -66,7 +66,7 @@ const (
 )
 
 func specWith(checks ...string) string {
-	return `{"model":{"id":"opus"},"tools":{"builtin":[]},"checks":[` + strings.Join(checks, ",") + `],"hash":"` + gateHash + `"}`
+	return `{"identity":{"kind":"dispatch"},"model":{"id":"opus"},"tools":{"builtin":[]},"checks":[` + strings.Join(checks, ",") + `],"hash":"` + gateHash + `"}`
 }
 
 func TestToolchainPlan_ProvisionsWhatTheChecksExec(t *testing.T) {
