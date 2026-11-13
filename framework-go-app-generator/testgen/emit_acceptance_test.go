@@ -181,6 +181,37 @@ func TestAcceptance_WebBearingVariantIsAPlaywrightSpec(t *testing.T) {
 	}
 }
 
+// A browser probe sees the app as a fresh page load: a navigation to the route the page is already
+// on is a same-document no-op in the browser, so it would show the page the steps left, not the state
+// they changed. The probe therefore leaves the page before it navigates.
+func TestAcceptance_WebProbeNavigationIsAFreshLoad(t *testing.T) {
+	spec := string(acceptanceOutput(t).Generated[accWebSpec])
+	blank := strings.Index(spec, "await page.goto('about:blank');")
+	probe := strings.Index(spec, "await page.goto('#/');")
+	if blank < 0 || probe < 0 || blank > probe {
+		t.Errorf("a browser probe's navigation must be preceded by leaving the page (about:blank then the route):\n%s", spec)
+	}
+}
+
+// A variant whose first browser act is not a navigation (a double-click on a todo's title) begins at
+// the surface's entry screen: the page the spec gets is blank, so there is nothing to act on until the
+// member opens the app. The fixture records such a variant (reword-a-todo-P2@todoMcpServer).
+func TestAcceptance_FirstBrowserActOpensTheEntryScreen(t *testing.T) {
+	out, err := Generate(testfixtures.Fixture(t, "todomvc"), Config{ModulePath: accModulePath})
+	if err != nil {
+		t.Fatal(err)
+	}
+	spec := string(out.Generated["uitests/generated/acceptance/reword-a-todo-P2@todoMcpServer.spec.gen.ts"])
+	open := strings.Index(spec, "await page.goto('#/');")
+	act := strings.Index(spec, ".dblclick()")
+	if act < 0 || open < 0 || open > act {
+		t.Errorf("the entry screen must be opened before the first browser act:\n%s", spec)
+	}
+	if strings.Count(spec, "await page.goto('#/');") != 1 {
+		t.Errorf("the entry screen is opened once, before the first act (later probes navigate themselves):\n%s", spec)
+	}
+}
+
 // A variant with no browser step or probe is a Go test over the wire in internal/acceptance: one
 // session per (client, actor), and a probe of a Manager as another actor is a call made as that actor.
 func TestAcceptance_MachineOnlyVariantIsGo(t *testing.T) {
@@ -256,7 +287,19 @@ func TestAcceptance_UnboundResidualIsAWarning(t *testing.T) {
 
 // A project with no acceptance plan emits no acceptance file.
 func TestAcceptance_NoPlanEmitsNothing(t *testing.T) {
-	out := todomvcOutput(t)
+	var doc map[string]any
+	if err := json.Unmarshal(testfixtures.Fixture(t, "todomvc"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	delete(doc["phaseArtifacts"].(map[string]any), "acceptancePlan") // the fixture records one
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := Generate(raw, Config{ModulePath: "example.com/todomvc"})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
 	for path := range out.Generated {
 		if strings.Contains(path, "acceptance") {
 			t.Errorf("no acceptancePlan is recorded, yet %s was emitted", path)

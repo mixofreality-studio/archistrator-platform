@@ -54,6 +54,8 @@ type accSpec struct {
 	rec    methodcheck.AcceptancePlanRecord
 	// principalsUsed: some call is made as a named actor, so the spec declares the subjects.
 	principalsUsed bool
+	// pageOpen: a browser act has already loaded the app in the spec's page.
+	pageOpen bool
 }
 
 // acceptanceSpec is one variant's spec: the latency, the typed arrange, then per step its action
@@ -173,6 +175,9 @@ func (a *accSpec) step(st boundStep) error {
 func (a *accSpec) browserStep(st boundStep) error {
 	w := a.specWriter
 	for _, in := range st.Bind.Inputs {
+		if err := a.preparePage(in, false); err != nil {
+			return err
+		}
 		if err := w.action(in); err != nil {
 			return err
 		}
@@ -207,6 +212,40 @@ func (a *accSpec) call(t accTarget, op methodcheck.ContractOperation, inputs []m
 	}
 	w.use(fn)
 	w.line("await %s(testInfo, { %s%s });", fn, call, a.as(actor))
+	return nil
+}
+
+// preparePage readies the page for one browser act, before the act is emitted.
+//
+//   - A navigation by a probe is a fresh load of the app: navigating to the route the page is already
+//     on is a same-document no-op, so a probe after an earlier one would show the page the steps left
+//     rather than the state they changed (the member who comes back to the app loads it anew), so the
+//     probe leaves the page first.
+//   - An act that is not a navigation, with no page open yet, begins at the surface's entry screen:
+//     the page a spec gets is blank, so there is nothing to act on until the member opens the app.
+func (a *accSpec) preparePage(in methodcheck.TestArg, probe bool) error {
+	if in.Name != webActionParam {
+		return nil
+	}
+	lit, err := literalInput(in)
+	if err != nil {
+		return err
+	}
+	act, err := methodcheck.ParseUIAction(lit)
+	if err != nil {
+		return fmt.Errorf("input %s %s: %w", in.Name, lit, err)
+	}
+	if _, ok := act.(methodcheck.UINavigate); ok {
+		if probe {
+			a.line("await page.goto('about:blank');")
+		}
+		a.pageOpen = true
+		return nil
+	}
+	if !a.pageOpen && len(a.design.Screens) > 0 {
+		a.line("await page.goto(%s);", tsStr(a.design.Screens[0].Route))
+	}
+	a.pageOpen = true
 	return nil
 }
 
@@ -251,6 +290,9 @@ func (a *accSpec) probe(st boundStep, n int, pr methodcheck.Probe) error {
 		return a.call(t, op, pr.Inputs, pr.Expect, actor, "probe")
 	}
 	for _, in := range pr.Inputs {
+		if err := a.preparePage(in, true); err != nil {
+			return err
+		}
 		if err := w.action(in); err != nil {
 			return err
 		}
