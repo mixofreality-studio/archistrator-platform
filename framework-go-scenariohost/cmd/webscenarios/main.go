@@ -21,8 +21,10 @@
 //
 // The environment is passed to Playwright unchanged (AIARCH_NULL_OPS of a discrimination run,
 // AIARCH_SCENARIO_TIMEOUT_MS, ...), plus PLAYWRIGHT_TEST_BASE_URL (the launched app) and, when the
-// surface's test plan declares principals, AIARCH_DEV_PRINCIPAL (the first, in name order: the app's
-// process principal, which every plan principal is allowlisted beside).
+// plan declares principals, AIARCH_DEV_PRINCIPAL: the browser's subject, which is the app's process
+// principal (every plan principal is allowlisted beside it). For a surface's test plan that is the
+// first in name order; for an acceptance run (-config generated/acceptance/...) it is the acceptance
+// plan's browserActor, and a web spec without one is an error naming ATP-BROWSER (planPrincipals).
 //
 // The exit status is Playwright's. A bad invocation is 2, a launch or teardown failure is 1, and a
 // leftover container or volume is 3.
@@ -39,6 +41,7 @@ import (
 	"os/exec"
 	"os/signal"
 	"path/filepath"
+	"slices"
 	"sort"
 	"syscall"
 
@@ -232,9 +235,18 @@ func (l *launched) Stop() error {
 	return err
 }
 
-// startReal boots the host and launches the app of the module o names, as the plan's principals of
-// the surface o's config belongs to.
+// launchFunc boots the host and launches the app at module as principals, the first being the process
+// principal; browser is the subject the browser runs as (the first principal's).
+type launchFunc func(ctx context.Context, module string, principals []scenariohost.Principal, browser string) (stack, error)
+
+// startReal boots the host and launches the app of the module o names, as the principals of the plan
+// o's config belongs to (planPrincipals).
 func startReal(ctx context.Context, o options) (stack, error) {
+	return startWith(ctx, o, launchReal)
+}
+
+// startWith resolves the module and the plan's principals and hands them to launch.
+func startWith(ctx context.Context, o options, launch launchFunc) (stack, error) {
 	module := o.module
 	if module == "" {
 		var err error
@@ -242,10 +254,20 @@ func startReal(ctx context.Context, o options) (stack, error) {
 			return nil, err
 		}
 	}
-	principals, err := surfacePrincipals(module, o.config)
+	// The config is relative to the directory playwright runs in.
+	config := o.config
+	if !filepath.IsAbs(config) {
+		config = filepath.Join(o.dir, config)
+	}
+	principals, browser, err := planPrincipals(module, config)
 	if err != nil {
 		return nil, err
 	}
+	return launch(ctx, module, principals, browser)
+}
+
+// launchReal is the production launch: the host's substrates, then the app into them.
+func launchReal(ctx context.Context, module string, principals []scenariohost.Principal, browser string) (stack, error) {
 	h, err := scenariohost.Boot(ctx)
 	if err != nil {
 		return nil, err
@@ -255,11 +277,7 @@ func startReal(ctx context.Context, o options) (stack, error) {
 		h.Close()
 		return nil, err
 	}
-	l := &launched{host: h, web: web}
-	if len(principals) > 0 {
-		l.principal = principals[0].Subject
-	}
-	return l, nil
+	return &launched{host: h, web: web, principal: browser}, nil
 }
 
 // moduleRoot is the nearest directory at or above the working directory holding a go.mod.
@@ -280,43 +298,105 @@ func moduleRoot() (string, error) {
 	}
 }
 
-// surfacePrincipals is the principals the test plan of the surface a Playwright config belongs to
-// declares (<module>/.aiarch/state/project.json, phaseArtifacts.testPlan.<surface>.principals), in
-// name order. The surface is the config's directory name (generated/<surface>/playwright.config.gen.ts).
-// A model or a plan with none yields none: the app then runs as its default principal.
-func surfacePrincipals(module, config string) ([]scenariohost.Principal, error) {
+// acceptanceSurface is the directory name generated/<name>/ an acceptance run's config lives in.
+const acceptanceSurface = "acceptance"
+
+// planPrincipal is one named actor of a plan as project.json carries it.
+type planPrincipal struct {
+	Subject    string   `json:"subject"`
+	Roles      []string `json:"roles"`
+	OnBehalfOf string   `json:"onBehalfOf"`
+	Intents    []string `json:"intents"`
+}
+
+// acceptancePlan is the part of the acceptance plan a launch reads.
+type acceptancePlan struct {
+	Principals   map[string]planPrincipal `json:"principals"`
+	BrowserActor string                   `json:"browserActor"`
+}
+
+// planPrincipals is the principals a Playwright config's run launches the app as, and the subject
+// the browser runs as (<module>/.aiarch/state/project.json). The surface is the config's directory
+// name (generated/<surface>/playwright.config.gen.ts).
+//
+// An acceptance config (generated/acceptance/) takes the acceptance plan's principals
+// (phaseArtifacts.acceptancePlan.principals) with the browserActor's principal first: the app's
+// process principal is the SPA's own identity, because its fetches carry no header, so the actor the
+// browser plays must be the first. An acceptance plan with web specs under the config's directory
+// and no browserActor is an error naming ATP-BROWSER, and so is a browserActor the plan does not
+// declare.
+//
+// Any other config takes the surface's test plan's principals (phaseArtifacts.testPlan.<surface>),
+// in name order, the browser being the first. A model or a plan with none yields none: the app then
+// runs as its default principal.
+func planPrincipals(module, config string) (principals []scenariohost.Principal, browser string, err error) {
 	raw, err := os.ReadFile(filepath.Join(module, ".aiarch", "state", "project.json")) // #nosec G304 -- the app under test
 	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
+		return nil, "", nil
 	}
 	if err != nil {
-		return nil, err
+		return nil, "", err
 	}
 	var doc struct {
 		PhaseArtifacts struct {
 			TestPlan map[string]struct {
-				Principals map[string]struct {
-					Subject    string   `json:"subject"`
-					Roles      []string `json:"roles"`
-					OnBehalfOf string   `json:"onBehalfOf"`
-					Intents    []string `json:"intents"`
-				} `json:"principals"`
+				Principals map[string]planPrincipal `json:"principals"`
 			} `json:"testPlan"`
+			AcceptancePlan *acceptancePlan `json:"acceptancePlan"`
 		} `json:"phaseArtifacts"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
-		return nil, fmt.Errorf("project.json: %w", err)
+		return nil, "", fmt.Errorf("project.json: %w", err)
 	}
-	plan := doc.PhaseArtifacts.TestPlan[filepath.Base(filepath.Dir(config))]
-	names := make([]string, 0, len(plan.Principals))
-	for name := range plan.Principals {
+	dir := filepath.Dir(config)
+	surface := filepath.Base(dir)
+	if surface != acceptanceSurface {
+		principals, browser := principalsInOrder(doc.PhaseArtifacts.TestPlan[surface].Principals, "")
+		return principals, browser, nil
+	}
+	return acceptancePrincipals(doc.PhaseArtifacts.AcceptancePlan, webSpecs(dir))
+}
+
+// acceptancePrincipals is planPrincipals for an acceptance run over a plan (nil: the model has none)
+// whose generated specs include a browser spec when web is set.
+func acceptancePrincipals(plan *acceptancePlan, web bool) ([]scenariohost.Principal, string, error) {
+	if plan == nil {
+		plan = &acceptancePlan{}
+	}
+	if plan.BrowserActor == "" && web {
+		return nil, "", errors.New("webscenarios: the acceptance specs run in a browser but the acceptance plan names no browserActor: one actor owns the browser (ATP-BROWSER)")
+	}
+	if _, ok := plan.Principals[plan.BrowserActor]; plan.BrowserActor != "" && !ok {
+		return nil, "", fmt.Errorf("webscenarios: the acceptance plan's browserActor %q is not one of its principals (ATP-BROWSER)", plan.BrowserActor)
+	}
+	principals, browser := principalsInOrder(plan.Principals, plan.BrowserActor)
+	return principals, browser, nil
+}
+
+// principalsInOrder is the principals in name order with the one named first (when set) moved to the
+// front, and the first one's subject.
+func principalsInOrder(byName map[string]planPrincipal, first string) ([]scenariohost.Principal, string) {
+	names := make([]string, 0, len(byName))
+	for name := range byName {
 		names = append(names, name)
 	}
 	sort.Strings(names)
+	if i := slices.Index(names, first); first != "" && i >= 0 {
+		names = slices.Insert(slices.Delete(names, i, i+1), 0, first)
+	}
 	out := make([]scenariohost.Principal, 0, len(names))
 	for _, name := range names {
-		p := plan.Principals[name]
+		p := byName[name]
 		out = append(out, scenariohost.Principal{Subject: p.Subject, Roles: p.Roles, OnBehalfOf: p.OnBehalfOf, Intents: p.Intents})
 	}
-	return out, nil
+	if len(out) == 0 {
+		return nil, ""
+	}
+	return out, out[0].Subject
+}
+
+// webSpecs reports whether dir holds a generated Playwright spec.
+func webSpecs(dir string) bool {
+	specs, err := filepath.Glob(filepath.Join(dir, "*.spec.gen.ts"))
+	return err == nil && len(specs) > 0
 }

@@ -10,6 +10,8 @@ import (
 	"slices"
 	"strings"
 	"testing"
+
+	scenariohost "github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost"
 )
 
 // fakeStack is a launched app the run stub hands back.
@@ -188,15 +190,95 @@ func TestWebscenarios_SurfacePrincipals(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(state, "project.json"), []byte(model), 0o600); err != nil {
 		t.Fatal(err)
 	}
-	got, err := surfacePrincipals(dir, "generated/todoWebApp/playwright.config.gen.ts")
+	got, browser, err := planPrincipals(dir, "generated/todoWebApp/playwright.config.gen.ts")
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got) != 2 || got[0].Subject != "agent-1" || got[0].OnBehalfOf != "alice" || got[0].Intents[0] != "read" || got[1].Subject != "alice" {
-		t.Errorf("principals = %+v, want agent-1 (team-agent) then alice (team-member)", got)
+	if len(got) != 2 || got[0].Subject != "agent-1" || got[0].OnBehalfOf != "alice" || got[0].Intents[0] != "read" || got[1].Subject != "alice" || browser != "agent-1" {
+		t.Errorf("principals = %+v, browser %q; want agent-1 (team-agent) then alice (team-member), browser agent-1", got, browser)
 	}
-	none, err := surfacePrincipals(dir, "generated/other/playwright.config.gen.ts")
+	none, _, err := planPrincipals(dir, "generated/other/playwright.config.gen.ts")
 	if err != nil || len(none) != 0 {
 		t.Errorf("a surface with no plan has no principals, got %+v, %v", none, err)
+	}
+}
+
+// acceptanceModule is a module whose project.json holds an acceptance plan, and the path of the
+// config an acceptance run is given (its directory holds the generated specs).
+func acceptanceModule(t *testing.T, plan string, specs bool) (module, config string) {
+	t.Helper()
+	module = t.TempDir()
+	state := filepath.Join(module, ".aiarch", "state")
+	if err := os.MkdirAll(state, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(state, "project.json"), []byte(`{"phaseArtifacts":{"acceptancePlan":`+plan+`}}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	gen := filepath.Join(module, "uitests", "generated", "acceptance")
+	if err := os.MkdirAll(gen, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if specs {
+		if err := os.WriteFile(filepath.Join(gen, "work-the-list-P1@todoApi.spec.gen.ts"), []byte("// spec\n"), 0o600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return module, filepath.Join(gen, "playwright.config.gen.ts")
+}
+
+const acceptancePlanJSON = `{"principals":{
+	"team-agent":{"subject":"agent-1","roles":["agent"],"onBehalfOf":"alice","intents":["read"]},
+	"team-member":{"subject":"alice","roles":["member"]}},
+	"browserActor":"team-member","bindings":[]}`
+
+// An acceptance run launches the app as the acceptance plan's principals with the browser actor
+// first (the SPA's own fetches carry no header, so the browser identity is the process principal),
+// and AIARCH_DEV_PRINCIPAL is that actor's subject.
+func TestWebscenarios_AcceptancePrincipalsBrowserActorFirst(t *testing.T) {
+	var launched []string
+	var launchedBrowser string
+	launch := func(_ context.Context, _ string, principals []scenariohost.Principal, browser string) (stack, error) {
+		launched = nil
+		for _, p := range principals {
+			launched = append(launched, p.Subject)
+		}
+		launchedBrowser = browser
+		return &fakeStack{base: "http://127.0.0.1:1", principal: browser}, nil
+	}
+	var got command
+	d := deps{
+		start:     func(ctx context.Context, o options) (stack, error) { return startWith(ctx, o, launch) },
+		exec:      func(_ context.Context, c command, _, _ io.Writer) (int, error) { got = c; return 0, nil },
+		inventory: func(context.Context) ([]string, error) { return nil, nil },
+	}
+	var out, errOut bytes.Buffer
+
+	module, config := acceptanceModule(t, acceptancePlanJSON, true)
+	if code := run(t.Context(), []string{"-config", config, "-module", module}, nil, d, &out, &errOut); code != 0 {
+		t.Fatalf("exit %d\n%s%s", code, out.String(), errOut.String())
+	}
+	if !slices.Equal(launched, []string{"alice", "agent-1"}) || launchedBrowser != "alice" {
+		t.Errorf("launch saw principals %v and browser %q, want [alice agent-1] and alice", launched, launchedBrowser)
+	}
+	if v, ok := envValue(got.env, "AIARCH_DEV_PRINCIPAL"); !ok || v != "alice" {
+		t.Errorf("AIARCH_DEV_PRINCIPAL = %q (set %v), want alice", v, ok)
+	}
+
+	// Web specs and no browserActor: ATP-BROWSER.
+	module, config = acceptanceModule(t, `{"principals":{"team-member":{"subject":"alice","roles":["member"]}},"bindings":[]}`, true)
+	if code := run(t.Context(), []string{"-config", config, "-module", module}, nil, d, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "ATP-BROWSER") {
+		t.Errorf("web specs with no browserActor: exit %d, stderr %q; want 1 naming ATP-BROWSER", code, errOut.String())
+	}
+	// No web spec and no browserActor: nothing runs in a browser; the first by name is the process principal.
+	module, config = acceptanceModule(t, `{"principals":{"b":{"subject":"bob"},"a":{"subject":"ann"}},"bindings":[]}`, false)
+	if code := run(t.Context(), []string{"-config", config, "-module", module}, nil, d, &out, &errOut); code != 0 || !slices.Equal(launched, []string{"ann", "bob"}) || launchedBrowser != "ann" {
+		t.Errorf("no web specs: exit %d, principals %v, browser %q; want 0, [ann bob], ann", code, launched, launchedBrowser)
+	}
+	// A browserActor the plan does not declare is refused by name.
+	module, config = acceptanceModule(t, `{"principals":{"a":{"subject":"ann"}},"browserActor":"ghost","bindings":[]}`, true)
+	errOut.Reset()
+	if code := run(t.Context(), []string{"-config", config, "-module", module}, nil, d, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "ghost") {
+		t.Errorf("undeclared browserActor: exit %d, stderr %q; want 1 naming ghost", code, errOut.String())
 	}
 }
