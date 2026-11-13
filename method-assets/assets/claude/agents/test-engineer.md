@@ -18,6 +18,7 @@ tools:
   - mcp__aiarch-state__getResearchSource
   - mcp__aiarch-state__projectStateReadProject
   - mcp__aiarch-state__listComponentScenarios
+  - mcp__aiarch-state__listAcceptanceScenarios
   - mcp__aiarch-state__recordTestingState
   - mcp__aiarch-state__recordPhaseArtifact
   - mcp__aiarch-state__publishDraft

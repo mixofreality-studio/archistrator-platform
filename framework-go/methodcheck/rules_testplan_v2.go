@@ -158,7 +158,7 @@ func (sc tpScope) refFindings(inputs []TestArg, seq, probeIdx int, section strin
 	var out []Finding
 	for _, in := range inputs {
 		switch v := in.Value.(type) {
-		case LiteralValue:
+		case LiteralValue, PlanRef: // a planRef is ATP-REF's
 		case RefValue:
 			if msg := sc.refProblem(v, seq, probeIdx); msg != "" {
 				out = append(out, tpFinding(ruleTPArgRef, sc.l, "%s: input %q: %s", section, in.Name, msg))
@@ -217,8 +217,9 @@ func (sc tpScope) refShapeProblem(v RefValue, target StepBinding, seq, probeIdx 
 // operation is not designed.
 func (sc tpScope) refOp(v RefValue, target StepBinding, seq, probeIdx int) (ContractOperation, ServiceContract, bool) {
 	if v.Probe == nil {
-		op, ok := sc.op(target.Operation)
-		return op, sc.contract, ok
+		ts := sc.scopeOfSeq(target.Seq)
+		op, ok := ts.op(target.Operation)
+		return op, ts.contract, ok
 	}
 	if *v.Probe < 0 || *v.Probe >= len(target.Probes) || (probeIdx >= 0 && v.Step == seq && *v.Probe >= probeIdx) {
 		return ContractOperation{}, ServiceContract{}, false
@@ -417,11 +418,12 @@ func (sc tpScope) contractCallFindings(v ContractCall, section string) []Finding
 // scenario's stimulus operations.
 func (sc tpScope) performsOwnStimulus(v ContractCall) bool {
 	callee := scenario.Normalize(v.Component)
-	if callee != scenario.Normalize(sc.comp) && callee != scenario.Normalize(sc.contract.Component) {
-		return false
-	}
 	for _, stim := range sc.scn.Stimuli {
-		if stim.Input.Op == v.Operation {
+		if stim.Input.Op != v.Operation {
+			continue
+		}
+		own := sc.forStimulus(stim)
+		if callee == scenario.Normalize(own.comp) || callee == scenario.Normalize(own.contract.Component) {
 			return true
 		}
 	}

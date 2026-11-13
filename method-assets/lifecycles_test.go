@@ -12,7 +12,7 @@ import (
 var wantLifecycleTypes = []string{
 	"requirements", "architecture", "projectDesign",
 	"service", "frontend",
-	"testing:harness", "testing:perf", "testing:qaProcess",
+	"testing:harness", "testing:perf", "testing:qaProcess", "testing:acceptancePlan",
 	"deployment", "documentation", "uiDesign", "integration", "machineClient",
 }
 
@@ -42,6 +42,31 @@ func TestLifecycles_ClosedOrderedTypeSet(t *testing.T) {
 	}
 	if _, ok := LifecycleFor("nope"); ok {
 		t.Error("LifecycleFor must report false for an unknown type key")
+	}
+}
+
+// The acceptance test plan (Amendment C) is one dispatch and its gate: the plan binds the
+// residual use-case variants and the stpReview gate holds the ATP-* and TP-* rules.
+func TestLifecycles_AcceptancePlanIsOneDispatchAndOneGate(t *testing.T) {
+	l, ok := LifecycleFor("testing:acceptancePlan")
+	if !ok {
+		t.Fatal("no testing:acceptancePlan lifecycle")
+	}
+	if len(l.Tasks) != 2 {
+		t.Fatalf("tasks = %+v, want stp then stpReview", l.Tasks)
+	}
+	stp, review := l.Tasks[0], l.Tasks[1]
+	if stp.ID != "stp" || stp.Kind != LifecycleTaskDispatch || stp.Command != "acceptance-test-plan" || stp.WorkerClass != "test-engineer" || stp.ArtifactKind != "ATP" || len(stp.DependsOn) != 0 {
+		t.Errorf("stp = %+v", stp)
+	}
+	if review.ID != "stpReview" || review.Kind != LifecycleTaskReview || review.Reviews != "stp" || !slices.Equal(review.DependsOn, []string{"stp"}) {
+		t.Errorf("stpReview = %+v", review)
+	}
+	if len(l.Phases) != 1 || l.Phases[0].ID != "acceptance_plan" || l.Phases[0].Gate != "stpReview" || l.Phases[0].Weight != 100 {
+		t.Errorf("phases = %+v", l.Phases)
+	}
+	if problems := ValidateLifecycles(Lifecycles()); len(problems) != 0 {
+		t.Errorf("ValidateLifecycles: %v", problems)
 	}
 }
 

@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"slices"
 	"strings"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
 
 // Binding model v2 (FPC plan 2). The sum types below are hand-written in the shape
@@ -25,6 +28,7 @@ type TestArgValueKind string
 const (
 	TestArgLiteral TestArgValueKind = "literal"
 	TestArgRef     TestArgValueKind = "ref"
+	TestArgPlanRef TestArgValueKind = "planRef"
 )
 
 // TestArg is one concrete input argument to a step's operation call.
@@ -56,14 +60,29 @@ type RefValue struct {
 	Probe *int   `json:"probe,omitempty"`
 }
 
+// PlanRef is the literal bound to input Input of step Seq of the client plan
+// Component/Scenario (kind "planRef"). Only the acceptance plan carries it: a shared step
+// input is written once, in the client plan, and the acceptance plan names it instead of
+// restating it (ATP-REF refuses one anywhere else and one that does not resolve).
+type PlanRef struct {
+	Component string `json:"component"`
+	Scenario  string `json:"scenario"`
+	Seq       int    `json:"seq"`
+	Input     string `json:"input"`
+}
+
 // Kind implements TestArgValue.
 func (LiteralValue) Kind() TestArgValueKind { return TestArgLiteral }
 
 // Kind implements TestArgValue.
 func (RefValue) Kind() TestArgValueKind { return TestArgRef }
 
+// Kind implements TestArgValue.
+func (PlanRef) Kind() TestArgValueKind { return TestArgPlanRef }
+
 func (LiteralValue) isTestArgValue() {}
 func (RefValue) isTestArgValue()     {}
+func (PlanRef) isTestArgValue()      {}
 
 // MarshalJSON writes the envelope.
 func (v LiteralValue) MarshalJSON() ([]byte, error) { return marshalEnvelope(v.Kind(), literalWire(v)) }
@@ -71,11 +90,15 @@ func (v LiteralValue) MarshalJSON() ([]byte, error) { return marshalEnvelope(v.K
 // MarshalJSON writes the envelope.
 func (v RefValue) MarshalJSON() ([]byte, error) { return marshalEnvelope(v.Kind(), refWire(v)) }
 
+// MarshalJSON writes the envelope.
+func (v PlanRef) MarshalJSON() ([]byte, error) { return marshalEnvelope(v.Kind(), planRefWire(v)) }
+
 // The wire aliases drop the MarshalJSON method so the envelope marshals the bare
 // model without recursing.
 type (
 	literalWire LiteralValue
 	refWire     RefValue
+	planRefWire PlanRef
 )
 
 // UnmarshalTestArgValue decodes the {"kind","model"} envelope; an unknown kind is an error.
@@ -97,6 +120,12 @@ func UnmarshalTestArgValue(raw []byte) (TestArgValue, error) {
 			return nil, fmt.Errorf("methodcheck: test arg value ref: %w", err)
 		}
 		return RefValue(v), nil
+	case TestArgPlanRef:
+		var v planRefWire
+		if err := strictUnmarshal(model, &v); err != nil {
+			return nil, fmt.Errorf("methodcheck: test arg value planRef: %w", err)
+		}
+		return PlanRef(v), nil
 	}
 	return nil, fmt.Errorf("methodcheck: test arg value: unknown kind %q", kind)
 }
@@ -280,6 +309,85 @@ func (r *TestPlanRecord) UnmarshalJSON(raw []byte) error {
 	}
 	*r = TestPlanRecord(v)
 	return nil
+}
+
+// UnmarshalJSON decodes an AcceptancePlanRecord as strictly as a TestPlanRecord: the removed
+// `hook` and `unobservable` are TP-HOOK's, any other undeclared field is a decode error.
+func (r *AcceptancePlanRecord) UnmarshalJSON(raw []byte) error {
+	type plain AcceptancePlanRecord // drops this method; nested types keep theirs
+	var v plain
+	if err := strictUnmarshal(raw, &v); err != nil {
+		if removedHookField(err) {
+			return fmt.Errorf("%s: acceptance plan: %w", ruleTPHook, err)
+		}
+		return fmt.Errorf("acceptance plan: %w", err)
+	}
+	*r = AcceptancePlanRecord(v)
+	return nil
+}
+
+// ResolvePlanRef is the literal v names: input v.Input of step v.Seq of binding v.Scenario of
+// the client plan v.Component. ok is false when the plan, binding, step or input is missing,
+// the binding is skipped, or the input is not a literal.
+func ResolvePlanRef(p Project, v PlanRef) (LiteralValue, bool) {
+	lit, problem := resolvePlanRef(p, v)
+	return lit, problem == ""
+}
+
+// resolvePlanRef is ResolvePlanRef with the reason it failed ("" on success).
+func resolvePlanRef(p Project, v PlanRef) (LiteralValue, string) {
+	if p.PhaseArtifacts == nil {
+		return LiteralValue{}, fmt.Sprintf("no client plan %q is recorded", v.Component)
+	}
+	rec, ok := planRecord(p, v.Component)
+	if !ok {
+		return LiteralValue{}, fmt.Sprintf("no client plan %q is recorded", v.Component)
+	}
+	for _, b := range rec.Bindings {
+		if b.Scenario != v.Scenario {
+			continue
+		}
+		if b.Skip != nil {
+			return LiteralValue{}, fmt.Sprintf("%s's binding of %s is skipped, so it binds no step", v.Component, v.Scenario)
+		}
+		return resolveStepInput(b, v)
+	}
+	return LiteralValue{}, fmt.Sprintf("client plan %q has no binding for scenario %q", v.Component, v.Scenario)
+}
+
+func resolveStepInput(b ScenarioBinding, v PlanRef) (LiteralValue, string) {
+	si := slices.IndexFunc(b.Steps, func(st StepBinding) bool { return st.Seq == v.Seq })
+	if si < 0 {
+		return LiteralValue{}, fmt.Sprintf("%s has no step %d", v.Scenario, v.Seq)
+	}
+	inputs := b.Steps[si].Inputs
+	ii := slices.IndexFunc(inputs, func(in TestArg) bool { return in.Name == v.Input })
+	if ii < 0 {
+		return LiteralValue{}, fmt.Sprintf("step %d of %s has no input %q", v.Seq, v.Scenario, v.Input)
+	}
+	lit, ok := inputs[ii].Value.(LiteralValue)
+	if !ok {
+		return LiteralValue{}, fmt.Sprintf("step %d input %q of %s must name a literal, and it is a %s", v.Seq, v.Input, v.Scenario, inputs[ii].Value.Kind())
+	}
+	return lit, ""
+}
+
+// planRecord finds a client plan by its key, then by scenario.Normalize equality of the key.
+func planRecord(p Project, comp string) (TestPlanRecord, bool) {
+	if rec, ok := p.PhaseArtifacts.TestPlan[comp]; ok {
+		return rec, true
+	}
+	want := scenario.Normalize(comp)
+	best, found := "", false
+	for key := range p.PhaseArtifacts.TestPlan {
+		if scenario.Normalize(key) == want && (!found || key < best) {
+			best, found = key, true
+		}
+	}
+	if !found {
+		return TestPlanRecord{}, false
+	}
+	return p.PhaseArtifacts.TestPlan[best], true
 }
 
 // removedHookField reports a decode error caused by one of the fields binding model v2

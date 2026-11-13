@@ -142,6 +142,14 @@ func unboundFindings(comp string, projected []scenario.Scenario, bound map[strin
 // bindingFindings checks one binding: a skip (TP-SKIP) or the step list (TP-STEP
 // cardinality, then every step).
 func bindingFindings(p Project, env tpEnv, comp string, s scenario.Scenario, b ScenarioBinding, l *Location) []Finding {
+	return planBindingFindings(p, env, comp, s, b, l, false)
+}
+
+// planBindingFindings is bindingFindings for either kind of plan. A client plan's steps all
+// address the plan's own component. An acceptance plan's (acceptance true; comp is only the
+// label of the plan) address whatever component each stimulus targets, so each step is held
+// to the contract of the component its stimulus's Input.To names (tpScope.forStimulus).
+func planBindingFindings(p Project, env tpEnv, comp string, s scenario.Scenario, b ScenarioBinding, l *Location, acceptance bool) []Finding {
 	if b.Skip != nil {
 		return skipFindings(p, comp, b, l)
 	}
@@ -149,10 +157,10 @@ func bindingFindings(p Project, env tpEnv, comp string, s scenario.Scenario, b S
 		return []Finding{tpFinding(ruleTPStep, l, "%s %s: %d steps bound, %d stimuli projected", comp, s.ID, len(b.Steps), len(s.Stimuli))}
 	}
 	contract, op := findContract(p, comp)
-	sc := tpScope{p: p, env: env, comp: comp, scenario: s.ID, scn: s, steps: b.Steps, contract: contract, op: op, web: env.isWeb(comp, contract), l: l}
+	sc := tpScope{p: p, env: env, comp: comp, scenario: s.ID, scn: s, steps: b.Steps, contract: contract, op: op, web: env.isWeb(comp, contract), l: l, acceptance: acceptance}
 	out := sc.arrangeFindings(b.Arrange)
 	for i, st := range b.Steps {
-		out = append(out, sc.stepFindings(s.Stimuli[i], st)...)
+		out = append(out, sc.forStimulus(s.Stimuli[i]).stepFindings(s.Stimuli[i], st)...)
 	}
 	return out
 }
@@ -171,6 +179,32 @@ type tpScope struct {
 	scn   scenario.Scenario // the projected scenario under test
 	steps []StepBinding     // the binding's steps, for refs
 	web   bool              // the component is a browser surface
+
+	// acceptance marks an acceptance plan's binding: its steps address several components, so
+	// comp, contract, op and web are per stimulus (forStimulus) and not the plan's.
+	acceptance bool
+}
+
+// forStimulus is the scope a stimulus is checked in: the plan's own, or, in an acceptance plan,
+// the one of the component the stimulus addresses (Input.To, a scenario.Normalize key).
+func (sc tpScope) forStimulus(stim scenario.Stimulus) tpScope {
+	if !sc.acceptance {
+		return sc
+	}
+	sc.comp = stim.Input.To
+	sc.contract, sc.op = findContract(sc.p, stim.Input.To)
+	sc.web = sc.env.isWeb(stim.Input.To, sc.contract)
+	return sc
+}
+
+// scopeOfSeq is forStimulus for the stimulus numbered seq (the scope a ref's target step ran in).
+func (sc tpScope) scopeOfSeq(seq int) tpScope {
+	for _, stim := range sc.scn.Stimuli {
+		if stim.Seq == seq {
+			return sc.forStimulus(stim)
+		}
+	}
+	return sc
 }
 
 // section labels one step for messages.
@@ -673,6 +707,8 @@ func argTypeFinding(in TestArg, p ContractParam, contract ServiceContract, op Co
 		return &f
 	case RefValue:
 		return nil // a ref resolves at run time: indeterminate here
+	case PlanRef:
+		return nil // resolved at generation; ATP-REF holds its parameter to this one's
 	}
 	return nil
 }

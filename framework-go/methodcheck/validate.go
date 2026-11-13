@@ -36,7 +36,8 @@ func ValidateProject(p Project) ([]Finding, error) {
 
 // scenarioFindings derives the project's scenarios ONCE and runs the rules that
 // read the derivation: UC-START-REDUNDANT over the start families it dropped, then
-// the TP-* family over the scenarios it kept.
+// the TP-* family over the scenarios it kept, then the ATP-* family over the acceptance variants
+// no single client plan covers.
 func scenarioFindings(p Project) ([]Finding, error) {
 	r, err := deriveReport(p)
 	if err != nil {
@@ -47,7 +48,8 @@ func scenarioFindings(p Project) ([]Finding, error) {
 		return nil, err
 	}
 	out = append(out, scenarioProblemFindings(r)...)
-	return append(out, testPlanFindings(p, r.Scenarios)...), nil
+	out = append(out, testPlanFindings(p, r.Scenarios)...)
+	return append(out, acceptancePlanFindings(p, newTPEnv(p), r.Scenarios)...), nil
 }
 
 // glossaryFindings runs the GLOSS-FOURQ twin. It fires only when the Glossary slot is

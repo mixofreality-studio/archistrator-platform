@@ -734,6 +734,22 @@ type PhaseArtifacts struct {
 	// UIDesign is each browser surface's typed UI design (uidesign.go); UI test steps
 	// target its elements.
 	UIDesign map[string]UIDesignRecord `json:"uiDesign"`
+	// AcceptancePlan is the one residual use-case plan (Amendment C): it binds the acceptance
+	// variants no single client plan covers. It belongs to no component, so it is a singleton.
+	AcceptancePlan *AcceptancePlanRecord `json:"acceptancePlan,omitempty"`
+}
+
+// AcceptancePlanRecord is the acceptance plan: a binding per residual acceptance variant
+// ("<scenario>@<client>", scenario.AcceptanceResidual) plus the principals the bindings act
+// as. It decodes as strictly as TestPlanRecord (bindings.go).
+type AcceptancePlanRecord struct {
+	Principals map[string]TestPrincipal `json:"principals"`
+	Bindings   []ScenarioBinding        `json:"bindings"` // keyed by variant id
+	// BrowserActor is the actor whose browser every web step and web probe runs in: one
+	// browser identity per launch (ATP-BROWSER).
+	BrowserActor string `json:"browserActor,omitempty"`
+	// AuthoredAt is stamped by the recording verb; nothing reads it.
+	AuthoredAt string `json:"authoredAt,omitempty"`
 }
 
 // TestPlanRecord is one component's test plan: a binding per derived scenario
@@ -798,6 +814,9 @@ type Probe struct {
 	Operation string     `json:"operation"`
 	Inputs    []TestArg  `json:"inputs"`
 	Expect    TestExpect `json:"expect"`
+	// As is the actor the probe runs as (an acceptance plan's cross-actor observation); the
+	// step's own actor when empty. ATP-PROBE-AS holds it to the plan's principals.
+	As string `json:"as,omitempty"`
 }
 
 // TestExpect is a step's expected outcome: a result value OR an expected error.

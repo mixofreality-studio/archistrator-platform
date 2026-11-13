@@ -106,6 +106,9 @@ func sameValue(a, b TestArgValue) bool {
 	case RefValue:
 		y, ok := b.(RefValue)
 		return ok && reflect.DeepEqual(x, y)
+	case PlanRef:
+		y, ok := b.(PlanRef)
+		return ok && x == y
 	}
 	return false
 }

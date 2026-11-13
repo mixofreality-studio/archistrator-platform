@@ -128,6 +128,16 @@
       ]
     },
     {
+      "type": "testing:acceptancePlan",
+      "phases": [
+        {"id": "acceptance_plan", "label": "Acceptance Test Plan", "weight": 100, "gate": "stpReview", "exitCriterion": "Every residual use-case scenario is bound and the ATP-* and TP-* rules pass"}
+      ],
+      "tasks": [
+        {"id": "stp", "kind": "dispatch", "title": "Acceptance Test Plan", "phase": "acceptance_plan", "dependsOn": [], "command": "acceptance-test-plan", "workerClass": "test-engineer", "artifactKind": "ATP"},
+        {"id": "stpReview", "kind": "review", "title": "Acceptance Plan Review", "phase": "acceptance_plan", "dependsOn": ["stp"], "reviews": "stp"}
+      ]
+    },
+    {
       "type": "deployment",
       "phases": [
         {"id": "detailed_design", "label": "Provisioning Spec", "weight": 25, "gate": "designReview", "exitCriterion": "The provisioning spec is written and passes review"},

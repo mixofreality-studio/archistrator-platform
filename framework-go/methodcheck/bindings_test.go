@@ -14,6 +14,8 @@ func describe(v TestArgValue) string {
 		return "literal:" + string(x.JSON)
 	case RefValue:
 		return "ref:" + x.Path
+	case PlanRef:
+		return "planRef:" + x.Component + "/" + x.Scenario
 	}
 	return ""
 }

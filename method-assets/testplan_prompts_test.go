@@ -99,6 +99,10 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 			"TP-ARRANGE", "TP-ACTOR-OBSERVED", "TP-PRINCIPAL",
 			"TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "onBehalfOf",
 		},
+		cmd("acceptance-test-plan"): {
+			"ATP-BOUND", "ATP-REF", "ATP-PROBE-AS", "ATP-BROWSER", "TP-PRINCIPAL", "TP-EXPECT-REQUIRED", "TP-STATE",
+			"TP-ARG-REF", "TP-SKIP", "onBehalfOf", "planRef",
+		},
 		cmd("frontend-detailed-design"): {"UID-ROLE", "UID-NAME", "UID-ID-UNIQUE", "UID-WITHIN", "UID-ROUTE", "surface check", "latency"},
 		cmd("service-integration"):      {"ARCH-TEST-COMPOSE", "TP-DISCRIMINATE"},
 		cmd("frontend-integration"):     {"ARCH-TEST-COMPOSE", "TP-DISCRIMINATE", "surface-check"},
