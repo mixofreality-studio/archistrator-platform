@@ -9,7 +9,7 @@ import (
 // rules_acceptance_test.go: the ATP-* family (FPC plan 4, Task 4.2) over testdata/atp_clean.json,
 // tp2_clean plus an acceptance plan binding its one residual variant, process-order-P2@shopClient
 // (the customer's invoice is a later outcome of a stimulus no single client projection keeps).
-// atp_unbound.json is the same design with no acceptance plan; atp_badref.json has two planRefs
+// atp_unbound.json is the same design with a recorded acceptance plan that binds nothing;atp_badref.json has two planRefs
 // that do not resolve.
 
 func runATP(t *testing.T, p Project) []Finding {
@@ -72,6 +72,15 @@ func TestATP_Bound_FiresOnUnboundResidual(t *testing.T) {
 			t.Errorf("ATP-BOUND is an Error: %+v", f)
 		}
 	}
+}
+
+// No recorded plan is not an ATP-BOUND finding: N-ATP runs beside construction, so every
+// whole-document write gate (ValidateProject) must stay open until the plan is written.
+func TestATP_Bound_SilentWhenNoPlanIsRecorded(t *testing.T) {
+	p := loadProject(t, "atp_unbound.json")
+	wantRules(t, runATP(t, p), ruleATPBound, 1)
+	p.PhaseArtifacts.AcceptancePlan = nil
+	wantRules(t, runATP(t, p), ruleATPBound, 0)
 }
 
 func TestATP_Bound_FiresOnNonResidualBinding(t *testing.T) {

@@ -488,8 +488,17 @@ func literalInput(in methodcheck.TestArg) (string, error) {
 		return string(v.JSON), nil
 	case methodcheck.RefValue:
 		return "", fmt.Errorf("input %s is a ref to step %d (%s): ref arguments are not resolved by this emitter", in.Name, v.Step, v.Path)
+	case methodcheck.PlanRef:
+		return "", planRefError(in)
 	}
 	panic("unreachable: sealed TestArgValue")
+}
+
+// planRefError is the generation error for a planRef input reaching a client-plan emitter. A
+// planRef is resolved (methodcheck.ResolvePlanRef) only by the acceptance emitter; a client plan
+// never carries one (ATP-REF), so one arriving here is a plan the gate should have refused.
+func planRefError(in methodcheck.TestArg) error {
+	return fmt.Errorf("input %s is a planRef: only the acceptance plan carries one and a client plan never does (ATP-REF)", in.Name)
 }
 
 // urlMatcher is the toHaveURL argument for a `url` observable. The observable

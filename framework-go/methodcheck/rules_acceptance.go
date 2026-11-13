@@ -43,6 +43,7 @@ type acceptanceScope struct {
 	variants map[string]scenario.Scenario
 	residual map[string]string // variant id -> why it is residual
 	rec      AcceptancePlanRecord
+	recorded bool // an acceptancePlan record exists
 	l        *Location
 }
 
@@ -68,8 +69,11 @@ func acceptancePlanFindings(p Project, env tpEnv, all []scenario.Scenario) []Fin
 			live = append(live, v)
 		}
 	}
+	// The unbound half runs only over a recorded plan, as TP-BOUND runs only over recorded client
+	// plans: N-ATP runs beside construction, so a plan not yet written must not refuse the whole-
+	// document writes construction makes. That the plan exists is N-ATP's exit gate (Task 4.4's job gate).
 	for _, id := range sortedResidual(sc.residual) {
-		if !bound[id] {
+		if sc.recorded && !bound[id] {
 			out = append(out, tpFinding(ruleATPBound, sc.l, "%s has no binding for residual variant %s (%s)", acceptanceLabel, id, sc.residual[id]))
 		}
 	}
@@ -95,6 +99,7 @@ func newAcceptanceScope(p Project, env tpEnv, all []scenario.Scenario) (acceptan
 	}
 	if p.PhaseArtifacts != nil && p.PhaseArtifacts.AcceptancePlan != nil {
 		sc.rec = *p.PhaseArtifacts.AcceptancePlan
+		sc.recorded = true
 	}
 	return sc, true
 }

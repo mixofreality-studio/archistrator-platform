@@ -622,6 +622,8 @@ func inputsJSON(sc methodcheck.ServiceContract, op methodcheck.ContractOperation
 			parts = append(parts, strconv.Quote(p.Name)+":"+jsonValue(string(v.JSON), isStringSchema(sc, p.Schema)))
 		case methodcheck.RefValue:
 			refs = append(refs, refArg{param: p.Name, ref: v})
+		case methodcheck.PlanRef:
+			return "", nil, planRefError(arg)
 		}
 	}
 	return "{" + strings.Join(parts, ",") + "}", refs, nil
