@@ -1,0 +1,618 @@
+{
+ "Diagrams": [
+  {
+   "UseCaseID": "come-back-to-an-intact-list",
+   "Title": "Come back to an intact list",
+   "Nodes": [
+    {
+     "ID": "n1",
+     "Kind": "start",
+     "Label": "",
+     "RoleName": "Team Member",
+     "LinkedActorID": "team-member",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n1a",
+     "Kind": "action",
+     "Label": "Ask to come back to an intact list",
+     "RoleName": "Team Member",
+     "LinkedActorID": "team-member",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n2",
+     "Kind": "action",
+     "Label": "Recall the member's whole list, with every title and completed state, exactly as last kept",
+     "RoleName": "List Keeping",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "out-team-member",
+     "Kind": "sendSignal",
+     "Label": "The surface shows the member the whole list with every title and completed state as last kept",
+     "RoleName": "Team Member",
+     "LinkedActorID": "team-member",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n9",
+     "Kind": "end",
+     "Label": "",
+     "RoleName": "List Keeping",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    }
+   ],
+   "Edges": [
+    {
+     "From": "n1",
+     "To": "n1a",
+     "Guard": ""
+    },
+    {
+     "From": "n1a",
+     "To": "n2",
+     "Guard": ""
+    },
+    {
+     "From": "n2",
+     "To": "out-team-member",
+     "Guard": ""
+    },
+    {
+     "From": "out-team-member",
+     "To": "n9",
+     "Guard": ""
+    }
+   ]
+  },
+  {
+   "UseCaseID": "drive-the-list-from-agent-tooling",
+   "Title": "Drive the list from agent tooling",
+   "Nodes": [
+    {
+     "ID": "n1",
+     "Kind": "start",
+     "Label": "",
+     "RoleName": "Team Agent",
+     "LinkedActorID": "team-agent",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n1a",
+     "Kind": "action",
+     "Label": "Agent asks for a list change through the agent surface",
+     "RoleName": "Team Agent",
+     "LinkedActorID": "team-agent",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n2",
+     "Kind": "action",
+     "Label": "Check the agent's delegation covers this change to this member's list",
+     "RoleName": "List Keeping",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n3",
+     "Kind": "decision",
+     "Label": "Within delegation?",
+     "RoleName": "List Keeping",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n4",
+     "Kind": "action",
+     "Label": "Apply the change exactly as a person's change would be applied",
+     "RoleName": "List Keeping",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n5",
+     "Kind": "note",
+     "Label": "Refused: the agent is told the change is outside its delegation",
+     "RoleName": "List Keeping",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n6",
+     "Kind": "merge",
+     "Label": "",
+     "RoleName": "List Keeping",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "out-team-agent",
+     "Kind": "sendSignal",
+     "Label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+     "RoleName": "Team Agent",
+     "LinkedActorID": "team-agent",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n7",
+     "Kind": "end",
+     "Label": "",
+     "RoleName": "List Keeping",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    }
+   ],
+   "Edges": [
+    {
+     "From": "n1",
+     "To": "n1a",
+     "Guard": ""
+    },
+    {
+     "From": "n1a",
+     "To": "n2",
+     "Guard": ""
+    },
+    {
+     "From": "n2",
+     "To": "n3",
+     "Guard": ""
+    },
+    {
+     "From": "n3",
+     "To": "n4",
+     "Guard": "[within delegation]"
+    },
+    {
+     "From": "n3",
+     "To": "n5",
+     "Guard": "[else]"
+    },
+    {
+     "From": "n4",
+     "To": "n6",
+     "Guard": ""
+    },
+    {
+     "From": "n5",
+     "To": "n6",
+     "Guard": ""
+    },
+    {
+     "From": "n6",
+     "To": "out-team-agent",
+     "Guard": ""
+    },
+    {
+     "From": "out-team-agent",
+     "To": "n7",
+     "Guard": ""
+    }
+   ]
+  }
+ ],
+ "Views": [
+  {
+   "UseCaseID": "drive-the-list-from-agent-tooling",
+   "Steps": [
+    {
+     "NodeID": "n1a",
+     "Calls": [
+      {
+       "From": "team-agent",
+       "To": "todo-mcp-server",
+       "Mode": "sync",
+       "Label": "AddTodo | RewordTodo | DiscardTodo | MarkTodo | ToggleAll | ClearCompleted \u2014 agent asks for one list change",
+       "Alt": "s1"
+      },
+      {
+       "From": "team-agent",
+       "To": "todo-api",
+       "Mode": "sync",
+       "Label": "AddTodo | RewordTodo | DiscardTodo | MarkTodo | ToggleAll | ClearCompleted \u2014 agent asks for one list change",
+       "Alt": "s1"
+      }
+     ]
+    },
+    {
+     "NodeID": "n2",
+     "Calls": [
+      {
+       "From": "todo-mcp-server",
+       "To": "list-manager",
+       "Mode": "sync",
+       "Label": "addTodo | rewordTodo | discardTodo | markTodo | toggleAll | clearCompleted \u2014 one list change",
+       "Alt": "s2"
+      },
+      {
+       "From": "todo-api",
+       "To": "list-manager",
+       "Mode": "sync",
+       "Label": "addTodo | rewordTodo | discardTodo | markTodo | toggleAll | clearCompleted \u2014 one list change",
+       "Alt": "s2"
+      },
+      {
+       "From": "list-manager",
+       "To": "access-granting-engine",
+       "Mode": "sync",
+       "Label": "DecideAccess(principal, owner, change) \u2192 within delegation | refused",
+       "Alt": ""
+      }
+     ]
+    },
+    {
+     "NodeID": "n4",
+     "Calls": [
+      {
+       "From": "list-manager",
+       "To": "todo-list-access",
+       "Mode": "sync",
+       "Label": "recallList(owner) \u2192 todos",
+       "Alt": ""
+      },
+      {
+       "From": "todo-list-access",
+       "To": "todo-list-store",
+       "Mode": "sync",
+       "Label": "read the member's list entries",
+       "Alt": ""
+      },
+      {
+       "From": "list-manager",
+       "To": "list-ruling-engine",
+       "Mode": "sync",
+       "Label": "JudgeTitle | JudgeToggleTarget \u2014 rules the change exactly as for a person",
+       "Alt": ""
+      },
+      {
+       "From": "list-manager",
+       "To": "todo-list-access",
+       "Mode": "sync",
+       "Label": "recordTodo | retitleTodo | removeTodo | setCompletion | setAllCompletion | purgeCompleted \u2014 keeps the ruled change",
+       "Alt": ""
+      },
+      {
+       "From": "todo-list-access",
+       "To": "todo-list-store",
+       "Mode": "sync",
+       "Label": "write the changed list entries (idempotency: todo id)",
+       "Alt": ""
+      },
+      {
+       "From": "list-manager",
+       "To": "message-bus",
+       "Mode": "sync",
+       "Label": "publish(ListChanged)",
+       "Alt": ""
+      }
+     ]
+    }
+   ]
+  },
+  {
+   "UseCaseID": "come-back-to-an-intact-list",
+   "Steps": [
+    {
+     "NodeID": "n1a",
+     "Calls": [
+      {
+       "From": "team-member",
+       "To": "todo-web-app",
+       "Mode": "sync",
+       "Label": "OpenList \u2014 returns to the list",
+       "Alt": "s1"
+      },
+      {
+       "From": "team-member",
+       "To": "todo-mcp-server",
+       "Mode": "sync",
+       "Label": "OpenList \u2014 returns to the list in an MCP Apps host",
+       "Alt": "s1"
+      }
+     ]
+    },
+    {
+     "NodeID": "n2",
+     "Calls": [
+      {
+       "From": "todo-web-app",
+       "To": "list-manager",
+       "Mode": "sync",
+       "Label": "openList(view) \u2192 visible todos, itemsLeft",
+       "Alt": "s2"
+      },
+      {
+       "From": "todo-mcp-server",
+       "To": "list-manager",
+       "Mode": "sync",
+       "Label": "openList(view) \u2192 visible todos, itemsLeft",
+       "Alt": "s2"
+      },
+      {
+       "From": "list-manager",
+       "To": "access-granting-engine",
+       "Mode": "sync",
+       "Label": "DecideAccess(principal, owner, read) \u2192 permitted | refused",
+       "Alt": ""
+      },
+      {
+       "From": "list-manager",
+       "To": "todo-list-access",
+       "Mode": "sync",
+       "Label": "recallList(owner) \u2192 every title and completed state as last kept",
+       "Alt": ""
+      },
+      {
+       "From": "todo-list-access",
+       "To": "todo-list-store",
+       "Mode": "sync",
+       "Label": "read the member's list entries",
+       "Alt": ""
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Actors": {
+  "team-agent": true,
+  "team-member": true
+ },
+ "Contracts": {
+  "listManager": {
+   "Component": "listManager",
+   "FacetOf": "",
+   "Interface": "ListManager",
+   "Client": false,
+   "Ops": [
+    {
+     "Name": "AddTodo",
+     "Params": [
+      "owner",
+      "wording",
+      "requestId"
+     ]
+    },
+    {
+     "Name": "RewordTodo",
+     "Params": [
+      "owner",
+      "todoId",
+      "wording"
+     ]
+    },
+    {
+     "Name": "DiscardTodo",
+     "Params": [
+      "owner",
+      "todoId"
+     ]
+    },
+    {
+     "Name": "MarkTodo",
+     "Params": [
+      "owner",
+      "todoId",
+      "completed"
+     ]
+    },
+    {
+     "Name": "ToggleAll",
+     "Params": [
+      "owner"
+     ]
+    },
+    {
+     "Name": "ClearCompleted",
+     "Params": [
+      "owner"
+     ]
+    },
+    {
+     "Name": "OpenList",
+     "Params": [
+      "owner",
+      "view"
+     ]
+    }
+   ]
+  },
+  "todoApi": {
+   "Component": "todoApi",
+   "FacetOf": "",
+   "Interface": "TodoApiList",
+   "Client": true,
+   "Ops": [
+    {
+     "Name": "ListAddTodo",
+     "Params": [
+      "owner",
+      "wording",
+      "requestId"
+     ]
+    },
+    {
+     "Name": "ListRewordTodo",
+     "Params": [
+      "owner",
+      "todoId",
+      "wording"
+     ]
+    },
+    {
+     "Name": "ListDiscardTodo",
+     "Params": [
+      "owner",
+      "todoId"
+     ]
+    },
+    {
+     "Name": "ListMarkTodo",
+     "Params": [
+      "owner",
+      "todoId",
+      "completed"
+     ]
+    },
+    {
+     "Name": "ListToggleAll",
+     "Params": [
+      "owner"
+     ]
+    },
+    {
+     "Name": "ListClearCompleted",
+     "Params": [
+      "owner"
+     ]
+    },
+    {
+     "Name": "ListOpenList",
+     "Params": [
+      "owner",
+      "view"
+     ]
+    }
+   ]
+  },
+  "todoMcpServer": {
+   "Component": "todoMcpServer",
+   "FacetOf": "",
+   "Interface": "TodoMcpServerList",
+   "Client": true,
+   "Ops": [
+    {
+     "Name": "ListAddTodo",
+     "Params": [
+      "owner",
+      "wording",
+      "requestId"
+     ]
+    },
+    {
+     "Name": "ListRewordTodo",
+     "Params": [
+      "owner",
+      "todoId",
+      "wording"
+     ]
+    },
+    {
+     "Name": "ListDiscardTodo",
+     "Params": [
+      "owner",
+      "todoId"
+     ]
+    },
+    {
+     "Name": "ListMarkTodo",
+     "Params": [
+      "owner",
+      "todoId",
+      "completed"
+     ]
+    },
+    {
+     "Name": "ListToggleAll",
+     "Params": [
+      "owner"
+     ]
+    },
+    {
+     "Name": "ListClearCompleted",
+     "Params": [
+      "owner"
+     ]
+    },
+    {
+     "Name": "ListOpenList",
+     "Params": [
+      "owner",
+      "view"
+     ]
+    }
+   ]
+  },
+  "todoWebApp": {
+   "Component": "todoWebApp",
+   "FacetOf": "",
+   "Interface": "TodoWebApp",
+   "Client": true,
+   "Ops": [
+    {
+     "Name": "AddTodo",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "RewordTodo",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "DiscardTodo",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "MarkTodo",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "ToggleAll",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "ClearCompleted",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "OpenList",
+     "Params": [
+      "action"
+     ]
+    }
+   ]
+  }
+ }
+}

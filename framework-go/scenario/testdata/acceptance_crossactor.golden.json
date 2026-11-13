@@ -1,0 +1,2189 @@
+[
+  {
+    "id": "work-the-list-P1@todoApi",
+    "useCase": "work-the-list",
+    "title": "Work the List — [permitted]",
+    "path": [
+      "n1",
+      "n1a",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "n8",
+      "n10",
+      "out-team-member",
+      "out-team-agent",
+      "n11"
+    ],
+    "guards": [
+      {
+        "at": "n3",
+        "guard": "[permitted]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListAddTodo",
+          "call": "work-the-list/n1a/3.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListRewordTodo",
+          "call": "work-the-list/n1a/3.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListDiscardTodo",
+          "call": "work-the-list/n1a/3.2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListMarkTodo",
+          "call": "work-the-list/n1a/3.3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListToggleAll",
+          "call": "work-the-list/n1a/3.4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListClearCompleted",
+          "call": "work-the-list/n1a/3.5"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "work-the-list-P1@todoMcpServer",
+    "useCase": "work-the-list",
+    "title": "Work the List — [permitted]",
+    "path": [
+      "n1",
+      "n1a",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "n8",
+      "n10",
+      "out-team-member",
+      "out-team-agent",
+      "n11"
+    ],
+    "guards": [
+      {
+        "at": "n3",
+        "guard": "[permitted]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListAddTodo",
+          "call": "work-the-list/n1a/1.0",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListRewordTodo",
+          "call": "work-the-list/n1a/1.1",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListDiscardTodo",
+          "call": "work-the-list/n1a/1.2",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListMarkTodo",
+          "call": "work-the-list/n1a/1.3",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListToggleAll",
+          "call": "work-the-list/n1a/1.4",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListClearCompleted",
+          "call": "work-the-list/n1a/1.5",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "work-the-list-P1@todoWebApp",
+    "useCase": "work-the-list",
+    "title": "Work the List — [permitted]",
+    "path": [
+      "n1",
+      "n1a",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n6",
+      "n8",
+      "n10",
+      "out-team-member",
+      "out-team-agent",
+      "n11"
+    ],
+    "guards": [
+      {
+        "at": "n3",
+        "guard": "[permitted]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "AddTodo",
+          "call": "work-the-list/n1a/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "RewordTodo",
+          "call": "work-the-list/n1a/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "DiscardTodo",
+          "call": "work-the-list/n1a/0.2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "MarkTodo",
+          "call": "work-the-list/n1a/0.3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "ToggleAll",
+          "call": "work-the-list/n1a/0.4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "ClearCompleted",
+          "call": "work-the-list/n1a/0.5"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "work-the-list-P2@todoApi",
+    "useCase": "work-the-list",
+    "title": "Work the List — [permitted]",
+    "path": [
+      "n1",
+      "n1a",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n7",
+      "n8",
+      "n10",
+      "out-team-member",
+      "out-team-agent",
+      "n11"
+    ],
+    "guards": [
+      {
+        "at": "n3",
+        "guard": "[permitted]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListAddTodo",
+          "call": "work-the-list/n1a/3.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListRewordTodo",
+          "call": "work-the-list/n1a/3.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListDiscardTodo",
+          "call": "work-the-list/n1a/3.2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListMarkTodo",
+          "call": "work-the-list/n1a/3.3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListToggleAll",
+          "call": "work-the-list/n1a/3.4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListClearCompleted",
+          "call": "work-the-list/n1a/3.5"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "work-the-list-P2@todoMcpServer",
+    "useCase": "work-the-list",
+    "title": "Work the List — [permitted]",
+    "path": [
+      "n1",
+      "n1a",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n7",
+      "n8",
+      "n10",
+      "out-team-member",
+      "out-team-agent",
+      "n11"
+    ],
+    "guards": [
+      {
+        "at": "n3",
+        "guard": "[permitted]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListAddTodo",
+          "call": "work-the-list/n1a/1.0",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListRewordTodo",
+          "call": "work-the-list/n1a/1.1",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListDiscardTodo",
+          "call": "work-the-list/n1a/1.2",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListMarkTodo",
+          "call": "work-the-list/n1a/1.3",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListToggleAll",
+          "call": "work-the-list/n1a/1.4",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListClearCompleted",
+          "call": "work-the-list/n1a/1.5",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "work-the-list-P2@todoWebApp",
+    "useCase": "work-the-list",
+    "title": "Work the List — [permitted]",
+    "path": [
+      "n1",
+      "n1a",
+      "n2",
+      "n3",
+      "n4",
+      "n5",
+      "n7",
+      "n8",
+      "n10",
+      "out-team-member",
+      "out-team-agent",
+      "n11"
+    ],
+    "guards": [
+      {
+        "at": "n3",
+        "guard": "[permitted]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "AddTodo",
+          "call": "work-the-list/n1a/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "RewordTodo",
+          "call": "work-the-list/n1a/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "DiscardTodo",
+          "call": "work-the-list/n1a/0.2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "MarkTodo",
+          "call": "work-the-list/n1a/0.3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "ToggleAll",
+          "call": "work-the-list/n1a/0.4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "ClearCompleted",
+          "call": "work-the-list/n1a/0.5"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "work-the-list-P3@todoApi",
+    "useCase": "work-the-list",
+    "title": "Work the List — [else]",
+    "path": [
+      "n1",
+      "n1a",
+      "n2",
+      "n3",
+      "n9",
+      "n10",
+      "out-team-member",
+      "out-team-agent",
+      "n11"
+    ],
+    "guards": [
+      {
+        "at": "n3",
+        "guard": "[else]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListAddTodo",
+          "call": "work-the-list/n1a/3.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListRewordTodo",
+          "call": "work-the-list/n1a/3.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListDiscardTodo",
+          "call": "work-the-list/n1a/3.2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListMarkTodo",
+          "call": "work-the-list/n1a/3.3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListToggleAll",
+          "call": "work-the-list/n1a/3.4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-agent",
+          "to": "todoapi",
+          "op": "ListClearCompleted",
+          "call": "work-the-list/n1a/3.5"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "work-the-list-P3@todoMcpServer",
+    "useCase": "work-the-list",
+    "title": "Work the List — [else]",
+    "path": [
+      "n1",
+      "n1a",
+      "n2",
+      "n3",
+      "n9",
+      "n10",
+      "out-team-member",
+      "out-team-agent",
+      "n11"
+    ],
+    "guards": [
+      {
+        "at": "n3",
+        "guard": "[else]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListAddTodo",
+          "call": "work-the-list/n1a/1.0",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListRewordTodo",
+          "call": "work-the-list/n1a/1.1",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListDiscardTodo",
+          "call": "work-the-list/n1a/1.2",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListMarkTodo",
+          "call": "work-the-list/n1a/1.3",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListToggleAll",
+          "call": "work-the-list/n1a/1.4",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todomcpserver",
+          "op": "ListClearCompleted",
+          "call": "work-the-list/n1a/1.5",
+          "via": [
+            "team-member",
+            "team-agent"
+          ]
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  },
+  {
+    "id": "work-the-list-P3@todoWebApp",
+    "useCase": "work-the-list",
+    "title": "Work the List — [else]",
+    "path": [
+      "n1",
+      "n1a",
+      "n2",
+      "n3",
+      "n9",
+      "n10",
+      "out-team-member",
+      "out-team-agent",
+      "n11"
+    ],
+    "guards": [
+      {
+        "at": "n3",
+        "guard": "[else]"
+      }
+    ],
+    "preconditions": {
+      "expectedOutputs": [],
+      "expectedStates": [],
+      "hints": []
+    },
+    "stimuli": [
+      {
+        "seq": 1,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "AddTodo",
+          "call": "work-the-list/n1a/0.0"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 2,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "RewordTodo",
+          "call": "work-the-list/n1a/0.1"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 3,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "DiscardTodo",
+          "call": "work-the-list/n1a/0.2"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 4,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "MarkTodo",
+          "call": "work-the-list/n1a/0.3"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 5,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "ToggleAll",
+          "call": "work-the-list/n1a/0.4"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      },
+      {
+        "seq": 6,
+        "node": "n1a",
+        "input": {
+          "kind": "action",
+          "from": "team-member",
+          "to": "todowebapp",
+          "op": "ClearCompleted",
+          "call": "work-the-list/n1a/0.5"
+        },
+        "expectedOutputs": [],
+        "expectedStates": [],
+        "hints": [],
+        "actorOutcome": {
+          "expectedOutputs": [
+            {
+              "node": "out-team-member",
+              "kind": "sendSignal",
+              "to": "team-member",
+              "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+              "immediate": false
+            },
+            {
+              "node": "out-team-agent",
+              "kind": "sendSignal",
+              "to": "team-agent",
+              "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+              "immediate": false
+            }
+          ],
+          "expectedStates": [],
+          "hints": []
+        }
+      }
+    ]
+  }
+]

@@ -43,7 +43,7 @@ type InputEv struct {
 	Op    string   `json:"op"`              // resolved contract op name, or "" when unresolved
 	Call  string   `json:"call"`            // "<useCase>/<nodeId>/<callIndex>" provenance ("…/<callIndex>.<k>" when one label names several ops), "" when none
 	Guard string   `json:"guard,omitempty"` // the guard taken at a decision/switch node, on every stimulus of that node
-	Via   []string `json:"via,omitempty"`   // the alternative callers when an alt group's calls into To collapse to this one stimulus (A4)
+	Via   []string `json:"via,omitempty"`   // the alternative callers when an alt group's calls into To collapse to this one stimulus (A4); ForAcceptance reads them as the callers that may have made it
 }
 
 // Outcome is what is observed after a stimulus (or, for Preconditions,

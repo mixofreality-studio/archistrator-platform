@@ -1,0 +1,244 @@
+{
+ "Diagrams": [
+  {
+   "UseCaseID": "tidy-nightly",
+   "Title": "Tidy the list nightly",
+   "Nodes": [
+    {
+     "ID": "t1",
+     "Kind": "timeEvent",
+     "Label": "Nightly: the list is due for a tidy",
+     "RoleName": "listManager",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n2",
+     "Kind": "action",
+     "Label": "Tidy the member's list",
+     "RoleName": "listManager",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "out-member",
+     "Kind": "sendSignal",
+     "Label": "The member is told the list was tidied overnight",
+     "RoleName": "Team Member",
+     "LinkedActorID": "team-member",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n3",
+     "Kind": "action",
+     "Label": "Come back to the list",
+     "RoleName": "Team Member",
+     "LinkedActorID": "team-member",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n4",
+     "Kind": "action",
+     "Label": "Recall the member's tidied list",
+     "RoleName": "listManager",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "out-member-back",
+     "Kind": "sendSignal",
+     "Label": "The surface shows the tidied list",
+     "RoleName": "Team Member",
+     "LinkedActorID": "team-member",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    },
+    {
+     "ID": "n5",
+     "Kind": "end",
+     "Label": "",
+     "RoleName": "listManager",
+     "LinkedActorID": "",
+     "DecidedBy": "",
+     "InState": "",
+     "Anchor": ""
+    }
+   ],
+   "Edges": [
+    {
+     "From": "t1",
+     "To": "n2",
+     "Guard": ""
+    },
+    {
+     "From": "n2",
+     "To": "out-member",
+     "Guard": ""
+    },
+    {
+     "From": "out-member",
+     "To": "n3",
+     "Guard": ""
+    },
+    {
+     "From": "n3",
+     "To": "n4",
+     "Guard": ""
+    },
+    {
+     "From": "n4",
+     "To": "out-member-back",
+     "Guard": ""
+    },
+    {
+     "From": "out-member-back",
+     "To": "n5",
+     "Guard": ""
+    }
+   ]
+  }
+ ],
+ "Views": [
+  {
+   "UseCaseID": "tidy-nightly",
+   "Steps": [
+    {
+     "NodeID": "n3",
+     "Calls": [
+      {
+       "From": "team-member",
+       "To": "todo-web-app",
+       "Mode": "sync",
+       "Label": "OpenList - returns to the list",
+       "Alt": ""
+      }
+     ]
+    }
+   ]
+  }
+ ],
+ "Actors": {
+  "team-member": true
+ },
+ "Contracts": {
+  "listManager": {
+   "Component": "listManager",
+   "FacetOf": "",
+   "Interface": "ListManager",
+   "Client": false,
+   "Ops": [
+    {
+     "Name": "AddTodo",
+     "Params": [
+      "owner",
+      "wording",
+      "requestId"
+     ]
+    },
+    {
+     "Name": "RewordTodo",
+     "Params": [
+      "owner",
+      "todoId",
+      "wording"
+     ]
+    },
+    {
+     "Name": "DiscardTodo",
+     "Params": [
+      "owner",
+      "todoId"
+     ]
+    },
+    {
+     "Name": "MarkTodo",
+     "Params": [
+      "owner",
+      "todoId",
+      "completed"
+     ]
+    },
+    {
+     "Name": "ToggleAll",
+     "Params": [
+      "owner"
+     ]
+    },
+    {
+     "Name": "ClearCompleted",
+     "Params": [
+      "owner"
+     ]
+    },
+    {
+     "Name": "OpenList",
+     "Params": [
+      "owner",
+      "view"
+     ]
+    }
+   ]
+  },
+  "todoWebApp": {
+   "Component": "todoWebApp",
+   "FacetOf": "",
+   "Interface": "TodoWebApp",
+   "Client": true,
+   "Ops": [
+    {
+     "Name": "AddTodo",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "RewordTodo",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "DiscardTodo",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "MarkTodo",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "ToggleAll",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "ClearCompleted",
+     "Params": [
+      "action"
+     ]
+    },
+    {
+     "Name": "OpenList",
+     "Params": [
+      "action"
+     ]
+    }
+   ]
+  }
+ }
+}
