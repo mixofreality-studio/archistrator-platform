@@ -3,14 +3,18 @@ name: Release Gate
 # A module tag is a release. The platform has no tagging workflow (tags are
 # pushed by hand: `git push origin fpc/main --tags`), so this workflow gates
 # them after the fact: when a tag for a module that apps consume is pushed, the
-# `conformance` job of Platform Checks must have passed on the SAME commit,
+# conformance jobs of Platform Checks (conformance, conformance-proof,
+# conformance-discriminate, conformance-discriminate-impl) must have passed on the SAME commit,
 # otherwise this run fails and the tag must be deleted and re-cut from a green SHA.
 #
 # Wait budget: with one `git push origin fpc/main --tags` this run starts at the
 # same moment as Platform Checks, whose `go` job (build, lint, test of every
-# module) must finish before `conformance` (own 60 minute budget) even starts.
-# The gate therefore polls for up to 120 minutes (120 x 60s) under a 130 minute
-# job timeout, which covers both jobs end to end.
+# module) must finish before the conformance jobs even start. They run in
+# parallel; the longest, conformance-discriminate-impl, measured 73 minutes and
+# has a 150 minute budget, so the gate polls for up to 170 minutes (170 x 60s)
+# under a 180 minute job timeout, which covers the go job and the longest
+# conformance job end to end even at its timeout. A job that times out ends
+# `timed_out`, which fails the gate at once rather than at the end of the poll.
 
 on:
   push:
@@ -23,7 +27,7 @@ on:
 jobs:
   require-conformance:
     runs-on: ubuntu-latest
-    timeout-minutes: 130
+    timeout-minutes: 180
     permissions:
       contents: read
       checks: read
@@ -33,7 +37,7 @@ jobs:
       - uses: actions/checkout@v6
         with:
           fetch-depth: 0
-      - name: Require green conformance and conformance-proof check runs on the tagged commit
+      - name: Require green conformance, conformance-proof, conformance-discriminate and conformance-discriminate-impl check runs on the tagged commit
         env:
           GH_TOKEN: ${{ github.token }}
           REPO: ${{ github.repository }}
@@ -42,9 +46,9 @@ jobs:
           set -euo pipefail
           SHA="$(git rev-parse "refs/tags/${TAG}^{commit}")"
           echo "tag ${TAG} resolves to commit ${SHA}"
-          for check in conformance conformance-proof; do
+          for check in conformance conformance-proof conformance-discriminate conformance-discriminate-impl; do
             passed=0
-            for attempt in $(seq 1 120); do
+            for attempt in $(seq 1 170); do
               conclusion="$(gh api "repos/${REPO}/commits/${SHA}/check-runs?check_name=${check}" \
                 --jq "[.check_runs[] | select(.name == \"${check}\")] | sort_by(.started_at) | last | .conclusion // \"none\"")"
               echo "${check} on ${SHA} for ${TAG}: ${conclusion} (attempt ${attempt})"

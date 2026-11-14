@@ -69,10 +69,22 @@ jobs:
   # npm typecheck), then the composed todomvc app is booted and probed (GET /,
   # POST /mcp initialize + tools/list) and a double boot must leave no Docker
   # orphans. Docker is preinstalled on ubuntu-latest. The job names are load-bearing:
-  # release-gate.yml requires green check runs named `conformance` AND
-  # `conformance-proof` on the tagged SHA. The two run in parallel because the
-  # RUN-021 proof alone (null-build and real-body discrimination) takes ~35 minutes
-  # locally and longer on the runner.
+  # release-gate.yml requires a green check run of each of `conformance`,
+  # `conformance-proof`, `conformance-discriminate` and `conformance-discriminate-impl`
+  # on the tagged SHA.
+  #
+  # The RUN-021 proof (TestConformance_RUN021Proof) is split by subtest into three
+  # parallel jobs. Run in one process it outlasted its 100 minute budget (run
+  # 43609346562, 2026-11-14, measured on the runner): derive, methodcheck, testgen
+  # under a second each, chain 0.7 min, discriminate_impl 72.8 min (the harvested
+  # SPA's browser scenarios run through Playwright, one devstack boot per scenario
+  # and stimulus operation), vet under a second, discriminate 16.8 min, vacuous
+  # still running at 9.7 min when the process was killed. Each job is timed at about
+  # twice what its subtests measured. The subtests are independent: each builds the
+  # tree it needs. A -run that matches no subtest exits 0, so each job also checks
+  # that every subtest it owns reported PASS. Earmark E16/E18: discriminate_impl
+  # boots one devstack per web run because AIARCH_NULL_OPS is read when the server
+  # starts; one boot per package needs the null set switchable per run.
   conformance:
     needs: go
     runs-on: ubuntu-latest
@@ -103,7 +115,7 @@ jobs:
   conformance-proof:
     needs: go
     runs-on: ubuntu-latest
-    timeout-minutes: 110
+    timeout-minutes: 50
     permissions:
       contents: read
     steps:
@@ -122,11 +134,77 @@ jobs:
           temporal --version
           git --version
           docker info --format '{{.ServerVersion}}'
-      # RUN-021 replayed through the chain: derive, methodcheck, testgen, chain, vet,
-      # discriminate (null build), vacuous, discriminate_impl (harvested bodies).
-      - name: RUN-021 proof
+      # The RUN-021 proof's quick subtests, the build of the null chain, its vet, and the vacuous-binding discrimination (about 20 minutes).
+      - name: RUN-021 proof (derive, methodcheck, testgen, chain, vet, vacuous)
         working-directory: framework-go-conformance
-        run: GOWORK=off go test -tags conformance ./ -run 'TestConformance_RUN021Proof$' -v -timeout 100m
+        run: |
+          set -euo pipefail
+          GOWORK=off go test -tags conformance ./ -run '^TestConformance_RUN021Proof$/^(derive|methodcheck|testgen|chain|vet|vacuous)$' -v -timeout 45m | tee proof.log
+          for sub in derive methodcheck testgen chain vet vacuous; do
+            grep -q -- "--- PASS: TestConformance_RUN021Proof/${sub} " proof.log || { echo "::error::RUN-021 subtest ${sub} did not run and pass"; exit 1; }
+          done
+  conformance-discriminate:
+    needs: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: temporalio/setup-temporal@v0
+        with:
+          version: '1.10.0'
+      - name: Toolchain the proof needs (temporal, git, docker)
+        run: |
+          temporal --version
+          git --version
+          docker info --format '{{.ServerVersion}}'
+      # The null build's discrimination: builds its own chain, then runs every scenario once (about 18 minutes).
+      - name: RUN-021 proof (discriminate)
+        working-directory: framework-go-conformance
+        run: |
+          set -euo pipefail
+          GOWORK=off go test -tags conformance ./ -run '^TestConformance_RUN021Proof$/^(discriminate)$' -v -timeout 45m | tee proof.log
+          for sub in discriminate; do
+            grep -q -- "--- PASS: TestConformance_RUN021Proof/${sub} " proof.log || { echo "::error::RUN-021 subtest ${sub} did not run and pass"; exit 1; }
+          done
+  conformance-discriminate-impl:
+    needs: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 150
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: temporalio/setup-temporal@v0
+        with:
+          version: '1.10.0'
+      - name: Toolchain the proof needs (temporal, git, docker)
+        run: |
+          temporal --version
+          git --version
+          docker info --format '{{.ServerVersion}}'
+      # Discrimination over the harvest's hand-written bodies, Go and browser scenarios (measured 73 minutes, the long pole).
+      - name: RUN-021 proof (discriminate_impl)
+        working-directory: framework-go-conformance
+        run: |
+          set -euo pipefail
+          GOWORK=off go test -tags conformance ./ -run '^TestConformance_RUN021Proof$/^(discriminate_impl)$' -v -timeout 145m | tee proof.log
+          for sub in discriminate_impl; do
+            grep -q -- "--- PASS: TestConformance_RUN021Proof/${sub} " proof.log || { echo "::error::RUN-021 subtest ${sub} did not run and pass"; exit 1; }
+          done
   web:
     runs-on: ubuntu-latest
     permissions:

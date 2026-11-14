@@ -23,6 +23,11 @@ const run021Fixture = "todomvc"
 
 // TestConformance_RUN021Proof replays RUN-021 through the new chain (FPC plan 2, Task 2.13).
 //
+// The subtests are independent: each runs alone under -run 'TestConformance_RUN021Proof/<name>$', and
+// CI runs them as parallel jobs (platform-checks.yml: conformance-proof, conformance-discriminate,
+// conformance-discriminate-impl), because run in one process they outlast the runner (measured: the
+// browser scenarios put discriminate_impl alone near 73 minutes, the whole proof past 100).
+//
 // The harvest passed every gate and built an app whose reword-an-abandoned-todo path had no
 // test, whose delete test asserted what was already true before the click, and whose checkbox
 // test waited for the server. Each subtest pins one of those defects shut:
@@ -53,34 +58,47 @@ func TestConformance_RUN021Proof(t *testing.T) {
 	t.Run("methodcheck", func(t *testing.T) { run021Methodcheck(t, raw) })
 	t.Run("testgen", func(t *testing.T) { run021Testgen(t, raw) })
 
-	var built string
-	// The built tree belongs to the parent test: the subtests after the chain read it, and a
-	// subtest's own TempDir is gone when that subtest returns.
-	chainDir := t.TempDir()
-	t.Run("chain", func(t *testing.T) {
-		dir := chainDir
-		ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
-		defer cancel()
-		if _, err := RunChainOn(ctx, run021Fixture, raw, dir); err != nil {
-			t.Fatalf("RunChain: %v", err)
+	// The built tree belongs to the parent test and is built on first need. Every subtest that reads
+	// it (chain, vet, discriminate) asks for it through built, so each runs on its own under
+	// -run 'TestConformance_RUN021Proof/<name>$' (the CI jobs split the proof that way), and the tree
+	// outlives the subtest that happened to build it (a subtest's own TempDir is gone when it
+	// returns). A failed build fails every subtest that needs the tree; none is skipped.
+	var (
+		chainTried bool
+		chainDir   string
+		chainErr   error
+	)
+	parent := t
+	built := func(t *testing.T) string {
+		t.Helper()
+		if !chainTried {
+			chainTried = true
+			dir := parent.TempDir()
+			ctx, cancel := context.WithTimeout(context.Background(), 25*time.Minute)
+			defer cancel()
+			if _, chainErr = RunChainOn(ctx, run021Fixture, raw, dir); chainErr == nil {
+				chainDir = dir
+			}
 		}
-		built = dir
-	})
+		if chainErr != nil {
+			t.Fatalf("RunChain: %v", chainErr)
+		}
+		return chainDir
+	}
+	t.Run("chain", func(t *testing.T) { built(t) })
 	// Independent of the null build: it builds its own tree from the harvested bodies.
 	t.Run("discriminate_impl", func(t *testing.T) { run021DiscriminateImpl(t, raw) })
-	if built == "" {
-		return
-	}
-	t.Run("vet", func(t *testing.T) { run021Vet(t, built) })
+	t.Run("vet", func(t *testing.T) { run021Vet(t, built(t)) })
 	t.Run("discriminate", func(t *testing.T) {
-		got := discriminate(t, built)
+		dir := built(t)
+		got := discriminate(t, dir)
 		for _, s := range got.list {
 			t.Errorf("%s scenario %s op %s survives the null subject", s.component, s.scenario, s.op)
 		}
 		if got.survivors != 0 {
 			t.Errorf("null build: %d survivor(s), want 0", got.survivors)
 		}
-		if want := goScenarios(t, built) + len(webScenarioIDs(t, built)); got.scenarios != want {
+		if want := goScenarios(t, dir) + len(webScenarioIDs(t, dir)); got.scenarios != want {
 			t.Errorf("null build: %d scenario(s) discriminated, but %d were generated (Go components and machine clients, and browser scenarios)", got.scenarios, want)
 		}
 		// The null build is all-null: its "real subject" returns zero results, so every Go scenario
@@ -329,7 +347,9 @@ type discriminateRun struct {
 // as the vacuous binding, is a survivor.
 func discriminate(t *testing.T, dir string) discriminateRun {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Minute)
+	// Bounded below the CI job that runs the longest discrimination (conformance-discriminate-impl: go
+	// test -timeout 145m, measured 73 minutes), so the go test timeout, not this, is what ends a stuck run.
+	ctx, cancel := context.WithTimeout(context.Background(), 140*time.Minute)
 	defer cancel()
 	// The browser scenarios run in the app's own uitests project, which an app (not the scaffold)
 	// installs Playwright and its browser in.
