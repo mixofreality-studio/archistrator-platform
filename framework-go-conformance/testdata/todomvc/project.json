@@ -31614,7 +31614,7 @@
           "steps": [],
           "skip": {
             "reason": "the SPA opens the requester's own list (owner is empty), so a member's browser is never refused another member's list: the refused path has no browser driver",
-            "until": "U-SPA-todo-web-app"
+            "until": "2099-12-31"
           }
         },
         {
@@ -34504,7 +34504,7 @@
           "steps": [],
           "skip": {
             "reason": "the browser cannot add a todo in one action: the dialect has fill and press but no type-and-submit, and the web steps for reword are three actions (dblclick, fill, Enter) where the path has one stimulus",
-            "until": "U-SPA-todo-web-app"
+            "until": "2099-12-31"
           }
         },
         {
@@ -35350,7 +35350,7 @@
           "steps": [],
           "skip": {
             "reason": "the browser cannot add a todo in one action: the dialect has fill and press but no type-and-submit, and the web steps for reword are three actions (dblclick, fill, Enter) where the path has one stimulus",
-            "until": "U-SPA-todo-web-app"
+            "until": "2099-12-31"
           }
         },
         {
@@ -36080,7 +36080,7 @@
           "steps": [],
           "skip": {
             "reason": "the SPA opens the requester's own list (owner is empty), so a member's browser is never refused another member's list: the refused path has no browser driver",
-            "until": "U-SPA-todo-web-app"
+            "until": "2099-12-31"
           }
         }
       ]
