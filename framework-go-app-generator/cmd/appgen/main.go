@@ -42,6 +42,8 @@ import (
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/temporalgen"
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
 
 const (
@@ -389,6 +391,7 @@ func composeConfig(m, effective *projectmodel.Model, cfg config, module string) 
 		WebExposedManagers: cfg.WebExposedManagers, ExposedOps: cfg.Clients.Exposed, VariantHookArgs: hooks,
 		VariantConstructorNoError: cfg.VariantConstructorNoError, VariantConstructorReturnsError: returnsError,
 		ScheduleRegistrarComponent: cfg.ScheduleRegistrarComponent,
+		App:                        clientgen.AppName(clientgen.Config{ModulePath: module, App: cfg.Clients.App}),
 	}
 }
 
@@ -422,10 +425,72 @@ func genClients(m *projectmodel.Model, cfg config, module, project string) (map[
 	for key := range m.Contracts {
 		built[key] = doc.ServiceContracts[key]
 	}
-	return clientgen.Generate(clientgen.Project{Contracts: built, System: m.System}, clientgen.Config{
+	apps, err := mcpApps(m, raw, built)
+	if err != nil {
+		return nil, fmt.Errorf("%s: %w", project, err)
+	}
+	return clientgen.Generate(clientgen.Project{Contracts: built, System: m.System, MCPApps: apps}, clientgen.Config{
 		ModulePath: module, Title: cfg.Clients.Title, App: cfg.Clients.App,
 		Exposed: cfg.Clients.Exposed, OpDocs: cfg.Clients.OpDocs, OAS: cfg.Clients.OAS,
 	})
+}
+
+// mcpApps is what each built mcpApp Client reaches, read off the project's dynamic views: the
+// Manager operations (by the built contracts' keys) the views call through the Client.
+func mcpApps(m *projectmodel.Model, raw []byte, built map[string]json.RawMessage) ([]clientgen.MCPApp, error) {
+	ids := mcpAppClients(m.System)
+	if len(ids) == 0 {
+		return nil, nil
+	}
+	p, _, err := methodcheck.DecodeProject(raw)
+	if err != nil {
+		return nil, err
+	}
+	in, err := methodcheck.ScenarioInput(p)
+	if err != nil {
+		return nil, fmt.Errorf("derive what the mcpApp Clients reach: %w", err)
+	}
+	apps := make([]clientgen.MCPApp, 0, len(ids))
+	for _, id := range ids {
+		reached := map[string][]string{}
+		for key, ops := range scenario.ManagerOpsThrough(in, id) {
+			if _, ok := built[key]; ok {
+				reached[key] = managerOpNames(ops)
+			}
+		}
+		apps = append(apps, clientgen.MCPApp{Component: id, Ops: reached})
+	}
+	return apps, nil
+}
+
+// managerOpNames is the sorted Manager operation names of ops (the Manager's own, not the client's).
+func managerOpNames(ops []scenario.ManagerOp) []string {
+	names := make([]string, 0, len(ops))
+	for _, op := range ops {
+		names = append(names, op.Op)
+	}
+	slices.Sort(names)
+	return names
+}
+
+// mcpAppClients is the ids of the System's built mcpApp Clients.
+func mcpAppClients(s *projectmodel.System) []string {
+	if s == nil {
+		return nil
+	}
+	var ids []string
+	for _, c := range s.Components {
+		kind, ok := c.SurfaceKind()
+		if !ok || !c.IsBuilt() {
+			continue
+		}
+		switch kind.(type) {
+		case projectmodel.MCPAppSurface:
+			ids = append(ids, c.ID)
+		case projectmodel.WebSurface, projectmodel.RESTSurface, projectmodel.MCPToolsSurface:
+		}
+	}
+	return ids
 }
 
 func containerOf(m *projectmodel.Model, cfg config) string {

@@ -54,6 +54,10 @@ type Options struct {
 	OpDoc func(op string) string
 	// App names the app in the MCP Apps shell resource URI (ui://<app>/shell.html).
 	App string
+	// UI is the ui:// resource URI an operation's tool references, by operation name, derived from
+	// the model (an operation an mcpApp Client reaches). An operation listed here must not also
+	// carry the hand ui.view annotation: one operation has one resource.
+	UI map[string]string
 }
 
 // Result holds the generator output.
@@ -287,23 +291,40 @@ func emitHandlerAndRegister(b *strings.Builder, doc *projectmodel.Doc, opts Opti
 		if strings.TrimSpace(desc) == "" {
 			return fmt.Errorf("mcpemit: no documentation for operation %q on %s (add it to appgen.json's clients.opDocs)", op.Name, iface)
 		}
-		lcName := projectmodel.LowerFirst(op.Name)
-		if op.UI != nil {
-			// Both the shell resource URI AND the view id ride the tool's _meta so the
-			// shell can resolve the view WITHOUT falling back to a tool-name lookup —
-			// tool name and view id are two names for the same routing decision, and
-			// only one (this one) is authoritative (see the ratified spec: "the same
-			// view ids drive the registry"). The shell's registry keeps the tool-name
-			// mapping too, as a fallback for any older/other host that doesn't forward
-			// _meta.
-			fmt.Fprintf(b, "\tmcp.AddTool(srv, &mcp.Tool{Name: %q, Description: %q, InputSchema: %sInputSchema(), OutputSchema: %sOutputSchema(), Meta: mcp.Meta{\"ui\": map[string]any{\"resourceUri\": shellResourceURI, \"view\": %q}}}, h.handle%s)\n",
-				toolName, desc, lcName, lcName, op.UI.View, op.Name)
-		} else {
-			fmt.Fprintf(b, "\tmcp.AddTool(srv, &mcp.Tool{Name: %q, Description: %q, InputSchema: %sInputSchema(), OutputSchema: %sOutputSchema()}, h.handle%s)\n",
-				toolName, desc, lcName, lcName, op.Name)
+		if err := emitToolRegistration(b, op, toolName, desc, opts, iface); err != nil {
+			return err
 		}
 	}
 	b.WriteString("}\n\n")
+	return nil
+}
+
+// emitToolRegistration writes one operation's mcp.AddTool call. Its _meta names the ui:// resource
+// an mcpApp Client reaching it derives (opts.UI), or the hand shell and view of its ui annotation;
+// an operation with both has two resources, which is an error.
+func emitToolRegistration(b *strings.Builder, op projectmodel.Operation, toolName, desc string, opts Options, iface string) error {
+	lcName := projectmodel.LowerFirst(op.Name)
+	derived, hasDerived := opts.UI[op.Name]
+	switch {
+	case hasDerived && op.UI != nil:
+		return fmt.Errorf("mcpemit: operation %q on %s is reached by an mcpApp Client and also carries a ui annotation (view %q): one operation has one resource", op.Name, iface, op.UI.View)
+	case hasDerived:
+		fmt.Fprintf(b, "\tmcp.AddTool(srv, &mcp.Tool{Name: %q, Description: %q, InputSchema: %sInputSchema(), OutputSchema: %sOutputSchema(), Meta: mcp.Meta{\"ui\": map[string]any{\"resourceUri\": %q}}}, h.handle%s)\n",
+			toolName, desc, lcName, lcName, derived, op.Name)
+	case op.UI != nil:
+		// Both the shell resource URI AND the view id ride the tool's _meta so the
+		// shell can resolve the view WITHOUT falling back to a tool-name lookup —
+		// tool name and view id are two names for the same routing decision, and
+		// only one (this one) is authoritative (see the ratified spec: "the same
+		// view ids drive the registry"). The shell's registry keeps the tool-name
+		// mapping too, as a fallback for any older/other host that doesn't forward
+		// _meta.
+		fmt.Fprintf(b, "\tmcp.AddTool(srv, &mcp.Tool{Name: %q, Description: %q, InputSchema: %sInputSchema(), OutputSchema: %sOutputSchema(), Meta: mcp.Meta{\"ui\": map[string]any{\"resourceUri\": shellResourceURI, \"view\": %q}}}, h.handle%s)\n",
+			toolName, desc, lcName, lcName, op.UI.View, op.Name)
+	default:
+		fmt.Fprintf(b, "\tmcp.AddTool(srv, &mcp.Tool{Name: %q, Description: %q, InputSchema: %sInputSchema(), OutputSchema: %sOutputSchema()}, h.handle%s)\n",
+			toolName, desc, lcName, lcName, op.Name)
+	}
 	return nil
 }
 

@@ -70,6 +70,15 @@ type Config struct {
 type Project struct {
 	Contracts map[string]json.RawMessage
 	System    *projectmodel.System
+	// MCPApps is what each mcpApp Client reaches, derived from the views. Every operation listed
+	// names the Client's ui:// resource in its tool's _meta.
+	MCPApps []MCPApp
+}
+
+// MCPApp is one mcpApp Client and the Manager operations the views reach through it.
+type MCPApp struct {
+	Component string              // the mcpApp Client's System id: webApp/src/<id>, ui://<app>/<id>/shell.html
+	Ops       map[string][]string // Manager contract key → the operations the views reach through the Client
 }
 
 // Generate returns every generated file, keyed by module-root-relative path.
@@ -121,8 +130,12 @@ func generateManager(p Project, cfg Config, key string, ops []string, files map[
 	if err != nil {
 		return contractOAS{}, err
 	}
+	ui, err := opUI(p, cfg, key)
+	if err != nil {
+		return contractOAS{}, err
+	}
 	for _, c := range machineClients(p, cfg, key) {
-		if err := g.mcpTools(files, c); err != nil {
+		if err := g.mcpTools(files, c, ui); err != nil {
 			return contractOAS{}, err
 		}
 	}
@@ -137,6 +150,32 @@ func wiring(files map[string][]byte) error {
 	files[webRoot+"/middleware.gen.go"] = w.MiddlewareGo
 	files[webRoot+"/server.gen.go"] = w.ServerGo
 	return nil
+}
+
+// AppName is the app's name in the MCP Apps resource URIs: Config.App, else the module's leaf.
+func AppName(cfg Config) string {
+	if cfg.App != "" {
+		return cfg.App
+	}
+	return moduleLeaf(cfg.ModulePath)
+}
+
+// opUI is the ui:// resource each operation of the Manager key names, derived from the mcpApp
+// Clients that reach it. An operation two Clients reach has no single resource: an error naming
+// both.
+func opUI(p Project, cfg Config, key string) (map[string]string, error) {
+	out := map[string]string{}
+	by := map[string]string{}
+	for _, app := range p.MCPApps {
+		for _, op := range app.Ops[key] {
+			if other, ok := by[op]; ok && other != app.Component {
+				return nil, fmt.Errorf("operation %q is reached by two mcpApp Clients, %q and %q: one operation has one resource", op, other, app.Component)
+			}
+			by[op] = app.Component
+			out[op] = mcpemit.ResourceURI(AppName(cfg), app.Component)
+		}
+	}
+	return out, nil
 }
 
 func moduleLeaf(module string) string {
@@ -261,10 +300,7 @@ func newContractGen(p Project, cfg Config, key string, ops []string) (*contractG
 	if err != nil {
 		return nil, err
 	}
-	app := cfg.App
-	if app == "" {
-		app = moduleLeaf(cfg.ModulePath)
-	}
+	app := AppName(cfg)
 	return &contractGen{
 		entry: entry, doc: doc, pkg: path.Base(meta.GoPackage),
 		base:          projectmodel.Kebab(doc.ManagerBase()),
@@ -289,9 +325,9 @@ func (g *contractGen) rest(files map[string][]byte) (contractOAS, error) {
 }
 
 // mcpTools writes the MCP tool table this Manager gets on one machine client.
-func (g *contractGen) mcpTools(files map[string][]byte, c projectmodel.SystemComponent) error {
+func (g *contractGen) mcpTools(files map[string][]byte, c projectmodel.SystemComponent, ui map[string]string) error {
 	res, err := mcpemit.Generate(g.entry, mcpemit.Options{
-		Package: g.pkg, ManagerImport: g.managerImport, OpDoc: g.opDoc, App: g.app,
+		Package: g.pkg, ManagerImport: g.managerImport, OpDoc: g.opDoc, App: g.app, UI: ui,
 	})
 	if err != nil {
 		return fmt.Errorf("mcpemit: %w", err)

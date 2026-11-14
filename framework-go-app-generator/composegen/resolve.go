@@ -42,6 +42,8 @@ type resolved struct {
 	// browser surfaces are served on the API's origin (surfaces.go).
 	mcpMounts []mcpMount
 	serveWeb  bool
+	// mcpApps are the built mcpApp Client ids whose ui:// resources /mcp serves (mcpapps.go).
+	mcpApps []string
 
 	hooks []hookMethod
 

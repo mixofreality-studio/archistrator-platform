@@ -304,3 +304,27 @@ func ReachesClient(client string, step []Call) bool {
 	want := Normalize(client)
 	return slices.ContainsFunc(step, func(c Call) bool { return Normalize(c.To) == want })
 }
+
+// ManagerOpsThrough is what the views reach through client, by Manager contract key: the client's
+// calls into a Manager in every view someone calls the client in (the whole view, because the
+// actor's request and the client's call into the Manager are drawn in one step as often as in two).
+func ManagerOpsThrough(in Input, client string) map[string][]ManagerOp {
+	out := map[string][]ManagerOp{}
+	seen := map[ManagerOp]bool{}
+	for _, v := range in.Views {
+		var calls []Call
+		for _, st := range v.Steps {
+			calls = append(calls, st.Calls...)
+		}
+		if !ReachesClient(client, calls) {
+			continue
+		}
+		for _, op := range ClientManagerOps(in, client, calls) {
+			if !seen[op] {
+				seen[op] = true
+				out[op.Contract] = append(out[op.Contract], op)
+			}
+		}
+	}
+	return out
+}

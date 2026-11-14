@@ -34,6 +34,9 @@ func (r *resolved) resolveSurfaces(m *projectmodel.Model) error {
 	if err := r.resolveMCP(m); err != nil {
 		return err
 	}
+	if err := r.resolveMCPApps(m); err != nil {
+		return err
+	}
 	return r.resolveBrowserSurfaces(m)
 }
 
@@ -146,6 +149,7 @@ func writeRootMounts(b *strings.Builder, r *resolved) {
 	for _, mm := range r.mcpMounts {
 		b.WriteString("\t(&" + mm.alias + ".Handler{Manager: webManagers." + mm.iface + ", Security: sec}).Register(mcpServer)\n")
 	}
+	writeMCPAppResources(b, r)
 	b.WriteString("\troot.Handle(\"/mcp\", hooks.MCPMount(mcpServer, dev, web.AuthMiddleware(dev, validator)(mcp.NewStreamableHTTPHandler(func(*http.Request) *mcp.Server { return mcpServer }, nil))))\n")
 }
 

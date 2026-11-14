@@ -247,3 +247,34 @@ func TestProseRequestResolvesThroughTheManagerCall(t *testing.T) {
 		t.Errorf("only a Client resolves through its own calls: %+v", got)
 	}
 }
+
+// A view draws the actor's request into the client and the client's call into the Manager as
+// separate steps as often as in one, so the whole view is read; a view the client is not called in
+// contributes nothing.
+func TestManagerOpsThrough_WholeView(t *testing.T) {
+	in := Input{
+		Actors: map[string]bool{"user": true},
+		Contracts: map[string]Contract{
+			"listManager": {Component: "listManager", Interface: "ListManager", Ops: []Op{{Name: "AddTodo"}, {Name: "Drop"}}},
+			"todoMcpApp":  {Component: "todoMcpApp", Client: true, Interface: "TodoMcpApp", Ops: []Op{{Name: "ListAddTodo"}}},
+		},
+		Views: []View{
+			{UseCaseID: "add", Steps: []Step{
+				{NodeID: "n1", Calls: []Call{{From: "user", To: "todo-mcp-app", Label: "adds a todo"}}},
+				{NodeID: "n2", Calls: []Call{{From: "todo-mcp-app", To: "list-manager", Label: "AddTodo"}}},
+			}},
+			{UseCaseID: "other", Steps: []Step{
+				{NodeID: "n1", Calls: []Call{{From: "user", To: "list-manager", Label: "Drop"}}},
+				{NodeID: "n2", Calls: []Call{{From: "todo-mcp-app", To: "list-manager", Label: "Drop"}}},
+			}},
+		},
+	}
+	got := ManagerOpsThrough(in, "todo-mcp-app")
+	want := []ManagerOp{{Contract: "listManager", Interface: "ListManager", Op: "AddTodo"}}
+	if len(got) != 1 || !slices.Equal(got["listManager"], want) {
+		t.Errorf("got %+v, want %+v", got, want)
+	}
+	if got := ManagerOpsThrough(in, "absent-client"); len(got) != 0 {
+		t.Errorf("a client no view calls reaches nothing: %+v", got)
+	}
+}

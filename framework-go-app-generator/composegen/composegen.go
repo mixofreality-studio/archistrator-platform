@@ -114,6 +114,9 @@ type Config struct {
 	// generated authorization table (authz.gen.go) lists one row per served
 	// operation, so it must agree with what clientgen emitted handlers for.
 	ExposedOps map[string][]string
+	// App is the MCP Apps resource namespace: an mcpApp Client's resource is
+	// ui://<App>/<client id>/shell.html. appgen passes clientgen.AppName.
+	App string
 }
 
 // HookArgType is one return value of a per-variant args Hooks method: a verbatim
@@ -155,8 +158,8 @@ func Generate(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
 		return nil, err
 	}
 	out := map[string][]byte{MainFile: src}
-	if r.serveWeb {
-		out[SurfacesFile] = emitSurfaces(r.pkgName)
+	if err := emitSurfaceFiles(r, out); err != nil {
+		return nil, err
 	}
 	if len(r.webMgrs) == 0 {
 		return out, nil
