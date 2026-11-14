@@ -160,7 +160,7 @@ func chainSteps(model *projectmodel.Model, impl fs.FS) []chainStep {
 	surfaces := model.System.BuiltBrowserSurfaces()
 	for _, s := range surfaces {
 		steps = append(steps, chainStep{name: "webgen bootstrap " + s.ID,
-			argv: []string{"go", "tool", "webgen", "bootstrap", "-C", webDir, "-surface", s.ID}})
+			argv: []string{"go", "tool", "webgen", "bootstrap", "-C", webDir, "-surface", s.ID, "-kind", string(s.Surface)}})
 	}
 	if len(surfaces) > 0 {
 		steps = append(steps, chainStep{name: "webgen generate",

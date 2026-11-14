@@ -1,0 +1,19 @@
+{
+  "name": "aiarch-scenario-mcp-app-host",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "The harness MCP host an mcpApp surface's generated Playwright specs run in. dist/host.js is committed and embedded by the Go package; rebuild it with `npm ci && node build.mjs`.",
+  "scripts": {
+    "build": "node build.mjs",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/ext-apps": "1.7.4",
+    "@modelcontextprotocol/sdk": "1.29.0"
+  },
+  "devDependencies": {
+    "esbuild": "0.25.12",
+    "typescript": "5.9.3"
+  }
+}

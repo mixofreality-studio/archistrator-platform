@@ -248,7 +248,7 @@ func TestWebscenarios_AcceptancePrincipalsBrowserActorFirst(t *testing.T) {
 	}
 	var got command
 	d := deps{
-		start:     func(ctx context.Context, o options) (stack, error) { return startWith(ctx, o, launch) },
+		start:     func(ctx context.Context, o options) (stack, error) { return startWith(ctx, o, launch, noHost(t)) },
 		exec:      func(_ context.Context, c command, _, _ io.Writer) (int, error) { got = c; return 0, nil },
 		inventory: func(context.Context) ([]string, error) { return nil, nil },
 	}
@@ -280,5 +280,89 @@ func TestWebscenarios_AcceptancePrincipalsBrowserActorFirst(t *testing.T) {
 	errOut.Reset()
 	if code := run(t.Context(), []string{"-config", config, "-module", module}, nil, d, &out, &errOut); code != 1 || !strings.Contains(errOut.String(), "ghost") {
 		t.Errorf("undeclared browserActor: exit %d, stderr %q; want 1 naming ghost", code, errOut.String())
+	}
+}
+
+// noHost is the host server of a run that must not serve one.
+func noHost(t *testing.T) serveHostFunc {
+	t.Helper()
+	return func(context.Context, *scenariohost.App, string) (*scenariohost.AppHost, error) {
+		t.Error("a surface that is not an mcpApp must not be given a harness host")
+		return nil, errors.New("unexpected host")
+	}
+}
+
+// appFakeStack is a launched app that can be handed to a host server.
+type appFakeStack struct {
+	fakeStack
+	app   *scenariohost.App
+	order *[]string
+}
+
+func (h *appFakeStack) App() *scenariohost.App { return h.app }
+func (h *appFakeStack) Stop() error {
+	*h.order = append(*h.order, "app")
+	return h.fakeStack.Stop()
+}
+
+// surfaceModule is a module whose System has one Client component per key=surface of clients, and
+// the config path of the plan keyed contractKey.
+func surfaceModule(t *testing.T, contractKey string, clients map[string]string) (module, config string) {
+	t.Helper()
+	module = t.TempDir()
+	state := filepath.Join(module, ".aiarch", "state")
+	if err := os.MkdirAll(state, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	var comps []string
+	for id, surface := range clients {
+		comps = append(comps, `{"id":"`+id+`","name":"`+id+`","kind":"client","layer":"client","surface":"`+surface+`"}`)
+	}
+	project := `{"id":"p","version":1,"slots":{"5":{"kind":5,"status":2,"model":{"components":[` + strings.Join(comps, ",") + `]}}}}`
+	if err := os.WriteFile(filepath.Join(state, "project.json"), []byte(project), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	return module, filepath.Join("generated", contractKey, "playwright.config.gen.ts")
+}
+
+// An mcpApp surface's specs run inside the harness MCP host: the stack's base URL is the host's, and
+// Stop closes the host, then the app. A web surface's config gets no host.
+func TestWebscenarios_McpAppConfigServesTheHost(t *testing.T) {
+	var order []string
+	var hostedFor string
+	launch := func(context.Context, string, []scenariohost.Principal, string) (stack, error) {
+		return &appFakeStack{fakeStack: fakeStack{base: "http://127.0.0.1:1111"}, app: &scenariohost.App{BaseURL: "http://127.0.0.1:1111"}, order: &order}, nil
+	}
+	serve := func(_ context.Context, app *scenariohost.App, surface string) (*scenariohost.AppHost, error) {
+		hostedFor = surface + "@" + app.BaseURL
+		return &scenariohost.AppHost{URL: "http://127.0.0.1:2222", Close: func() error { order = append(order, "host"); return nil }}, nil
+	}
+	module, config := surfaceModule(t, "todoMcpApp", map[string]string{"todo-mcp-app": "mcpApp", "todo-web-app": "web"})
+	st, err := startWith(t.Context(), options{module: module, config: config}, launch, serve)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.BaseURL() != "http://127.0.0.1:2222" {
+		t.Errorf("BaseURL = %q, want the host's origin", st.BaseURL())
+	}
+	if hostedFor != "todo-mcp-app@http://127.0.0.1:1111" {
+		t.Errorf("the host was served for %q, want the surface over the launched app", hostedFor)
+	}
+	if err := st.Stop(); err != nil {
+		t.Fatal(err)
+	}
+	if !slices.Equal(order, []string{"host", "app"}) {
+		t.Errorf("stop order = %v, want the host closed first, then the app", order)
+	}
+
+	// A web surface's config: the app's own origin, no host.
+	order = nil
+	module, config = surfaceModule(t, "todoWebApp", map[string]string{"todo-mcp-app": "mcpApp", "todo-web-app": "web"})
+	st, err = startWith(t.Context(), options{module: module, config: config}, launch, noHost(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st.BaseURL() != "http://127.0.0.1:1111" {
+		t.Errorf("a web surface's BaseURL = %q, want the app's", st.BaseURL())
 	}
 }

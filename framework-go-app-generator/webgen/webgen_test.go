@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/google/jsonschema-go/jsonschema"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 var update = flag.Bool("update", false, "rewrite golden files and the pinned reference diffs")
@@ -559,7 +561,7 @@ func TestVendoredESLintConfigMatches(t *testing.T) {
 
 func TestBootstrapSeatsAProjectAndASurface(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "webApp")
-	files, err := Bootstrap("todomvc", "web-app")
+	files, err := Bootstrap("todomvc", "web-app", projectmodel.SurfaceWeb)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -572,7 +574,7 @@ func TestBootstrapSeatsAProjectAndASurface(t *testing.T) {
 		}
 	}
 	// A second surface adds only its own files, and the project keeps its config.
-	second, err := Bootstrap("todomvc", "workspace-embed")
+	second, err := Bootstrap("todomvc", "workspace-embed", projectmodel.SurfaceWeb)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -591,11 +593,11 @@ func TestBootstrapSeatsAProjectAndASurface(t *testing.T) {
 // byte the same whichever surface bootstraps it, and the shared config parses with no
 // surface because only the preview shell reads one.
 func TestBootstrapSharedSeatsAreSurfaceNeutral(t *testing.T) {
-	a, err := Bootstrap("todomvc", "todo-mcp-app")
+	a, err := Bootstrap("todomvc", "todo-mcp-app", projectmodel.SurfaceMCPApp)
 	if err != nil {
 		t.Fatal(err)
 	}
-	b, err := Bootstrap("todomvc", "todo-web-app")
+	b, err := Bootstrap("todomvc", "todo-web-app", projectmodel.SurfaceWeb)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -631,8 +633,51 @@ func TestBootstrapSharedSeatsAreSurfaceNeutral(t *testing.T) {
 	if _, err := ParseConfig([]byte(`{"app":"a","oas":"a","mcpTools":"b","fixturesEnv":"X"}`)); err == nil {
 		t.Error("a preview config (the default) still needs its surface")
 	}
-	if _, err := Bootstrap("todomvc", "Not-Kebab"); err == nil {
+	if _, err := Bootstrap("todomvc", "Not-Kebab", projectmodel.SurfaceWeb); err == nil {
 		t.Error("Bootstrap must still refuse a surface its file paths cannot carry")
+	}
+}
+
+func TestWebgen_McpAppScaffold(t *testing.T) {
+	files, err := Bootstrap("todomvc", "todo-mcp-app", projectmodel.SurfaceMCPApp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	byPath := map[string]string{}
+	for _, f := range files {
+		byPath[f.Path] = string(f.Content)
+	}
+	if _, ok := byPath["todo-mcp-app.html"]; ok {
+		t.Error("an mcpApp writes no top-level page: the server would serve it at /")
+	}
+	if !strings.Contains(byPath["todo-mcp-app.mcpapp.html"], `src="/src/todo-mcp-app/main.tsx"`) {
+		t.Errorf("todo-mcp-app.mcpapp.html does not load the host-bridge seat:\n%s", byPath["todo-mcp-app.mcpapp.html"])
+	}
+	main := byPath["src/todo-mcp-app/main.tsx"]
+	for _, want := range []string{"new McpApp(", "await host.connect()", "mcpOpsClient(host)", "transport: 'mcp'"} {
+		if !strings.Contains(main, want) {
+			t.Errorf("the host-bridge seat lacks %q:\n%s", want, main)
+		}
+	}
+	if _, ok := byPath["src/todo-mcp-app/routes/App.tsx"]; !ok {
+		t.Error("no routes/App.tsx: the agent owns routes/ and below")
+	}
+	if !strings.Contains(byPath["vite.config.ts"], ".mcpapp.html") {
+		t.Error("vite.config.ts must leave *.mcpapp.html out of the page build")
+	}
+	if !strings.Contains(byPath["scripts/build-mcpapps.mjs"], "shell.html") {
+		t.Error("scripts/build-mcpapps.mjs does not write dist/<surface>/shell.html")
+	}
+	if !strings.Contains(byPath["package.json"], "node scripts/build-mcpapps.mjs") {
+		t.Error("package.json's build does not run scripts/build-mcpapps.mjs")
+	}
+}
+
+func TestWebgen_BootstrapRefusesMachineSurface(t *testing.T) {
+	for _, k := range []projectmodel.Surface{projectmodel.SurfaceREST, projectmodel.SurfaceMCPTools} {
+		if _, err := Bootstrap("todomvc", "todo-api", k); err == nil || !strings.Contains(err.Error(), "has no web project") {
+			t.Errorf("kind %s: err = %v, want one containing \"has no web project\"", k, err)
+		}
 	}
 }
 

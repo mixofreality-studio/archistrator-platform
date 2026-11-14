@@ -3,6 +3,8 @@ package webgen
 import (
 	"fmt"
 	"strings"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 // Bootstrap renders the web project a fresh app's first frontend job starts from, and the
@@ -22,16 +24,26 @@ import (
 // separate branches must write byte-identical shared files, or their merges conflict
 // (webgen.json did, add/add, while it carried "surface"). Only the surface's own three files
 // are rendered from the surface name.
-func Bootstrap(app, surface string) ([]File, error) {
+//
+// kind is the surface's kind. A web surface is a page the server serves at /; an mcpApp is the
+// same app mounted behind a generated host-bridge seat (<surface>.mcpapp.html and
+// src/<surface>/main.tsx, which connects to the MCP host and gives the app its OpsClient) and
+// built by scripts/build-mcpapps.mjs into one self-contained dist/<surface>/shell.html. A rest or
+// mcpTools surface has no web project at all.
+func Bootstrap(app, surface string, kind projectmodel.Surface) ([]File, error) {
 	if !validSurface(surface) {
 		return nil, fmt.Errorf("webgen: bootstrap: surface %q must be kebab-case, at most %d characters", surface, maxSurface)
+	}
+	files, err := surfaceFiles(surface, kind)
+	if err != nil {
+		return nil, err
 	}
 	c := Config{App: app, Surface: surface, OAS: "-", MCPTools: "-", FixturesEnv: DefaultFixturesEnv(app)}
 	if err := c.Validate(); err != nil {
 		return nil, err
 	}
 	var out []File
-	for _, f := range bootstrapFiles(surface) {
+	for _, f := range files {
 		content, err := render(f.tmpl, c)
 		if err != nil {
 			return nil, err
@@ -60,9 +72,38 @@ func AppSlug(module string) string {
 	return strings.Trim(b.String()[:min(b.Len(), 40)], "-")
 }
 
-func bootstrapFiles(surface string) []struct{ tmpl, out string } {
+type seat struct{ tmpl, out string }
+
+// surfaceFiles is the surface's own three files, by kind, then the seats every surface shares. The
+// switch over the sealed surface has no default (gochecksumtype).
+func surfaceFiles(surface string, kind projectmodel.Surface) ([]seat, error) {
+	k, err := projectmodel.ParseSurface(string(kind))
+	if err != nil {
+		return nil, fmt.Errorf("webgen: bootstrap: %w", err)
+	}
 	const b = "bootstrap/"
-	return []struct{ tmpl, out string }{
+	switch k.(type) {
+	case projectmodel.WebSurface:
+		return append([]seat{
+			{b + "surface.html.tmpl", surface + ".html"},
+			{b + "main.tsx.tmpl", "src/" + surface + "/main.tsx"},
+			{b + "App.tsx.tmpl", "src/" + surface + "/routes/App.tsx"},
+		}, sharedSeats()...), nil
+	case projectmodel.MCPAppSurface:
+		return append([]seat{
+			{b + "mcpapp.html.tmpl", surface + ".mcpapp.html"},
+			{b + "mcpapp.main.tsx.tmpl", "src/" + surface + "/main.tsx"},
+			{b + "App.tsx.tmpl", "src/" + surface + "/routes/App.tsx"},
+		}, sharedSeats()...), nil
+	case projectmodel.RESTSurface, projectmodel.MCPToolsSurface:
+		return nil, fmt.Errorf("webgen: bootstrap: %s is a %s surface, which has no web project", surface, kind)
+	}
+	panic("unreachable: sealed SurfaceKind")
+}
+
+func sharedSeats() []seat {
+	const b = "bootstrap/"
+	return []seat{
 		{b + "webgen.json.tmpl", ConfigFile},
 		{b + "package.json.tmpl", "package.json"},
 		{b + "tsconfig.json.tmpl", "tsconfig.json"},
@@ -76,9 +117,7 @@ func bootstrapFiles(surface string) []struct{ tmpl, out string } {
 		{"errors.ts.tmpl", "src/contracts/errors.ts"},
 		{"opsContext.tsx.tmpl", "src/api/opsContext.tsx"},
 		{"opTypes.ts.tmpl", "src/api/opTypes.ts"},
-		{b + "surface.html.tmpl", surface + ".html"},
-		{b + "main.tsx.tmpl", "src/" + surface + "/main.tsx"},
-		{b + "App.tsx.tmpl", "src/" + surface + "/routes/App.tsx"},
+		{b + "build-mcpapps.mjs.tmpl", "scripts/build-mcpapps.mjs"},
 		{b + "uitests.package.json.tmpl", "../uitests/package.json"},
 		{b + "uitests.gitignore.tmpl", "../uitests/.gitignore"},
 		{b + "tool-versions.tmpl", "../uitests/.tool-versions"},

@@ -1,0 +1,25 @@
+import { StrictMode } from 'react';
+import { createRoot } from 'react-dom/client';
+import { App as McpApp } from '@modelcontextprotocol/ext-apps';
+import { OpsClientProvider } from '../api/opsContext';
+import { mcpOpsClient } from '../api/ops.gen';
+import { App } from './routes/App';
+
+// The @@SURFACE@@ surface is an MCP App: an MCP host embeds this bundle and the app reaches the
+// server only through the host's bridge (App.callServerTool), never by its own network calls.
+// Generated host-bridge seat: it wires the transport and mounts routes/App.tsx, which is the
+// app's own code.
+const host = new McpApp({ name: '@@APP@@-@@SURFACE@@', version: '0.0.0' });
+await host.connect();
+
+const rootElement = document.getElementById('root');
+if (rootElement === null) {
+  throw new Error('Root element not found');
+}
+createRoot(rootElement).render(
+  <StrictMode>
+    <OpsClientProvider value={{ ops: mcpOpsClient(host), transport: 'mcp' }}>
+      <App />
+    </OpsClientProvider>
+  </StrictMode>
+);

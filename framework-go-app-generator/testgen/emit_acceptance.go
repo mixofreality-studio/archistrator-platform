@@ -218,6 +218,9 @@ func bindAcceptanceStep(out *Output, p methodcheck.Project, v scenario.Scenario,
 // plan's one browser actor (ATP-BROWSER) and to one surface.
 func (ab *accBound) noteBrowser(p methodcheck.Project, plan componentPlan, rec methodcheck.AcceptancePlanRecord, st boundStep, t accTarget) error {
 	if t.isWeb() {
+		if err := refuseMCPAppTarget(p, ab.Scenario.ID, t); err != nil {
+			return err
+		}
 		if err := ab.useBrowser(rec, stepPrincipal(plan, st), t, fmt.Sprintf("step %d", st.Bind.Seq)); err != nil {
 			return err
 		}
@@ -235,9 +238,23 @@ func (ab *accBound) noteBrowserProbes(p methodcheck.Project, plan componentPlan,
 		if !ok || !pt.isWeb() {
 			continue
 		}
+		if err := refuseMCPAppTarget(p, ab.Scenario.ID, pt); err != nil {
+			return err
+		}
 		if err := ab.useBrowser(rec, probeActor(plan, st, pr), pt, fmt.Sprintf("step %d probe %d", st.Bind.Seq, i+1)); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// refuseMCPAppTarget refuses a live acceptance step or probe whose browser surface is an MCP App.
+// The acceptance Playwright spec drives the surface's own page; an MCP App has none outside a host,
+// and no acceptance host drives one yet, so the spec would run the App against nothing (earmark E28).
+// A variant recorded as skipped never reaches here.
+func refuseMCPAppTarget(p methodcheck.Project, variant string, t accTarget) error {
+	if _, s, ok := p.ClientSurface(t.key); ok && inHost(s) {
+		return fmt.Errorf("testgen: acceptance variant %q runs through the MCP App %s, which no acceptance host drives yet (earmark E28): record it skipped", variant, t.key)
 	}
 	return nil
 }

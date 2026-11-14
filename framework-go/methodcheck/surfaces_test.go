@@ -102,3 +102,27 @@ func TestSurfaceKind_SwitchIsExhaustive(t *testing.T) {
 		}
 	}
 }
+
+func TestClientSurface_ResolvesFacetsToTheirComponent(t *testing.T) {
+	p := loadProject(t, "surfaces_clean.json")
+	for _, tc := range []struct {
+		key  string
+		comp string
+		want Surface
+		ok   bool
+	}{
+		{"todoMcpApp", "todo-mcp-app", SurfaceMCPApp, true},
+		{"todoWebApp", "todo-web-app", SurfaceWeb, true},
+		{"nonesuch", "", "", false},
+	} {
+		comp, got, ok := p.ClientSurface(tc.key)
+		if comp != tc.comp || got != tc.want || ok != tc.ok {
+			t.Errorf("ClientSurface(%q) = (%q, %q, %v), want (%q, %q, %v)", tc.key, comp, got, ok, tc.comp, tc.want, tc.ok)
+		}
+	}
+	// A facet is a contract of its own whose component names the parent.
+	p.ServiceContracts = map[string]ServiceContract{"todoMcpAppActions": {Component: "todoMcpApp"}}
+	if comp, got, ok := p.ClientSurface("todoMcpAppActions"); comp != "todo-mcp-app" || got != SurfaceMCPApp || !ok {
+		t.Errorf("a facet resolved to (%q, %q, %v), want its parent todo-mcp-app", comp, got, ok)
+	}
+}

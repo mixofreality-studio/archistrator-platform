@@ -1,6 +1,10 @@
 package methodcheck
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
+)
 
 // Delivery surfaces (FPC W6). framework-go-projectmodel carries the same closed set for the
 // generators; framework-go keeps its own structural mirror so methodcheck stays dependency-free.
@@ -111,4 +115,29 @@ func (c Component) surfaceKind() (SurfaceKind, bool) {
 		return nil, false
 	}
 	return k, true
+}
+
+// ClientSurface resolves a serviceContracts key to the Client component it belongs to and the
+// surface that component states. A facet (a contract whose `component` names another component)
+// resolves to its parent. ok is false when the key names no Client of the committed System, or
+// the Client states no surface of the closed set.
+func (p Project) ClientSurface(contractKey string) (componentID string, s Surface, ok bool) {
+	sys, committed, err := p.system()
+	if err != nil || !committed {
+		return "", "", false
+	}
+	target := contractKey
+	if sc, has := p.ServiceContracts[contractKey]; has && sc.Component != "" {
+		target = sc.Component
+	}
+	want := scenario.Normalize(target)
+	for _, c := range sys.Components {
+		if _, isClient := c.surfaceKind(); !isClient {
+			continue
+		}
+		if scenario.Normalize(c.ID) == want || scenario.Normalize(c.Name) == want {
+			return c.ID, c.Surface, true
+		}
+	}
+	return "", "", false
 }

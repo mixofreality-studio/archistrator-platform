@@ -1,0 +1,65 @@
+// Builds every <surface>.mcpapp.html beside the project root into ONE self-contained
+// dist/<surface>/shell.html: an MCP host renders the resource in a sandboxed iframe with no
+// network, so the script and the stylesheet are inlined and the page references no file.
+// A project with no *.mcpapp.html builds nothing. Shared seat: surface-neutral.
+import { readdirSync, renameSync } from 'node:fs';
+import { dirname, resolve } from 'node:path';
+import { fileURLToPath } from 'node:url';
+import { build } from 'vite';
+import react from '@vitejs/plugin-react';
+
+const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const entries = readdirSync(root).filter((name) => name.endsWith('.mcpapp.html'));
+
+// inlineAll puts the bundle's one script and stylesheet into the html page and drops them from
+// the output, so dist/<surface>/ holds the page alone.
+function inlineAll() {
+  return {
+    name: 'inline-all',
+    enforce: 'post',
+    generateBundle(_options, bundle) {
+      const page = Object.values(bundle).find((f) => f.type === 'asset' && f.fileName.endsWith('.html'));
+      if (page === undefined) throw new Error('inline-all: the build emitted no html page');
+      let html = String(page.source);
+      for (const file of Object.values(bundle)) {
+        if (file === page) continue;
+        const name = file.fileName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        if (file.type === 'chunk') {
+          const tag = new RegExp(`<script\\b[^>]*\\bsrc="[^"]*${name}"[^>]*></script>`);
+          if (!tag.test(html)) continue;
+          const code = file.code.replace(/<\/script/gi, '<\\/script');
+          html = html.replace(tag, () => `<script type="module">${code}</script>`);
+        } else {
+          const tag = new RegExp(`<link\\b[^>]*\\bhref="[^"]*${name}"[^>]*>`);
+          if (!tag.test(html)) continue;
+          const css = String(file.source).replace(/<\/style/gi, '<\\/style');
+          html = html.replace(tag, () => `<style>${css}</style>`);
+        }
+        delete bundle[file.fileName];
+      }
+      page.source = html;
+    },
+  };
+}
+
+for (const entry of entries) {
+  const surface = entry.slice(0, -'.mcpapp.html'.length);
+  const outDir = resolve(root, 'dist', surface);
+  await build({
+    root,
+    configFile: false,
+    logLevel: 'error',
+    plugins: [react(), inlineAll()],
+    build: {
+      outDir,
+      emptyOutDir: true,
+      assetsInlineLimit: Number.MAX_SAFE_INTEGER,
+      cssCodeSplit: false,
+      rollupOptions: {
+        input: resolve(root, entry),
+        output: { inlineDynamicImports: true },
+      },
+    },
+  });
+  renameSync(resolve(outDir, entry), resolve(outDir, 'shell.html'));
+}

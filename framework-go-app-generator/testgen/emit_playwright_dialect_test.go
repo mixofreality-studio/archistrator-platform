@@ -46,7 +46,7 @@ func TestPlaywrightDialect_EveryKindIsSpelled(t *testing.T) {
 		if err != nil {
 			t.Fatalf("action %s: %v", k, err)
 		}
-		if playwrightActionLine(a) == "" {
+		if playwrightActionLine(a, methodcheck.SurfaceWeb) == "" {
 			t.Errorf("action %s has no spelling", k)
 		}
 	}
@@ -55,7 +55,7 @@ func TestPlaywrightDialect_EveryKindIsSpelled(t *testing.T) {
 		if err != nil {
 			t.Fatalf("observable %s: %v", k, err)
 		}
-		if playwrightObservableLine(o) == "" {
+		if playwrightObservableLine(o, methodcheck.SurfaceWeb) == "" {
 			t.Errorf("observable %s has no spelling", k)
 		}
 	}

@@ -4,16 +4,30 @@ import { fileURLToPath } from 'node:url';
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
-// One toolchain, one entry per browser surface: every <surface>.html beside this file is a
-// page of the build.
+// One toolchain, one entry per browser surface: every <surface>.html beside this file is a page
+// of the build. An MCP App's entry is <surface>.mcpapp.html: it is not a page the server serves
+// at /, so this build leaves it to scripts/build-mcpapps.mjs, which makes its single-file shell.
 const here = dirname(fileURLToPath(import.meta.url));
-const pages = readdirSync(here).filter((name) => name.endsWith('.html'));
+const pages = readdirSync(here).filter((name) => name.endsWith('.html') && !name.endsWith('.mcpapp.html'));
+
+// A project whose surfaces are all MCP Apps has no page to build; an empty entry keeps the
+// build valid.
+const empty = 'virtual:no-pages';
+const input =
+  pages.length > 0
+    ? Object.fromEntries(pages.map((page) => [page, resolve(here, page)]))
+    : { 'no-pages': empty };
 
 export default defineConfig({
-  plugins: [react()],
-  build: {
-    rollupOptions: {
-      input: Object.fromEntries(pages.map((page) => [page, resolve(here, page)])),
+  plugins: [
+    react(),
+    {
+      name: 'no-pages',
+      resolveId: (id) => (id === empty ? `\0${empty}` : null),
+      load: (id) => (id === `\0${empty}` ? 'export {};' : null),
     },
+  ],
+  build: {
+    rollupOptions: { input },
   },
 });

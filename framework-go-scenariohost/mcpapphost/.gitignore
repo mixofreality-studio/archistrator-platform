@@ -1,0 +1,3 @@
+node_modules/
+# dist/host.js is committed (embedded by the Go package): the module's root .gitignore ignores dist/.
+!dist/

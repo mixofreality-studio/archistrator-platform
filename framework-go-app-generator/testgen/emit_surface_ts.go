@@ -16,7 +16,11 @@ import (
 // An element that repeats is one per item, and an element inside a repeating one is inside an item:
 // neither is on a page that holds no items, so neither is checked here; the scenarios that put an item
 // there find them.
-func surfaceSpecTS(surface string, d methodcheck.UIDesignRecord) string {
+//
+// An MCP App's screens are opened through the harness host (openApp) and its elements are found in
+// the host page's frame (appFrame): the app has no address of its own.
+func surfaceSpecTS(surface string, s methodcheck.Surface, d methodcheck.UIDesignRecord) string {
+	root := hostRoot(s)
 	var b strings.Builder
 	b.WriteString(genHeader + "\n")
 	fmt.Fprintf(&b, "// Source: project.json .phaseArtifacts.uiDesign.%s\n", surface)
@@ -29,15 +33,18 @@ func surfaceSpecTS(surface string, d methodcheck.UIDesignRecord) string {
 		byID[e.ID] = e
 	}
 	b.WriteString("import { test, expect } from '@playwright/test';\nimport { locate } from './elements.gen';\n")
-	for _, s := range d.Screens {
-		annotation := fmt.Sprintf("{ type: 'surface', description: %s }", tsStr(s.ID))
-		fmt.Fprintf(&b, "\ntest(%s, { annotation: %s }, async ({ page }) => {\n", tsStr("surface — "+s.ID), annotation)
-		fmt.Fprintf(&b, "  await page.goto(%s);\n", tsStr(s.Route))
-		for _, e := range s.Elements {
+	if inHost(s) {
+		b.WriteString("import { appFrame, openApp } from './runtime.gen';\n")
+	}
+	for _, scr := range d.Screens {
+		annotation := fmt.Sprintf("{ type: 'surface', description: %s }", tsStr(scr.ID))
+		fmt.Fprintf(&b, "\ntest(%s, { annotation: %s }, async ({ page }) => {\n", tsStr("surface — "+scr.ID), annotation)
+		fmt.Fprintf(&b, "  await %s;\n", openScreen(s, scr.Route))
+		for _, e := range scr.Elements {
 			if !onEmptyPage(e, byID) {
 				continue
 			}
-			fmt.Fprintf(&b, "  await expect(locate(page, %s)).toBeAttached();\n", tsStr(e.ID))
+			fmt.Fprintf(&b, "  await expect(locate(%s, %s)).toBeAttached();\n", root, tsStr(e.ID))
 		}
 		b.WriteString("});\n")
 	}

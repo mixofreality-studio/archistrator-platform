@@ -187,7 +187,7 @@ func TestPlaywright_ActionSwitchExhaustive(t *testing.T) {
 		if err != nil {
 			t.Fatalf("action %s: %v", k, err)
 		}
-		line := playwrightActionLine(a)
+		line := playwrightActionLine(a, methodcheck.SurfaceWeb)
 		if line == "" {
 			t.Errorf("action %s has no emitter", k)
 		}

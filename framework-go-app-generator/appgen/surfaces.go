@@ -6,8 +6,9 @@ import "github.com/mixofreality-studio/archistrator-platform/framework-go/method
 
 // SupportedSurfaces is every Client surface the generators build end to end, each proven by a
 // conformance fixture (framework-go-conformance TestSupportedSurfaces_EachHasAConformanceFixture).
-// A surface joins this list only with its generator and its fixture. mcpApp joins it when its
-// resource and bridge generation land.
+// A surface joins this list only with its generator and its fixture. mcpApp joined it with its
+// resource (clientgen, composegen), its host-bridge seat and single-file shell build (webgen) and
+// its harness host (scenariohost); its conformance fixture is the todomvc fixture's todo-mcp-app.
 func SupportedSurfaces() []methodcheck.Surface {
-	return []methodcheck.Surface{methodcheck.SurfaceWeb, methodcheck.SurfaceREST, methodcheck.SurfaceMCPTools}
+	return []methodcheck.Surface{methodcheck.SurfaceWeb, methodcheck.SurfaceREST, methodcheck.SurfaceMCPTools, methodcheck.SurfaceMCPApp}
 }

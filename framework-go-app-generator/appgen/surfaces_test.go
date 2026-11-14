@@ -7,10 +7,10 @@ import (
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
 )
 
-// The generators build web, rest and mcpTools end to end. mcpApp joins this list in the task that
-// emits its resource and bridge, together with its conformance fixture.
-func TestSupportedSurfaces_ExcludesMcpAppUntilGenerated(t *testing.T) {
-	want := []methodcheck.Surface{methodcheck.SurfaceWeb, methodcheck.SurfaceREST, methodcheck.SurfaceMCPTools}
+// The generators build every surface end to end: web, rest and mcpTools, and mcpApp since its
+// resource and bridge generation landed.
+func TestSupportedSurfaces_IncludesMcpApp(t *testing.T) {
+	want := []methodcheck.Surface{methodcheck.SurfaceWeb, methodcheck.SurfaceREST, methodcheck.SurfaceMCPTools, methodcheck.SurfaceMCPApp}
 	if got := SupportedSurfaces(); !slices.Equal(got, want) {
 		t.Fatalf("SupportedSurfaces() = %v, want %v", got, want)
 	}

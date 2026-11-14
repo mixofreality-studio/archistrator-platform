@@ -28,12 +28,19 @@ func designElements(d methodcheck.UIDesignRecord) []methodcheck.UIElement {
 // containing element, whether it repeats) and `locate`, the one function every generated spec finds an
 // element with. A locator is how a user finds a control: by its role and accessible name, inside the
 // element that contains it. It is never a test id or a selector.
-func elementsTS(surface string, d methodcheck.UIDesignRecord) string {
+//
+// An MCP App's elements are found inside the host page's iframe, so its `locate` takes the page or
+// the frame (a FrameLocator); a web surface's takes the page.
+func elementsTS(surface string, s methodcheck.Surface, d methodcheck.UIDesignRecord) string {
+	imports, param, root, scopeType := "Locator, Page", "page: Page", "page", "Page | Locator"
+	if inHost(s) {
+		imports, param, root, scopeType = "FrameLocator, Locator, Page", "root: Page | FrameLocator", "root", "Page | FrameLocator | Locator"
+	}
 	var b strings.Builder
 	b.WriteString(genHeader + "\n")
 	fmt.Fprintf(&b, "// Source: project.json .phaseArtifacts.uiDesign.%s\n", surface)
-	b.WriteString(`import type { Locator, Page } from '@playwright/test';
-
+	fmt.Fprintf(&b, "import type { %s } from '@playwright/test';\n", imports)
+	b.WriteString(`
 type Role = Parameters<Page['getByRole']>[0];
 
 type Spec = {
@@ -56,10 +63,11 @@ export type ElementId = keyof typeof elements;
  * Finds an element the way a user does: by role and accessible name, inside the element that
  * contains it. nth picks one instance of an element that repeats (zero-based).
  */
-export function locate(page: Page, id: ElementId, nth?: number): Locator {
-  const spec: Spec = elements[id];
-  const scope: Page | Locator = spec.within === undefined ? page : locate(page, spec.within);
-  const found = scope.getByRole(spec.role, spec.name === '' ? {} : { name: spec.name, exact: true });
+`)
+	fmt.Fprintf(&b, "export function locate(%s, id: ElementId, nth?: number): Locator {\n", param)
+	b.WriteString("  const spec: Spec = elements[id];\n")
+	fmt.Fprintf(&b, "  const scope: %s = spec.within === undefined ? %s : locate(%s, spec.within);\n", scopeType, root, root)
+	b.WriteString(`  const found = scope.getByRole(spec.role, spec.name === '' ? {} : { name: spec.name, exact: true });
   return nth === undefined ? found : found.nth(nth);
 }
 `)

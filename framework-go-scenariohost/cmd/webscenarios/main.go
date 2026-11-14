@@ -26,6 +26,11 @@
 // first in name order; for an acceptance run (-config generated/acceptance/...) it is the acceptance
 // plan's browserActor, and a web spec without one is an error naming ATP-BROWSER (planPrincipals).
 //
+// A plan whose Client is an mcpApp (the System's surface of the config's directory name) runs in the
+// harness MCP host: webscenarios serves it in front of the launched app (scenariohost.ServeMCPAppHost)
+// and PLAYWRIGHT_TEST_BASE_URL is the host's origin, which forwards the app's own routes; a web or
+// machine plan runs against the app directly.
+//
 // The exit status is Playwright's. A bad invocation is 2, a launch or teardown failure is 1, and a
 // leftover container or volume is 3.
 package main
@@ -47,6 +52,7 @@ import (
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/devstack"
 	scenariohost "github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
 )
 
 // Exit statuses besides Playwright's own.
@@ -120,6 +126,9 @@ type deps struct {
 func realDeps() deps {
 	return deps{start: startReal, exec: execReal, inventory: devstack.DockerInventory}
 }
+
+// serveHostFunc serves the harness MCP host for an mcpApp surface of the launched app.
+type serveHostFunc func(ctx context.Context, app *scenariohost.App, surface string) (*scenariohost.AppHost, error)
 
 // playwrightCommand is the invocation of o against the launched app st, under environ.
 func playwrightCommand(o options, st stack, environ []string) command {
@@ -226,8 +235,9 @@ type launched struct {
 	principal string
 }
 
-func (l *launched) BaseURL() string   { return l.web.App.BaseURL }
-func (l *launched) Principal() string { return l.principal }
+func (l *launched) BaseURL() string        { return l.web.App.BaseURL }
+func (l *launched) Principal() string      { return l.principal }
+func (l *launched) App() *scenariohost.App { return l.web.App }
 
 func (l *launched) Stop() error {
 	err := l.web.Stop()
@@ -242,11 +252,51 @@ type launchFunc func(ctx context.Context, module string, principals []scenarioho
 // startReal boots the host and launches the app of the module o names, as the principals of the plan
 // o's config belongs to (planPrincipals).
 func startReal(ctx context.Context, o options) (stack, error) {
-	return startWith(ctx, o, launchReal)
+	return startWith(ctx, o, launchReal, scenariohost.ServeMCPAppHost)
 }
 
-// startWith resolves the module and the plan's principals and hands them to launch.
-func startWith(ctx context.Context, o options, launch launchFunc) (stack, error) {
+// appStack is a launched stack that exposes its app, which a harness host fronts.
+type appStack interface {
+	stack
+	App() *scenariohost.App
+}
+
+// hostedStack is a launched app fronted by the harness MCP host of its mcpApp surface: the run's
+// browser opens the host, which opens the app in a frame and reaches the app's routes through itself.
+type hostedStack struct {
+	stack
+	host *scenariohost.AppHost
+}
+
+func (h *hostedStack) BaseURL() string { return h.host.URL }
+
+// Stop closes the host, then stops the app (the host fronts it).
+func (h *hostedStack) Stop() error { return errors.Join(h.host.Close(), h.stack.Stop()) }
+
+// mcpAppSurface is the surface id of the MCP App the plan of config belongs to, when the
+// module's System says it is one (a facet resolves to its component).
+func mcpAppSurface(module, config string) (string, bool, error) {
+	raw, err := os.ReadFile(filepath.Join(module, ".aiarch", "state", "project.json")) // #nosec G304 -- the app under test
+	if errors.Is(err, os.ErrNotExist) {
+		return "", false, nil
+	}
+	if err != nil {
+		return "", false, err
+	}
+	p, ok, err := methodcheck.DecodeProject(raw)
+	if err != nil {
+		return "", false, fmt.Errorf("project.json: %w", err)
+	}
+	if !ok {
+		return "", false, nil
+	}
+	id, s, ok := p.ClientSurface(filepath.Base(filepath.Dir(config)))
+	return id, ok && s == methodcheck.SurfaceMCPApp, nil
+}
+
+// startWith resolves the module and the plan's principals and hands them to launch; for the plan of
+// an mcpApp surface it then serves the harness host in front of the launched app.
+func startWith(ctx context.Context, o options, launch launchFunc, serve serveHostFunc) (stack, error) {
 	module := o.module
 	if module == "" {
 		var err error
@@ -263,7 +313,23 @@ func startWith(ctx context.Context, o options, launch launchFunc) (stack, error)
 	if err != nil {
 		return nil, err
 	}
-	return launch(ctx, module, principals, browser)
+	surface, isApp, err := mcpAppSurface(module, config)
+	if err != nil {
+		return nil, err
+	}
+	st, err := launch(ctx, module, principals, browser)
+	if err != nil || !isApp {
+		return st, err
+	}
+	fronted, ok := st.(appStack)
+	if !ok {
+		return nil, errors.Join(fmt.Errorf("webscenarios: the launched stack exposes no app for the MCP App host of %s", surface), st.Stop())
+	}
+	host, err := serve(ctx, fronted.App(), surface)
+	if err != nil {
+		return nil, errors.Join(fmt.Errorf("webscenarios: mcp app host for %s: %w", surface, err), st.Stop())
+	}
+	return &hostedStack{stack: st, host: host}, nil
 }
 
 // launchReal is the production launch: the host's substrates, then the app into them.

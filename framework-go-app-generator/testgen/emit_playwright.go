@@ -44,9 +44,9 @@ func emitPlaywright(out *Output, cfg Config, web webEnv, plan componentPlan) err
 			return err
 		}
 	}
-	out.Generated[path.Join(dir, "elements.gen.ts")] = []byte(elementsTS(plan.Key, design))
+	out.Generated[path.Join(dir, "elements.gen.ts")] = []byte(elementsTS(plan.Key, plan.Surface, design))
 	out.Generated[path.Join(dir, "runtime.gen.ts")] = []byte(genHeader + "\n" + tsRuntimeSource)
-	out.Generated[path.Join(dir, "surface.spec.gen.ts")] = []byte(surfaceSpecTS(plan.Key, design))
+	out.Generated[path.Join(dir, "surface.spec.gen.ts")] = []byte(surfaceSpecTS(plan.Key, plan.Surface, design))
 	out.Generated[path.Join(dir, "playwright.config.gen.ts")] = []byte(playwrightConfig(playwrightResultsDir(plan.Key)))
 	out.Generated[path.Join(dir, "reporter.gen.ts")] = []byte(playwrightReporter)
 	return nil
@@ -303,13 +303,16 @@ func (w *specWriter) action(in methodcheck.TestArg) error {
 		}
 	}
 	if _, ok := methodcheck.ActionTarget(a); ok {
-		w.use("locate")
+		w.useLocate()
 	}
-	w.line("await %s;", playwrightActionLine(a))
+	if _, ok := a.(methodcheck.UINavigate); ok && inHost(w.plan.Surface) {
+		w.use("openApp")
+	}
+	w.line("await %s;", playwrightActionLine(a, w.plan.Surface))
 	for _, o := range methodcheck.LayerAObservables(a) {
 		w.use("immediate")
 		w.useObservable(o)
-		w.line("await %s;", observableLine(o, true))
+		w.line("await %s;", observableLine(o, true, w.plan.Surface))
 	}
 	return nil
 }
@@ -346,8 +349,11 @@ func (w *specWriter) observable(o methodcheck.UIObservable) error {
 			return err
 		}
 	}
+	if _, isURL := o.(methodcheck.UIURL); isURL && inHost(w.plan.Surface) {
+		return fmt.Errorf("surface %s is an MCP App, which has no address bar: a url observable cannot be asserted; observe what the user sees on the screen instead", w.plan.Key)
+	}
 	w.useObservable(o)
-	w.line("await %s;", observableLine(o, false))
+	w.line("await %s;", observableLine(o, false, w.plan.Surface))
 	return nil
 }
 
@@ -355,8 +361,38 @@ func (w *specWriter) observable(o methodcheck.UIObservable) error {
 func (w *specWriter) useObservable(o methodcheck.UIObservable) {
 	w.use("expect")
 	if _, ok := methodcheck.ObservableTarget(o); ok {
-		w.use("locate")
+		w.useLocate()
 	}
+}
+
+// useLocate records the names a located element spells: locate, and the frame an MCP App's elements
+// are found in.
+func (w *specWriter) useLocate() {
+	w.use("locate")
+	if inHost(w.plan.Surface) {
+		w.use("appFrame")
+	}
+}
+
+// inHost reports a surface whose app runs inside the harness MCP host's iframe (an mcpApp): its
+// elements are located in that frame and it opens a screen through the host, not by an address.
+func inHost(s methodcheck.Surface) bool { return s == methodcheck.SurfaceMCPApp }
+
+// openScreen spells opening a screen by its route: an MCP App has no address bar, so the harness host
+// opens it (openApp); a web surface is navigated to.
+func openScreen(s methodcheck.Surface, route string) string {
+	if inHost(s) {
+		return "openApp(page, " + tsStr(route) + ")"
+	}
+	return "page.goto(" + tsStr(route) + ")"
+}
+
+// hostRoot is what a spec locates elements in: the page, or an MCP App's frame inside the host's page.
+func hostRoot(s methodcheck.Surface) string {
+	if inHost(s) {
+		return "appFrame(page)"
+	}
+	return "page"
 }
 
 // known refuses a target the surface's design does not have: the locator would be built from nothing.
@@ -387,26 +423,27 @@ func immediateWarnings(surface, scenarioID string, st boundStep) []string {
 // playwrightActionLine spells one UIAction as a page action on the located element. check/uncheck use
 // Playwright's check()/uncheck(), which fail unless the control flips on the click itself. The switch is
 // exhaustive over the sealed UIAction (gochecksumtype).
-func playwrightActionLine(a methodcheck.UIAction) string {
+func playwrightActionLine(a methodcheck.UIAction, s methodcheck.Surface) string {
+	root := hostRoot(s)
 	switch v := a.(type) {
 	case methodcheck.UINavigate:
-		return "page.goto(" + tsStr(v.Route) + ")"
+		return openScreen(s, v.Route)
 	case methodcheck.UIClick:
-		return byElement(v.Target) + ".click()"
+		return byElement(root, v.Target) + ".click()"
 	case methodcheck.UIDblclick:
-		return byElement(v.Target) + ".dblclick()"
+		return byElement(root, v.Target) + ".dblclick()"
 	case methodcheck.UIFill:
-		return byElement(v.Target) + ".fill(" + tsStr(v.Value) + ")"
+		return byElement(root, v.Target) + ".fill(" + tsStr(v.Value) + ")"
 	case methodcheck.UIPress:
-		return byElement(v.Target) + ".press(" + tsStr(v.Key) + ")"
+		return byElement(root, v.Target) + ".press(" + tsStr(v.Key) + ")"
 	case methodcheck.UICheck:
-		return byElement(v.Target) + ".check()"
+		return byElement(root, v.Target) + ".check()"
 	case methodcheck.UIUncheck:
-		return byElement(v.Target) + ".uncheck()"
+		return byElement(root, v.Target) + ".uncheck()"
 	case methodcheck.UIHover:
-		return byElement(v.Target) + ".hover()"
+		return byElement(root, v.Target) + ".hover()"
 	case methodcheck.UISelect:
-		return byElement(v.Target) + ".selectOption(" + tsStr(v.Option) + ")"
+		return byElement(root, v.Target) + ".selectOption(" + tsStr(v.Option) + ")"
 	}
 	panic("unreachable: sealed UIAction")
 }
@@ -438,26 +475,29 @@ func matcherCall(call string, immediate bool, args ...string) string {
 }
 
 // playwrightObservableLine spells one UIObservable as an assertion under the default timeout.
-func playwrightObservableLine(o methodcheck.UIObservable) string { return observableLine(o, false) }
+func playwrightObservableLine(o methodcheck.UIObservable, s methodcheck.Surface) string {
+	return observableLine(o, false, s)
+}
 
 // observableLine spells one UIObservable as an assertion; immediate asserts it under the short
 // timeout of what the user sees the instant an action lands. The switch is exhaustive over the sealed
 // UIObservable.
-func observableLine(o methodcheck.UIObservable, immediate bool) string {
+func observableLine(o methodcheck.UIObservable, immediate bool, s methodcheck.Surface) string {
+	root := hostRoot(s)
 	switch v := o.(type) {
 	case methodcheck.UIText:
-		return "expect(" + byElement(v.Target) + ")" + matcherCall(".toHaveText", immediate, tsStr(v.Text))
+		return "expect(" + byElement(root, v.Target) + ")" + matcherCall(".toHaveText", immediate, tsStr(v.Text))
 	case methodcheck.UIValue:
-		return "expect(" + byElement(v.Target) + ")" + matcherCall(".toHaveValue", immediate, tsStr(v.Value))
+		return "expect(" + byElement(root, v.Target) + ")" + matcherCall(".toHaveValue", immediate, tsStr(v.Value))
 	case methodcheck.UICount:
-		return "expect(" + byElement(v.Target) + ")" + matcherCall(".toHaveCount", immediate, fmt.Sprint(v.N))
+		return "expect(" + byElement(root, v.Target) + ")" + matcherCall(".toHaveCount", immediate, fmt.Sprint(v.N))
 	case methodcheck.UIURL:
 		return "expect(page)" + matcherCall(".toHaveURL", immediate, urlMatcher(v.Route))
 	case methodcheck.UIVisible, methodcheck.UIHidden, methodcheck.UIAbsent, methodcheck.UIChecked,
 		methodcheck.UIUnchecked, methodcheck.UIEnabled, methodcheck.UIDisabled, methodcheck.UIFocused:
 		t, _ := methodcheck.ObservableTarget(o)
 		m := playwrightStateMatchers[o.Kind()]
-		return "expect(" + byElement(t) + ")" + matcherCall(m.call, immediate, m.args...)
+		return "expect(" + byElement(root, t) + ")" + matcherCall(m.call, immediate, m.args...)
 	}
 	panic("unreachable: sealed UIObservable")
 }
@@ -471,8 +511,8 @@ func UIObservableKinds() []string { return methodcheck.UIObservableKinds() }
 
 // byElement is the locator of a target: the element found by role and name through the surface's
 // generated inventory, one instance of it when the target picks one.
-func byElement(t methodcheck.UITarget) string {
-	loc := "locate(page, " + tsStr(t.Element)
+func byElement(root string, t methodcheck.UITarget) string {
+	loc := "locate(" + root + ", " + tsStr(t.Element)
 	if t.Nth != nil {
 		loc += fmt.Sprintf(", %d", *t.Nth)
 	}

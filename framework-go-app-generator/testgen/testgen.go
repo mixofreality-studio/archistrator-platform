@@ -105,6 +105,9 @@ type componentPlan struct {
 	Scenarios  []boundScenario
 	// Design is the surface's recorded UI design (a web client's plan only); nil when none is recorded.
 	Design *methodcheck.UIDesignRecord
+	// Surface is the surface the Client component states ("" for a contract that is no Client, or one
+	// that states none). An mcpApp's specs run inside the harness MCP host's frame.
+	Surface methodcheck.Surface
 }
 
 // webEnv is what a browser surface's emitter needs from the rest of the document: every contract (to
@@ -226,6 +229,9 @@ func planOf(out *Output, p methodcheck.Project, all []scenario.Scenario, comp st
 	}
 	if d, ok := designOf(p, comp, sc); ok {
 		plan.Design = &d
+	}
+	if _, s, ok := p.ClientSurface(comp); ok {
+		plan.Surface = s
 	}
 	return plan, nil
 }
