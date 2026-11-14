@@ -223,13 +223,16 @@ the outcome one actor sees on a client the other did not call through belongs to
   `resume-the-list-P2/P3@todoWebApp` variants (the member opens the list in the browser; an MCP read as
   the agent shows the same list) and `reword-a-todo-P2/P3@todoMcpServer` (the member starts a reword in
   the browser, the commit is an MCP call, and the browser, which leaves edit mode, shows it).
-- The 4 variants the plan skips, each with `until: 2099-12-31` (no activity unblocks them: a skip that
-  waited on the SPA's activity would become an Error the day that activity integrates, TP-SKIP, though
-  the path is no more drivable) and a reason the generated Go file reports as the verdict `skip`:
+- The 4 variants the plan skips, each with `until: 2026-12-31` (the programme's waiver horizon, as the
+  ATP-BOUND waiver; no activity unblocks them, since a skip that waited on the SPA's activity would become
+  an Error the day that activity integrates, TP-SKIP, though the path is no more drivable; the date is
+  bounded so the skip expires into TP-SKIP rather than hiding for good) and a reason the generated Go file reports as the verdict `skip`:
   `work-the-list-P1/P2@todoWebApp` (the dialect has no type-and-submit, and a reword is three browser acts
-  where the path has one stimulus: the browser cannot drive these paths in the steps the use case has) and
+  where the path has one stimulus: the browser cannot drive these paths in the steps the use case has;
+  earmark E25, the dialect's missing type-and-submit act and multi-act steps) and
   `work-the-list-P3@todoWebApp`, `resume-the-list-P1@todoWebApp` (the SPA opens the requester's own list,
-  so a member's browser is never refused another member's: the refused path has no browser driver).
+  so a member's browser is never refused another member's: the refused path has no browser driver;
+  earmark E26, the SPA's owner-less open-list).
 - Arrange goes through the Manager's routes (a browser spec can reach nothing else): the list is emptied
   (`ToggleAll`, `ClearCompleted`, twice: the second pair empties a list that was all completed), then built
   with `AddTodo`. The launch is shared by every spec of the plan, so each spec starts by emptying `alice`'s
