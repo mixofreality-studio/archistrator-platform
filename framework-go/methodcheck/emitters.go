@@ -85,7 +85,7 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleSCNUnaddressed, ruleSCNActorPathClient, ruleTPClientContracted,
 	}
 	set := make(map[RuleID]bool, len(ids))
-	for _, id := range append(append(ids, uiDesignRuleIDs...), acceptanceRuleIDs...) {
+	for _, id := range append(append(append(ids, uiDesignRuleIDs...), acceptanceRuleIDs...), surfaceRuleIDs...) {
 		set[id] = true
 	}
 	return set

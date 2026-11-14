@@ -53,6 +53,10 @@ type ProjectSpec struct {
 	// dated period. It may change a finding's severity and message and may not add or drop
 	// findings; Check reports what it returns. Nil reports the findings as the rules made them.
 	FindingPolicy func([]Finding) []Finding
+
+	// SupportedSurfaces is what the platform generators can build (appgen.SupportedSurfaces()); it
+	// feeds GEN-SURFACE-SUPPORTED. Empty fails closed on every Client that states a surface.
+	SupportedSurfaces []Surface
 }
 
 // Check is the all-in-one Method gate a consuming repo runs from one go test. It
@@ -81,7 +85,7 @@ func Check(t *testing.T, spec ProjectSpec) {
 	if !ok {
 		return
 	}
-	findings, runErr := ValidateProject(proj)
+	findings, runErr := ValidateProject(proj, ValidateOptions{SupportedSurfaces: spec.SupportedSurfaces})
 	handleValidationError(t, runErr)
 	if spec.FindingPolicy != nil {
 		findings = spec.FindingPolicy(findings)

@@ -297,6 +297,9 @@ type System struct {
 	Components    []Component    `json:"components"`
 	Relationships []Relationship `json:"relationships"`
 	DynamicViews  []DynamicView  `json:"dynamicViews"`
+	// Waivers are conscious, justified exceptions recorded on the System (a CheckItem per waived
+	// rule; SYS-SURFACE-ENTRY waives per use case, Section = the use case id).
+	Waivers []CheckItem `json:"waivers,omitempty"`
 }
 
 // Component is a node in the System static architecture model.

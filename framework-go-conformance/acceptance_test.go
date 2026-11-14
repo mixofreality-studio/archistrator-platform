@@ -16,6 +16,7 @@ import (
 	"testing/fstest"
 	"time"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
 	scenariohost "github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
@@ -232,7 +233,7 @@ func TestConformance_Acceptance(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	findings, err := methodcheck.ValidateProjectJSON(raw)
+	findings, err := methodcheck.ValidateProjectJSON(raw, methodcheck.ValidateOptions{SupportedSurfaces: appgen.SupportedSurfaces()})
 	if err != nil {
 		t.Fatal(err)
 	}

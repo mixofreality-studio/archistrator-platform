@@ -1,0 +1,337 @@
+{
+ "id": "surfaces-clean",
+ "version": 1,
+ "slots": {
+  "0": {
+   "status": 2,
+   "kind": 0,
+   "model": {
+    "vision": "v",
+    "objectives": [
+     {
+      "number": 1,
+      "statement": "o"
+     }
+    ],
+    "mission": "m",
+    "deliverySurfaces": [
+     {
+      "kind": "web",
+      "audience": "human",
+      "source": "an ordinary web app",
+      "objective": 1
+     },
+     {
+      "kind": "mcpApp",
+      "audience": "human",
+      "source": "inside their MCP host",
+      "objective": 1
+     },
+     {
+      "kind": "mcpTools",
+      "audience": "machine",
+      "source": "an agent can drive it over MCP tools",
+      "objective": 1
+     },
+     {
+      "kind": "rest",
+      "audience": "machine",
+      "source": "reachable as an ordinary web API",
+      "objective": 1
+     }
+    ]
+   }
+  },
+  "4": {
+   "status": 2,
+   "kind": 4,
+   "model": {
+    "decisions": [
+     {
+      "useCase": {
+       "id": "add-a-todo",
+       "name": "Add a todo",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        },
+        {
+         "id": "team-agent",
+         "role": "Team agent",
+         "kind": "agent"
+        }
+       ],
+       "trigger": "actor",
+       "classification": "core",
+       "variationOf": null,
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "action",
+          "label": "Add a todo",
+          "linkedActorId": "team-member",
+          "linkedCompId": null
+         }
+        ],
+        "edges": []
+       }
+      },
+      "rejectionReason": ""
+     },
+     {
+      "useCase": {
+       "id": "review-todos",
+       "name": "Review todos",
+       "actors": [
+        {
+         "id": "team-member",
+         "role": "Team member"
+        },
+        {
+         "id": "team-agent",
+         "role": "Team agent",
+         "kind": "agent"
+        }
+       ],
+       "trigger": "actor",
+       "classification": "core",
+       "variationOf": null,
+       "activity": {
+        "nodes": [
+         {
+          "id": "s1",
+          "kind": "action",
+          "label": "Review todos",
+          "linkedActorId": "team-member",
+          "linkedCompId": null
+         }
+        ],
+        "edges": []
+       }
+      },
+      "rejectionReason": ""
+     }
+    ]
+   }
+  },
+  "5": {
+   "status": 2,
+   "kind": 5,
+   "model": {
+    "components": [
+     {
+      "id": "todo-web-app",
+      "name": "TodoWebApp",
+      "kind": "client",
+      "layer": "client",
+      "encapsulates": "TodoWebApp volatility",
+      "atomicBusinessVerbs": null,
+      "surface": "web"
+     },
+     {
+      "id": "todo-mcp-app",
+      "name": "TodoMcpApp",
+      "kind": "client",
+      "layer": "client",
+      "encapsulates": "TodoMcpApp volatility",
+      "atomicBusinessVerbs": null,
+      "surface": "mcpApp"
+     },
+     {
+      "id": "todo-mcp-server",
+      "name": "TodoMcpServer",
+      "kind": "client",
+      "layer": "client",
+      "encapsulates": "TodoMcpServer volatility",
+      "atomicBusinessVerbs": null,
+      "surface": "mcpTools"
+     },
+     {
+      "id": "todo-api",
+      "name": "TodoApi",
+      "kind": "client",
+      "layer": "client",
+      "encapsulates": "TodoApi volatility",
+      "atomicBusinessVerbs": null,
+      "surface": "rest"
+     },
+     {
+      "id": "list-manager",
+      "name": "ListManager",
+      "kind": "manager",
+      "layer": "manager",
+      "encapsulates": "ListManager volatility",
+      "atomicBusinessVerbs": null
+     }
+    ],
+    "relationships": [
+     {
+      "from": "todo-web-app",
+      "to": "list-manager",
+      "mode": "sync",
+      "label": ""
+     },
+     {
+      "from": "todo-mcp-app",
+      "to": "list-manager",
+      "mode": "sync",
+      "label": ""
+     },
+     {
+      "from": "todo-mcp-server",
+      "to": "list-manager",
+      "mode": "sync",
+      "label": ""
+     },
+     {
+      "from": "todo-api",
+      "to": "list-manager",
+      "mode": "sync",
+      "label": ""
+     }
+    ],
+    "dynamicViews": [
+     {
+      "useCaseId": "add-a-todo",
+      "key": "add-a-todo",
+      "title": "add-a-todo",
+      "steps": [
+       {
+        "activityNodeId": "s1",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "todo-web-app",
+          "mode": "sync",
+          "label": "Act",
+          "alt": "s1"
+         },
+         {
+          "from": "team-member",
+          "to": "todo-mcp-app",
+          "mode": "sync",
+          "label": "Act",
+          "alt": "s1"
+         },
+         {
+          "from": "team-agent",
+          "to": "todo-mcp-server",
+          "mode": "sync",
+          "label": "Act",
+          "alt": "s1"
+         },
+         {
+          "from": "team-agent",
+          "to": "todo-api",
+          "mode": "sync",
+          "label": "Act",
+          "alt": "s1"
+         },
+         {
+          "from": "todo-web-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "Keep",
+          "alt": "s1"
+         },
+         {
+          "from": "todo-mcp-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "Keep",
+          "alt": "s1"
+         },
+         {
+          "from": "todo-mcp-server",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "Keep",
+          "alt": "s1"
+         },
+         {
+          "from": "todo-api",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "Keep",
+          "alt": "s1"
+         }
+        ]
+       }
+      ]
+     },
+     {
+      "useCaseId": "review-todos",
+      "key": "review-todos",
+      "title": "review-todos",
+      "steps": [
+       {
+        "activityNodeId": "s1",
+        "calls": [
+         {
+          "from": "team-member",
+          "to": "todo-web-app",
+          "mode": "sync",
+          "label": "Act",
+          "alt": "s1"
+         },
+         {
+          "from": "team-member",
+          "to": "todo-mcp-app",
+          "mode": "sync",
+          "label": "Act",
+          "alt": "s1"
+         },
+         {
+          "from": "team-agent",
+          "to": "todo-mcp-server",
+          "mode": "sync",
+          "label": "Act",
+          "alt": "s1"
+         },
+         {
+          "from": "team-agent",
+          "to": "todo-api",
+          "mode": "sync",
+          "label": "Act",
+          "alt": "s1"
+         },
+         {
+          "from": "todo-web-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "Keep",
+          "alt": "s1"
+         },
+         {
+          "from": "todo-mcp-app",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "Keep",
+          "alt": "s1"
+         },
+         {
+          "from": "todo-mcp-server",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "Keep",
+          "alt": "s1"
+         },
+         {
+          "from": "todo-api",
+          "to": "list-manager",
+          "mode": "sync",
+          "label": "Keep",
+          "alt": "s1"
+         }
+        ]
+       }
+      ]
+     }
+    ],
+    "waivers": []
+   }
+  }
+ }
+}

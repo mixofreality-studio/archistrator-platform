@@ -12,7 +12,7 @@ import "fmt"
 // typed slots of p. A verb runs ONLY when its committed prerequisite models are
 // present. A non-nil error is a coherence fault (a dependent artifact committed
 // without its prerequisite), exactly as the CLI's validateProject returns.
-func ValidateProject(p Project) ([]Finding, error) {
+func ValidateProject(p Project, o ValidateOptions) ([]Finding, error) {
 	var all []Finding
 	for _, run := range []func(Project) ([]Finding, error){
 		glossaryFindings,
@@ -24,6 +24,7 @@ func ValidateProject(p Project) ([]Finding, error) {
 		standardCheckFindings,
 		appCFindings,
 		scenarioFindings,
+		func(p Project) ([]Finding, error) { return surfaceFindings(p, o) },
 	} {
 		f, err := run(p)
 		if err != nil {
@@ -193,7 +194,7 @@ func appCFindings(p Project) ([]Finding, error) {
 // `.aiarch/state/project.json` and run ValidateProject. Empty/absent bytes decode
 // to no project and return no findings (nothing to validate), matching the CLI's
 // clean-pass-on-empty.
-func ValidateProjectJSON(raw []byte) ([]Finding, error) {
+func ValidateProjectJSON(raw []byte, o ValidateOptions) ([]Finding, error) {
 	p, ok, err := DecodeProject(raw)
 	if err != nil {
 		return nil, err
@@ -201,5 +202,5 @@ func ValidateProjectJSON(raw []byte) ([]Finding, error) {
 	if !ok {
 		return nil, nil
 	}
-	return ValidateProject(p)
+	return ValidateProject(p, o)
 }

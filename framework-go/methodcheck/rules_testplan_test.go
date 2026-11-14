@@ -633,7 +633,7 @@ func TestTP_DriftFixture(t *testing.T) {
 // testdata/scenario_project.json — it is not a Method-clean architecture, so the
 // CC-*/DV-* families are out of scope here.)
 func TestTP_WiredIntoValidateProject(t *testing.T) {
-	fs, err := ValidateProjectJSON(readFixture(t, "tp_clean.json"))
+	fs, err := ValidateProjectJSON(readFixture(t, "tp_clean.json"), ValidateOptions{SupportedSurfaces: Surfaces()})
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -642,7 +642,7 @@ func TestTP_WiredIntoValidateProject(t *testing.T) {
 			t.Fatalf("clean plan produced a finding: %s %s", f.RuleID, f.Message)
 		}
 	}
-	fs, err = ValidateProjectJSON(readFixture(t, "tp_drift.json"))
+	fs, err = ValidateProjectJSON(readFixture(t, "tp_drift.json"), ValidateOptions{SupportedSurfaces: Surfaces()})
 	if err != nil {
 		t.Fatal(err)
 	}

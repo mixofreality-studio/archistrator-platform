@@ -242,7 +242,7 @@ func TestUCStartRedundant_Wired(t *testing.T) {
 		{From: "tick", To: "a", Kind: edgeControlFlow},
 		{From: "a", To: "e", Kind: edgeControlFlow},
 	})
-	fs, err := ValidateProject(projectWithUseCases(t, c))
+	fs, err := ValidateProject(projectWithUseCases(t, c), ValidateOptions{SupportedSurfaces: Surfaces()})
 	if err != nil {
 		t.Fatal(err)
 	}

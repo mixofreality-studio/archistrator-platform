@@ -3,6 +3,7 @@ package conformance
 import (
 	"testing"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
 )
@@ -27,7 +28,7 @@ func TestFixtures_LoadUnderProjectmodelAndMethodcheck(t *testing.T) {
 			if _, ok, err := methodcheck.DecodeProject(raw); err != nil || !ok {
 				t.Fatalf("methodcheck.DecodeProject: ok=%v err=%v", ok, err)
 			}
-			findings, err := methodcheck.ValidateProjectJSON(raw)
+			findings, err := methodcheck.ValidateProjectJSON(raw, methodcheck.ValidateOptions{SupportedSurfaces: appgen.SupportedSurfaces()})
 			if err != nil {
 				t.Fatalf("methodcheck.ValidateProjectJSON: %v", err)
 			}

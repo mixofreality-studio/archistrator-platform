@@ -156,7 +156,7 @@ func TestDecodeProject_UncommittedSlotIsNotReadable(t *testing.T) {
 // TestValidateProjectJSON_CleanFixturePasses proves the orchestration produces zero
 // Error findings over a fully-legal committed project (testdata/project_clean.json).
 func TestValidateProjectJSON_CleanFixturePasses(t *testing.T) {
-	findings, err := ValidateProjectJSON(readFixture(t, "project_clean.json"))
+	findings, err := ValidateProjectJSON(readFixture(t, "project_clean.json"), ValidateOptions{SupportedSurfaces: Surfaces()})
 	if err != nil {
 		t.Fatalf("validate: %v", err)
 	}
@@ -172,7 +172,7 @@ func TestValidateProjectJSON_CleanFixturePasses(t *testing.T) {
 // trips the deployment Error rules — a concrete cross-artifact-rule exercise over the
 // decoded real shape.
 func TestValidateProjectJSON_RealFixtureFlagsDeploymentGaps(t *testing.T) {
-	findings, err := ValidateProjectJSON(readFixture(t, "project.json"))
+	findings, err := ValidateProjectJSON(readFixture(t, "project.json"), ValidateOptions{SupportedSurfaces: Surfaces()})
 	if err != nil {
 		t.Fatalf("validate: %v", err)
 	}

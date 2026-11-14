@@ -36,7 +36,7 @@ func writeRepoState(t *testing.T, fixture string) string {
 func TestCheck_CleanFixtureNoAlignmentPasses(t *testing.T) {
 	repoRoot := writeRepoState(t, "project_clean.json")
 	// No Arch patterns → alignment skipped; only the design rules run, all clean.
-	Check(t, ProjectSpec{RepoRoot: repoRoot})
+	Check(t, ProjectSpec{SupportedSurfaces: Surfaces(), RepoRoot: repoRoot})
 }
 
 // The app's own severity policy (a waived rule's Errors downgraded for a dated period) runs over
@@ -44,7 +44,7 @@ func TestCheck_CleanFixtureNoAlignmentPasses(t *testing.T) {
 func TestCheck_FindingPolicyRunsOverTheDesignFindings(t *testing.T) {
 	repoRoot := writeRepoState(t, "project_clean.json")
 	called := 0
-	Check(t, ProjectSpec{RepoRoot: repoRoot, FindingPolicy: func(f []Finding) []Finding {
+	Check(t, ProjectSpec{SupportedSurfaces: Surfaces(), RepoRoot: repoRoot, FindingPolicy: func(f []Finding) []Finding {
 		called++
 		return f
 	}})
@@ -59,7 +59,7 @@ func TestCheck_CleanFixtureWithMatchingCodePasses(t *testing.T) {
 	t.Setenv("GOWORK", "off")
 	repoRoot := writeRepoState(t, "project_clean.json")
 	// Alignment against the testdata module whose packages match the design components.
-	Check(t, ProjectSpec{RepoRoot: repoRoot, Arch: alignAppArchSpec()})
+	Check(t, ProjectSpec{SupportedSurfaces: Surfaces(), RepoRoot: repoRoot, Arch: alignAppArchSpec()})
 }
 
 // TestCheck_DesignOnlyNoCodeSkipsLayerAndAlignment proves the pure-design-phase
@@ -82,7 +82,7 @@ func TestCheck_DesignOnlyNoCodeSkipsLayerAndAlignment(t *testing.T) {
 			{Name: "Manager", DirPrefix: "manager"},
 		},
 	}
-	Check(t, ProjectSpec{RepoRoot: repoRoot, Arch: noCodeSpec})
+	Check(t, ProjectSpec{SupportedSurfaces: Surfaces(), RepoRoot: repoRoot, Arch: noCodeSpec})
 }
 
 // TestCheck_WithCodeRunsAllThree proves that when the module HAS Go code, ONE Check
@@ -99,7 +99,7 @@ func TestCheck_WithCodeRunsAllThree(t *testing.T) {
 	repoRoot := writeRepoState(t, "project_clean.json")
 	// The full, correct alignapp spec: design rules + arch.Check + alignment all run
 	// and all pass. (Same module arch's own TestZZ-style check passes against.)
-	Check(t, ProjectSpec{RepoRoot: repoRoot, Arch: alignAppArchSpec()})
+	Check(t, ProjectSpec{SupportedSurfaces: Surfaces(), RepoRoot: repoRoot, Arch: alignAppArchSpec()})
 }
 
 // layoutBadArchSpec targets the layoutbadapp fixture: a Manager package that
@@ -141,7 +141,7 @@ func TestCheck_FileLayoutViolationSurfacesThroughCheck(t *testing.T) {
 		// the parent greps for the file-layout rule specifically.)
 		t.Setenv("GOWORK", "off") // nested testdata module — see loadAlignPkgs.
 		repoRoot := writeRepoState(t, "project_clean.json")
-		Check(t, ProjectSpec{RepoRoot: repoRoot, Arch: layoutBadArchSpec()})
+		Check(t, ProjectSpec{SupportedSurfaces: Surfaces(), RepoRoot: repoRoot, Arch: layoutBadArchSpec()})
 		return
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCheck_FileLayoutViolationSurfacesThroughCheck$", "-test.v")
@@ -161,7 +161,7 @@ func TestCheck_FileLayoutViolationSurfacesThroughCheck(t *testing.T) {
 func TestCheck_MissingStateIsCleanPass(t *testing.T) {
 	// A repo root with no .aiarch tree must NOT fail.
 	repoRoot := t.TempDir()
-	Check(t, ProjectSpec{RepoRoot: repoRoot})
+	Check(t, ProjectSpec{SupportedSurfaces: Surfaces(), RepoRoot: repoRoot})
 }
 
 func TestCheck_EmptyStateIsCleanPass(t *testing.T) {
@@ -173,7 +173,7 @@ func TestCheck_EmptyStateIsCleanPass(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(dir, "project.json"), nil, 0o644); err != nil {
 		t.Fatalf("write empty state: %v", err)
 	}
-	Check(t, ProjectSpec{RepoRoot: repoRoot})
+	Check(t, ProjectSpec{SupportedSurfaces: Surfaces(), RepoRoot: repoRoot})
 }
 
 // TestCheck_AlignmentSurfacesMissingPackage proves the alignment pass Check runs WILL
@@ -223,7 +223,7 @@ const vacuousSubprocessEnv = "METHODCHECK_VACUOUS_SUBPROCESS"
 // empty tree stays green: that is a project before its first component.
 func TestCheck_CodeThatClassifiesNowhereFailsCheck(t *testing.T) {
 	if root := os.Getenv(vacuousSubprocessEnv); root != "" {
-		Check(t, ProjectSpec{RepoRoot: root, Arch: arch.MethodSpec(root)})
+		Check(t, ProjectSpec{SupportedSurfaces: Surfaces(), RepoRoot: root, Arch: arch.MethodSpec(root)})
 		return
 	}
 	module := func(extra ...string) string {
@@ -269,7 +269,7 @@ const opReachedSubprocessEnv = "METHODCHECK_OPREACHED_SUBPROCESS"
 // TP-OP-REACHED as an ERROR naming the op.
 func TestCheck_UnreachedOpFailsCheck(t *testing.T) {
 	if os.Getenv(opReachedSubprocessEnv) == "1" {
-		Check(t, ProjectSpec{RepoRoot: writeUnreachedOpState(t)})
+		Check(t, ProjectSpec{SupportedSurfaces: Surfaces(), RepoRoot: writeUnreachedOpState(t)})
 		return
 	}
 	cmd := exec.Command(os.Args[0], "-test.run=^TestCheck_UnreachedOpFailsCheck$", "-test.v")

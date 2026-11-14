@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/testgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
@@ -254,7 +255,7 @@ func run021Derive(t *testing.T, raw []byte) {
 }
 
 func run021Methodcheck(t *testing.T, raw []byte) {
-	findings, err := methodcheck.ValidateProjectJSON(raw)
+	findings, err := methodcheck.ValidateProjectJSON(raw, methodcheck.ValidateOptions{SupportedSurfaces: appgen.SupportedSurfaces()})
 	if err != nil {
 		t.Fatalf("ValidateProjectJSON: %v", err)
 	}
