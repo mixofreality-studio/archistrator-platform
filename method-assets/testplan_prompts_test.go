@@ -78,6 +78,23 @@ func TestPrompts_NoHookOrUnobservableMentions(t *testing.T) {
 	}
 }
 
+// The Client's surface is one closed field (FPC W6): the two booleans it replaced must be in no
+// prompt, skill or agent, because a prompt that still names them invites a record the schema now
+// refuses.
+func TestPrompts_NoRetiredSurfaceFields(t *testing.T) {
+	files, err := ClaudeFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range files {
+		for _, banned := range []string{"uiSurface", "machineProtocol", "SYS-CLIENT-UISURFACE", "SYS-CLIENT-PROTOCOL"} {
+			if strings.Contains(string(body), banned) {
+				t.Errorf("%s still mentions %q: a Client states one `surface`", path, banned)
+			}
+		}
+	}
+}
+
 // Every sentence that states a rule of the declarative test model names the rule id that
 // enforces it, so a prompt can never promise what no gate holds and a rule can be found from
 // the prompt that explains it. The ids are the ones framework-go/methodcheck emits
@@ -104,6 +121,9 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 			"TP-ARG-REF", "TP-SKIP", "onBehalfOf", "planRef",
 		},
 		cmd("frontend-detailed-design"): {"UID-ROLE", "UID-NAME", "UID-ID-UNIQUE", "UID-WITHIN", "UID-ROUTE", "surface check", "latency"},
+		cmd("system-draft"):             {"surface", "SYS-CLIENT-SURFACE", "mcpApp"},
+		cmd("mission-draft"):            {"deliverySurfaces", "verbatim"},
+		cmd("mission-critique"):         {"deliverySurfaces", "audience"},
 		cmd("service-integration"):      {"ARCH-TEST-COMPOSE", "TP-DISCRIMINATE"},
 		cmd("frontend-integration"):     {"ARCH-TEST-COMPOSE", "TP-DISCRIMINATE", "surface-check"},
 		cmd("service-construction"):     {"ARCH-TEST-COMPOSE"},

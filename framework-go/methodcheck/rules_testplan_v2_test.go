@@ -262,10 +262,9 @@ func TestTP_ActorObserved_WebClientNeedsUIObservable(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	surface := true
 	for i := range sys.Components {
 		if sys.Components[i].ID == "shop-client" {
-			sys.Components[i].UISurface = &surface
+			sys.Components[i].Surface = SurfaceWeb
 		}
 	}
 	p = withSystem(t, p, sys)

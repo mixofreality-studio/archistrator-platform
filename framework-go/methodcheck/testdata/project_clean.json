@@ -185,7 +185,7 @@
      {
       "id": "appclient",
       "name": "AppClient",
-      "kind": "client", "uiSurface": false, "machineProtocol": "mcp",
+      "kind": "client", "surface": "mcpTools",
       "layer": "client",
       "encapsulates": "the client transport surface"
      },

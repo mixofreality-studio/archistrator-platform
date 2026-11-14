@@ -25,7 +25,7 @@ State is git-as-DB: archistrator is a single Go-server repo whose canonical proj
 
 ## Output
 
-The typed **`MissionStatement`** model (Go shape in `internal/resourceaccess/projectstate/models_phase1.go`: `Vision string`, `Objectives []Objective`, `Mission string`), committed to **`.aiarch/state/project.json` → `.mission`**. NOT a `mission.md` file — any markdown rendering is produced render-on-read from this slot.
+The typed **`MissionStatement`** model (Go shape in `internal/resourceaccess/projectstate/models_phase1.go`: `Vision string`, `Objectives []Objective`, `Mission string`, `DeliverySurfaces []DeliverySurface`), committed to **`.aiarch/state/project.json` → `.mission`**. NOT a `mission.md` file — any markdown rendering is produced render-on-read from this slot.
 
 Two usage patterns produce the same result:
 1. **Agentic / CI dispatch** — the agent emits the typed `MissionStatement` JSON and commits it into `.mission` on its session branch; the server reads it back and stages it (`StageArtifactForReview`) for the human review gate.
@@ -100,6 +100,8 @@ Hand to the Product Manager (or the user) for ratification. They review for:
 - Are objectives in business language?
 - Does the mission align with what customers will see?
 
+- Does every channel the brief names (a web portal, an HTTP API, MCP tools, an MCP Apps UI) have a `deliverySurfaces` entry whose `source` is the brief's own words and whose `audience` is who the brief says uses it?
+
 They do not author. They ratify or push back. If they push back, iterate until aligned.
 
 ## Draft-job doctrine (CI dispatch)
@@ -113,6 +115,7 @@ Produce the mission from the research corpus. The three parts divide per ch. 5: 
 - The mission states **HOW the vision will be realized** — 1–3 terse sentences, in business and user language. It MUST state a recognizable approach, and it MUST NOT merely restate the vision or the objectives in different words: describing the business capability or the user value again is the vision's and objectives' job, and a mission that repeats them is a defect.
 - First distill the 2-3 business pillars that DIFFERENTIATE this system from competitors; use them to frame the mission's *how* and the objectives' *why*. The vision itself stays technology-free — unless a technology IS the founder's stated product identity, in which case at most one identity qualifier may appear in it.
 - Write the mission PURELY in business and user language: you MUST NOT use the words component, module, service, subsystem, layer, or any system-architecture / software-decomposition terminology, and you MUST NOT assert or imply any breakdown of the system into parts. The structural boundaries are derived LATER from volatility analysis in the Structure artifact — pre-deciding a decomposition here is a defect. This rule does NOT conflict with stating a how: a how is an operating approach ("standardize X", "automate Y end-to-end", "make every Z a configuration change") and is always expressible without structural vocabulary.
+- **`deliverySurfaces` is a channel constraint, never a behaviour list.** The architect lists one entry per channel the brief commits the system to — `kind` (`web`, `mcpApp`, `rest`, `mcpTools`), `audience` (`human` for `web`/`mcpApp`, `machine` for `rest`/`mcpTools`), `source` (the brief's words, quoted verbatim) and the `objective` number it serves — and the PM ratifies the list against the brief's wording. A channel the brief does not name is not listed. The record verb refuses an empty list, a blank source, an objective that is not one of the mission's numbers, a kind listed twice and an audience that disagrees with the kind.
 - **Constraints carry-forward (binding).** Founder-stated technical, deployment, or operational constraints (e.g. "will be operated by archistrator") are correctly EXCLUDED from the vision, objectives, and mission — but they MUST NOT be silently dropped. Enumerate every excluded constraint explicitly, verbatim where possible: name each one in your `publishDraft` message and in your review-thread responses (the typed `MissionStatement` model has no notes field, so the co-author thread IS the carry-forward channel), so requirements analysis scrubs them into `.scrubbedRequirements` and volatility identification receives them. Losing a stated constraint here is a defect.
 
 **Reconciliation with the book framing above.** Löwy frames the mission as "build components, not features" (Step 3, and the TradeMe quote). That is his rhetorical device to *force* volatility-based decomposition downstream — it is NOT license to put software-decomposition words in the committed mission text. For archistrator's committed `.mission`, the business-and-user-language rule above is binding and stricter: the mission states the how in business and user language, and never uses component / module / service / subsystem / layer terminology.

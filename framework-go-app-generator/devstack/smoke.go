@@ -41,12 +41,12 @@ func WebSeated(moduleDir string) bool {
 }
 
 // SmokeSpecFor is what the app at moduleDir must answer, derived from m: the SPA iff m has a built
-// browser surface and its web project is seated (a seated project that does not build is a smoke
+// web surface and its web project is seated (a seated project that does not build is a smoke
 // failure; an unseated one is not yet built), and every tool its MCP clients front (ToolNames,
 // narrowed by exposed).
 func SmokeSpecFor(m *projectmodel.Model, moduleDir string, exposed map[string][]string) SmokeSpec {
 	return SmokeSpec{
-		SPA:   m != nil && m.System != nil && m.System.HasBrowserSurface() && WebSeated(moduleDir),
+		SPA:   m != nil && m.System != nil && m.System.HasWebSurface() && WebSeated(moduleDir),
 		Tools: ToolNames(m, exposed),
 	}
 }
@@ -87,10 +87,10 @@ func clientTools(m *projectmodel.Model, c projectmodel.SystemComponent, exposed 
 	return out
 }
 
-// isMCPClient is a built machine client that speaks MCP: the ones clientgen writes tool tables
-// for.
+// isMCPClient is a built Client that serves MCP tool tables (surface mcpTools or mcpApp): the ones
+// clientgen writes tool tables for.
 func isMCPClient(c projectmodel.SystemComponent) bool {
-	return strings.EqualFold(c.Kind, "client") && c.IsBuilt() && !c.IsBrowserSurface() && c.IsMCPClient()
+	return strings.EqualFold(c.Kind, "client") && c.IsBuilt() && c.ServesMCPTools()
 }
 
 // isBuiltManager is a Manager contract the composition root constructs.

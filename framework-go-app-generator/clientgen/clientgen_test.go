@@ -111,16 +111,14 @@ func TestExposedContract_UnknownOpFails(t *testing.T) {
 const appContract = `{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list","$defs":{"Name":{"type":"string"}},
 "interface":{"name":"ListManager","layer":"manager","operations":[{"name":"RecallList","params":[{"name":"owner","schema":{"$ref":"#/$defs/Name"}}],"result":{"$ref":"#/$defs/Name"},"error":true}]}}`
 
-func boolPtr(b bool) *bool { return &b }
-
 func appProject() Project {
 	return Project{
 		Contracts: map[string]json.RawMessage{"listManager": json.RawMessage(appContract)},
 		System: &projectmodel.System{
 			Components: []projectmodel.SystemComponent{
-				{ID: "web-app", Name: "WebApp", Kind: "client", UISurface: boolPtr(true)},
-				{ID: "machine-api", Name: "MachineApi", Kind: "client", UISurface: boolPtr(false), MachineProtocol: "mcp"},
-				{ID: "later", Name: "LaterClient", Kind: "client", UISurface: boolPtr(false), MachineProtocol: "mcp", BuildStatus: "planned"},
+				{ID: "web-app", Name: "WebApp", Kind: "client", Surface: projectmodel.SurfaceWeb},
+				{ID: "machine-api", Name: "MachineApi", Kind: "client", Surface: projectmodel.SurfaceMCPTools},
+				{ID: "later", Name: "LaterClient", Kind: "client", Surface: projectmodel.SurfaceMCPTools, BuildStatus: "planned"},
 				{ID: "list-manager", Name: "ListManager", Kind: "manager", ContractKey: "listManager"},
 			},
 			Relationships: []projectmodel.Relationship{
@@ -164,7 +162,7 @@ func TestGenerateDerivesTheClientLayerFromTheSystem(t *testing.T) {
 // A REST machine client is the shared transport: it gets no tool table of its own.
 func TestRESTClientGetsNoToolTable(t *testing.T) {
 	p := appProject()
-	p.System.Components[1].MachineProtocol = "rest"
+	p.System.Components[1].Surface = projectmodel.SurfaceREST
 	files, err := Generate(p, Config{ModulePath: "example.com/todomvc"})
 	if err != nil {
 		t.Fatal(err)

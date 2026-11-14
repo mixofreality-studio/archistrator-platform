@@ -24,7 +24,7 @@ func runATP(t *testing.T, p Project) []Finding {
 // webProject is atp_clean with its shopClient made a browser surface.
 func webProject(t *testing.T) Project {
 	t.Helper()
-	raw := strings.Replace(string(readFixture(t, "atp_clean.json")), `"uiSurface": false`, `"uiSurface": true`, 1)
+	raw := strings.Replace(string(readFixture(t, "atp_clean.json")), `"surface": "mcpTools"`, `"surface": "web"`, 1)
 	p, ok, err := DecodeProject([]byte(raw))
 	if err != nil || !ok {
 		t.Fatalf("decode web project: ok=%v err=%v", ok, err)

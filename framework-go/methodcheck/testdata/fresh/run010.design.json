@@ -1759,7 +1759,7 @@
       ],
       "atomicBusinessVerbs": null,
       "contractKey": "listApp",
-      "uiSurface": true
+      "surface": "web"
      },
      {
       "id": "list-api",
@@ -1772,8 +1772,7 @@
       ],
       "atomicBusinessVerbs": null,
       "contractKey": "listApi",
-      "uiSurface": false,
-      "machineProtocol": "rest"
+      "surface": "rest"
      },
      {
       "id": "list-mcp-server",
@@ -1786,8 +1785,7 @@
       ],
       "atomicBusinessVerbs": null,
       "contractKey": "listMcpServer",
-      "uiSurface": false,
-      "machineProtocol": "mcp"
+      "surface": "mcpTools"
      },
      {
       "id": "list-manager",

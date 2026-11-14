@@ -21,7 +21,7 @@ const webOnlyProject = `{"serviceContracts":{
 	"listManager":{"component":"listManager","layer":"Manager","goPackage":"internal/manager/list",
 	  "$defs":{"T":{"type":"string"}},"interface":{"name":"ListManager","layer":"manager","operations":[{"name":"Ping","params":[],"error":false}]}}},
 	"slots":{"5":{"kind":5,"model":{"components":[
-	  {"id":"todo-web-app","name":"TodoWebApp","kind":"client","uiSurface":true},
+	  {"id":"todo-web-app","name":"TodoWebApp","kind":"client","surface": "web"},
 	  {"id":"list-manager","name":"ListManager","kind":"manager","contractKey":"listManager"}],
 	  "relationships":[{"from":"todo-web-app","to":"list-manager"}]}}}}`
 

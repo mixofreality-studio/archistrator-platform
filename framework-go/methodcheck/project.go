@@ -172,6 +172,8 @@ type MissionStatement struct {
 	Vision     string      `json:"vision"`
 	Objectives []Objective `json:"objectives"`
 	Mission    string      `json:"mission"`
+	// DeliverySurfaces are the channels the brief commits the system to (FPC W6).
+	DeliverySurfaces []DeliverySurface `json:"deliverySurfaces"`
 }
 
 // Objective is one numbered business objective.
@@ -323,18 +325,11 @@ type Component struct {
 	// have code. See buildStatus* constants.
 	BuildStatus string `json:"buildStatus,omitempty"`
 
-	// UISurface says whether a Client is a browser surface: true means its code is hand-built
-	// under webApp/src/<id>/ on the frontend lifecycle, so it has no Go package of its own;
-	// false means it is a machine client generated into internal/client/<leaf>. It is a
-	// pointer because the choice must be explicit: an absent value is a defect
-	// (SYS-CLIENT-UISURFACE), never a default.
-	UISurface *bool `json:"uiSurface,omitempty"`
-
-	// MachineProtocol says which generated transport a built machine client is: "rest" owns
-	// the shared generated internal/client/web and has no package of its own, "mcp" gets its
-	// tool tables in internal/client/<leaf>. Required on a built machine client and illegal
-	// anywhere else (SYS-CLIENT-PROTOCOL), because uiSurface false does not tell them apart.
-	MachineProtocol string `json:"machineProtocol,omitempty"`
+	// Surface is how a Client reaches its users: web and mcpApp are hand-built under
+	// webApp/src/<id>/ on the frontend lifecycle (so no Go package of its own), rest is the shared
+	// generated internal/client/web, and mcpTools gets generated tool tables in
+	// internal/client/<leaf>. A built Client must state one (SYS-CLIENT-SURFACE), never a default.
+	Surface Surface `json:"surface,omitempty"`
 
 	// ConstructionProfile is how the component comes to exist. "generated" means no activity
 	// builds it: a generated Client appears when the Managers it fronts are integrated.
@@ -342,14 +337,34 @@ type Component struct {
 }
 
 // isBrowserSurface reports a Client whose code lives in the web project rather than a Go
-// package.
+// package: surface web or mcpApp.
 func (c Component) isBrowserSurface() bool {
-	return c.Kind == kindClient && c.UISurface != nil && *c.UISurface
+	k, ok := c.surfaceKind()
+	if !ok {
+		return false
+	}
+	switch k.(type) {
+	case WebSurface, MCPAppSurface:
+		return true
+	case RESTSurface, MCPToolsSurface:
+		return false
+	}
+	return false
 }
 
-// isMachineClient reports a Client that states it is no browser surface.
+// isMachineClient reports a Client whose surface is a machine one: rest or mcpTools.
 func (c Component) isMachineClient() bool {
-	return c.Kind == kindClient && c.UISurface != nil && !*c.UISurface
+	k, ok := c.surfaceKind()
+	if !ok {
+		return false
+	}
+	switch k.(type) {
+	case RESTSurface, MCPToolsSurface:
+		return true
+	case WebSurface, MCPAppSurface:
+		return false
+	}
+	return false
 }
 
 // isBuilt reports a component expected to have code: neither planned nor external.
@@ -357,9 +372,14 @@ func (c Component) isBuilt() bool {
 	return c.BuildStatus != buildStatusPlanned && c.BuildStatus != buildStatusExternal
 }
 
-// isRESTClient reports a machine client whose transport is the shared generated REST server.
+// isRESTClient reports a Client whose surface is the shared generated REST server.
 func (c Component) isRESTClient() bool {
-	return c.Kind == kindClient && c.MachineProtocol == machineProtocolREST
+	k, ok := c.surfaceKind()
+	if !ok {
+		return false
+	}
+	_, rest := k.(RESTSurface)
+	return rest
 }
 
 // Relationship is a directed edge between two Components.
@@ -857,12 +877,6 @@ type ScenarioResult struct {
 // slotKindActivityList is the activity-list slot's kind ordinal (projectstate's
 // KindActivityList).
 const slotKindActivityList = 9
-
-// A built machine client's transport (Component.MachineProtocol).
-const (
-	machineProtocolREST = "rest"
-	machineProtocolMCP  = "mcp"
-)
 
 // constructionGenerated is the constructionProfile of a component no activity builds.
 const constructionGenerated = "generated"

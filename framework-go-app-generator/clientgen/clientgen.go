@@ -3,11 +3,11 @@
 //	internal/client/web/{middleware,server}.gen.go   the auth middleware and server wiring
 //	internal/client/web/<pkg>/<base>_handlers.gen.go one REST handler set per exposed Manager
 //	internal/client/<leaf>/<pkg>/<base>_tools.gen.go one MCP tool table per Manager an MCP client
-//	                                                 fronts (machineProtocol mcp)
+//	                                                 fronts (surface mcpTools or mcpApp)
 //	api/openapi.yaml                                 every exposed Manager's REST surface, merged
 //
-// Browser surfaces (uiSurface true) get no Go of their own: they all reach the shared REST
-// transport, and a REST machine client (machineProtocol rest) is that transport. <leaf> is the machine client's name without its stereotype, the same rule the
+// A web surface gets no Go of its own: it reaches the shared REST transport, and a REST client
+// (surface rest) is that transport. <leaf> is the MCP client's name without its stereotype, the same rule the
 // alignment gate matches by, so the package is found without a join: MCPClient lands in
 // internal/client/mcp and MachineApi in internal/client/machineapi.
 //
@@ -214,12 +214,12 @@ func managersOf(p Project, clientID string) []string {
 	return slices.Compact(out)
 }
 
-// machineClients is the MCP Clients that front the Manager key. A REST client gets no tool
-// table: it is the shared REST transport.
+// machineClients is the MCP Clients (surface mcpTools or mcpApp) that front the Manager key. A
+// REST client gets no tool table: it is the shared REST transport.
 func machineClients(p Project, cfg Config, key string) []projectmodel.SystemComponent {
 	var out []projectmodel.SystemComponent
 	for _, c := range builtClients(p) {
-		if c.IsBrowserSurface() || !c.IsMCPClient() {
+		if !c.ServesMCPTools() {
 			continue
 		}
 		if cfg.Exposed != nil || slices.Contains(managersOf(p, c.ID), key) {

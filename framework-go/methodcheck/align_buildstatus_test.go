@@ -355,14 +355,12 @@ func TestAlign_Built_OrphanSubpackage_StillExtra(t *testing.T) {
 	}
 }
 
-func boolPtr(b bool) *bool { return &b }
-
 // A browser surface's code is under webApp/src/, so finishing its activity must not turn the
 // Go alignment gate red for every later task. A machine client still owes a package.
 func TestAlignBrowserSurfaceOwesNoPackage(t *testing.T) {
 	sys := System{Components: []Component{
-		{ID: "web-app", Name: "WebApp", Kind: kindClient, Layer: layerClient, UISurface: boolPtr(true)},
-		{ID: "machine-api", Name: "MachineApi", Kind: kindClient, Layer: layerClient, UISurface: boolPtr(false), MachineProtocol: machineProtocolMCP},
+		{ID: "web-app", Name: "WebApp", Kind: kindClient, Layer: layerClient, Surface: SurfaceWeb},
+		{ID: "machine-api", Name: "MachineApi", Kind: kindClient, Layer: layerClient, Surface: SurfaceMCPTools},
 		{ID: "list-manager", Name: "ListManager", Kind: kindManager, Layer: layerManager},
 	}}
 	pkgs := []classifiedPackage{{pkgPath: "m/internal/manager/list", leaf: "list", layer: "Manager"}}
@@ -473,10 +471,10 @@ func TestArchitectureValidationRequiresClientSurface(t *testing.T) {
 func TestClientSurfaceMustBeExplicit(t *testing.T) {
 	s := System{Components: []Component{
 		{ID: "a", Name: "A", Kind: kindClient},
-		{ID: "b", Name: "B", Kind: kindClient, UISurface: boolPtr(false), MachineProtocol: machineProtocolMCP},
+		{ID: "b", Name: "B", Kind: kindClient, Surface: SurfaceMCPTools},
 		{ID: "c", Name: "C", Kind: kindManager},
 	}}
-	got := clientSurfaceExplicit(s)
+	got := clientSurfaceStated(s)
 	if len(got) != 1 || got[0].RuleID != ruleSysClientSurface || got[0].Severity != SeverityError {
 		t.Fatalf("got %+v", got)
 	}

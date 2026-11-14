@@ -21,9 +21,9 @@ func freshSurfacesProject(systemExtra, relExtra string) string {
 	  "$defs":{"Greeting":{"type":"string"}},
 	  "interface":{"name":"ListManager","layer":"manager","operations":[{"name":"Greet","params":[],"result":{"$ref":"#/$defs/Greeting"},"error":true}]}}},
 	"slots":{"5":{"kind":5,"model":{"components":[
-	  {"id":"todo-web-app","name":"TodoWebApp","kind":"client","layer":"client","uiSurface":true,"contractKey":"todoWebApp"},
-	  {"id":"todo-api","name":"TodoApi","kind":"client","layer":"client","uiSurface":false,"machineProtocol":"rest"},
-	  {"id":"assistant-mcp-server","name":"AssistantMcpServer","kind":"client","layer":"client","uiSurface":false,"machineProtocol":"mcp"},
+	  {"id":"todo-web-app","name":"TodoWebApp","kind":"client","layer":"client","surface": "web","contractKey":"todoWebApp"},
+	  {"id":"todo-api","name":"TodoApi","kind":"client","layer":"client","surface": "rest"},
+	  {"id":"assistant-mcp-server","name":"AssistantMcpServer","kind":"client","layer":"client","surface": "mcpTools"},
 	  {"id":"list-manager","name":"ListManager","kind":"manager","layer":"manager","contractKey":"listManager"}` + systemExtra + `],
 	  "relationships":[
 	  {"from":"todo-web-app","to":"list-manager"},{"from":"todo-api","to":"list-manager"},{"from":"assistant-mcp-server","to":"list-manager"}` + relExtra + `]}}}}`

@@ -25,8 +25,8 @@ const freshProject = `{"serviceContracts":{
 	"identityAccess":{"component":"identityAccess","layer":"ResourceAccess","goPackage":"internal/resourceaccess/identity","infra":["ExternalHTTP"],"$defs":{"T":{"type":"string"}},
 	  "interface":{"name":"IdentityAccess","layer":"resourceaccess","operations":[{"name":"Ping","params":[],"error":false}]}}},
 	"slots":{"5":{"kind":5,"model":{"components":[
-	  {"id":"todo-web-app","name":"TodoWebApp","kind":"client","uiSurface":true},
-	  {"id":"assistant","name":"Assistant","kind":"client","uiSurface":false,"machineProtocol":"mcp"},
+	  {"id":"todo-web-app","name":"TodoWebApp","kind":"client","surface": "web"},
+	  {"id":"assistant","name":"Assistant","kind":"client","surface": "mcpTools"},
 	  {"id":"list-manager","name":"ListManager","kind":"manager","contractKey":"listManager"}],
 	  "relationships":[{"from":"todo-web-app","to":"list-manager"},{"from":"assistant","to":"list-manager"}]}}}}`
 

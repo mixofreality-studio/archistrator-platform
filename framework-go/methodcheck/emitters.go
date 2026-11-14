@@ -31,7 +31,7 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleSystemLayerDegenerate,
 
 		// ---- State-validation twins (rules_statevalidation.go) ----
-		ruleSysRAOrphan, ruleSysEncapsulates, ruleSysRelDup,
+		ruleSysRAOrphan, ruleSysEncapsulates, ruleSysRelDup, ruleSysClientSurface,
 		ruleUCActPresent, ruleUCGuardLabel, ruleUCVariationRef,
 		ruleVolAxisExplicit, ruleStdStatusExplicit, ruleStdFailOpen,
 		ruleGlossFourQ, ruleSRIDUnique, ruleOPCTopicCoverage,

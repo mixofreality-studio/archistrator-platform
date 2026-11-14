@@ -210,12 +210,11 @@ func TestDefaultDeploymentDeclaresEachExternalEndpoint(t *testing.T) {
 // A System with a built browser surface gets the webDistDir setting in its effective default
 // deployment (FIX-051), and one without gets none.
 func TestEffectiveDeploymentDeclaresWebDistDirForABrowserSurface(t *testing.T) {
-	yes := true
-	withSurface := &Model{System: &System{Components: []SystemComponent{{ID: "web", Kind: "client", UISurface: &yes}}}}
+	withSurface := &Model{System: &System{Components: []SystemComponent{{ID: "web", Kind: "client", Surface: SurfaceWeb}}}}
 	if !hasSetting(withSurface.EffectiveDeployment("server"), WebDistDirSetting) {
 		t.Error("a browser surface must declare webDistDir")
 	}
-	planned := &Model{System: &System{Components: []SystemComponent{{ID: "web", Kind: "client", UISurface: &yes, BuildStatus: "planned"}}}}
+	planned := &Model{System: &System{Components: []SystemComponent{{ID: "web", Kind: "client", Surface: SurfaceWeb, BuildStatus: "planned"}}}}
 	if hasSetting(planned.EffectiveDeployment("server"), WebDistDirSetting) || hasSetting((&Model{}).EffectiveDeployment("server"), WebDistDirSetting) {
 		t.Error("no built browser surface must declare no webDistDir")
 	}

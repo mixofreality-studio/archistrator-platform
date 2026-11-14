@@ -27,24 +27,67 @@ type SystemComponent struct {
 	// the field — spec: Schema ownership & evolution, tolerant evolution) the
 	// case-convention heuristic is used instead.
 	ContractKey string `json:"contractKey,omitempty"`
-	// UISurface is a Client's browser-surface choice; nil means unstated.
-	UISurface *bool `json:"uiSurface,omitempty"`
-	// MachineProtocol is a built machine client's transport: "rest" or "mcp".
-	MachineProtocol string `json:"machineProtocol,omitempty"`
+	// Surface is a Client's delivery surface (web, rest, mcpTools or mcpApp); empty means unstated.
+	Surface Surface `json:"surface,omitempty"`
 	// BuildStatus is the component's lifecycle marker ("planned", "external"; "" is built).
 	BuildStatus string `json:"buildStatus,omitempty"`
 }
 
-// IsMCPClient reports a machine client whose generated surface is MCP tool tables.
-func (c SystemComponent) IsMCPClient() bool { return c.MachineProtocol == "mcp" }
-
-// IsBrowserSurface reports a Client that is a browser surface.
-func (c SystemComponent) IsBrowserSurface() bool {
-	return c.UISurface != nil && *c.UISurface
+// SurfaceKind parses the component's surface. It is false for a component that is not a Client,
+// states no surface, or states one outside the closed set.
+func (c SystemComponent) SurfaceKind() (SurfaceKind, bool) {
+	if !strings.EqualFold(c.Kind, "client") {
+		return nil, false
+	}
+	k, err := ParseSurface(string(c.Surface))
+	if err != nil {
+		return nil, false
+	}
+	return k, true
 }
 
-// BuiltBrowserSurfaces is the System's built browser-surface Clients (not planned, not
-// external), in declaration order. A nil System has none.
+// IsBrowserSurface reports a Client whose surface is a browser surface: web or mcpApp.
+func (c SystemComponent) IsBrowserSurface() bool {
+	k, ok := c.SurfaceKind()
+	if !ok {
+		return false
+	}
+	switch k.(type) {
+	case WebSurface, MCPAppSurface:
+		return true
+	case RESTSurface, MCPToolsSurface:
+		return false
+	}
+	return false
+}
+
+// IsWebSurface reports a Client whose surface is a page served at the origin's root: web.
+func (c SystemComponent) IsWebSurface() bool {
+	k, ok := c.SurfaceKind()
+	if !ok {
+		return false
+	}
+	_, web := k.(WebSurface)
+	return web
+}
+
+// ServesMCPTools reports a Client that gets generated MCP tool tables: mcpTools or mcpApp.
+func (c SystemComponent) ServesMCPTools() bool {
+	k, ok := c.SurfaceKind()
+	if !ok {
+		return false
+	}
+	switch k.(type) {
+	case MCPToolsSurface, MCPAppSurface:
+		return true
+	case WebSurface, RESTSurface:
+		return false
+	}
+	return false
+}
+
+// BuiltBrowserSurfaces is the System's built browser-surface Clients (web or mcpApp; not planned,
+// not external), in declaration order. A nil System has none.
 func (s *System) BuiltBrowserSurfaces() []SystemComponent {
 	if s == nil {
 		return nil
@@ -60,6 +103,23 @@ func (s *System) BuiltBrowserSurfaces() []SystemComponent {
 
 // HasBrowserSurface reports whether the System has a built browser surface.
 func (s *System) HasBrowserSurface() bool { return len(s.BuiltBrowserSurfaces()) > 0 }
+
+// BuiltWebSurfaces is the System's built web Clients, in declaration order. A nil System has none.
+func (s *System) BuiltWebSurfaces() []SystemComponent {
+	if s == nil {
+		return nil
+	}
+	var out []SystemComponent
+	for _, c := range s.Components {
+		if c.IsWebSurface() && c.IsBuilt() {
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// HasWebSurface reports whether the System has a built web surface.
+func (s *System) HasWebSurface() bool { return len(s.BuiltWebSurfaces()) > 0 }
 
 // IsBuilt reports a component the project builds: neither planned nor external.
 func (c SystemComponent) IsBuilt() bool {

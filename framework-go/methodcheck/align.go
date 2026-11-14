@@ -238,7 +238,7 @@ func componentLayerName(layer string) string {
 // whose activity was skipped surfaces as a warning. Orphan and layer-mismatch findings are
 // unaffected: code that exists is always held to the design.
 //
-// A browser surface (Component.UISurface) is held to its contract, not to a package: its code
+// A browser surface (Component.Surface web or mcpApp) is held to its contract, not to a package: its code
 // is under webApp/src/, which this Go check cannot see, so it never owes a package. A REST
 // client is the shared generated internal/client/web, so it owes none of its own either. If a
 // Go package does carry either's name, the ordinary reconciliation still accounts it.

@@ -325,8 +325,7 @@
             "id": "shop-client",
             "name": "ShopClient",
             "kind": "client",
-            "uiSurface": false,
-            "machineProtocol": "mcp",
+            "surface": "mcpTools",
             "layer": "client",
             "encapsulates": "",
             "atomicBusinessVerbs": null

@@ -64,8 +64,8 @@ func proofManager(params string) string {
 }
 
 const proofSystem = `{"components":[
-  {"id":"mcp-client","name":"MCPClient","kind":"client","uiSurface":false,"machineProtocol":"mcp"},
-  {"id":"web-api","name":"WebApi","kind":"client","uiSurface":false,"machineProtocol":"rest"},
+  {"id":"mcp-client","name":"MCPClient","kind":"client","surface": "mcpTools"},
+  {"id":"web-api","name":"WebApi","kind":"client","surface": "rest"},
   {"id":"proof-manager","name":"ProofManager","kind":"manager","contractKey":"proofManager"}],
   "relationships":[{"from":"mcp-client","to":"proof-manager"},{"from":"web-api","to":"proof-manager"}]}`
 

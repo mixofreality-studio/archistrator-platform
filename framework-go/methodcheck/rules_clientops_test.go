@@ -16,9 +16,9 @@ func clientDesign(t *testing.T) (System, CoreUseCases, Project) {
 	  "activity":{"nodes":[{"id":"a","kind":"action","label":"act","linkedActorId":"user"}],"edges":[]}}}]}},
 	"5":{"kind":5,"status":2,"model":{
 	  "components":[
-	    {"id":"web-app","name":"WebApp","kind":"client","layer":"client","uiSurface":true},
-	    {"id":"web-api","name":"WebApi","kind":"client","layer":"client","uiSurface":false,"machineProtocol":"rest"},
-	    {"id":"mcp-server","name":"McpServer","kind":"client","layer":"client","uiSurface":false,"machineProtocol":"mcp"},
+	    {"id":"web-app","name":"WebApp","kind":"client","layer":"client","surface": "web"},
+	    {"id":"web-api","name":"WebApi","kind":"client","layer":"client","surface": "rest"},
+	    {"id":"mcp-server","name":"McpServer","kind":"client","layer":"client","surface": "mcpTools"},
 	    {"id":"list-manager","name":"ListManager","kind":"manager","layer":"manager"}],
 	  "relationships":[{"from":"web-app","to":"list-manager","mode":"sync"}],
 	  "dynamicViews":[{"useCaseId":"keep","key":"keep","steps":[{"activityNodeId":"a","calls":[
@@ -94,8 +94,8 @@ func TestSysClientMachineCallIsInTheDesignGate(t *testing.T) {
 // An app has one shared generated REST server, so a second REST client has nothing to be.
 func TestSysClientProtocolRefusesASecondREST(t *testing.T) {
 	sys, _, _ := clientDesign(t)
-	sys.Components[2].MachineProtocol = machineProtocolREST
-	if msg := ruleMessages(clientProtocolStated(sys), ruleSysClientProtocol); !strings.Contains(msg, "second REST client") {
+	sys.Components[2].Surface = SurfaceREST
+	if msg := ruleMessages(clientSurfaceStated(sys), ruleSysClientSurface); !strings.Contains(msg, "second REST client") {
 		t.Errorf("got %q", msg)
 	}
 }
@@ -128,24 +128,23 @@ func TestSysClientOpLabelRefusesTwoSpellings(t *testing.T) {
 	}
 }
 
-func TestSysClientProtocol(t *testing.T) {
+func TestSysClientSurface(t *testing.T) {
 	for _, tc := range []struct {
 		name string
 		edit func(*Component)
 		want string
 	}{
-		{"a built machine client must state it", func(c *Component) { c.MachineProtocol = "" }, "does not state machineProtocol"},
-		{"only rest or mcp", func(c *Component) { c.MachineProtocol = "grpc" }, "must be"},
-		{"illegal on a browser surface", func(c *Component) { c.UISurface = boolPtr(true) }, "only a machine client"},
-		{"illegal on a Manager", func(c *Component) { c.Kind = kindManager }, "only a machine client"},
-		{"a planned client is exempt", func(c *Component) { c.MachineProtocol = ""; c.BuildStatus = buildStatusPlanned }, ""},
-		{"an external client is exempt", func(c *Component) { c.MachineProtocol = ""; c.BuildStatus = buildStatusExternal }, ""},
+		{"a built client must state it", func(c *Component) { c.Surface = "" }, "does not state surface"},
+		{"only the four surfaces", func(c *Component) { c.Surface = "grpc" }, "must be one of"},
+		{"illegal on a Manager", func(c *Component) { c.Kind = kindManager }, "only a Client may state"},
+		{"a planned client is exempt", func(c *Component) { c.Surface = ""; c.BuildStatus = buildStatusPlanned }, ""},
+		{"an external client is exempt", func(c *Component) { c.Surface = ""; c.BuildStatus = buildStatusExternal }, ""},
 		{"a stated one passes", func(*Component) {}, ""},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			sys, _, _ := clientDesign(t)
 			tc.edit(&sys.Components[1])
-			msg := ruleMessages(clientProtocolStated(sys), ruleSysClientProtocol)
+			msg := ruleMessages(clientSurfaceStated(sys), ruleSysClientSurface)
 			if (tc.want == "") != (msg == "") || !strings.Contains(msg, tc.want) {
 				t.Errorf("got %q, want %q", msg, tc.want)
 			}
@@ -267,11 +266,10 @@ func TestCCEdgeRealized(t *testing.T) {
 
 // A REST client is the shared transport, so finishing it owes no package; an MCP one owes its own.
 func TestRESTClientOwesNoPackage(t *testing.T) {
-	surface := false
 	s := System{Components: []Component{
 		comp(t, "OrderManager", kindManager),
-		{ID: "web-api", Name: "WebApi", Kind: kindClient, UISurface: &surface, MachineProtocol: machineProtocolREST},
-		{ID: "mcp-server", Name: "McpServer", Kind: kindClient, UISurface: &surface, MachineProtocol: machineProtocolMCP},
+		{ID: "web-api", Name: "WebApi", Kind: kindClient, Surface: SurfaceREST},
+		{ID: "mcp-server", Name: "McpServer", Kind: kindClient, Surface: SurfaceMCPTools},
 	}}
 	pkgs := []classifiedPackage{cpkg("ex/manager/order", "order", "Manager")}
 	var missing []string

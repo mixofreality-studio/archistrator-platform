@@ -77,14 +77,15 @@ func (r *resolved) mcpFronts(s *projectmodel.System, c projectmodel.SystemCompon
 	})
 }
 
-// mcpClients is the System's built MCP machine clients, the ones clientgen writes tool tables for.
+// mcpClients is the System's built Clients that serve MCP tool tables (surface mcpTools or mcpApp),
+// the ones clientgen writes tool tables for.
 func mcpClients(s *projectmodel.System) []projectmodel.SystemComponent {
 	if s == nil {
 		return nil
 	}
 	var out []projectmodel.SystemComponent
 	for _, c := range s.Components {
-		if strings.EqualFold(c.Kind, "client") && c.IsBuilt() && !c.IsBrowserSurface() && c.IsMCPClient() {
+		if strings.EqualFold(c.Kind, "client") && c.IsBuilt() && c.ServesMCPTools() {
 			out = append(out, c)
 		}
 	}
@@ -104,7 +105,7 @@ func (r *resolved) resolveBrowserSurfaces(m *projectmodel.Model) error {
 		}
 		return fmt.Errorf("composegen: the System has browser surfaces (%s) but the deployment declares no %q setting: the composed server must serve them on the origin of their /api calls", strings.Join(names, ", "), projectmodel.WebDistDirSetting)
 	}
-	r.serveWeb = declared && len(r.webMgrs) > 0
+	r.serveWeb = declared && len(r.webMgrs) > 0 && m.System.HasWebSurface()
 	return nil
 }
 

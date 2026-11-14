@@ -80,8 +80,7 @@ func comp(t *testing.T, name, kind string) Component {
 	// tests that specifically exercise SYS-ENCAPSULATES build their own components.
 	c := Component{ID: Slug(name), Name: name, Kind: kind, Layer: layer, Encapsulates: name + " volatility"}
 	if kind == kindClient {
-		c.UISurface = boolPtr(false)
-		c.MachineProtocol = machineProtocolMCP
+		c.Surface = SurfaceMCPTools
 	}
 	return c
 }

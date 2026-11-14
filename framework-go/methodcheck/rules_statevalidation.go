@@ -33,14 +33,13 @@ const (
 	ruleSysRAOrphan     RuleID = "SYS-RA-ORPHAN"
 	ruleSysEncapsulates RuleID = "SYS-ENCAPSULATES"
 	ruleSysRelDup       RuleID = "SYS-REL-DUP"
-	// ruleSysClientSurface is not a twin: it requires every Client to state whether it is a
-	// browser surface, because that one field picks its lifecycle.
-	ruleSysClientSurface RuleID = "SYS-CLIENT-UISURFACE"
+	// ruleSysClientSurface is not a twin: it requires every built Client to state its surface
+	// (web, rest, mcpTools or mcpApp), because that one field picks its lifecycle and what the
+	// generators emit for it.
+	ruleSysClientSurface RuleID = "SYS-CLIENT-SURFACE"
 	// ruleSysClientOpLabel requires each actor call into a browser surface to lead with the
 	// exported operation names the surface's contract is derived from.
 	ruleSysClientOpLabel RuleID = "SYS-CLIENT-OP-LABEL"
-	// ruleSysClientProtocol requires a built machine client to say which transport it is.
-	ruleSysClientProtocol RuleID = "SYS-CLIENT-PROTOCOL"
 	// ruleSysClientMachineCall requires an actor's prose call into a built machine client to
 	// draw, in the same step, the client's call into a Manager: its contract is derived from that.
 	ruleSysClientMachineCall RuleID = "SYS-CLIENT-MACHINE-CALL"
@@ -86,59 +85,41 @@ func raOrphan(s System) []Finding {
 	return out
 }
 
-// clientSurfaceExplicit — SYS-CLIENT-UISURFACE (error). A Client's uiSurface decides what gets
-// built: true is a browser surface on the frontend lifecycle, false a machine client generated
-// into a Go package. Left absent it would silently read as false, and a browser app would be
-// planned as a Go service with nothing to compile.
-func clientSurfaceExplicit(s System) []Finding {
-	var out []Finding
-	for i, c := range s.Components {
-		if c.Kind != kindClient || c.UISurface != nil {
-			continue
-		}
-		label := componentName(c, i)
-		out = append(out, Finding{
-			RuleID:   ruleSysClientSurface,
-			Severity: SeverityError,
-			Message:  fmt.Sprintf("Client %q does not state uiSurface; set uiSurface: true for a surface a person uses in a browser, false for a machine client such as an API or MCP server", label),
-			Location: loc(i+1, "component "+label),
-		})
-	}
-	return out
-}
-
-// clientProtocolStated — SYS-CLIENT-PROTOCOL (error). uiSurface false does not tell a REST
-// client from an MCP one, and the generators emit a different thing for each. A planned or
-// external client has nothing generated yet, so it is exempt; anything but a machine client
-// has no transport to name.
-func clientProtocolStated(s System) []Finding {
+// clientSurfaceStated — SYS-CLIENT-SURFACE (error). A Client's surface decides what gets built:
+// web and mcpApp are hand-built on the frontend lifecycle, rest is the shared generated REST
+// transport, mcpTools gets generated tool tables. Left absent a browser app would be planned as a
+// Go service with nothing to compile. A planned or external Client has nothing generated yet, so it
+// may omit it; a stated surface must parse; only a Client states one; an app has one shared
+// generated REST server, so at most one Client is `rest`.
+func clientSurfaceStated(s System) []Finding {
 	var out []Finding
 	rest := 0
 	for i, c := range s.Components {
 		label := componentName(c, i)
-		msg := clientProtocolDefect(c, label)
+		msg := clientSurfaceDefect(c, label)
 		if c.isRESTClient() {
 			if rest++; rest > 1 {
 				msg = fmt.Sprintf("%q is a second REST client; an app has one shared generated REST server, so one REST client states it", label)
 			}
 		}
 		if msg != "" {
-			out = append(out, Finding{RuleID: ruleSysClientProtocol, Severity: SeverityError, Message: msg, Location: loc(i+1, "component "+label)})
+			out = append(out, Finding{RuleID: ruleSysClientSurface, Severity: SeverityError, Message: msg, Location: loc(i+1, "component "+label)})
 		}
 	}
 	return out
 }
 
-// clientProtocolDefect is what is wrong with one component's machineProtocol, or "".
-func clientProtocolDefect(c Component, label string) string {
-	machine := c.isMachineClient()
+// clientSurfaceDefect is what is wrong with one component's surface, or "".
+func clientSurfaceDefect(c Component, label string) string {
 	switch {
-	case c.MachineProtocol != "" && !machine:
-		return fmt.Sprintf("%q sets machineProtocol, which only a machine client (kind client, uiSurface false) may state", label)
-	case c.MachineProtocol != "" && !slices.Contains([]string{machineProtocolREST, machineProtocolMCP}, c.MachineProtocol):
-		return fmt.Sprintf("machine client %q has machineProtocol %q; it must be %q or %q", label, c.MachineProtocol, machineProtocolREST, machineProtocolMCP)
-	case machine && c.isBuilt() && c.MachineProtocol == "":
-		return fmt.Sprintf("machine client %q does not state machineProtocol; set %q for an HTTP API, %q for an MCP server, because each generates something different", label, machineProtocolREST, machineProtocolMCP)
+	case c.Surface != "" && c.Kind != kindClient:
+		return fmt.Sprintf("%q sets surface, which only a Client may state", label)
+	case c.Surface != "":
+		if _, err := ParseSurface(string(c.Surface)); err != nil {
+			return fmt.Sprintf("Client %q has surface %q; it must be one of web, rest, mcpTools, mcpApp", label, c.Surface)
+		}
+	case c.Kind == kindClient && c.isBuilt():
+		return fmt.Sprintf("Client %q does not state surface; set web (a page people use in a browser), mcpApp (a UI people use inside an MCP host), rest (the shared generated HTTP API, at most one) or mcpTools (generated MCP tool tables), because each is built differently", label)
 	}
 	return ""
 }
