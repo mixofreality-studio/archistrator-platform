@@ -99,7 +99,7 @@ func TestConformance_RUN021Proof(t *testing.T) {
 		if got.survivors != 0 {
 			t.Errorf("null build: %d survivor(s), want 0", got.survivors)
 		}
-		if want := goScenarios(t, dir) + len(webScenarioIDs(t, dir)); got.scenarios != want {
+		if want := goScenarios(t, dir) + len(browserScenarios(t, dir)); got.scenarios != want {
 			t.Errorf("null build: %d scenario(s) discriminated, but %d were generated (Go components and machine clients, and browser scenarios)", got.scenarios, want)
 		}
 		// The null build is all-null: its "real subject" returns zero results, so every Go scenario
@@ -110,7 +110,7 @@ func TestConformance_RUN021Proof(t *testing.T) {
 		// what this subtest pins.
 		goBroken := 0
 		for _, b := range got.brokenList {
-			if b.component != webSurface {
+			if !browserSurfaces[b.component] {
 				goBroken++
 			}
 		}
@@ -136,7 +136,8 @@ func TestConformance_RUN021Proof(t *testing.T) {
 
 // nullBuildBroken is how many Go scenarios of the todomvc fixture, components (78) and machine clients
 // (28, which drive the launched null build over the wire) alike, fail against the null build's own
-// (all-null) real subject.
+// (all-null) real subject. The browser scenarios, the web app's and the MCP App's (Plan 5 Task 5.4: its
+// 16 scenarios are specs run in the harness host), are not Go scenarios and are not in this count.
 const nullBuildBroken = 106
 
 // run021DiscriminateImpl builds the fixture with the harvest's hand-written component bodies in
@@ -160,19 +161,20 @@ func run021DiscriminateImpl(t *testing.T, raw []byte) {
 	// Every Go scenario, machine clients included (they run over the wire since Plan 3 Task 3.3), passes
 	// against the harvested bodies. The browser scenarios mostly do not: the fixture's SPA is the
 	// harvest's hand-written one, against which webPasses pass and the rest are TP-BROKEN. So TP-BROKEN
-	// names exactly the browser scenarios outside webPasses.
-	web := webScenarioIDs(t, dir)
-	broken := map[string]bool{}
+	// names exactly the browser scenarios outside webPasses, on the web surface and on the MCP App (which
+	// reuses the same SPA and runs in the harness MCP host): both are browser surfaces, never Go ones.
+	web := browserScenarios(t, dir)
+	broken := map[browserScenario]bool{}
 	for _, b := range got.brokenList {
-		if b.component != webSurface {
+		if !browserSurfaces[b.component] {
 			t.Errorf("Go scenario %s/%s fails against the harvested bodies (TP-BROKEN)", b.component, b.scenario)
 			continue
 		}
-		broken[b.scenario] = true
+		broken[browserScenario{surface: b.component, id: b.scenario}] = true
 	}
-	for _, id := range web {
-		if webPasses[id] == broken[id] {
-			t.Errorf("browser scenario %s: pinned as passing = %v but TP-BROKEN = %v against the harvested SPA: pin which browser scenarios are TP-BROKEN again", id, webPasses[id], broken[id])
+	for _, sc := range web {
+		if webPasses[sc.id] == broken[sc] {
+			t.Errorf("browser scenario %s/%s: pinned as passing = %v but TP-BROKEN = %v against the harvested SPA: pin which browser scenarios are TP-BROKEN again", sc.surface, sc.id, webPasses[sc.id], broken[sc])
 		}
 	}
 	if got.survivors != 0 {

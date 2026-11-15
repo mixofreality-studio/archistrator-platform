@@ -25,7 +25,10 @@ import (
 // tests, running the 28 client scenarios one `go test` each, and the whole -discriminate run is by far
 // the slowest thing the harness does, and each test only asserts a different half of it.
 
-// webPasses is the browser scenarios of the fixture's web plan that pass against the harvested SPA.
+// webPasses is the browser scenarios of the fixture's web plan that pass against the harvested SPA. The
+// fixture's MCP App (todoMcpApp) reuses that SPA and carries the same bindings, so the same pins apply to
+// its scenarios, which run in the harness MCP host (Plan 5 Task 5.4): every pinned id is a pin for each
+// browser surface.
 var webPasses = map[string]bool{
 	"come-back-to-an-intact-list-P1": true,
 	"resume-the-list-P2":             true,
@@ -44,7 +47,7 @@ type harvestRun struct {
 	clients    []clientScenario
 	clientFail map[string]string // "contract/scenario" -> why it did not pass over the wire
 	goCount    int               // TestScenario_ functions generated for Go components and machine clients
-	webIDs     []string          // the browser scenarios, by id
+	web        []browserScenario // the browser scenarios of every browser surface (web and MCP App)
 	disc       discriminateRun
 	left       []string // docker objects the whole run left behind
 }
@@ -108,7 +111,7 @@ func performHarvest(t *testing.T) (harvestRun, bool) {
 		}
 	}
 	run.goCount = goScenarios(t, dir)
-	run.webIDs = webScenarioIDs(t, dir)
+	run.web = browserScenarios(t, dir)
 	run.disc = discriminate(t, dir)
 
 	after, err := DockerInventory(ctx)
@@ -192,11 +195,20 @@ func runClientScenario(ctx context.Context, t *testing.T, dir string, c clientSc
 	return "results.json has no verdict for the scenario"
 }
 
-// webScenarioIDs lists the browser scenarios generated under uitests/generated, by id (the surface
-// check is not a scenario).
-func webScenarioIDs(t *testing.T, dir string) []string {
+// browserSurfaces is the fixture's surfaces whose scenarios are browser scenarios: the web app's, run
+// in the page, and the MCP App's, run in the harness MCP host's frame. Either is a spec under
+// uitests/generated/<surface>, never a Go test, so -discriminate names its scenarios under the
+// surface's contract key and TP-BROKEN is a browser verdict (never a Go one).
+var browserSurfaces = map[string]bool{webSurface: true, mcpAppSurfaceKey: true}
+
+// browserScenario is one generated browser scenario: the surface (its contract key) and the scenario id.
+type browserScenario struct{ surface, id string }
+
+// browserScenarios lists the browser scenarios generated under uitests/generated, by surface and id
+// (the surface check is not a scenario).
+func browserScenarios(t *testing.T, dir string) []browserScenario {
 	t.Helper()
-	var ids []string
+	var out []browserScenario
 	root := filepath.Join(dir, "uitests", "generated")
 	err := filepath.WalkDir(root, func(path string, d os.DirEntry, err error) error {
 		base := filepath.Base(path)
@@ -208,14 +220,19 @@ func webScenarioIDs(t *testing.T, dir string) []string {
 		if filepath.Base(filepath.Dir(path)) == acceptanceResults {
 			return nil
 		}
-		ids = append(ids, strings.TrimSuffix(base, ".spec.gen.ts"))
+		out = append(out, browserScenario{surface: filepath.Base(filepath.Dir(path)), id: strings.TrimSuffix(base, ".spec.gen.ts")})
 		return nil
 	})
 	if err != nil {
 		t.Fatalf("listing the generated browser scenarios: %v", err)
 	}
-	sort.Strings(ids)
-	return ids
+	sort.Slice(out, func(i, j int) bool {
+		if out[i].surface != out[j].surface {
+			return out[i].surface < out[j].surface
+		}
+		return out[i].id < out[j].id
+	})
+	return out
 }
 
 // Every scenario of the fixture's two machine clients, todoApi (REST, 8) and todoMcpServer (MCP, 20),
@@ -257,8 +274,8 @@ func TestConformance_ClientsOverWire(t *testing.T) {
 			t.Errorf("client scenario %s/%s fails against its real subject in the null-subject run (TP-BROKEN)", b.component, b.scenario)
 		}
 	}
-	if want := implScenarios + len(got.webIDs); got.disc.scenarios != want {
-		t.Errorf("-discriminate counted %d scenario(s), want %d: %d Go (78 components + 28 machine clients) and %d browser", got.disc.scenarios, want, implScenarios, len(got.webIDs))
+	if want := implScenarios + len(got.web); got.disc.scenarios != want {
+		t.Errorf("-discriminate counted %d scenario(s), want %d: %d Go (78 components + 28 machine clients) and %d browser", got.disc.scenarios, want, implScenarios, len(got.web))
 	}
 	if got.goCount != implScenarios {
 		t.Errorf("%d TestScenario_ functions generated, want %d", got.goCount, implScenarios)
@@ -268,47 +285,49 @@ func TestConformance_ClientsOverWire(t *testing.T) {
 	}
 }
 
-// The browser half of the null-subject run: the fixture's todo-web-app scenarios run through the
+// The browser half of the null-subject run: the fixture's browser scenarios (todo-web-app's, and since
+// Plan 5 Task 5.4 todo-mcp-app's, which run in the harness MCP host) run through the
 // scenario host (go tool webscenarios), each once against its real server and, when that passes, once
 // per stimulus operation with the Manager operation it reaches nulled in the server the host launches.
 // None is dropped or announced as skipped, and none survives. The fixture's SPA is the RUN-021 harvest's
 // hand-written one (FPC plan 4 Task 4.5, README "Acceptance plan and the harvested SPA"). 4 of its 19 web
-// scenarios pass against it (webPasses) and are nulled, and none survives; the other 15 assert what the
+// scenarios (and the same 4 of the MCP App's 16) pass against it (webPasses) and are nulled, and none survives; the other 15 assert what the
 // plan's steps cannot do (a type-and-submit in one act, a refusal the SPA never shows, a reword in one
 // act) or start from a page nothing opened, so they are TP-BROKEN, never nulled. The proof here is that
 // the run reaches a verdict for every browser scenario through the host and leaves nothing behind.
 func TestConformance_Discriminate_Web(t *testing.T) {
 	got := harvested(t)
-	if len(got.webIDs) == 0 {
+	if len(got.web) == 0 {
 		t.Fatal("the fixture generated no browser scenario")
 	}
-	web := map[string]bool{}
-	for _, id := range got.webIDs {
-		web[id] = true
+	web := map[browserScenario]bool{}
+	for _, sc := range got.web {
+		web[sc] = true
 	}
-	broken := map[string]bool{}
+	broken := map[browserScenario]bool{}
 	for _, b := range got.disc.brokenList {
-		if b.component == webSurface {
-			broken[b.scenario] = true
-			if !web[b.scenario] {
-				t.Errorf("TP-BROKEN names browser scenario %s, which the surface has no spec for", b.scenario)
+		if browserSurfaces[b.component] {
+			sc := browserScenario{surface: b.component, id: b.scenario}
+			broken[sc] = true
+			if !web[sc] {
+				t.Errorf("TP-BROKEN names browser scenario %s/%s, which the surface has no spec for", b.component, b.scenario)
 			}
 		}
 	}
 	for _, s := range got.disc.list {
-		if s.component == webSurface {
-			t.Errorf("browser scenario %s op %s survives its Manager operation being nulled", s.scenario, s.op)
+		if browserSurfaces[s.component] {
+			t.Errorf("browser scenario %s/%s op %s survives its Manager operation being nulled", s.component, s.scenario, s.op)
 		}
 	}
-	if got.disc.scenarios != implScenarios+len(got.webIDs) {
-		t.Errorf("-discriminate counted %d scenario(s), want %d Go and %d browser", got.disc.scenarios, implScenarios, len(got.webIDs))
+	if got.disc.scenarios != implScenarios+len(got.web) {
+		t.Errorf("-discriminate counted %d scenario(s), want %d Go and %d browser", got.disc.scenarios, implScenarios, len(got.web))
 	}
-	for _, id := range got.webIDs {
+	for _, sc := range got.web {
 		switch {
-		case webPasses[id] && broken[id]:
-			t.Errorf("browser scenario %s is TP-BROKEN against the harvested SPA: it passed when the SPA was seated and is pinned as passing", id)
-		case !webPasses[id] && !broken[id]:
-			t.Errorf("browser scenario %s passes against the harvested SPA: the fixture's browser bindings or the SPA changed; pin which ones are TP-BROKEN again", id)
+		case webPasses[sc.id] && broken[sc]:
+			t.Errorf("browser scenario %s/%s is TP-BROKEN against the harvested SPA: it passed when the SPA was seated and is pinned as passing", sc.surface, sc.id)
+		case !webPasses[sc.id] && !broken[sc]:
+			t.Errorf("browser scenario %s/%s passes against the harvested SPA: the fixture's browser bindings or the SPA changed; pin which ones are TP-BROKEN again", sc.surface, sc.id)
 		}
 	}
 	if len(got.left) > 0 {

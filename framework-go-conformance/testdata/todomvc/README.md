@@ -338,3 +338,7 @@ surface's `webPasses` pins apply to it unchanged: the same 4 pass
 The first real run in the host found one fault in the generated runtime: `openApp` waited the default 5
 seconds for the app's root, but the host reaches the resource through four calls to the server and the
 injected latency holds each of them 1.5 seconds. The wait is now 60 seconds.
+
+### Proof accounting of the MCP App (Plan 5 CI fix)
+
+The two discriminate proofs count the MCP App's 16 scenarios as browser scenarios beside the web app's 19 (35 in all): `-discriminate` runs a `uitests/generated/<surface>` spec through the scenario host (the harness MCP host for an mcpApp), never as a Go test, and names it under the surface's contract key. `nullBuildBroken` and `implScenarios` stay 106 (Go scenarios only); `browserSurfaces` names the two browser surfaces and `webPasses` pins apply to each.
