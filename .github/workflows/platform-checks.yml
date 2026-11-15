@@ -70,7 +70,7 @@ jobs:
   # POST /mcp initialize + tools/list) and a double boot must leave no Docker
   # orphans. Docker is preinstalled on ubuntu-latest. The job names are load-bearing:
   # release-gate.yml requires a green check run of each of `conformance`,
-  # `conformance-proof`, `conformance-discriminate` and `conformance-discriminate-impl`
+  # `conformance-proof`, `conformance-mcpapp`, `conformance-discriminate` and `conformance-discriminate-impl`
   # on the tagged SHA.
   #
   # The RUN-021 proof (TestConformance_RUN021Proof) is split by subtest into three
@@ -143,6 +143,35 @@ jobs:
           for sub in derive methodcheck testgen chain vet vacuous; do
             grep -q -- "--- PASS: TestConformance_RUN021Proof/${sub} " proof.log || { echo "::error::RUN-021 subtest ${sub} did not run and pass"; exit 1; }
           done
+  conformance-mcpapp:
+    needs: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - uses: temporalio/setup-temporal@v0
+        with:
+          version: '1.10.0'
+      - name: Toolchain the proof needs (temporal, git, docker)
+        run: |
+          temporal --version
+          git --version
+          docker info --format '{{.ServerVersion}}'
+      # The MCP Apps surface: the bench's frontend-mcpapps-surface probe over the built fixture, then its scenarios in the harness MCP host.
+      - name: MCP Apps surface (probe and scenarios in the host)
+        working-directory: framework-go-conformance
+        run: |
+          set -euo pipefail
+          GOWORK=off go test -tags conformance ./ -run 'TestConformance_McpAppSurface$' -v -timeout 60m | tee proof.log
+          grep -q -- "--- PASS: TestConformance_McpAppSurface " proof.log || { echo "::error::TestConformance_McpAppSurface did not run and pass"; exit 1; }
   conformance-discriminate:
     needs: go
     runs-on: ubuntu-latest

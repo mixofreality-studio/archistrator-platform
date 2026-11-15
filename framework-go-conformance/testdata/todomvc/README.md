@@ -284,3 +284,57 @@ holds the header to the launch's allowlist.
 - `testgen -discriminate` waits the Playwright test timeout (300s) for every browser scenario that cannot
   pass. `TestConformance_Discriminate_Web` and `TestConformance_ClientsOverWire` set it to 90s
   (`AIARCH_SCENARIO_TIMEOUT_MS`): with the SPA seated they exceeded the 115 minute budget.
+
+## Delivery surfaces and the MCP App (FPC plan 5, Task 5.5)
+
+The brief (`archistrator-bench/benchmarks/todomvc/research/00-founder-brief.txt:27-30`) names four delivery
+channels. The fixture now lists them as the mission's `deliverySurfaces`, each with the brief's own words
+as its `source` (slot 0; the seven objectives are numbered 1..7, the harvest left every `number` 0, so an
+entry can name its objective):
+
+| kind | audience | source | objective |
+|---|---|---|---|
+| `rest` | machine | "reachable both as an ordinary web API" | 6 |
+| `mcpTools` | machine | "as an MCP surface, so our other agent tooling can drive it too" | 6 |
+| `web` | human | "a real frontend on top (an ordinary web app" | 7 |
+| `mcpApp` | human | "an MCP Apps surface so it can be embedded the same way our other MCP-hosted UIs are" | 7 |
+
+The harvested System had no MCP Apps Client (the brief asked for one and RUN-021 built an MCP tool server
+instead, which `SYS-SURFACE-REQUIRED` now refuses). The fixture gains `todo-mcp-app` (`surface: mcpApp`,
+contract key `todoMcpApp`) beside `todo-web-app`:
+
+- Slot 5: the component, the relationship `todo-mcp-app -> list-manager`, and in every view where
+  `team-member` enters through `todo-web-app` inside an alt group, the same alt call into `todo-mcp-app` and
+  its call into `list-manager`. `SYS-SURFACE-ENTRY` (core use cases only: `work-the-list`,
+  `resume-the-list`) holds with no waiver, so none is recorded. `reword-a-todo` (not core) gets no
+  `todo-mcp-app` calls: its web calls carry no alt, so a second un-alted client would add a stimulus to
+  every `reword` variant (`TP-STEP`), and the double-click and fill that make a commit meaningful are the
+  browser editor's.
+- `serviceContracts.todoMcpApp`: `todoWebApp`'s contract under the new component and interface name.
+- `phaseArtifacts.uiDesign["todo-mcp-app"]`: `todo-web-app`'s design with `surface: "todo-mcp-app"`;
+  `phaseArtifacts.testPlan.todoMcpApp`: `todoWebApp`'s principals and bindings, less the three `reword`
+  bindings (the MCP App has no stimulus on those paths: `TP-BOUND`) and less every `url` observable (four
+  bindings: an MCP App has no address bar, and testgen refuses the observable). The remaining `visible`
+  and `text` observables still assert what the user sees.
+- `phaseArtifacts.acceptancePlan`: the six residual variants `resume-the-list-P{1,2,3}@todoMcpApp` and
+  `work-the-list-P{1,2,3}@todoMcpApp`, each a copy of its `@todoWebApp` binding, skipped until 2026-12-31
+  (earmark E28: the acceptance emitter drives the SPA page, not the harness host).
+- Slots 9 and 10: `U-SPA-todo-mcp-app` (`surface: mcpApp`), its dependencies the web app's, and
+  `M-ACCEPT` depends on it. The items `C-todo-api` and `C-todo-mcp-server` carry `surface` (`rest`,
+  `mcpTools`) where they carried `machineClient: true`.
+- `impl/webApp/src/todo-mcp-app/routes/App.tsx` re-exports the harvested SPA's `App`; `main.tsx` is the
+  generated host-bridge seat.
+
+`TestConformance_McpAppSurface` (tag `conformance`, CI job `conformance-mcpapp`, required by the release
+gate) is the bench's `frontend-mcpapps-surface` probe over the built fixture (initialize, a tool whose
+`_meta.ui.resourceUri` names `ui://todomvc/todo-mcp-app/shell.html` and no tool the Client does not
+reach, `resources/list`, `resources/read` with the MCP Apps mime type and one self-contained document),
+then the MCP App's 16 scenarios, one scenario-host launch each, in the harness MCP host (`go tool
+webscenarios` serves the host for an mcpApp plan). The MCP App reuses the harvested SPA, so the web
+surface's `webPasses` pins apply to it unchanged: the same 4 pass
+(`come-back-to-an-intact-list-P1`, `resume-the-list-P2`, `resume-the-list-P3`,
+`see-how-many-todos-are-left-P1`) and the other 12 are not.
+
+The first real run in the host found one fault in the generated runtime: `openApp` waited the default 5
+seconds for the app's root, but the host reaches the resource through four calls to the server and the
+injected latency holds each of them 1.5 seconds. The wait is now 60 seconds.

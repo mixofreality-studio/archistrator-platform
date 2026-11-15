@@ -40,3 +40,29 @@ func TestFixtures_LoadUnderProjectmodelAndMethodcheck(t *testing.T) {
 		})
 	}
 }
+
+// Every surface the generators claim to build is proven by a fixture: some embedded fixture has a
+// built Client with that surface. A surface joins appgen.SupportedSurfaces only with its fixture.
+func TestSupportedSurfaces_EachHasAConformanceFixture(t *testing.T) {
+	have := map[string]bool{}
+	for _, name := range FixtureNames() {
+		raw, err := Fixture(name)
+		if err != nil {
+			t.Fatalf("Fixture(%q): %v", name, err)
+		}
+		m, err := projectmodel.Load(raw)
+		if err != nil {
+			t.Fatalf("projectmodel.Load(%q): %v", name, err)
+		}
+		for _, c := range m.System.Components {
+			if c.Kind == "client" {
+				have[string(c.Surface)] = true
+			}
+		}
+	}
+	for _, s := range appgen.SupportedSurfaces() {
+		if !have[string(s)] {
+			t.Errorf("surface %s is supported by the generators but no conformance fixture has a Client with it", s)
+		}
+	}
+}

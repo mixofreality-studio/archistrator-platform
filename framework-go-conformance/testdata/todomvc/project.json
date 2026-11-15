@@ -13,35 +13,61 @@
         "vision": "A dependable todo list a small team can adopt and rely on from day one.",
         "objectives": [
           {
-            "number": 0,
+            "number": 1,
             "statement": "Let team members capture, reword, and discard tasks with no workarounds such as deleting and re-adding to fix a typo."
           },
           {
-            "number": 0,
+            "number": 2,
             "statement": "Give users full control over what counts as done, one task at a time or the whole list at once, always reversible."
           },
           {
-            "number": 0,
+            "number": 3,
             "statement": "Keep each list uncluttered by letting users sweep away all finished work in a single action."
           },
           {
-            "number": 0,
+            "number": 4,
             "statement": "Let users review their work the way they prefer (everything, what remains, or what is finished) while always knowing exactly how much remains."
           },
           {
-            "number": 0,
+            "number": 5,
             "statement": "Ensure no user ever loses their todos between visits, whether they close the app or restart their machine."
           },
           {
-            "number": 0,
+            "number": 6,
             "statement": "Let the team's automated agents work the same lists people do, with the same outcomes."
           },
           {
-            "number": 0,
+            "number": 7,
             "statement": "Be usable by a small team immediately, with no training beyond familiar todo-list conventions."
           }
         ],
-        "mission": "Adopt the well-known TodoMVC behavior as the exact, non-negotiable contract instead of inventing features, keep every list safely held by the team's own infrastructure rather than the user's browser, and offer that one experience equally to people and to the team's agents wherever they already work."
+        "mission": "Adopt the well-known TodoMVC behavior as the exact, non-negotiable contract instead of inventing features, keep every list safely held by the team's own infrastructure rather than the user's browser, and offer that one experience equally to people and to the team's agents wherever they already work.",
+        "deliverySurfaces": [
+          {
+            "kind": "rest",
+            "audience": "machine",
+            "source": "reachable both as an ordinary web API",
+            "objective": 6
+          },
+          {
+            "kind": "mcpTools",
+            "audience": "machine",
+            "source": "as an MCP surface, so our other agent tooling can drive it too",
+            "objective": 6
+          },
+          {
+            "kind": "web",
+            "audience": "human",
+            "source": "a real frontend on top (an ordinary web app",
+            "objective": 7
+          },
+          {
+            "kind": "mcpApp",
+            "audience": "human",
+            "source": "an MCP Apps surface so it can be embedded the same way our other MCP-hosted UIs are",
+            "objective": 7
+          }
+        ]
       },
       "revisions": 2,
       "provenance": {
@@ -280,6 +306,7 @@
               "C-todo-api",
               "C-todo-mcp-server",
               "N-ATP",
+              "U-SPA-todo-mcp-app",
               "U-SPA-todo-web-app"
             ]
           },
@@ -291,6 +318,12 @@
           },
           {
             "activity": "U-SPA-todo-web-app",
+            "dependsOn": [
+              "C-list-manager"
+            ]
+          },
+          {
+            "activity": "U-SPA-todo-mcp-app",
             "dependsOn": [
               "C-list-manager"
             ]
@@ -315,6 +348,7 @@
           "C-todo-api",
           "C-todo-mcp-server",
           "M-ACCEPT",
+          "U-SPA-todo-mcp-app",
           "U-SPA-todo-web-app",
           "architecture",
           "projectDesign",
@@ -2381,6 +2415,19 @@
             "surface": "web"
           },
           {
+            "id": "todo-mcp-app",
+            "name": "TodoMcpApp",
+            "kind": "client",
+            "layer": "client",
+            "encapsulates": "Encapsulates Presentation-host volatility. MCP Apps surface for team members inside their MCP host; routes list actions to ListManager through the MCP tools.",
+            "encapsulatesVolatilities": [
+              "Presentation-host volatility"
+            ],
+            "atomicBusinessVerbs": null,
+            "contractKey": "todoMcpApp",
+            "surface": "mcpApp"
+          },
+          {
             "id": "todo-mcp-server",
             "name": "TodoMcpServer",
             "kind": "client",
@@ -2489,6 +2536,12 @@
             "label": "addTodo | rewordTodo | discardTodo | markTodo | toggleAll | clearCompleted | openList"
           },
           {
+            "from": "todo-mcp-app",
+            "to": "list-manager",
+            "mode": "sync",
+            "label": "addTodo | rewordTodo | discardTodo | markTodo | toggleAll | clearCompleted | openList"
+          },
+          {
             "from": "todo-mcp-server",
             "to": "list-manager",
             "mode": "sync",
@@ -2561,6 +2614,13 @@
                   },
                   {
                     "from": "team-member",
+                    "to": "todo-mcp-app",
+                    "mode": "sync",
+                    "label": "AddTodo | RewordTodo | DiscardTodo | MarkTodo | ToggleAll | ClearCompleted — performs one list action",
+                    "alt": "s1"
+                  },
+                  {
+                    "from": "team-member",
                     "to": "todo-mcp-server",
                     "mode": "sync",
                     "label": "AddTodo | RewordTodo | DiscardTodo | MarkTodo | ToggleAll | ClearCompleted — performs one list action in an MCP Apps host",
@@ -2587,6 +2647,13 @@
                 "calls": [
                   {
                     "from": "todo-web-app",
+                    "to": "list-manager",
+                    "mode": "sync",
+                    "label": "addTodo | rewordTodo | discardTodo | markTodo | toggleAll | clearCompleted — one list change",
+                    "alt": "s2"
+                  },
+                  {
+                    "from": "todo-mcp-app",
                     "to": "list-manager",
                     "mode": "sync",
                     "label": "addTodo | rewordTodo | discardTodo | markTodo | toggleAll | clearCompleted — one list change",
@@ -2690,6 +2757,13 @@
                   },
                   {
                     "from": "team-member",
+                    "to": "todo-mcp-app",
+                    "mode": "sync",
+                    "label": "OpenList — opens the list in a chosen view",
+                    "alt": "s1"
+                  },
+                  {
+                    "from": "team-member",
                     "to": "todo-mcp-server",
                     "mode": "sync",
                     "label": "OpenList — opens the list in a chosen view in an MCP Apps host",
@@ -2716,6 +2790,13 @@
                 "calls": [
                   {
                     "from": "todo-web-app",
+                    "to": "list-manager",
+                    "mode": "sync",
+                    "label": "openList(view) → visible todos, itemsLeft",
+                    "alt": "s2"
+                  },
+                  {
+                    "from": "todo-mcp-app",
                     "to": "list-manager",
                     "mode": "sync",
                     "label": "openList(view) → visible todos, itemsLeft",
@@ -2815,6 +2896,13 @@
                   },
                   {
                     "from": "team-member",
+                    "to": "todo-mcp-app",
+                    "mode": "sync",
+                    "label": "AddTodo — submits wording for a new todo",
+                    "alt": "s1"
+                  },
+                  {
+                    "from": "team-member",
                     "to": "todo-mcp-server",
                     "mode": "sync",
                     "label": "AddTodo — submits wording for a new todo in an MCP Apps host",
@@ -2827,6 +2915,13 @@
                 "calls": [
                   {
                     "from": "todo-web-app",
+                    "to": "list-manager",
+                    "mode": "sync",
+                    "label": "addTodo(wording) → todo",
+                    "alt": "s2"
+                  },
+                  {
+                    "from": "todo-mcp-app",
                     "to": "list-manager",
                     "mode": "sync",
                     "label": "addTodo(wording) → todo",
@@ -3015,6 +3110,13 @@
                   },
                   {
                     "from": "team-member",
+                    "to": "todo-mcp-app",
+                    "mode": "sync",
+                    "label": "DiscardTodo — discards one todo",
+                    "alt": "s1"
+                  },
+                  {
+                    "from": "team-member",
                     "to": "todo-mcp-server",
                     "mode": "sync",
                     "label": "DiscardTodo — discards one todo in an MCP Apps host",
@@ -3027,6 +3129,13 @@
                 "calls": [
                   {
                     "from": "todo-web-app",
+                    "to": "list-manager",
+                    "mode": "sync",
+                    "label": "discardTodo(todoId)",
+                    "alt": "s2"
+                  },
+                  {
+                    "from": "todo-mcp-app",
                     "to": "list-manager",
                     "mode": "sync",
                     "label": "discardTodo(todoId)",
@@ -3084,6 +3193,13 @@
                   },
                   {
                     "from": "team-member",
+                    "to": "todo-mcp-app",
+                    "mode": "sync",
+                    "label": "MarkTodo — marks one todo completed or active",
+                    "alt": "s1"
+                  },
+                  {
+                    "from": "team-member",
                     "to": "todo-mcp-server",
                     "mode": "sync",
                     "label": "MarkTodo — marks one todo completed or active in an MCP Apps host",
@@ -3096,6 +3212,13 @@
                 "calls": [
                   {
                     "from": "todo-web-app",
+                    "to": "list-manager",
+                    "mode": "sync",
+                    "label": "markTodo(todoId, completed)",
+                    "alt": "s2"
+                  },
+                  {
+                    "from": "todo-mcp-app",
                     "to": "list-manager",
                     "mode": "sync",
                     "label": "markTodo(todoId, completed)",
@@ -3153,6 +3276,13 @@
                   },
                   {
                     "from": "team-member",
+                    "to": "todo-mcp-app",
+                    "mode": "sync",
+                    "label": "ToggleAll — toggles completion of the whole list",
+                    "alt": "s1"
+                  },
+                  {
+                    "from": "team-member",
                     "to": "todo-mcp-server",
                     "mode": "sync",
                     "label": "ToggleAll — toggles completion of the whole list in an MCP Apps host",
@@ -3165,6 +3295,13 @@
                 "calls": [
                   {
                     "from": "todo-web-app",
+                    "to": "list-manager",
+                    "mode": "sync",
+                    "label": "toggleAll()",
+                    "alt": "s2"
+                  },
+                  {
+                    "from": "todo-mcp-app",
                     "to": "list-manager",
                     "mode": "sync",
                     "label": "toggleAll()",
@@ -3268,6 +3405,13 @@
                   },
                   {
                     "from": "team-member",
+                    "to": "todo-mcp-app",
+                    "mode": "sync",
+                    "label": "ClearCompleted — clears completed todos",
+                    "alt": "s1"
+                  },
+                  {
+                    "from": "team-member",
                     "to": "todo-mcp-server",
                     "mode": "sync",
                     "label": "ClearCompleted — clears completed todos in an MCP Apps host",
@@ -3280,6 +3424,13 @@
                 "calls": [
                   {
                     "from": "todo-web-app",
+                    "to": "list-manager",
+                    "mode": "sync",
+                    "label": "clearCompleted()",
+                    "alt": "s2"
+                  },
+                  {
+                    "from": "todo-mcp-app",
                     "to": "list-manager",
                     "mode": "sync",
                     "label": "clearCompleted()",
@@ -3429,6 +3580,13 @@
                   },
                   {
                     "from": "team-member",
+                    "to": "todo-mcp-app",
+                    "mode": "sync",
+                    "label": "OpenList — chooses the All, Active or Completed view",
+                    "alt": "s1"
+                  },
+                  {
+                    "from": "team-member",
                     "to": "todo-mcp-server",
                     "mode": "sync",
                     "label": "OpenList — chooses the All, Active or Completed view in an MCP Apps host",
@@ -3441,6 +3599,13 @@
                 "calls": [
                   {
                     "from": "todo-web-app",
+                    "to": "list-manager",
+                    "mode": "sync",
+                    "label": "openList(view) → visible todos, itemsLeft",
+                    "alt": "s2"
+                  },
+                  {
+                    "from": "todo-mcp-app",
                     "to": "list-manager",
                     "mode": "sync",
                     "label": "openList(view) → visible todos, itemsLeft",
@@ -3498,6 +3663,13 @@
                   },
                   {
                     "from": "team-member",
+                    "to": "todo-mcp-app",
+                    "mode": "sync",
+                    "label": "OpenList — shows the items-left count",
+                    "alt": "s1"
+                  },
+                  {
+                    "from": "team-member",
                     "to": "todo-mcp-server",
                     "mode": "sync",
                     "label": "OpenList — shows the items-left count in an MCP Apps host",
@@ -3510,6 +3682,13 @@
                 "calls": [
                   {
                     "from": "todo-web-app",
+                    "to": "list-manager",
+                    "mode": "sync",
+                    "label": "openList(view) → visible todos, itemsLeft",
+                    "alt": "s2"
+                  },
+                  {
+                    "from": "todo-mcp-app",
                     "to": "list-manager",
                     "mode": "sync",
                     "label": "openList(view) → visible todos, itemsLeft",
@@ -3567,6 +3746,13 @@
                   },
                   {
                     "from": "team-member",
+                    "to": "todo-mcp-app",
+                    "mode": "sync",
+                    "label": "OpenList — returns to the list",
+                    "alt": "s1"
+                  },
+                  {
+                    "from": "team-member",
                     "to": "todo-mcp-server",
                     "mode": "sync",
                     "label": "OpenList — returns to the list in an MCP Apps host",
@@ -3579,6 +3765,13 @@
                 "calls": [
                   {
                     "from": "todo-web-app",
+                    "to": "list-manager",
+                    "mode": "sync",
+                    "label": "openList(view) → visible todos, itemsLeft",
+                    "alt": "s2"
+                  },
+                  {
+                    "from": "todo-mcp-app",
                     "to": "list-manager",
                     "mode": "sync",
                     "label": "openList(view) → visible todos, itemsLeft",
@@ -3695,7 +3888,7 @@
             "riskBucket": 5,
             "title": "Build TodoApi",
             "componentId": "todo-api",
-            "machineClient": true
+            "surface": "rest"
           },
           {
             "name": "C-todo-list-access",
@@ -3714,7 +3907,7 @@
             "riskBucket": 5,
             "title": "Build TodoMcpServer",
             "componentId": "todo-mcp-server",
-            "machineClient": true
+            "surface": "mcpTools"
           },
           {
             "name": "U-SPA-todo-web-app",
@@ -3725,6 +3918,16 @@
             "title": "Build Todo Web App (SPA)",
             "componentId": "todo-web-app",
             "surface": "web"
+          },
+          {
+            "name": "U-SPA-todo-mcp-app",
+            "effortDays": 25,
+            "workerClass": "junior-developer",
+            "coding": true,
+            "riskBucket": 5,
+            "title": "Build Todo Mcp App (MCP Apps UI)",
+            "componentId": "todo-mcp-app",
+            "surface": "mcpApp"
           },
           {
             "name": "N-ATP",
@@ -5443,6 +5646,182 @@
       },
       "interface": {
         "name": "TodoWebApp",
+        "layer": "client",
+        "operations": [
+          {
+            "name": "AddTodo",
+            "params": [
+              {
+                "name": "action",
+                "schema": {
+                  "$ref": "#/$defs/UIAction"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/UIObservation"
+            },
+            "error": false
+          },
+          {
+            "name": "RewordTodo",
+            "params": [
+              {
+                "name": "action",
+                "schema": {
+                  "$ref": "#/$defs/UIAction"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/UIObservation"
+            },
+            "error": false
+          },
+          {
+            "name": "DiscardTodo",
+            "params": [
+              {
+                "name": "action",
+                "schema": {
+                  "$ref": "#/$defs/UIAction"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/UIObservation"
+            },
+            "error": false
+          },
+          {
+            "name": "MarkTodo",
+            "params": [
+              {
+                "name": "action",
+                "schema": {
+                  "$ref": "#/$defs/UIAction"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/UIObservation"
+            },
+            "error": false
+          },
+          {
+            "name": "ToggleAll",
+            "params": [
+              {
+                "name": "action",
+                "schema": {
+                  "$ref": "#/$defs/UIAction"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/UIObservation"
+            },
+            "error": false
+          },
+          {
+            "name": "ClearCompleted",
+            "params": [
+              {
+                "name": "action",
+                "schema": {
+                  "$ref": "#/$defs/UIAction"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/UIObservation"
+            },
+            "error": false
+          },
+          {
+            "name": "OpenList",
+            "params": [
+              {
+                "name": "action",
+                "schema": {
+                  "$ref": "#/$defs/UIAction"
+                }
+              }
+            ],
+            "result": {
+              "$ref": "#/$defs/UIObservation"
+            },
+            "error": false,
+            "readOnly": true
+          }
+        ]
+      }
+    },
+    "todoMcpApp": {
+      "component": "todoMcpApp",
+      "layer": "Client",
+      "title": "todoMcpApp contract",
+      "$defs": {
+        "UIAction": {
+          "type": "object",
+          "description": "One browser action a scenario step performs: click or fill the element carrying data-testid target, or navigate to value.",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "click",
+                "fill",
+                "navigate"
+              ]
+            },
+            "target": {
+              "type": "string"
+            },
+            "value": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "kind"
+          ],
+          "additionalProperties": false
+        },
+        "UIObservable": {
+          "type": "object",
+          "description": "One observation after the action: the data-testid that is visible, the text a data-testid holds, or the URL.",
+          "properties": {
+            "visible": {
+              "type": "string"
+            },
+            "text": {
+              "type": "string"
+            },
+            "target": {
+              "type": "string"
+            },
+            "url": {
+              "type": "string"
+            }
+          },
+          "additionalProperties": false
+        },
+        "UIObservation": {
+          "description": "What the step observes: one observable, or several.",
+          "oneOf": [
+            {
+              "$ref": "#/$defs/UIObservable"
+            },
+            {
+              "type": "array",
+              "items": {
+                "$ref": "#/$defs/UIObservable"
+              }
+            }
+          ]
+        }
+      },
+      "interface": {
+        "name": "TodoMcpApp",
         "layer": "client",
         "operations": [
           {
@@ -31197,11 +31576,1808 @@
             ]
           }
         }
+      },
+      "todoMcpApp": {
+        "component": "todoMcpApp",
+        "bindings": [
+          {
+            "scenario": "add-a-todo-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "fill",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "value": "Buy milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"todo-item\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\"},\"text\":\"Buy milk\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": []
+          },
+          {
+            "scenario": "add-a-todo-P2",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "fill",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "value": "   "
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"value\",\"model\":{\"target\":{\"element\":\"new-todo-input\"},\"value\":\"\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": []
+          },
+          {
+            "scenario": "clear-completed-todos-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "clear-completed"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\"},\"text\":\"Buy milk\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Pay rent"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-1"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Pay rent\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "ToggleAll",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"toggled\"}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Buy milk"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-3"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "scenario": "come-back-to-an-intact-list-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "OpenList",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "navigate",
+                          "model": {
+                            "route": "#/"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"todo-item\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\"},\"text\":\"Buy milk\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Buy milk"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-1"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "scenario": "discard-a-todo-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "DiscardTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "todo-destroy"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Buy milk"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-1"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Walk dog"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-2"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "scenario": "mark-a-todo-completed-or-active-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "MarkTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "check",
+                          "model": {
+                            "target": {
+                              "element": "todo-checkbox"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"0 items left\"}},{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"clear-completed\"}}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Buy milk"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-1"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "scenario": "resume-the-list-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "OpenList",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "navigate",
+                          "model": {
+                            "route": "#/"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"list-refused\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"list-refused\"},\"text\":\"This list is outside your reach.\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": []
+          },
+          {
+            "scenario": "resume-the-list-P2",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "OpenList",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "navigate",
+                          "model": {
+                            "route": "#/"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"filter-all\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Buy milk"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-1"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "scenario": "resume-the-list-P3",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "OpenList",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "navigate",
+                          "model": {
+                            "route": "#/"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"filter-all\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Buy milk"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-1"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "scenario": "review-the-list-in-a-chosen-view-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "OpenList",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "filter-active"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"filter-active\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Pay rent"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-1"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Pay rent\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "ToggleAll",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"toggled\"}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Buy milk"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-3"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "scenario": "see-how-many-todos-are-left-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "OpenList",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "navigate",
+                          "model": {
+                            "route": "#/"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"items-left\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Buy milk"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-1"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "scenario": "toggle-all-todos-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "toggle-all"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Buy milk"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-1"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              },
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "ToggleAll",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"toggled\"}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "scenario": "toggle-all-todos-P2",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "toggle-all"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"0 items left\"}},{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"clear-completed\"}}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": [
+              {
+                "kind": "contractCall",
+                "model": {
+                  "component": "listManager",
+                  "operation": "AddTodo",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "wording",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "Buy milk"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "requestId",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "arrange-1"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Buy milk\",\"completed\":false}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "scenario": "work-the-list-P1",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "fill",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "value": "Buy milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 2,
+                "operation": "RewordTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "fill",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "value": "Buy oat milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\"},\"text\":\"Buy oat milk\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 3,
+                "operation": "DiscardTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "todo-destroy"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"new-todo-input\"}}},{\"kind\":\"value\",\"model\":{\"target\":{\"element\":\"new-todo-input\"},\"value\":\"\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 4,
+                "operation": "MarkTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "check",
+                          "model": {
+                            "target": {
+                              "element": "todo-checkbox"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"0 items left\"}},{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"clear-completed\"}}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 5,
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "toggle-all"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 6,
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "clear-completed"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"new-todo-input\"}}},{\"kind\":\"value\",\"model\":{\"target\":{\"element\":\"new-todo-input\"},\"value\":\"\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": []
+          },
+          {
+            "scenario": "work-the-list-P2",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "fill",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "value": "Buy milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 2,
+                "operation": "RewordTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "fill",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "value": "Buy oat milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\"},\"text\":\"Buy oat milk\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 3,
+                "operation": "DiscardTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "todo-destroy"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"new-todo-input\"}}},{\"kind\":\"value\",\"model\":{\"target\":{\"element\":\"new-todo-input\"},\"value\":\"\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 4,
+                "operation": "MarkTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "check",
+                          "model": {
+                            "target": {
+                              "element": "todo-checkbox"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"0 items left\"}},{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"clear-completed\"}}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 5,
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "toggle-all"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"1 item left\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 6,
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "clear-completed"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"new-todo-input\"}}},{\"kind\":\"value\",\"model\":{\"target\":{\"element\":\"new-todo-input\"},\"value\":\"\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": []
+          },
+          {
+            "scenario": "work-the-list-P3",
+            "steps": [
+              {
+                "seq": 1,
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "fill",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "value": "Buy milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"status-strip\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"status-strip\"},\"text\":\"That change is outside your reach \\u2014 nothing was changed.\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 2,
+                "operation": "RewordTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "fill",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "value": "Buy oat milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"status-strip\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"status-strip\"},\"text\":\"That change is outside your reach \\u2014 nothing was changed.\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 3,
+                "operation": "DiscardTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "todo-destroy"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"status-strip\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"status-strip\"},\"text\":\"That change is outside your reach \\u2014 nothing was changed.\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 4,
+                "operation": "MarkTodo",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "check",
+                          "model": {
+                            "target": {
+                              "element": "todo-checkbox"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"status-strip\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"status-strip\"},\"text\":\"That change is outside your reach \\u2014 nothing was changed.\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 5,
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "toggle-all"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"status-strip\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"status-strip\"},\"text\":\"That change is outside your reach \\u2014 nothing was changed.\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              },
+              {
+                "seq": 6,
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "click",
+                          "model": {
+                            "target": {
+                              "element": "clear-completed"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "[{\"kind\":\"visible\",\"model\":{\"target\":{\"element\":\"status-strip\"}}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"status-strip\"},\"text\":\"That change is outside your reach \\u2014 nothing was changed.\"}}]",
+                  "errorExpected": false,
+                  "errorCode": ""
+                },
+                "probes": []
+              }
+            ],
+            "arrange": []
+          }
+        ],
+        "principals": {
+          "team-member": {
+            "subject": "alice",
+            "roles": [
+              "member"
+            ]
+          }
+        }
       }
     },
     "uiDesign": {
       "todo-web-app": {
         "surface": "todo-web-app",
+        "content": "# UI Design Concept — TodoWebApp (browser surface)\n\nDesign concept only. This document contains no production code. It covers every requirement in the committed UX Requirements for `todo-web-app` (R-ADD … R-READ-REFUSED, N-*) for the single persona that surface serves, **Team Member**. Each screen, region, flow and state below carries the requirement id it traces to. Nothing here adds scope beyond those ids.\n\n## 0. Design principles (from the N-* constraints)\n- **P1 Familiar TodoMVC layout and gestures** (N-FAMILIAR, N-CONTRACT). The page uses the standard TodoMVC structure and interactions: a header input, a list with checkboxes, double-click to edit, a destroy button, and a footer with the count, filters and Clear completed. Members need no instructions.\n- **P2 Show rulings, never compute them** (N-PARITY, N-CONTRACT; System: the Client holds no business rules). The surface never trims or judges a title. It never decides the toggle target, filters todos into a view, or counts items left. Every value it shows comes from `ListManager` (`ChangeOutcome`, `ListView`). For presentation only, the surface derives `completedCount = totalCount − itemsLeft` (as the contract documents) to decide whether Clear completed is shown and how toggle-all looks. It never uses that value to decide an outcome.\n- **P3 No optimistic mutation** (N-PARITY, N-DURABLE). The list on screen changes only after `ListManager` reports the change was kept. Then the surface re-fetches `openList(currentView)`. As a result, the screen always shows the kept record, never a guess.\n- **P4 Live by default** (N-FRESH, R-SYNC). While the list is open, the surface stays subscribed to `ListChanged` for this owner. On each notice it re-fetches through `openList`.\n- **P5 No browser-held list data** (N-DURABLE, R-INTACT). The surface keeps no todos in local or session storage. Only the URL holds the chosen view.\n\n## 1. Screen inventory\nThe surface has **one screen**, **List screen**. It is a single page with three regions and one overlay-free status strip. There are no other screens, and the surface has no settings, account or help pages, because no requirement asks for them.\n\n```\n┌──────────────────────────────────────────────┐\n│                    todos                     │  page title\n├──────────────────────────────────────────────┤\n│ [status strip — hidden unless a notice]      │  §4 states\n├──────────────────────────────────────────────┤\n│ [❯] What needs to be done?                   │  HEADER: toggle-all + new-todo input\n├──────────────────────────────────────────────┤\n│ ( ) Buy milk                             [×] │  MAIN: todo rows\n│ (✓) ~~Call plumber~~                     [×] │\n│ ( ) Book flights                         [×] │\n├──────────────────────────────────────────────┤\n│ 2 items left   All | Active | Completed   Clear completed │  FOOTER\n└──────────────────────────────────────────────┘\n```\n\n### 1.1 Header region\n| Element | Component | Behaviour | Trace |\n|---|---|---|---|\n| Page title “todos” | heading (h1) | Static. | N-FAMILIAR |\n| New-todo input | single-line text field, placeholder “What needs to be done?”, autofocus on load | **Enter** submits the raw wording as typed through `addTodo`. The field clears only on outcome `added` or `notAdded`. On an error the field keeps its text so the member can retry. | R-ADD |\n| Toggle-all control | checkbox (chevron style) labelled “Mark all as complete” for assistive tech | Shown only when `totalCount > 0`. Shown checked when `itemsLeft == 0`. Activating it calls `toggleAll()`. The engine picks the target, not the surface. | R-TOGGLE-ALL |\n\n### 1.2 Main region (todo list)\nHidden entirely when `totalCount == 0` (N-FAMILIAR). Renders `ListView.todos` in the order received.\n\n**Todo row (view mode)**\n| Element | Component | Behaviour | Trace |\n|---|---|---|---|\n| Completion checkbox | round checkbox, labelled by the title | Toggling calls `markTodo(todoId, !completed)`. Doing it again reverses the change. | R-MARK |\n| Title | label. Completed rows show strikethrough and muted text. | **Double-click** enters edit mode. | R-REWORD, R-MARK |\n| Destroy button | “×” icon button, visible on row hover or focus, accessible name “Delete <title>” | Calls `discardTodo(todoId)`. | R-DISCARD |\n\n**Todo row (edit mode)**, one row at most at a time\n| Element | Behaviour | Trace |\n|---|---|---|\n| Edit field pre-filled with the kept title, focused, caret at end | **Enter** or **blur** commits the edit with `rewordTodo(todoId, wording)`. **Escape** abandons it: the row goes back to view mode with the original title and no call is made. | R-REWORD |\n| Outcome `retitled` | The row shows the returned title in place, with the same position and completed state. | R-REWORD |\n| Outcome `removed` (blank wording) | The row disappears (blank reword rule). The surface sends blank wording as typed and lets the engine rule on it. | R-REWORD |\n\n### 1.3 Footer region\nHidden when `totalCount == 0`.\n| Element | Component | Behaviour | Trace |\n|---|---|---|---|\n| Items-left count | text: “**N** item left” / “**N** items left” (singular only when N = 1) | Always shows `itemsLeft` from the latest `ListView`/`ChangeOutcome`, so it counts the whole list in every view. | R-LEFT, R-TALLY-AFTER |\n| View filters | three links: All, Active, Completed. They are bound to the URL (`#/`, `#/active`, `#/completed`). The selected link is outlined and carries `aria-current`. | Choosing one updates the URL and calls `openList(view)`. No todo is changed. | R-VIEW |\n| Clear completed | text button | Shown only when `completedCount > 0`. Calls `clearCompleted()`. | R-CLEAR |\n\n## 2. Flows (per use case / variation)\nEvery change flow follows the same skeleton (UC1, `work-the-list`): **gesture → one `ListManager` change op → on success, apply the `ChangeOutcome.itemsLeft` immediately and re-fetch `openList(currentView)` → render**. On error, see §4. The surface sends one request per gesture, and each request carries a fresh request id so the server can deduplicate retries. A row whose request is in flight is marked busy and does not accept a second gesture until the outcome arrives.\n\n| Flow | Steps | Outcomes shown | Trace |\n|---|---|---|---|\n| F-ADD | type wording → Enter → `addTodo(wording)` | `added`: the field clears and the new active todo appears at the end of the list (if the current view shows it). `notAdded`: the field clears and the list is unchanged. There is no error message, because a blank add is a silent no-op in TodoMVC. | R-ADD |\n| F-REWORD | double-click title → edit → Enter/blur → `rewordTodo` / Escape → abandon | `retitled` in place. `removed` deletes the row. Escape keeps the original title and makes no call. | R-REWORD |\n| F-DISCARD | hover/focus row → × → `discardTodo` | `removed`: only that row goes and the other rows are untouched. | R-DISCARD |\n| F-MARK | click checkbox → `markTodo(id, completed)` | `marked`: the row's style flips and the count updates. In the Active or Completed view the row leaves that view after the re-fetch. | R-MARK |\n| F-TOGGLE-ALL | click toggle-all → `toggleAll()` | `toggled`: every row flips to the ruled target and the toggle-all state follows `itemsLeft`. | R-TOGGLE-ALL |\n| F-CLEAR | click Clear completed → `clearCompleted()` | `cleared`: completed rows go and active rows stay. The button hides when `completedCount` becomes 0. | R-CLEAR |\n| F-OPEN | page load or return → read view from URL (default `all`) → `openList(view)` → render → start subscription | Shows the full kept list exactly as last stored, with titles and completed states. | R-INTACT, R-LEFT |\n| F-VIEW | click filter or navigate the URL hash → `openList(view)` | Only that view's todos appear, the filter is highlighted, and the count is unchanged. | R-VIEW, R-LEFT |\n| F-SYNC | subscription notice → `openList(currentView)` → re-subscribe after the notice's sequence | Changes from another browser, MCP Apps host or Team Agent appear without a reload. A row in edit mode keeps the member's draft. If that todo disappeared, edit mode closes and a notice says it was removed elsewhere. | R-SYNC, N-FRESH |\n\n## 3. Live-update behaviour (R-SYNC)\n- The subscription starts after the first successful `openList` and lasts as long as the tab is open. Closing the tab ends it.\n- Each `ListChanged` notice triggers one re-fetch of the current view. A burst of notices may arrive as a single notice, and the surface re-fetches only once for it.\n- The surface ignores a notice that arrives while its own change is in flight, because it already re-fetches after its own outcome. Notices that arrive afterwards are applied as usual.\n- If the subscription drops (network), the surface reconnects with backoff. After reconnecting it re-fetches once, so no change is missed.\n\n## 4. States\n| State | Trigger | Presentation | Trace |\n|---|---|---|---|\n| S-LOADING | the first `openList` is pending | Header input visible but disabled. A quiet “Loading your list…” line in the main region. | R-INTACT |\n| S-EMPTY | `totalCount == 0` | Only the header input is shown. Toggle-all, the main region and the footer are hidden (TodoMVC convention). | R-ADD, N-FAMILIAR |\n| S-LIST | `totalCount > 0` | Header, main and footer as in §1. | R-INTACT, R-VIEW, R-LEFT |\n| S-VIEW-EMPTY | `totalCount > 0` but the view has no todos (e.g. Completed with none completed) | Empty main region. The footer still shows the count and filters. | R-VIEW |\n| S-ROW-EDITING | double-click on a title | Edit field replaces the label. Other rows stay interactive. | R-REWORD |\n| S-ROW-BUSY | a change for that row is in flight | Controls disabled, with subtle reduced opacity. | R-MARK, R-DISCARD, R-REWORD |\n| S-READ-REFUSED | `openList` → `ListError.kind = Refused` | The whole list area is replaced by: “This list is outside your reach.” No todos, counts or hints about whether the list exists. Header input and footer hidden. No subscription. | R-READ-REFUSED |\n| S-CHANGE-REFUSED | change op → `Refused` | Status strip (polite live region): “That change is outside your reach — nothing was changed.” The list stays exactly as it was, and an add or reword input keeps its text. The strip dismisses on the next action or after a few seconds. | R-REFUSED |\n| S-TODO-GONE | `rewordTodo` / `markTodo` → `TodoNotFound` | Status strip: “That todo was removed elsewhere.” The surface re-fetches the current view. | R-SYNC, N-FRESH |\n| S-UNAVAILABLE | any op → `Unavailable`, or a network failure | Status strip: “Couldn’t reach your list — nothing was changed.” with a **Retry** button that repeats the same op with the same request id. On first load the main region shows the same message with Retry instead. | N-DURABLE, R-INTACT |\n| S-INVALID | `InvalidRequest` (for example a bad view in the URL hash) | An unknown hash falls back to `#/` (All). Other invalid requests show the generic unavailable strip. The surface does not invent its own validation. | R-VIEW |\n| S-LIVE-RECONNECTING | the subscription dropped | Small unobtrusive “Reconnecting…” text in the footer. The list stays usable. | R-SYNC |\n\n## 5. Component selection (presentation-level, framework-neutral)\n- **NewTodoInput** (text field), **ToggleAllCheckbox**, **TodoList** → **TodoItem** (view/edit modes: checkbox, label, destroy button, edit field), **Footer** → **ItemsLeftCount**, **ViewFilters**, **ClearCompletedButton**, **StatusStrip** (an aria-live polite region).\n- **ListClient adapter** (not visual). It is the one place that calls `ListManager`'s `addTodo | rewordTodo | discardTodo | markTodo | toggleAll | clearCompleted | openList` and keeps the `subscribe(ListChanged)` loop. Components never call the backend directly. This matches the System relationships `todo-web-app → list-manager` and `todo-web-app → message-bus`, and nothing beyond them.\n- **View state**: the current view lives in the URL hash only. All list data comes from the latest `ListView`.\n- Styling follows the familiar TodoMVC visual language (centred card, light theme, strikethrough for completed) so members recognise it immediately (N-FAMILIAR). The surface uses its own stylesheet and does not reproduce anyone else's assets.\n\n## 6. Accessibility and input\n- Every control can be reached and operated by keyboard. On a focused row, Enter or F2 starts editing (the keyboard equivalent of double-click), Enter commits and Escape abandons.\n- Checkboxes and the destroy button have accessible names that include the todo title. The selected filter has `aria-current=\"page\"`. Status-strip messages go out through a polite live region.\n- After discard or clear, focus moves to the next row, or to the new-todo input when no rows remain.\n- Text and controls meet WCAG AA contrast. Completed rows never rely on colour alone, because strikethrough also marks them.\n\n## 7. Traceability matrix\n| Requirement | Covered by |\n|---|---|\n| R-ADD | §1.1 new-todo input, F-ADD, S-EMPTY |\n| R-REWORD | §1.2 edit mode, F-REWORD, S-ROW-EDITING |\n| R-DISCARD | §1.2 destroy button, F-DISCARD |\n| R-MARK | §1.2 checkbox, F-MARK |\n| R-TOGGLE-ALL | §1.1 toggle-all, F-TOGGLE-ALL |\n| R-CLEAR | §1.3 Clear completed, F-CLEAR |\n| R-REFUSED | S-CHANGE-REFUSED |\n| R-TALLY-AFTER | §1.3 items-left count, §2 skeleton (`ChangeOutcome.itemsLeft`) |\n| R-INTACT | F-OPEN, S-LOADING, S-UNAVAILABLE, P5 |\n| R-VIEW | §1.3 filters, F-VIEW, S-VIEW-EMPTY, S-INVALID |\n| R-LEFT | §1.3 items-left count, F-OPEN, F-VIEW |\n| R-SYNC | §3, F-SYNC, S-TODO-GONE, S-LIVE-RECONNECTING |\n| R-READ-REFUSED | S-READ-REFUSED |\n| N-CONTRACT / N-PARITY | P2, P3 |\n| N-DURABLE | P3, P5, S-UNAVAILABLE |\n| N-FAMILIAR | P1, §1 layout, §5 styling |\n| N-FRESH | P4, §3 |\n\nNo screen, flow or state lacks a trace. Team Agent journeys are out of scope here, as the UX Requirements state.\n\n## 8. Open points for review\n1. **Commit on blur.** TodoMVC commits an edit on blur. The UX Requirements say only “commit or abandon”, so this concept follows TodoMVC (N-CONTRACT). Reviewers should confirm.\n2. **Change-refused copy.** The UX Requirements require that the member be told the change is outside their reach. The exact wording above is a proposal for ux-reviewer.\n3. **Draft kept on concurrent change.** A row in edit mode keeps the member's draft when a remote change re-fetches the list (F-SYNC). This avoids losing typed text. It does not change any rule.",
+        "screens": [
+          {
+            "id": "list",
+            "route": "#/",
+            "elements": [
+              {
+                "id": "page-title",
+                "role": "heading",
+                "name": "todos",
+                "repeats": false
+              },
+              {
+                "id": "new-todo-input",
+                "role": "textbox",
+                "name": "What needs to be done?",
+                "repeats": false
+              },
+              {
+                "id": "status-strip",
+                "role": "status",
+                "name": "Notice",
+                "repeats": true
+              },
+              {
+                "id": "list-refused",
+                "role": "status",
+                "name": "List refused",
+                "repeats": true
+              },
+              {
+                "id": "toggle-all",
+                "role": "checkbox",
+                "name": "Mark all as complete",
+                "repeats": true
+              },
+              {
+                "id": "todo-list",
+                "role": "list",
+                "name": "",
+                "repeats": true
+              },
+              {
+                "id": "todo-item",
+                "role": "listitem",
+                "name": "Todo",
+                "within": "todo-list",
+                "repeats": true
+              },
+              {
+                "id": "todo-checkbox",
+                "role": "checkbox",
+                "name": "Completed",
+                "within": "todo-item",
+                "repeats": true
+              },
+              {
+                "id": "todo-title",
+                "role": "heading",
+                "name": "Todo title",
+                "within": "todo-item",
+                "repeats": true
+              },
+              {
+                "id": "todo-edit-input",
+                "role": "textbox",
+                "name": "Edit todo",
+                "within": "todo-item",
+                "repeats": true
+              },
+              {
+                "id": "todo-destroy",
+                "role": "button",
+                "name": "Delete",
+                "within": "todo-item",
+                "repeats": true
+              },
+              {
+                "id": "items-left",
+                "role": "status",
+                "name": "Items left",
+                "repeats": true
+              },
+              {
+                "id": "filter-all",
+                "role": "link",
+                "name": "All",
+                "repeats": true
+              },
+              {
+                "id": "filter-active",
+                "role": "link",
+                "name": "Active",
+                "repeats": true
+              },
+              {
+                "id": "filter-completed",
+                "role": "link",
+                "name": "Completed",
+                "repeats": true
+              },
+              {
+                "id": "clear-completed",
+                "role": "button",
+                "name": "Clear completed",
+                "repeats": true
+              }
+            ]
+          },
+          {
+            "id": "list-active",
+            "route": "#/active",
+            "elements": [
+              {
+                "id": "active-todo-list",
+                "role": "list",
+                "name": "Active todos",
+                "repeats": true
+              }
+            ]
+          },
+          {
+            "id": "list-completed",
+            "route": "#/completed",
+            "elements": [
+              {
+                "id": "completed-todo-list",
+                "role": "list",
+                "name": "Completed todos",
+                "repeats": true
+              }
+            ]
+          }
+        ]
+      },
+      "todo-mcp-app": {
+        "surface": "todo-mcp-app",
         "content": "# UI Design Concept — TodoWebApp (browser surface)\n\nDesign concept only. This document contains no production code. It covers every requirement in the committed UX Requirements for `todo-web-app` (R-ADD … R-READ-REFUSED, N-*) for the single persona that surface serves, **Team Member**. Each screen, region, flow and state below carries the requirement id it traces to. Nothing here adds scope beyond those ids.\n\n## 0. Design principles (from the N-* constraints)\n- **P1 Familiar TodoMVC layout and gestures** (N-FAMILIAR, N-CONTRACT). The page uses the standard TodoMVC structure and interactions: a header input, a list with checkboxes, double-click to edit, a destroy button, and a footer with the count, filters and Clear completed. Members need no instructions.\n- **P2 Show rulings, never compute them** (N-PARITY, N-CONTRACT; System: the Client holds no business rules). The surface never trims or judges a title. It never decides the toggle target, filters todos into a view, or counts items left. Every value it shows comes from `ListManager` (`ChangeOutcome`, `ListView`). For presentation only, the surface derives `completedCount = totalCount − itemsLeft` (as the contract documents) to decide whether Clear completed is shown and how toggle-all looks. It never uses that value to decide an outcome.\n- **P3 No optimistic mutation** (N-PARITY, N-DURABLE). The list on screen changes only after `ListManager` reports the change was kept. Then the surface re-fetches `openList(currentView)`. As a result, the screen always shows the kept record, never a guess.\n- **P4 Live by default** (N-FRESH, R-SYNC). While the list is open, the surface stays subscribed to `ListChanged` for this owner. On each notice it re-fetches through `openList`.\n- **P5 No browser-held list data** (N-DURABLE, R-INTACT). The surface keeps no todos in local or session storage. Only the URL holds the chosen view.\n\n## 1. Screen inventory\nThe surface has **one screen**, **List screen**. It is a single page with three regions and one overlay-free status strip. There are no other screens, and the surface has no settings, account or help pages, because no requirement asks for them.\n\n```\n┌──────────────────────────────────────────────┐\n│                    todos                     │  page title\n├──────────────────────────────────────────────┤\n│ [status strip — hidden unless a notice]      │  §4 states\n├──────────────────────────────────────────────┤\n│ [❯] What needs to be done?                   │  HEADER: toggle-all + new-todo input\n├──────────────────────────────────────────────┤\n│ ( ) Buy milk                             [×] │  MAIN: todo rows\n│ (✓) ~~Call plumber~~                     [×] │\n│ ( ) Book flights                         [×] │\n├──────────────────────────────────────────────┤\n│ 2 items left   All | Active | Completed   Clear completed │  FOOTER\n└──────────────────────────────────────────────┘\n```\n\n### 1.1 Header region\n| Element | Component | Behaviour | Trace |\n|---|---|---|---|\n| Page title “todos” | heading (h1) | Static. | N-FAMILIAR |\n| New-todo input | single-line text field, placeholder “What needs to be done?”, autofocus on load | **Enter** submits the raw wording as typed through `addTodo`. The field clears only on outcome `added` or `notAdded`. On an error the field keeps its text so the member can retry. | R-ADD |\n| Toggle-all control | checkbox (chevron style) labelled “Mark all as complete” for assistive tech | Shown only when `totalCount > 0`. Shown checked when `itemsLeft == 0`. Activating it calls `toggleAll()`. The engine picks the target, not the surface. | R-TOGGLE-ALL |\n\n### 1.2 Main region (todo list)\nHidden entirely when `totalCount == 0` (N-FAMILIAR). Renders `ListView.todos` in the order received.\n\n**Todo row (view mode)**\n| Element | Component | Behaviour | Trace |\n|---|---|---|---|\n| Completion checkbox | round checkbox, labelled by the title | Toggling calls `markTodo(todoId, !completed)`. Doing it again reverses the change. | R-MARK |\n| Title | label. Completed rows show strikethrough and muted text. | **Double-click** enters edit mode. | R-REWORD, R-MARK |\n| Destroy button | “×” icon button, visible on row hover or focus, accessible name “Delete <title>” | Calls `discardTodo(todoId)`. | R-DISCARD |\n\n**Todo row (edit mode)**, one row at most at a time\n| Element | Behaviour | Trace |\n|---|---|---|\n| Edit field pre-filled with the kept title, focused, caret at end | **Enter** or **blur** commits the edit with `rewordTodo(todoId, wording)`. **Escape** abandons it: the row goes back to view mode with the original title and no call is made. | R-REWORD |\n| Outcome `retitled` | The row shows the returned title in place, with the same position and completed state. | R-REWORD |\n| Outcome `removed` (blank wording) | The row disappears (blank reword rule). The surface sends blank wording as typed and lets the engine rule on it. | R-REWORD |\n\n### 1.3 Footer region\nHidden when `totalCount == 0`.\n| Element | Component | Behaviour | Trace |\n|---|---|---|---|\n| Items-left count | text: “**N** item left” / “**N** items left” (singular only when N = 1) | Always shows `itemsLeft` from the latest `ListView`/`ChangeOutcome`, so it counts the whole list in every view. | R-LEFT, R-TALLY-AFTER |\n| View filters | three links: All, Active, Completed. They are bound to the URL (`#/`, `#/active`, `#/completed`). The selected link is outlined and carries `aria-current`. | Choosing one updates the URL and calls `openList(view)`. No todo is changed. | R-VIEW |\n| Clear completed | text button | Shown only when `completedCount > 0`. Calls `clearCompleted()`. | R-CLEAR |\n\n## 2. Flows (per use case / variation)\nEvery change flow follows the same skeleton (UC1, `work-the-list`): **gesture → one `ListManager` change op → on success, apply the `ChangeOutcome.itemsLeft` immediately and re-fetch `openList(currentView)` → render**. On error, see §4. The surface sends one request per gesture, and each request carries a fresh request id so the server can deduplicate retries. A row whose request is in flight is marked busy and does not accept a second gesture until the outcome arrives.\n\n| Flow | Steps | Outcomes shown | Trace |\n|---|---|---|---|\n| F-ADD | type wording → Enter → `addTodo(wording)` | `added`: the field clears and the new active todo appears at the end of the list (if the current view shows it). `notAdded`: the field clears and the list is unchanged. There is no error message, because a blank add is a silent no-op in TodoMVC. | R-ADD |\n| F-REWORD | double-click title → edit → Enter/blur → `rewordTodo` / Escape → abandon | `retitled` in place. `removed` deletes the row. Escape keeps the original title and makes no call. | R-REWORD |\n| F-DISCARD | hover/focus row → × → `discardTodo` | `removed`: only that row goes and the other rows are untouched. | R-DISCARD |\n| F-MARK | click checkbox → `markTodo(id, completed)` | `marked`: the row's style flips and the count updates. In the Active or Completed view the row leaves that view after the re-fetch. | R-MARK |\n| F-TOGGLE-ALL | click toggle-all → `toggleAll()` | `toggled`: every row flips to the ruled target and the toggle-all state follows `itemsLeft`. | R-TOGGLE-ALL |\n| F-CLEAR | click Clear completed → `clearCompleted()` | `cleared`: completed rows go and active rows stay. The button hides when `completedCount` becomes 0. | R-CLEAR |\n| F-OPEN | page load or return → read view from URL (default `all`) → `openList(view)` → render → start subscription | Shows the full kept list exactly as last stored, with titles and completed states. | R-INTACT, R-LEFT |\n| F-VIEW | click filter or navigate the URL hash → `openList(view)` | Only that view's todos appear, the filter is highlighted, and the count is unchanged. | R-VIEW, R-LEFT |\n| F-SYNC | subscription notice → `openList(currentView)` → re-subscribe after the notice's sequence | Changes from another browser, MCP Apps host or Team Agent appear without a reload. A row in edit mode keeps the member's draft. If that todo disappeared, edit mode closes and a notice says it was removed elsewhere. | R-SYNC, N-FRESH |\n\n## 3. Live-update behaviour (R-SYNC)\n- The subscription starts after the first successful `openList` and lasts as long as the tab is open. Closing the tab ends it.\n- Each `ListChanged` notice triggers one re-fetch of the current view. A burst of notices may arrive as a single notice, and the surface re-fetches only once for it.\n- The surface ignores a notice that arrives while its own change is in flight, because it already re-fetches after its own outcome. Notices that arrive afterwards are applied as usual.\n- If the subscription drops (network), the surface reconnects with backoff. After reconnecting it re-fetches once, so no change is missed.\n\n## 4. States\n| State | Trigger | Presentation | Trace |\n|---|---|---|---|\n| S-LOADING | the first `openList` is pending | Header input visible but disabled. A quiet “Loading your list…” line in the main region. | R-INTACT |\n| S-EMPTY | `totalCount == 0` | Only the header input is shown. Toggle-all, the main region and the footer are hidden (TodoMVC convention). | R-ADD, N-FAMILIAR |\n| S-LIST | `totalCount > 0` | Header, main and footer as in §1. | R-INTACT, R-VIEW, R-LEFT |\n| S-VIEW-EMPTY | `totalCount > 0` but the view has no todos (e.g. Completed with none completed) | Empty main region. The footer still shows the count and filters. | R-VIEW |\n| S-ROW-EDITING | double-click on a title | Edit field replaces the label. Other rows stay interactive. | R-REWORD |\n| S-ROW-BUSY | a change for that row is in flight | Controls disabled, with subtle reduced opacity. | R-MARK, R-DISCARD, R-REWORD |\n| S-READ-REFUSED | `openList` → `ListError.kind = Refused` | The whole list area is replaced by: “This list is outside your reach.” No todos, counts or hints about whether the list exists. Header input and footer hidden. No subscription. | R-READ-REFUSED |\n| S-CHANGE-REFUSED | change op → `Refused` | Status strip (polite live region): “That change is outside your reach — nothing was changed.” The list stays exactly as it was, and an add or reword input keeps its text. The strip dismisses on the next action or after a few seconds. | R-REFUSED |\n| S-TODO-GONE | `rewordTodo` / `markTodo` → `TodoNotFound` | Status strip: “That todo was removed elsewhere.” The surface re-fetches the current view. | R-SYNC, N-FRESH |\n| S-UNAVAILABLE | any op → `Unavailable`, or a network failure | Status strip: “Couldn’t reach your list — nothing was changed.” with a **Retry** button that repeats the same op with the same request id. On first load the main region shows the same message with Retry instead. | N-DURABLE, R-INTACT |\n| S-INVALID | `InvalidRequest` (for example a bad view in the URL hash) | An unknown hash falls back to `#/` (All). Other invalid requests show the generic unavailable strip. The surface does not invent its own validation. | R-VIEW |\n| S-LIVE-RECONNECTING | the subscription dropped | Small unobtrusive “Reconnecting…” text in the footer. The list stays usable. | R-SYNC |\n\n## 5. Component selection (presentation-level, framework-neutral)\n- **NewTodoInput** (text field), **ToggleAllCheckbox**, **TodoList** → **TodoItem** (view/edit modes: checkbox, label, destroy button, edit field), **Footer** → **ItemsLeftCount**, **ViewFilters**, **ClearCompletedButton**, **StatusStrip** (an aria-live polite region).\n- **ListClient adapter** (not visual). It is the one place that calls `ListManager`'s `addTodo | rewordTodo | discardTodo | markTodo | toggleAll | clearCompleted | openList` and keeps the `subscribe(ListChanged)` loop. Components never call the backend directly. This matches the System relationships `todo-web-app → list-manager` and `todo-web-app → message-bus`, and nothing beyond them.\n- **View state**: the current view lives in the URL hash only. All list data comes from the latest `ListView`.\n- Styling follows the familiar TodoMVC visual language (centred card, light theme, strikethrough for completed) so members recognise it immediately (N-FAMILIAR). The surface uses its own stylesheet and does not reproduce anyone else's assets.\n\n## 6. Accessibility and input\n- Every control can be reached and operated by keyboard. On a focused row, Enter or F2 starts editing (the keyboard equivalent of double-click), Enter commits and Escape abandons.\n- Checkboxes and the destroy button have accessible names that include the todo title. The selected filter has `aria-current=\"page\"`. Status-strip messages go out through a polite live region.\n- After discard or clear, focus moves to the next row, or to the new-todo input when no rows remain.\n- Text and controls meet WCAG AA contrast. Completed rows never rely on colour alone, because strikethrough also marks them.\n\n## 7. Traceability matrix\n| Requirement | Covered by |\n|---|---|\n| R-ADD | §1.1 new-todo input, F-ADD, S-EMPTY |\n| R-REWORD | §1.2 edit mode, F-REWORD, S-ROW-EDITING |\n| R-DISCARD | §1.2 destroy button, F-DISCARD |\n| R-MARK | §1.2 checkbox, F-MARK |\n| R-TOGGLE-ALL | §1.1 toggle-all, F-TOGGLE-ALL |\n| R-CLEAR | §1.3 Clear completed, F-CLEAR |\n| R-REFUSED | S-CHANGE-REFUSED |\n| R-TALLY-AFTER | §1.3 items-left count, §2 skeleton (`ChangeOutcome.itemsLeft`) |\n| R-INTACT | F-OPEN, S-LOADING, S-UNAVAILABLE, P5 |\n| R-VIEW | §1.3 filters, F-VIEW, S-VIEW-EMPTY, S-INVALID |\n| R-LEFT | §1.3 items-left count, F-OPEN, F-VIEW |\n| R-SYNC | §3, F-SYNC, S-TODO-GONE, S-LIVE-RECONNECTING |\n| R-READ-REFUSED | S-READ-REFUSED |\n| N-CONTRACT / N-PARITY | P2, P3 |\n| N-DURABLE | P3, P5, S-UNAVAILABLE |\n| N-FAMILIAR | P1, §1 layout, §5 styling |\n| N-FRESH | P4, §3 |\n\nNo screen, flow or state lacks a trace. Team Agent journeys are out of scope here, as the UX Requirements state.\n\n## 8. Open points for review\n1. **Commit on blur.** TodoMVC commits an edit on blur. The UX Requirements say only “commit or abandon”, so this concept follows TodoMVC (N-CONTRACT). Reviewers should confirm.\n2. **Change-refused copy.** The UX Requirements require that the member be told the change is outside their reach. The exact wording above is a proposal for ux-reviewer.\n3. **Draft kept on concurrent change.** A row in edit mode keeps the member's draft when a remote change re-fetches the list (F-SYNC). This avoids losing typed text. It does not change any rule.",
         "screens": [
           {
@@ -31607,6 +33783,15 @@
           ]
         },
         {
+          "scenario": "resume-the-list-P1@todoMcpApp",
+          "arrange": [],
+          "steps": [],
+          "skip": {
+            "reason": "earmark E28: acceptance through an MCP Apps host — the acceptance emitter drives the SPA page, not the harness host",
+            "until": "2026-12-31"
+          }
+        },
+        {
           "scenario": "resume-the-list-P1@todoWebApp",
           "arrange": [],
           "steps": [],
@@ -31987,6 +34172,350 @@
               ]
             }
           ]
+        },
+        {
+          "scenario": "resume-the-list-P2@todoMcpApp",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Pay rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-pay-rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Pay rent\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Call mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-call-mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Call mum\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "MarkTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "todoId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "adf74fef44801a9b143337f40b0f87e3"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "completed",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": true
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"marked\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "OpenList",
+              "inputs": [
+                {
+                  "name": "action",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": {
+                        "kind": "navigate",
+                        "model": {
+                          "route": "#/"
+                        }
+                      }
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":3}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"items-left\"},\"text\":\"2 items left\"}},{\"kind\":\"checked\",\"model\":{\"target\":{\"element\":\"todo-checkbox\",\"nth\":1}}}]",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-agent",
+                  "component": "todoMcpServer",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "all"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"result\":{\"itemsLeft\":2,\"totalCount\":3,\"view\":\"all\"}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            }
+          ],
+          "skip": {
+            "reason": "earmark E28: acceptance through an MCP Apps host — the acceptance emitter drives the SPA page, not the harness host",
+            "until": "2026-12-31"
+          }
         },
         {
           "scenario": "resume-the-list-P2@todoWebApp",
@@ -32700,6 +35229,350 @@
               ]
             }
           ]
+        },
+        {
+          "scenario": "resume-the-list-P3@todoMcpApp",
+          "arrange": [
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ToggleAll",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"toggled\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "ClearCompleted",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"cleared\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Walk dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-walk-dog"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Walk dog\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Pay rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-pay-rent"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Pay rent\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "AddTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "wording",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "Call mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "requestId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "acc-call-mum"
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"added\",\"todo\":{\"title\":\"Call mum\",\"completed\":false}}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            },
+            {
+              "kind": "contractCall",
+              "model": {
+                "component": "listManager",
+                "operation": "MarkTodo",
+                "inputs": [
+                  {
+                    "name": "owner",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "alice"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "todoId",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": "adf74fef44801a9b143337f40b0f87e3"
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "completed",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": true
+                      }
+                    },
+                    "schemaRef": ""
+                  }
+                ],
+                "expect": {
+                  "result": "{\"outcome\":\"marked\"}",
+                  "errorExpected": false,
+                  "errorCode": ""
+                }
+              }
+            }
+          ],
+          "steps": [
+            {
+              "seq": 1,
+              "operation": "OpenList",
+              "inputs": [
+                {
+                  "name": "action",
+                  "value": {
+                    "kind": "literal",
+                    "model": {
+                      "json": {
+                        "kind": "navigate",
+                        "model": {
+                          "route": "#/active"
+                        }
+                      }
+                    }
+                  },
+                  "schemaRef": ""
+                }
+              ],
+              "expect": {
+                "result": "[{\"kind\":\"count\",\"model\":{\"target\":{\"element\":\"todo-item\"},\"n\":2}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":0},\"text\":\"Walk dog\"}},{\"kind\":\"text\",\"model\":{\"target\":{\"element\":\"todo-title\",\"nth\":1},\"text\":\"Call mum\"}}]",
+                "errorExpected": false,
+                "errorCode": ""
+              },
+              "probes": [
+                {
+                  "for": "out-team-agent",
+                  "component": "todoMcpServer",
+                  "operation": "ListOpenList",
+                  "as": "team-agent",
+                  "inputs": [
+                    {
+                      "name": "owner",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "alice"
+                        }
+                      },
+                      "schemaRef": ""
+                    },
+                    {
+                      "name": "view",
+                      "value": {
+                        "kind": "literal",
+                        "model": {
+                          "json": "active"
+                        }
+                      },
+                      "schemaRef": ""
+                    }
+                  ],
+                  "expect": {
+                    "result": "{\"result\":{\"itemsLeft\":2,\"totalCount\":3,\"view\":\"active\"}}",
+                    "errorExpected": false,
+                    "errorCode": ""
+                  }
+                }
+              ]
+            }
+          ],
+          "skip": {
+            "reason": "earmark E28: acceptance through an MCP Apps host — the acceptance emitter drives the SPA page, not the harness host",
+            "until": "2026-12-31"
+          }
         },
         {
           "scenario": "resume-the-list-P3@todoWebApp",
@@ -34497,6 +37370,15 @@
           ]
         },
         {
+          "scenario": "work-the-list-P1@todoMcpApp",
+          "arrange": [],
+          "steps": [],
+          "skip": {
+            "reason": "earmark E28: acceptance through an MCP Apps host — the acceptance emitter drives the SPA page, not the harness host",
+            "until": "2026-12-31"
+          }
+        },
+        {
           "scenario": "work-the-list-P1@todoWebApp",
           "arrange": [],
           "steps": [],
@@ -35343,6 +38225,15 @@
           ]
         },
         {
+          "scenario": "work-the-list-P2@todoMcpApp",
+          "arrange": [],
+          "steps": [],
+          "skip": {
+            "reason": "earmark E28: acceptance through an MCP Apps host — the acceptance emitter drives the SPA page, not the harness host",
+            "until": "2026-12-31"
+          }
+        },
+        {
           "scenario": "work-the-list-P2@todoWebApp",
           "arrange": [],
           "steps": [],
@@ -36071,6 +38962,15 @@
               ]
             }
           ]
+        },
+        {
+          "scenario": "work-the-list-P3@todoMcpApp",
+          "arrange": [],
+          "steps": [],
+          "skip": {
+            "reason": "earmark E28: acceptance through an MCP Apps host — the acceptance emitter drives the SPA page, not the harness host",
+            "until": "2026-12-31"
+          }
         },
         {
           "scenario": "work-the-list-P3@todoWebApp",
