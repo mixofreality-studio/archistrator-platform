@@ -246,7 +246,7 @@ func TestScaffoldGateDerivesItsPrefix(t *testing.T) {
 		t.Fatal(err)
 	}
 	gate := string(out[ArchGatePath])
-	for _, want := range []string{"package internal_test", "func TestFileLayout", "func TestGeneratedOnlyPublic", "func TestMethodLayering", "func TestMethod(", "arch.MethodSpec(moduleRoot)", "arch.CheckModuleFile"} {
+	for _, want := range []string{"package internal_test", "func TestFileLayout", "func TestGeneratedOnlyPublic", "func TestMethodLayering", "func TestMethod(", "arch.MethodSpec(moduleRoot)", "arch.CheckModuleFile", "SupportedSurfaces: appgen.SupportedSurfaces()", "framework-go-app-generator/appgen\""} {
 		if !strings.Contains(gate, want) {
 			t.Errorf("the seated gate is missing %q", want)
 		}

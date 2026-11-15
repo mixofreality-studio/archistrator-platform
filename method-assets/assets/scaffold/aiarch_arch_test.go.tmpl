@@ -24,6 +24,7 @@ import (
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
@@ -50,6 +51,8 @@ func TestMethod(t *testing.T) {
 		RepoRoot:       moduleRoot,
 		Arch:           arch.MethodSpec(moduleRoot),
 		NameNormalizer: methodcheck.StereotypeSuffixNormalizer,
+		// What the platform generators build; an empty list fails every Client closed.
+		SupportedSurfaces: appgen.SupportedSurfaces(),
 	})
 }
 
