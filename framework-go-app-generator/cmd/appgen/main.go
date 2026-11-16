@@ -128,7 +128,7 @@ func emit(o options, files []plan.File, out io.Writer) error {
 // writeOne writes a Generated file always, and a Seam only when it is absent.
 func writeOne(root string, f plan.File) error {
 	dest := filepath.Join(root, filepath.FromSlash(f.Path))
-	if plan.RoleName(f.Role) == "seam" {
+	if plan.IsSeam(f.Role) {
 		owned, err := exists(dest)
 		if err != nil || owned {
 			return err // the app's own now
@@ -150,7 +150,7 @@ func exists(p string) (bool, error) {
 func checkDrift(root string, files []plan.File, out io.Writer) error {
 	drifted := false
 	for _, f := range files {
-		if plan.RoleName(f.Role) != "generated" {
+		if plan.IsSeam(f.Role) {
 			continue
 		}
 		have, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f.Path))) // #nosec G304 G703 -- derived from the repo's own project.json

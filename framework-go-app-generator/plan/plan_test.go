@@ -11,6 +11,12 @@ func TestRoleName_Exhaustive(t *testing.T) {
 	}
 }
 
+func TestIsSeam_Exhaustive(t *testing.T) {
+	if IsSeam(Generated{}) || !IsSeam(Seam{}) {
+		t.Fatalf("IsSeam: generated=%v seam=%v", IsSeam(Generated{}), IsSeam(Seam{}))
+	}
+}
+
 func TestPaths_FiltersByRoleAndSorts(t *testing.T) {
 	outs := []Output{{"b.go", Generated{}}, {"hooks.go", Seam{}}, {"a.go", Generated{}}}
 	if got := Paths(outs, Generated{}); !slices.Equal(got, []string{"a.go", "b.go"}) {

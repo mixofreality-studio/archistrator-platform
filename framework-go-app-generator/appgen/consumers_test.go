@@ -22,11 +22,12 @@ var fixtures = []string{"greenfield", "todomvc"}
 // builtTree is a module tree where every contract with a goPackage holds one hand-written file.
 func builtTree(t *testing.T, project []byte) fstest.MapFS {
 	t.Helper()
-	return builtTreeWithout(t, project, "")
+	return builtTreeOf(t, project)
 }
 
-// builtTreeWithout is builtTree minus the packages of one layer: a module part way through construction.
-func builtTreeWithout(t *testing.T, project []byte, layer string) fstest.MapFS {
+// builtTreeOf holds one hand-written file for every contract with a goPackage in the named layers
+// (all layers when none is named): a module part way through construction.
+func builtTreeOf(t *testing.T, project []byte, layers ...string) fstest.MapFS {
 	t.Helper()
 	var doc struct {
 		ServiceContracts map[string]struct {
@@ -39,7 +40,8 @@ func builtTreeWithout(t *testing.T, project []byte, layer string) fstest.MapFS {
 	}
 	tree := fstest.MapFS{}
 	for _, c := range doc.ServiceContracts {
-		if c.GoPackage != "" && !strings.EqualFold(c.Layer, layer) {
+		wanted := len(layers) == 0 || slices.ContainsFunc(layers, func(l string) bool { return strings.EqualFold(c.Layer, l) })
+		if c.GoPackage != "" && wanted {
 			tree[c.GoPackage+"/impl.go"] = &fstest.MapFile{Data: []byte("package x\n")}
 		}
 	}
@@ -108,7 +110,13 @@ func TestPlan_MatchesEmit(t *testing.T) {
 
 // Plan treats every contract as built (Tree == nil); a module part way through construction only
 // ever emits a subset of it.
+//
+// The trees really are partial: an empty one (nothing built) and one holding only the
+// ResourceAccess and Engine packages. todomvc's `appgen compose` is the one known refusal on an
+// empty tree (its mcpApp fronts a Manager that is not built yet); it is asserted, not skipped.
+// The non-vacuity guard fails unless, per fixture, some consumer emits strictly fewer files than Plan.
 func TestPlan_CoversPartialEmit(t *testing.T) {
+	strictlyFewer := map[string][]string{}
 	for _, fx := range fixtures {
 		for _, c := range AllConsumers() {
 			t.Run(fx+"/"+c.Name, func(t *testing.T) {
@@ -117,23 +125,90 @@ func TestPlan_CoversPartialEmit(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				partial := Input{Project: in.Project, ModulePath: in.ModulePath, ModuleDir: in.ModuleDir, Config: in.Config, Tree: builtTreeWithout(t, in.Project, "Client")}
-				files, err := c.Emit(partial)
-				if err != nil {
-					t.Fatal(err)
-				}
 				have := map[string]plan.OutputRole{}
 				for _, o := range planned {
 					have[o.Path] = o.Role
 				}
-				for _, o := range plan.Outputs(files) {
-					role, ok := have[o.Path]
-					if !ok {
-						t.Errorf("partial emission wrote %s, which Plan does not name", o.Path)
+				trees := map[string]fstest.MapFS{
+					"empty":                  {},
+					"resourceaccess+engines": builtTreeOf(t, in.Project, "ResourceAccess", "Engine"),
+				}
+				for name, tree := range trees {
+					partial := in
+					partial.Tree = tree
+					files, err := c.Emit(partial)
+					if fx == "todomvc" && c.Name == "appgen compose" {
+						// No Manager is built in either tree.
+						if err == nil {
+							t.Errorf("%s over the %s tree: want the refusal for an mcpApp fronting an unbuilt Manager, got %d files", c.Name, name, len(files))
+						}
 						continue
 					}
-					if plan.RoleName(role) != plan.RoleName(o.Role) {
-						t.Errorf("%s: role %s in the emission, %s in Plan", o.Path, plan.RoleName(o.Role), plan.RoleName(role))
+					if err != nil {
+						t.Errorf("%s tree: %v", name, err)
+						continue
+					}
+					if len(files) < len(planned) {
+						strictlyFewer[fx] = append(strictlyFewer[fx], c.Name+" ("+name+")")
+					}
+					for _, o := range plan.Outputs(files) {
+						role, ok := have[o.Path]
+						if !ok {
+							t.Errorf("%s tree: the partial emission wrote %s, which Plan does not name", name, o.Path)
+							continue
+						}
+						if role != o.Role {
+							t.Errorf("%s tree: %s has role %T in the emission, %T in Plan", name, o.Path, o.Role, role)
+						}
+					}
+				}
+			})
+		}
+	}
+	for _, fx := range fixtures {
+		if len(strictlyFewer[fx]) == 0 {
+			t.Errorf("%s: no consumer emits fewer files over a partial tree than Plan names: the subset proof is vacuous", fx)
+		}
+	}
+}
+
+// Plan ignores the caller's Tree: it is the emission of a fully built module, whatever the module
+// holds now. Edit scope computed from Plan part way through construction depends on it.
+func TestPlan_IgnoresTheTree(t *testing.T) {
+	for _, fx := range fixtures {
+		for _, c := range AllConsumers() {
+			t.Run(fx+"/"+c.Name, func(t *testing.T) {
+				in := fixtureInput(t, fx, "server", false)
+				base, err := c.Plan(in)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if len(base) == 0 && fx == "todomvc" { // greenfield has no web or MCP surface for three consumers
+					t.Fatalf("%s plans nothing for %s: the proof is vacuous", c.Name, fx)
+				}
+				built := in
+				built.Tree = builtTree(t, in.Project)
+				files, err := c.Emit(built)
+				if err != nil {
+					t.Fatal(err)
+				}
+				if got := plan.Outputs(files); !reflect.DeepEqual(got, base) {
+					t.Errorf("Plan = %v, the emission of the built tree = %v", base, got)
+				}
+				for name, tree := range map[string]fstest.MapFS{
+					"empty":                  {},
+					"resourceaccess+engines": builtTreeOf(t, in.Project, "ResourceAccess", "Engine"),
+					"built":                  builtTree(t, in.Project),
+				} {
+					given := in
+					given.Tree = tree
+					got, err := c.Plan(given)
+					if err != nil {
+						t.Errorf("%s tree: Plan: %v", name, err)
+						continue
+					}
+					if !reflect.DeepEqual(got, base) {
+						t.Errorf("%s tree: Plan = %v, want the tree-less %v", name, got, base)
 					}
 				}
 			})
@@ -151,7 +226,7 @@ func TestPlan_IsRepoRelative(t *testing.T) {
 				t.Fatal(err)
 			}
 			if len(outs) == 0 {
-				t.Skipf("%s plans nothing for this fixture", c.Name)
+				t.Fatalf("%s plans nothing for the todomvc fixture, which plans at least one file for every consumer", c.Name)
 			}
 			for _, o := range outs {
 				switch {

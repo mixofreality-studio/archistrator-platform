@@ -5,9 +5,11 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/filesnap"
 )
 
 // The CLI and the manifest are one source: testgen writes exactly the files its consumer emits,
@@ -34,8 +36,17 @@ func TestCLIWritesItsConsumersEmit(t *testing.T) {
 	if len(want) == 0 {
 		t.Fatal("testgen emits nothing for the fixture: the proof is vacuous")
 	}
+	before := filesnap.Take(t, repo)
 	if err := run([]string{"-project", project, "-root", root}, io.Discard, io.Discard); err != nil {
 		t.Fatal(err)
+	}
+	var wantPaths []string
+	for _, f := range want {
+		wantPaths = append(wantPaths, f.Path)
+	}
+	slices.Sort(wantPaths)
+	if got := before.ChangedSince(filesnap.Take(t, repo)); !slices.Equal(got, wantPaths) {
+		t.Errorf("the CLI wrote %v, its consumer emits %v", got, wantPaths)
 	}
 	for _, f := range want {
 		got, err := os.ReadFile(filepath.Join(repo, filepath.FromSlash(f.Path)))

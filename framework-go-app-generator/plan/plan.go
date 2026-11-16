@@ -45,6 +45,18 @@ func RoleName(r OutputRole) string {
 	panic("unreachable: sealed OutputRole")
 }
 
+// IsSeam reports whether r is a Seam. The switch has no default (gochecksumtype keeps it exhaustive),
+// so a new role cannot fall silently into the branch of the old two.
+func IsSeam(r OutputRole) bool {
+	switch r.(type) {
+	case Generated:
+		return false
+	case Seam:
+		return true
+	}
+	panic("unreachable: sealed OutputRole")
+}
+
 // Paths returns the sorted paths of outs whose role is r's type.
 func Paths(outs []Output, r OutputRole) []string {
 	want := RoleName(r)

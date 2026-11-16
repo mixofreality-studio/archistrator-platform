@@ -5,10 +5,12 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/filesnap"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/plan"
 )
 
@@ -38,8 +40,17 @@ func TestCLIsWriteTheirConsumersEmit(t *testing.T) {
 			if len(want) == 0 {
 				t.Fatalf("appgen %s emits nothing for the fixture: the proof is vacuous", sub)
 			}
+			before := filesnap.Take(t, root)
 			if err := run(append([]string{sub}, base...), io.Discard); err != nil {
 				t.Fatal(err)
+			}
+			var wantPaths []string
+			for _, f := range want {
+				wantPaths = append(wantPaths, f.Path)
+			}
+			slices.Sort(wantPaths)
+			if got := before.ChangedSince(filesnap.Take(t, root)); !slices.Equal(got, wantPaths) {
+				t.Errorf("the CLI wrote %v, its consumer emits %v", got, wantPaths)
 			}
 			for _, f := range want {
 				got, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(f.Path)))

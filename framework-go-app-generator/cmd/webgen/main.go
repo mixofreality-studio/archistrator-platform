@@ -166,7 +166,7 @@ func writeBootstrap(dir string, files []appgen.WebFile) ([]string, error) {
 		if err != nil && !errors.Is(err, fs.ErrNotExist) {
 			return wrote, err
 		}
-		if exists && (plan.RoleName(f.Role) == "seam" || bytes.Equal(have, f.Content)) {
+		if exists && (plan.IsSeam(f.Role) || bytes.Equal(have, f.Content)) {
 			continue
 		}
 		if err := webgen.Write(dir, []webgen.File{f.File}); err != nil {
