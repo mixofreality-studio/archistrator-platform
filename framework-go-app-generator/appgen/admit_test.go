@@ -110,6 +110,54 @@ func TestAdmitTier1_IncompleteIsWarning(t *testing.T) {
 	}
 }
 
+// The design is recorded one contract at a time: an mcpApp client whose Manager is not recorded yet
+// is the design in progress. Each contract of the todomvc fixture, recorded in layer order with no
+// plan yet, admits with no Local problem, and the first ones carry the warning.
+func TestAdmitTier1_ContractsRecordedOneAtATimeAreNeverLocal(t *testing.T) {
+	raw := testfixtures.Fixture(t, "todomvc")
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	delete(doc, "phaseArtifacts")
+	all := doc["serviceContracts"].(map[string]any)
+	rank := map[string]int{"utility": 0, "resourceaccess": 1, "engine": 2, "manager": 3}
+	var keys []string
+	for k, v := range all {
+		if _, ok := rank[strings.ToLower(v.(map[string]any)["layer"].(string))]; ok {
+			keys = append(keys, k)
+		}
+	}
+	slices.SortFunc(keys, func(a, b string) int {
+		la, lb := strings.ToLower(all[a].(map[string]any)["layer"].(string)), strings.ToLower(all[b].(map[string]any)["layer"].(string))
+		if rank[la] != rank[lb] {
+			return rank[la] - rank[lb]
+		}
+		return strings.Compare(a, b)
+	})
+	recorded := map[string]any{}
+	var warned bool
+	for _, k := range keys {
+		recorded[k] = all[k]
+		doc["serviceContracts"] = recorded
+		b, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		in := Input{Project: b, ModulePath: "example.com/app", ModuleDir: "server", Config: DefaultConfig()}
+		for _, kind := range []ArtifactKind{KindServiceContract, KindSystem} {
+			ps := AdmitTier1(in, kind)
+			if hasLocal(ps) {
+				t.Fatalf("after recording %s, %s admits a Local problem: %v", k, kind, ps)
+			}
+			warned = warned || len(ps) > 0
+		}
+	}
+	if !warned {
+		t.Error("an mcpApp client whose Manager is unrecorded must warn at least once: the proof is vacuous")
+	}
+}
+
 // An unknown layer is a defect in the contract itself, not a part of the design that is yet to come.
 func TestAdmitTier1_UnknownLayerIsLocal(t *testing.T) {
 	raw := testfixtures.Fixture(t, "greenfield")

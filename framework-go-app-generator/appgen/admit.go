@@ -94,9 +94,10 @@ func problemLess(a, b Problem) bool {
 
 // absentID matches the generators' and the project model's own wording for an id the design has
 // not recorded yet: a component, contract or operation that a record names and the project does
-// not hold ("unknown component "ghostEngine""). Every other emit failure (an unknown layer, a
-// source gofmt cannot parse) is a defect in the artifact itself.
-var absentID = regexp.MustCompile(`\bunknown (component|contract|operation)\b`)
+// not hold ("unknown component "ghostEngine""), a Manager contract an mcpApp client fronts that is
+// still to be recorded, a test plan filed under a contract that is not there yet. Every other emit
+// failure (an unknown layer, a source gofmt cannot parse) is a defect in the artifact itself.
+var absentID = regexp.MustCompile(`\bunknown (component|contract|operation)\b|\bfronts no Manager\b|\bis not a serviceContracts key\b`)
 
 func emitSeverity(err error) Severity {
 	if absentID.MatchString(err.Error()) {
