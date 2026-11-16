@@ -2,7 +2,9 @@ package webgen
 
 import (
 	"fmt"
+	"io/fs"
 	"os"
+	slashpath "path"
 	"path/filepath"
 	"regexp"
 )
@@ -197,11 +199,44 @@ func LoadInputs(dir string, c Config) (Inputs, error) {
 	if err != nil {
 		return Inputs{}, fmt.Errorf("webgen: read OAS: %w", err)
 	}
-	doc, err := ParseYAML(src)
+	return inputsFrom(c, src, func() (map[string]bool, error) { return LoadMCPTools(filepath.Join(dir, c.MCPTools)) })
+}
+
+// LoadInputsFS is LoadInputs over a file system holding the repository: dir is the slash-separated
+// webApp root inside fsys, and the config's paths resolve against it (a path above fsys's root is
+// an error). The generator reads the clients' emission this way, from memory.
+func LoadInputsFS(fsys fs.FS, dir string, c Config) (Inputs, error) {
+	oas, err := rooted(dir, c.OAS)
 	if err != nil {
 		return Inputs{}, err
 	}
-	tools, err := LoadMCPTools(filepath.Join(dir, c.MCPTools))
+	src, err := fs.ReadFile(fsys, oas)
+	if err != nil {
+		return Inputs{}, fmt.Errorf("webgen: read OAS: %w", err)
+	}
+	tools, err := rooted(dir, c.MCPTools)
+	if err != nil {
+		return Inputs{}, err
+	}
+	return inputsFrom(c, src, func() (map[string]bool, error) { return LoadMCPToolsFS(fsys, tools) })
+}
+
+// rooted resolves rel against dir as a slash path inside an fs.FS: the result may not leave it.
+func rooted(dir, rel string) (string, error) {
+	p := slashpath.Join(dir, rel)
+	if !fs.ValidPath(p) {
+		return "", fmt.Errorf("webgen: %q resolves to %q, outside the repository", rel, p)
+	}
+	return p, nil
+}
+
+// inputsFrom parses the OAS and reads the tool tables.
+func inputsFrom(c Config, oas []byte, loadTools func() (map[string]bool, error)) (Inputs, error) {
+	doc, err := ParseYAML(oas)
+	if err != nil {
+		return Inputs{}, err
+	}
+	tools, err := loadTools()
 	if err != nil {
 		if !c.MCPOptional {
 			return Inputs{}, err

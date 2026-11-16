@@ -25,7 +25,6 @@ package main
 
 import (
 	"bytes"
-	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -35,8 +34,8 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/cli"
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/modelgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
 )
 
@@ -85,83 +84,22 @@ func run(args []string, errOut io.Writer) error {
 	if err != nil {
 		return err
 	}
-	only, err := selectContracts(raw, o)
+	consumer, _ := appgen.ConsumerNamed("modelgen")
+	emitted, err := consumer.Emit(appgen.Input{Project: raw, ModulePath: o.module, Tree: os.DirFS(o.root), Only: o.contracts})
 	if err != nil {
 		return err
 	}
-	if len(only) == 0 {
+	if len(emitted) == 0 {
 		return nil // nothing built yet: nothing to generate and nothing to drift from
 	}
-	files, err := render(raw, o.module, only)
-	if err != nil {
-		return err
+	files := make(map[string][]byte, len(emitted))
+	for _, f := range emitted {
+		files[f.Path] = f.Content
 	}
 	if o.check {
 		return checkFiles(o.root, files, errOut)
 	}
 	return writeFiles(o.root, files)
-}
-
-// selectContracts is the set of contract keys this run generates.
-func selectContracts(raw []byte, o options) ([]string, error) {
-	if len(o.contracts) > 0 {
-		return o.contracts, nil
-	}
-	var doc struct {
-		ServiceContracts map[string]struct {
-			GoPackage string `json:"goPackage"`
-			Layer     string `json:"layer"`
-			Stub      bool   `json:"stub"`
-		} `json:"serviceContracts"`
-	}
-	if err := json.Unmarshal(raw, &doc); err != nil {
-		return nil, fmt.Errorf("parse project.json: %w", err)
-	}
-	var out []string
-	for key, c := range doc.ServiceContracts {
-		if c.GoPackage == "" || strings.EqualFold(c.Layer, "client") {
-			continue
-		}
-		if c.Stub || holdsCode(filepath.Join(o.root, c.GoPackage)) {
-			out = append(out, key)
-		}
-	}
-	slices.Sort(out)
-	return out, nil
-}
-
-// holdsCode reports whether dir has a Go file other than a test: testgen seeds test files
-// into a package directory before its code exists, and that is not a package yet.
-func holdsCode(dir string) bool {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return false
-	}
-	return slices.ContainsFunc(entries, func(e os.DirEntry) bool {
-		n := e.Name()
-		return !e.IsDir() && strings.HasSuffix(n, ".go") && !strings.HasSuffix(n, "_test.go")
-	})
-}
-
-// render is the module-relative path → bytes of every generated file.
-func render(raw []byte, module string, only []string) (map[string][]byte, error) {
-	cfg := modelgen.Config{ModulePath: module, Only: only}
-	models, err := modelgen.Generate(raw, cfg)
-	if err != nil {
-		return nil, err
-	}
-	files := make(map[string][]byte, 2*len(models))
-	for goPackage, src := range models {
-		files[filepath.Join(goPackage, "contract.gen.go")] = src
-	}
-	fakes, err := modelgen.GenerateFakes(raw, cfg)
-	if err != nil {
-		return nil, err
-	}
-	for fakePackage, src := range fakes {
-		files[filepath.Join(fakePackage, "fake.gen.go")] = src
-	}
-	return files, nil
 }
 
 func sortedPaths(files map[string][]byte) []string {

@@ -58,6 +58,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/cli"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/testgen"
 )
@@ -91,7 +92,9 @@ func runWith(args []string, out, errOut io.Writer, goTest goTestRunner) error {
 	if err != nil {
 		return err
 	}
-	gen, err := testgen.Generate(raw, testgen.Config{ModulePath: o.module, UITestsDir: filepath.ToSlash(o.uitests)})
+	// The testgen consumer's emission is exactly these files (appgen.Consumers); the discrimination
+	// runs and warnings ride on the same output.
+	gen, err := appgen.TestgenOutput(appgen.Input{Project: raw, ModulePath: o.module, UITestsDir: filepath.ToSlash(o.uitests)})
 	if err != nil {
 		return err
 	}

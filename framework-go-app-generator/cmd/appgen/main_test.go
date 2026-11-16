@@ -8,8 +8,6 @@ import (
 	"regexp"
 	"strings"
 	"testing"
-
-	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 const projectDoc = `{"serviceContracts":{
@@ -229,65 +227,5 @@ func TestComposeRefusesAnUndeclaredEnvRead(t *testing.T) {
 	err = run(append([]string{"compose", "-check"}, base...), io.Discard)
 	if err == nil || !strings.Contains(err.Error(), "cmd/server/hooks.go: APP_IDENTITY_PROVIDER_URL") {
 		t.Fatalf("want a refusal naming the undeclared read, got %v", err)
-	}
-}
-
-// A package holding only nullgen's null.gen.go is built: the conformance pipeline wires it. Any
-// other generated file alone is not.
-func TestHoldsCodeCountsNullImplementations(t *testing.T) {
-	for _, tc := range []struct {
-		file string
-		want bool
-	}{
-		{"null.gen.go", true},
-		{"contract.gen.go", false},
-		{"thing_test.go", false},
-		{"thing.go", true},
-	} {
-		dir := t.TempDir()
-		if err := os.WriteFile(filepath.Join(dir, tc.file), []byte("package p\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-		if got := holdsCode(dir); got != tc.want {
-			t.Errorf("holdsCode with only %s = %v, want %v", tc.file, got, tc.want)
-		}
-	}
-}
-
-// A machine client's package is generated end to end: `appgen clients` writes it and a person
-// never adds a line. It is still built, so the model handed to compose keeps its contract and
-// the scenario subject gets its constructor. A package with no generated file stays dropped.
-func TestWireOnlyBuilt_KeepsGeneratedOnlyClients(t *testing.T) {
-	root := t.TempDir()
-	touch := func(rel string) {
-		p := filepath.Join(root, rel)
-		if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {
-			t.Fatal(err)
-		}
-		if err := os.WriteFile(p, []byte("package x\n"), 0o600); err != nil {
-			t.Fatal(err)
-		}
-	}
-	touch("internal/client/web/list/list_handlers.gen.go")
-	touch("internal/manager/list/contract.gen.go")
-	touch("internal/resourceaccess/todo/todo_test.go")
-	contract := func(layer, pkg string) *projectmodel.Contract {
-		return &projectmodel.Contract{Layer: layer, GoPackage: pkg}
-	}
-	m := &projectmodel.Model{Contracts: map[string]*projectmodel.Contract{
-		"todoApi":     contract("Client", "internal/client/web/list"),
-		"ungenerated": contract("Client", "internal/client/web/absent"),
-		"listManager": contract("Manager", "internal/manager/list"),
-		"todoAccess":  contract("ResourceAccess", "internal/resourceaccess/todo"),
-		"todoWebApp":  contract("Client", ""),
-	}}
-	wireOnlyBuilt(m, root, false)
-	if _, ok := m.Contracts["todoApi"]; !ok {
-		t.Error("a Client whose package holds only generated files is built: its contract must be kept")
-	}
-	for _, dropped := range []string{"ungenerated", "listManager", "todoAccess"} {
-		if _, ok := m.Contracts[dropped]; ok {
-			t.Errorf("%s holds no hand-written code and no generated client package: it must be dropped", dropped)
-		}
 	}
 }

@@ -7,6 +7,7 @@ import (
 	"go/token"
 	"io/fs"
 	"os"
+	slashpath "path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -40,36 +41,64 @@ func LoadMCPTools(dir string) (map[string]bool, error) {
 	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
 		return nil, fmt.Errorf("webgen: no generated MCP tool directory at %s", dir)
 	}
+	return loadMCPTools(os.DirFS(dir), ".", func(p string) string { return filepath.Join(dir, filepath.FromSlash(p)) })
+}
+
+// LoadMCPToolsFS is LoadMCPTools over a file system: dir is the slash-separated directory of the
+// tool tables inside fsys. The generator reads a project's tables from the emission it holds in
+// memory, so a manifest and a drift check never need the tree on disk.
+func LoadMCPToolsFS(fsys fs.FS, dir string) (map[string]bool, error) {
+	if st, err := fs.Stat(fsys, dir); err != nil || !st.IsDir() {
+		return nil, fmt.Errorf("webgen: no generated MCP tool directory at %s", dir)
+	}
+	return loadMCPTools(fsys, dir, func(p string) string { return p })
+}
+
+// loadMCPTools reads every *tools.gen.go under root in fsys; show names a path in errors.
+func loadMCPTools(fsys fs.FS, root string, show func(string) string) (map[string]bool, error) {
 	tools := map[string]bool{}
 	var tables int
-	err := filepath.WalkDir(dir, func(p string, d fs.DirEntry, err error) error {
+	err := fs.WalkDir(fsys, root, func(p string, d fs.DirEntry, err error) error {
 		if err != nil || d.IsDir() || !strings.HasSuffix(p, "tools.gen.go") {
 			return err
 		}
 		tables++
-		return addFileTools(p, tools)
+		return addFileTools(fsys, p, show, tools)
 	})
 	if err != nil {
 		return nil, err
 	}
 	if tables == 0 {
-		return nil, fmt.Errorf("webgen: no *tools.gen.go tool table under %s", dir)
+		return nil, fmt.Errorf("webgen: no *tools.gen.go tool table under %s", show(root))
 	}
 	return tools, nil
 }
 
-// addFileTools adds one table's registrations; a table with none is an error.
-func addFileTools(file string, tools map[string]bool) error {
-	fset := token.NewFileSet()
-	f, err := parser.ParseFile(fset, file, nil, parser.SkipObjectResolution)
+// parseTable reads and parses one tool table.
+func parseTable(fsys fs.FS, file string, show func(string) string) (*token.FileSet, *ast.File, error) {
+	src, err := fs.ReadFile(fsys, file)
 	if err != nil {
-		return fmt.Errorf("webgen: parse %s: %w", file, err)
+		return nil, nil, err
+	}
+	fset := token.NewFileSet()
+	f, err := parser.ParseFile(fset, show(file), src, parser.SkipObjectResolution)
+	if err != nil {
+		return nil, nil, fmt.Errorf("webgen: parse %s: %w", show(file), err)
+	}
+	return fset, f, nil
+}
+
+// addFileTools adds one table's registrations; a table with none is an error.
+func addFileTools(fsys fs.FS, file string, show func(string) string, tools map[string]bool) error {
+	fset, f, err := parseTable(fsys, file, show)
+	if err != nil {
+		return err
 	}
 	sdk, err := sdkName(f)
 	if err != nil {
-		return fmt.Errorf("webgen: %s: %w", file, err)
+		return fmt.Errorf("webgen: %s: %w", show(file), err)
 	}
-	consts, err := packageConsts(filepath.Dir(file))
+	consts, err := packageConsts(fsys, slashpath.Dir(file), show)
 	if err != nil {
 		return err
 	}
@@ -85,10 +114,10 @@ func addFileTools(file string, tools map[string]bool) error {
 		return true
 	})
 	if r.err != nil {
-		return fmt.Errorf("webgen: %s:%s: %w", file, lineOf(fset, r.at), r.err)
+		return fmt.Errorf("webgen: %s:%s: %w", show(file), lineOf(fset, r.at), r.err)
 	}
 	if len(names) == 0 {
-		return fmt.Errorf("webgen: %s registers no MCP tool (want at least one %s.AddTool)", file, sdk)
+		return fmt.Errorf("webgen: %s registers no MCP tool (want at least one %s.AddTool)", show(file), sdk)
 	}
 	for _, name := range names {
 		tools[name] = true
@@ -118,8 +147,8 @@ func sdkName(f *ast.File) (string, error) {
 // package), for a Name given as a constant. constString evaluates one; a
 // constant that is not a string literal (or a + of them) does not evaluate, so
 // naming it fails.
-func packageConsts(dir string) (map[string]ast.Expr, error) {
-	files, err := filepath.Glob(filepath.Join(dir, "*.go"))
+func packageConsts(fsys fs.FS, dir string, show func(string) string) (map[string]ast.Expr, error) {
+	files, err := fs.Glob(fsys, slashpath.Join(dir, "*.go"))
 	if err != nil {
 		return nil, err
 	}
@@ -128,9 +157,13 @@ func packageConsts(dir string) (map[string]ast.Expr, error) {
 		if strings.HasSuffix(file, "_test.go") {
 			continue
 		}
-		f, err := parser.ParseFile(token.NewFileSet(), file, nil, parser.SkipObjectResolution)
+		src, err := fs.ReadFile(fsys, file)
 		if err != nil {
-			return nil, fmt.Errorf("webgen: parse %s: %w", file, err)
+			return nil, err
+		}
+		f, err := parser.ParseFile(token.NewFileSet(), show(file), src, parser.SkipObjectResolution)
+		if err != nil {
+			return nil, fmt.Errorf("webgen: parse %s: %w", show(file), err)
 		}
 		collectConsts(f, raw)
 	}

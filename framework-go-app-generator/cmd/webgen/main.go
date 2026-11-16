@@ -23,12 +23,17 @@
 package main
 
 import (
+	"bytes"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
+	"io/fs"
 	"os"
 	"path/filepath"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/plan"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/webgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
@@ -142,12 +147,34 @@ func cmdBootstrap(fs *flag.FlagSet, args []string, out io.Writer) error {
 	if err != nil {
 		return err
 	}
-	files, err := webgen.Bootstrap(webgen.AppSlug(module), *surface, k.Surface())
+	files, err := appgen.BootstrapSurface(webgen.AppSlug(module), *surface, k.Surface())
 	if err != nil {
 		return err
 	}
-	wrote, err := webgen.WriteScaffold(dirOf(fs), files)
+	wrote, err := writeBootstrap(dirOf(fs), files)
 	return report(out, "bootstrapped", wrote, err)
+}
+
+// writeBootstrap writes a surface's bootstrap under dir: a Seam only when absent (it is the app's
+// afterwards), a Generated file whenever it differs from what is there. It returns what it wrote.
+func writeBootstrap(dir string, files []appgen.WebFile) ([]string, error) {
+	var wrote []string
+	for _, f := range files {
+		dest := filepath.Join(dir, f.Path)
+		have, err := os.ReadFile(dest) // #nosec G304 G703 -- a seat the generator itself owns
+		exists := err == nil
+		if err != nil && !errors.Is(err, fs.ErrNotExist) {
+			return wrote, err
+		}
+		if exists && (plan.RoleName(f.Role) == "seam" || bytes.Equal(have, f.Content)) {
+			continue
+		}
+		if err := webgen.Write(dir, []webgen.File{f.File}); err != nil {
+			return wrote, err
+		}
+		wrote = append(wrote, f.Path)
+	}
+	return wrote, nil
 }
 
 func cmdSkeleton(fs *flag.FlagSet, args []string, out io.Writer) error {

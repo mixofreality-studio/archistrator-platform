@@ -20,6 +20,7 @@ import (
 	"io"
 	"os"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/cli"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/nullgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/arch"
@@ -45,14 +46,14 @@ func main() {
 
 func run(args []string, errOut io.Writer) error {
 	var project, root, module string
-	var opts nullgen.Options
+	var cfg appgen.Config
 	fl := flag.NewFlagSet("nullgen", flag.ContinueOnError)
 	fl.SetOutput(errOut)
 	fl.StringVar(&project, "project", ".aiarch/state/project.json", "the project.json to read")
 	fl.StringVar(&root, "root", ".", "the Go module to generate into")
 	fl.StringVar(&module, "module", "", "the Go module path of -root (default: read from its go.mod)")
-	fl.StringVar(&opts.Container, "container", "", "the deployment container to compose (default: the first)")
-	fl.StringVar(&opts.EnvPrefix, "env-prefix", "", "the environment-variable prefix (default APP)")
+	fl.StringVar(&cfg.Container, "container", "", "the deployment container to compose (default: the first)")
+	fl.StringVar(&cfg.EnvPrefix, "env-prefix", "", "the environment-variable prefix (default APP)")
 	if err := fl.Parse(args); err != nil {
 		return err
 	}
@@ -62,14 +63,18 @@ func run(args []string, errOut io.Writer) error {
 			return err
 		}
 	}
-	opts.ModulePath = module
 	raw, err := cli.ReadAdmitted(project) // the one loader: every problem, before any emission
 	if err != nil {
 		return err
 	}
-	out, err := nullgen.Emit(raw, opts)
+	consumer, _ := appgen.ConsumerNamed("nullgen")
+	files, err := consumer.Emit(appgen.Input{Project: raw, ModulePath: module, Config: cfg})
 	if err != nil {
 		return err
 	}
-	return nullgen.Write(root, out)
+	out := nullgen.Output{Files: make(map[string][]byte, len(files))}
+	for _, f := range files {
+		out.Files[f.Path] = f.Content
+	}
+	return nullgen.Write(root, out) // refuses a hooks.go that is not nullgen's: the seam is the app's own
 }
