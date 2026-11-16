@@ -2,6 +2,7 @@ package appgen
 
 import (
 	"encoding/json"
+	"maps"
 	"os"
 	"slices"
 	"strings"
@@ -23,6 +24,11 @@ func mutateContracts(t *testing.T, raw []byte, fn func(contracts map[string]map[
 		contracts[k] = v.(map[string]any)
 	}
 	fn(contracts)
+	kept := map[string]any{}
+	for k, v := range contracts {
+		kept[k] = v
+	}
+	doc["serviceContracts"] = kept
 	out, err := json.Marshal(doc)
 	if err != nil {
 		t.Fatal(err)
@@ -155,6 +161,61 @@ func TestAdmitTier1_ContractsRecordedOneAtATimeAreNeverLocal(t *testing.T) {
 	}
 	if !warned {
 		t.Error("an mcpApp client whose Manager is unrecorded must warn at least once: the proof is vacuous")
+	}
+}
+
+// The design is incomplete while a built, contract-bearing component has no recorded contract: the
+// composition is whole only once the last is recorded, and its failures wait until then.
+func TestDesignIncomplete(t *testing.T) {
+	for _, fx := range fixtures {
+		raw := testfixtures.Fixture(t, fx)
+		if designIncomplete(raw) {
+			t.Errorf("the whole %s fixture is not incomplete", fx)
+		}
+		// Only the first contract recorded (a ResourceAccess or Utility, which depends on nothing).
+		first := mutateContracts(t, raw, func(c map[string]map[string]any) {
+			keep := ""
+			for _, k := range slices.Sorted(maps.Keys(c)) {
+				layer := strings.ToLower(c[k]["layer"].(string))
+				if keep == "" && (layer == "resourceaccess" || layer == "utility") {
+					keep = k
+				}
+			}
+			for k := range c {
+				if k != keep {
+					delete(c, k)
+				}
+			}
+		})
+		if !designIncomplete(first) {
+			t.Errorf("the %s fixture with one contract recorded is incomplete", fx)
+		}
+	}
+	if designIncomplete([]byte(`{"id": "x"}`)) {
+		t.Error("a project that does not load is not incomplete: its failure is its own")
+	}
+}
+
+// A composition failure over a design still being recorded is Incomplete; over a whole design it is Local.
+func TestAdmitTier1_CompositionFailureSeverityFollowsTheDesign(t *testing.T) {
+	s := &admitSources{}
+	for _, tc := range []struct {
+		incomplete bool
+		consumer   string
+		msg        string
+		want       string
+	}{
+		{true, "appgen compose", "composegen: something is off", "incomplete"},
+		{false, "appgen compose", "composegen: something is off", "local"},
+		{true, "modelgen", "modelgen: gofmt generated source", "local"},
+		{true, "testgen", "1:1: undefined: scenariocompose.NewX", "incomplete"},
+		{false, "testgen", "1:1: undefined: scenariocompose.NewX", "local"},
+		{false, "appgen compose", `rungen: the deployment declares no "listenAddr" setting, so the server has no HTTP address to run on`, "incomplete"},
+	} {
+		s.designIncomplete = tc.incomplete
+		if got := SeverityName(s.severityOf(tc.consumer, tc.msg)); got != tc.want {
+			t.Errorf("incomplete=%v %s %q = %s, want %s", tc.incomplete, tc.consumer, tc.msg, got, tc.want)
+		}
 	}
 }
 

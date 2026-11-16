@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/plan"
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
 // Severity is how an admission finding is handled: it refuses the write or it waits for Tier 2.
@@ -72,7 +73,7 @@ func AdmitTier1(in Input, kind ArtifactKind) []Problem {
 	if len(reading) == 0 {
 		return nil
 	}
-	src := &admitSources{fset: token.NewFileSet(), module: in.ModulePath, moduleDir: in.ModuleDir, byDir: map[string][]*admitFile{}, reporting: map[string]bool{}, partial: handWrittenPackages(in)}
+	src := &admitSources{fset: token.NewFileSet(), module: in.ModulePath, moduleDir: in.ModuleDir, byDir: map[string][]*admitFile{}, reporting: map[string]bool{}, partial: handWrittenPackages(in), designIncomplete: designIncomplete(in.Project)}
 	for _, c := range reading {
 		src.reporting[c.Name] = true
 	}
@@ -97,13 +98,58 @@ func problemLess(a, b Problem) bool {
 // not hold ("unknown component "ghostEngine""), a Manager contract an mcpApp client fronts that is
 // still to be recorded, a test plan filed under a contract that is not there yet. Every other emit
 // failure (an unknown layer, a source gofmt cannot parse) is a defect in the artifact itself.
-var absentID = regexp.MustCompile(`\bunknown (component|contract|operation)\b|\bfronts no Manager\b|\bis not a serviceContracts key\b`)
+var absentID = regexp.MustCompile(`\bunknown (component|contract|operation)\b|\bfronts no Manager\b|\bis not a serviceContracts key\b|\bthe deployment declares no "[^"]+" setting\b`)
 
-func emitSeverity(err error) Severity {
-	if absentID.MatchString(err.Error()) {
+// compositionConsumers are the consumers that wire the whole System together: what they emit
+// needs every contract and the deployment model, so over a design still being recorded their
+// findings name what is still to come.
+var compositionConsumers = map[string]bool{
+	"appgen compose": true, "appgen config": true, "appgen clients": true, "webgen bootstrap": true, "webgen generate": true,
+}
+
+// scenariocomposeRef matches a finding that names a subject the composition's scenario package builds.
+var scenariocomposeRef = regexp.MustCompile(`\bscenariocompose\.`)
+
+// severityOf is how a failure of consumer is handled: Incomplete when it names a part of the design
+// not recorded yet, when it is a configuration the app's appgen.json decides, or when the design is
+// still being recorded and the failure is the composition's (or a test's reference to it).
+func (s *admitSources) severityOf(consumer, msg string) Severity {
+	switch {
+	case absentID.MatchString(msg), configBound(consumer, msg):
+		return Incomplete{}
+	case s.designIncomplete && (compositionConsumers[consumer] || scenariocomposeRef.MatchString(msg)):
 		return Incomplete{}
 	}
 	return Local{}
+}
+
+// designIncomplete reports whether the System still has a built, contract-bearing component with no
+// recorded contract: contracts are recorded one at a time, and the composition is only whole once
+// the last one is. A project that does not load is not incomplete: its failure is its own.
+func designIncomplete(raw []byte) bool {
+	m, err := projectmodel.Load(raw)
+	if err != nil || m.System == nil {
+		return false
+	}
+	have := map[string]bool{}
+	for key := range m.Contracts {
+		if c, ok := m.System.ComponentByContractKey(key); ok {
+			have[c.ID] = true
+		}
+	}
+	return slices.ContainsFunc(m.System.Components, func(c projectmodel.SystemComponent) bool {
+		return c.BuildStatus == "" && bearsContract(c.Kind) && !have[c.ID]
+	})
+}
+
+// bearsContract reports whether a component kind records a service contract: a Client's is derived
+// and a Resource has none.
+func bearsContract(kind string) bool {
+	switch strings.ToLower(strings.ReplaceAll(kind, " ", "")) {
+	case "manager", "engine", "resourceaccess", "utility":
+		return true
+	}
+	return false
 }
 
 // firstLine is an emit error's message up to its first line break: a generator that fails on its
@@ -127,6 +173,8 @@ type admitSources struct {
 	byDir     map[string][]*admitFile // repo-relative directory -> its parsed files
 	reporting map[string]bool         // the consumers of the artifact: only their files' findings are reported
 	partial   map[string]bool         // import paths of the packages that also hold hand-written code (a contract's goPackage)
+
+	designIncomplete bool // the System still has contracts to record, or no deployment model: see designIncomplete
 }
 
 // handWrittenPackages is the import path of every contract package that holds code a person or
@@ -159,7 +207,7 @@ func (s *admitSources) emitAll(in Input) []Problem {
 		files, err := c.Emit(in)
 		if err != nil {
 			if s.reporting[c.Name] {
-				problems = append(problems, Problem{Consumer: c.Name, Message: firstLine(err), Severity: emitSeverity(err)})
+				problems = append(problems, Problem{Consumer: c.Name, Message: firstLine(err), Severity: s.severityOf(c.Name, err.Error())})
 			}
 			continue
 		}
@@ -415,11 +463,7 @@ func (c *admitChecker) problem(err error, byTok map[*token.File]*admitFile, info
 		return Problem{}, false
 	}
 	at := c.s.fset.Position(terr.Pos)
-	var sev Severity = Local{}
-	if configBound(f.consumer, terr.Msg) {
-		sev = Incomplete{}
-	}
-	return Problem{Consumer: f.consumer, Path: f.path, Message: fmt.Sprintf("%d:%d: %s", at.Line, at.Column, terr.Msg), Severity: sev}, true
+	return Problem{Consumer: f.consumer, Path: f.path, Message: fmt.Sprintf("%d:%d: %s", at.Line, at.Column, terr.Msg), Severity: c.s.severityOf(f.consumer, terr.Msg)}, true
 }
 
 var callArgs = regexp.MustCompile(`arguments in call to|in argument to`)
