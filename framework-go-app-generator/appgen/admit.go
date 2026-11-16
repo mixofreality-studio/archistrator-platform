@@ -77,7 +77,12 @@ func AdmitTier1(in Input, kind ArtifactKind) []Problem {
 	for _, c := range reading {
 		src.reporting[c.Name] = true
 	}
+	// A Manager the composition leaves unbuilt (a dependency with no arm in the deployment model yet)
+	// has no scenario subject, which the tests that name it cannot find: the composition is not whole.
+	var warn strings.Builder
+	in.Warn = &warn
 	problems := src.emitAll(in)
+	src.designIncomplete = src.designIncomplete || strings.Contains(warn.String(), "manager left unbuilt")
 	problems = append(problems, src.check()...)
 	sort.SliceStable(problems, func(i, j int) bool { return problemLess(problems[i], problems[j]) })
 	return problems
