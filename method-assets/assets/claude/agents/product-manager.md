@@ -12,6 +12,7 @@ tools:
   - mcp__aiarch-state__getDraftSlot
   - mcp__aiarch-state__getReviewThread
   - mcp__aiarch-state__getCritique
+  - mcp__aiarch-state__getUseCaseCoverage
   - mcp__aiarch-state__listResearchSources
   - mcp__aiarch-state__getResearchSource
   - mcp__aiarch-state__projectStateReadProject
@@ -115,7 +116,7 @@ After the architect commits `.mission`, `.glossary`, `.volatilities`, `.coreUseC
 - **Mission**: does this capture the business intent? Are objectives in business terms (not marketing slogans, not technical specifics)?
 - **Glossary**: missing terms? misnamed concepts the customer would not recognize?
 - **Volatilities**: did the architect miss a customer-driven source of change? (You don't propose new entries; you flag gaps and let the architect decide.)
-- **Core use cases**: if a customer-stated use case was rejected as non-core, does that break customer expectations?
+- **Core use cases**: if a customer-stated use case was rejected as non-core, does that break customer expectations? And read the coverage table (`getUseCaseCoverage`): for every path the diagrams derive, does the actor have a door (a Client they ask through) and an outcome they are shown? A path with neither is the customer-facing defect only you can name. Your "revise" here is a floor under every review preset — it holds the gate for a human even where drafts auto-approve, and a human can approve over it only as an override with a recorded reason — so spend it on a path that reaches no surface or shows the actor nothing.
 
 Push back precisely, with customer reasoning. Don't argue architecture.
 

@@ -144,3 +144,33 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 		}
 	}
 }
+
+// The core-use-cases critique reads the coverage table (FPC Task 2.14): per derived path, the door
+// the actor enters through, the outcome nodes the actor is shown and the derivation's defect codes. The
+// table is a tool read (getUseCaseCoverage), derived on read from the draft and stored nowhere, so the
+// prompt must name the tool, the columns the PM judges and the floor the PM's send-back is, and the PM's
+// charter must grant the tool: an agent without it cannot be asked to read the table.
+func TestCoreUseCasesCritique_ReadsTheCoverageTable(t *testing.T) {
+	files, err := ClaudeFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const (
+		critique = ".claude/commands/core-use-cases-critique.md"
+		pm       = ".claude/agents/product-manager.md"
+	)
+	for _, tc := range []struct{ path, want string }{
+		{critique, "getUseCaseCoverage"},
+		{critique, "Door"},
+		{critique, "Outcomes the actor sees"},
+		{critique, "NONE"},
+		{critique, "every review preset"},
+		{critique, "override"},
+		{pm, "mcp__aiarch-state__getUseCaseCoverage"},
+		{pm, "every review preset"},
+	} {
+		if !strings.Contains(string(files[tc.path]), tc.want) {
+			t.Errorf("%s no longer says %q", tc.path, tc.want)
+		}
+	}
+}
