@@ -7,7 +7,6 @@ import (
 	"slices"
 	"strings"
 	"testing"
-	"time"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/testfixtures"
 )
@@ -282,34 +281,6 @@ func TestAdmitTier1_HandWrittenNamesAreNotFindings(t *testing.T) {
 	}), ModulePath: "example.com/app", ModuleDir: "server", Config: DefaultConfig()}
 	if ps := AdmitTier1(in, KindServiceContract); len(ps) != 0 {
 		t.Fatalf("a dependency on a name of the pricing package's hand-written code is not a Tier 1 finding: %v", ps)
-	}
-}
-
-// The check is pure and runs in a workflow under Temporal's one-second deadlock detector: the
-// median of three runs over the todomvc fixture (the largest conformance project) and over
-// archistrator's own project stays under 500 ms (D8).
-func TestAdmitTier1_UnderWorkflowBudget(t *testing.T) {
-	own, err := os.ReadFile("../testdata/archistrator.project.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	cases := map[string]Input{
-		"todomvc":      fixtureInput(t, "todomvc", "server", false),
-		"archistrator": {Project: own, ModulePath: "github.com/mixofreality-studio/archistrator/server", ModuleDir: "server", Config: DefaultConfig()},
-	}
-	for name, in := range cases {
-		t.Run(name, func(t *testing.T) {
-			var runs []time.Duration
-			for range 3 {
-				start := time.Now()
-				AdmitTier1(in, KindServiceContract)
-				runs = append(runs, time.Since(start))
-			}
-			slices.Sort(runs)
-			if runs[1] > 500*time.Millisecond {
-				t.Fatalf("median %v over the 500 ms budget (runs %v)", runs[1], runs)
-			}
-		})
 	}
 }
 

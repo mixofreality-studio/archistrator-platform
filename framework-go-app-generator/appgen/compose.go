@@ -84,7 +84,7 @@ func (in Input) cfg() Config {
 // model loads the project and keeps the contracts that are built in the tree (every one with a
 // goPackage when the tree is nil).
 func (in Input) model(managerContracts bool) (*projectmodel.Model, error) {
-	m, err := projectmodel.Load(in.Project)
+	m, err := in.load()
 	if err != nil {
 		return nil, err
 	}
@@ -331,7 +331,7 @@ func composeConfig(m, effective *projectmodel.Model, cfg Config, module string) 
 
 // genClients generates the client layer of the Managers that hold code: wireOnlyBuilt has
 // already dropped the rest from m.
-func genClients(m *projectmodel.Model, cfg Config, module string, raw []byte) (map[string][]byte, error) {
+func genClients(m *projectmodel.Model, cfg Config, module string, raw []byte, decode func() (methodcheck.Project, error)) (map[string][]byte, error) {
 	var doc struct {
 		ServiceContracts map[string]json.RawMessage `json:"serviceContracts"`
 	}
@@ -342,7 +342,7 @@ func genClients(m *projectmodel.Model, cfg Config, module string, raw []byte) (m
 	for key := range m.Contracts {
 		built[key] = doc.ServiceContracts[key]
 	}
-	apps, err := mcpApps(m, raw, built)
+	apps, err := mcpApps(m, decode, built)
 	if err != nil {
 		return nil, fmt.Errorf("project.json: %w", err)
 	}
@@ -354,12 +354,12 @@ func genClients(m *projectmodel.Model, cfg Config, module string, raw []byte) (m
 
 // mcpApps is what each built mcpApp Client reaches, read off the project's dynamic views: the
 // Manager operations (by the built contracts' keys) the views call through the Client.
-func mcpApps(m *projectmodel.Model, raw []byte, built map[string]json.RawMessage) ([]clientgen.MCPApp, error) {
+func mcpApps(m *projectmodel.Model, decode func() (methodcheck.Project, error), built map[string]json.RawMessage) ([]clientgen.MCPApp, error) {
 	ids := mcpAppClients(m.System)
 	if len(ids) == 0 {
 		return nil, nil
 	}
-	p, _, err := methodcheck.DecodeProject(raw)
+	p, err := decode()
 	if err != nil {
 		return nil, err
 	}

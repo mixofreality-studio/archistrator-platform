@@ -138,6 +138,13 @@ func Generate(projectJSON []byte, cfg Config) (Output, error) {
 	if err != nil {
 		return Output{}, err
 	}
+	return GenerateDecoded(projectJSON, p, cfg)
+}
+
+// GenerateDecoded is Generate over a project the caller has already decoded from projectJSON
+// (methodcheck.DecodeProject): a pass that runs several generators over one document decodes it
+// once. p is only read.
+func GenerateDecoded(projectJSON []byte, p methodcheck.Project, cfg Config) (Output, error) {
 	all, err := methodcheck.DeriveScenarios(p)
 	if err != nil {
 		return Output{}, err

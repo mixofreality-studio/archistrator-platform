@@ -73,7 +73,14 @@ func AdmitTier1(in Input, kind ArtifactKind) []Problem {
 	if len(reading) == 0 {
 		return nil
 	}
-	src := &admitSources{fset: token.NewFileSet(), module: in.ModulePath, moduleDir: in.ModuleDir, byDir: map[string][]*admitFile{}, reporting: map[string]bool{}, partial: handWrittenPackages(in), designIncomplete: designIncomplete(in.Project)}
+	// The consumers read one document: parse it once (see emitMemo). This pass runs inside a
+	// workflow task, under Temporal's 1 s deadlock detector.
+	in.memo = &emitMemo{}
+	incomplete := false
+	if m, err := in.load(); err == nil {
+		incomplete = modelIncomplete(m)
+	}
+	src := &admitSources{fset: token.NewFileSet(), module: in.ModulePath, moduleDir: in.ModuleDir, byDir: map[string][]*admitFile{}, reporting: map[string]bool{}, partial: handWrittenPackages(in), designIncomplete: incomplete}
 	for _, c := range reading {
 		src.reporting[c.Name] = true
 	}
@@ -133,7 +140,12 @@ func (s *admitSources) severityOf(consumer, msg string) Severity {
 // the last one is. A project that does not load is not incomplete: its failure is its own.
 func designIncomplete(raw []byte) bool {
 	m, err := projectmodel.Load(raw)
-	if err != nil || m.System == nil {
+	return err == nil && modelIncomplete(m)
+}
+
+// modelIncomplete is designIncomplete over a loaded model.
+func modelIncomplete(m *projectmodel.Model) bool {
+	if m.System == nil {
 		return false
 	}
 	have := map[string]bool{}

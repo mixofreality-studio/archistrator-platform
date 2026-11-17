@@ -19,6 +19,7 @@ import (
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/testgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/webgen"
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
 )
 
 // ArtifactKind is a record verb's artifact kind (D2).
@@ -65,6 +66,53 @@ type Input struct {
 	WebTree fs.FS
 	// Warn receives what a generation leaves undone without failing; nil drops it.
 	Warn io.Writer
+
+	// memo, set only by a pass over every consumer of one document (AdmitTier1), shares what the
+	// consumers would each recompute from Project.
+	memo *emitMemo
+}
+
+// emitMemo is what the consumers of one in-process pass share instead of each recomputing it from
+// the same bytes: the loaded model, the decoded project envelope and the `appgen clients`
+// emission (`webgen generate` binds to it). Parsing a project is most of what a pass costs, and a
+// pass runs inside a workflow task, under Temporal's 1 s deadlock detector (AdmitTier1). The
+// consumers only read what the memo holds, and only a pass with no Tree uses it, so wireOnlyBuilt
+// (the one writer of a loaded model) has nothing to drop. A pass is single-goroutine.
+type emitMemo struct {
+	model        *projectmodel.Model
+	modelErr     error
+	modelDone    bool
+	decoded      methodcheck.Project
+	decodedErr   error
+	decodedDone  bool
+	clients      []plan.File
+	clientsErr   error
+	clientsReady bool
+}
+
+// load is projectmodel.Load over in.Project, once per pass when the pass has a memo.
+func (in Input) load() (*projectmodel.Model, error) {
+	if in.memo == nil {
+		return projectmodel.Load(in.Project)
+	}
+	if !in.memo.modelDone {
+		in.memo.model, in.memo.modelErr = projectmodel.Load(in.Project)
+		in.memo.modelDone = true
+	}
+	return in.memo.model, in.memo.modelErr
+}
+
+// decode is methodcheck.DecodeProject over in.Project, once per pass when the pass has a memo.
+func (in Input) decode() (methodcheck.Project, error) {
+	if in.memo == nil {
+		p, _, err := methodcheck.DecodeProject(in.Project)
+		return p, err
+	}
+	if !in.memo.decodedDone {
+		in.memo.decoded, _, in.memo.decodedErr = methodcheck.DecodeProject(in.Project)
+		in.memo.decodedDone = true
+	}
+	return in.memo.decoded, in.memo.decodedErr
 }
 
 // Consumer is one generator invocation the platform runs over an artifact.
@@ -278,11 +326,22 @@ func emitCompose(in Input) ([]plan.File, error) {
 }
 
 func emitClients(in Input) ([]plan.File, error) {
+	if in.memo == nil {
+		return emitClientsOnce(in)
+	}
+	if !in.memo.clientsReady {
+		in.memo.clients, in.memo.clientsErr = emitClientsOnce(in)
+		in.memo.clientsReady = true
+	}
+	return in.memo.clients, in.memo.clientsErr
+}
+
+func emitClientsOnce(in Input) ([]plan.File, error) {
 	m, err := in.model(false)
 	if err != nil {
 		return nil, err
 	}
-	files, err := genClients(m, in.cfg(), in.ModulePath, in.Project)
+	files, err := genClients(m, in.cfg(), in.ModulePath, in.Project, in.decode)
 	if err != nil {
 		return nil, err
 	}
@@ -306,7 +365,11 @@ func (in Input) uitestsDir() string {
 // warnings and discrimination runs the testgen command acts on. The testgen consumer's Emit is
 // these files.
 func TestgenOutput(in Input) (testgen.Output, error) {
-	return testgen.Generate(in.Project, testgen.Config{ModulePath: in.ModulePath, UITestsDir: filepath.ToSlash(in.uitestsDir())})
+	p, err := in.decode()
+	if err != nil {
+		return testgen.Output{}, err
+	}
+	return testgen.GenerateDecoded(in.Project, p, testgen.Config{ModulePath: in.ModulePath, UITestsDir: filepath.ToSlash(in.uitestsDir())})
 }
 
 func emitTests(in Input) ([]plan.File, error) {
@@ -357,7 +420,7 @@ func BootstrapSurface(app, surface string, kind projectmodel.Surface) ([]WebFile
 }
 
 func emitWebBootstrap(in Input) ([]plan.File, error) {
-	m, err := projectmodel.Load(in.Project)
+	m, err := in.load()
 	if err != nil {
 		return nil, err
 	}
@@ -386,7 +449,7 @@ func emitWebBootstrap(in Input) ([]plan.File, error) {
 // memory first and feeds its OpenAPI document and MCP tool tables to webgen.Generate: the
 // transport the web app binds to is the one the server emits, not whatever is on disk.
 func emitWebGenerate(in Input) ([]plan.File, error) {
-	m, err := projectmodel.Load(in.Project)
+	m, err := in.load()
 	if err != nil {
 		return nil, err
 	}
