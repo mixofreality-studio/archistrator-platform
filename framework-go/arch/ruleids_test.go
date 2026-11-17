@@ -58,6 +58,7 @@ func TestRuleIDs_CoverEveryViolationRule(t *testing.T) {
 	}
 
 	seen := 0
+	used := map[string]bool{}
 	check := func(expr ast.Expr, where string) {
 		seen++
 		id, ok := expr.(*ast.Ident)
@@ -70,8 +71,23 @@ func TestRuleIDs_CoverEveryViolationRule(t *testing.T) {
 			t.Errorf("%s: Rule %s is not a string constant declared in the arch gate files", where, id.Name)
 			return
 		}
+		used[v] = true
 		if !listed[v] {
 			t.Errorf("%s: rule %q (%s) is not listed by RuleIDs", where, v, id.Name)
+		}
+	}
+	checkFileLayout := func(cl *ast.CompositeLit) {
+		if len(cl.Elts) == 4 {
+			check(cl.Elts[2], fset.Position(cl.Pos()).String())
+		}
+	}
+	checkContractDup := func(cl *ast.CompositeLit) {
+		for _, e := range cl.Elts {
+			if kv, ok := e.(*ast.KeyValueExpr); ok {
+				if k, ok := kv.Key.(*ast.Ident); ok && k.Name == "Rule" {
+					check(kv.Value, fset.Position(cl.Pos()).String())
+				}
+			}
 		}
 	}
 	for _, f := range parsed {
@@ -84,20 +100,31 @@ func TestRuleIDs_CoverEveryViolationRule(t *testing.T) {
 			switch ty := cl.Type.(type) {
 			case *ast.Ident:
 				tname = ty.Name
+			case *ast.ArrayType:
+				// []T{{...}}: the element literals carry no type, so check them here.
+				elt, ok := ty.Elt.(*ast.Ident)
+				if !ok {
+					return true
+				}
+				for _, e := range cl.Elts {
+					el, ok := e.(*ast.CompositeLit)
+					if !ok || el.Type != nil {
+						continue
+					}
+					switch elt.Name {
+					case "fileLayoutViolation":
+						checkFileLayout(el)
+					case "contractDupViolation":
+						checkContractDup(el)
+					}
+				}
+				return true
 			}
 			switch tname {
 			case "fileLayoutViolation":
-				if len(cl.Elts) == 4 {
-					check(cl.Elts[2], fset.Position(cl.Pos()).String())
-				}
+				checkFileLayout(cl)
 			case "contractDupViolation":
-				for _, e := range cl.Elts {
-					if kv, ok := e.(*ast.KeyValueExpr); ok {
-						if k, ok := kv.Key.(*ast.Ident); ok && k.Name == "Rule" {
-							check(kv.Value, fset.Position(cl.Pos()).String())
-						}
-					}
-				}
+				checkContractDup(cl)
 			}
 			return true
 		})
@@ -111,8 +138,14 @@ func TestRuleIDs_CoverEveryViolationRule(t *testing.T) {
 		declared[v] = true
 	}
 	for _, id := range ids {
-		if !declared[id] && id != ruleTestCompose {
+		if !declared[id] {
 			t.Errorf("RuleIDs lists %q, which no gate file declares", id)
+		}
+		// And some checked violation literal uses it: a constant left behind after its last use
+		// must leave the list. (Every rule, ruleScenarioComposeTestOnly included, is reported
+		// through a violation literal, so there is no exemption.)
+		if !used[id] {
+			t.Errorf("RuleIDs lists %q, which no violation literal uses", id)
 		}
 	}
 }
