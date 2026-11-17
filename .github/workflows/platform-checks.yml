@@ -70,8 +70,8 @@ jobs:
   # POST /mcp initialize + tools/list) and a double boot must leave no Docker
   # orphans. Docker is preinstalled on ubuntu-latest. The job names are load-bearing:
   # release-gate.yml requires a green check run of each of `conformance`,
-  # `conformance-proof`, `conformance-mcpapp`, `conformance-discriminate` and `conformance-discriminate-impl`
-  # on the tagged SHA.
+  # `conformance-proof`, `conformance-mcpapp`, `conformance-manifests`, `conformance-discriminate` and
+  # `conformance-discriminate-impl` on the tagged SHA.
   #
   # The RUN-021 proof (TestConformance_RUN021Proof) is split by subtest into three
   # parallel jobs. Run in one process it outlasted its 100 minute budget (run
@@ -172,6 +172,30 @@ jobs:
           set -euo pipefail
           GOWORK=off go test -tags conformance ./ -run 'TestConformance_McpAppSurface$' -v -timeout 60m | tee proof.log
           grep -q -- "--- PASS: TestConformance_McpAppSurface " proof.log || { echo "::error::TestConformance_McpAppSurface did not run and pass"; exit 1; }
+  conformance-manifests:
+    needs: go
+    runs-on: ubuntu-latest
+    timeout-minutes: 70
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-go@v6
+        with:
+          go-version: '1.26'
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '22'
+      - name: Toolchain the proof needs (git)
+        run: git --version
+      # The generators' manifests: every path the chain writes over the todomvc fixture is a planned path of some consumer's Plan,
+      # and every planned Generated path exists after the chain (edit scope and drift read Plan, so an unplanned write is invisible to both).
+      - name: Manifests (every path the chain writes is planned)
+        working-directory: framework-go-conformance
+        run: |
+          set -euo pipefail
+          GOWORK=off go test -tags conformance ./ -run 'TestConformance_Manifests$' -v -timeout 60m | tee proof.log
+          grep -q -- "--- PASS: TestConformance_Manifests " proof.log || { echo "::error::TestConformance_Manifests did not run and pass"; exit 1; }
   conformance-discriminate:
     needs: go
     runs-on: ubuntu-latest
