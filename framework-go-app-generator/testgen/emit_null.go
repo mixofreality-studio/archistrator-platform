@@ -17,6 +17,12 @@ import (
 // Null wrapper (composegen's Null<Iface>), which returns the operation's zero result and a nil error;
 // a run that still passes is a survivor and an error.
 //
+// The runs of one Go package are not one process each: the package's generated TestDiscriminate runs a
+// list of them (AIARCH_DISCRIMINATE) as sequential subtests of one `go test`, switching the null
+// operations in process between them, so the package builds, links and boots its scenario host once per
+// phase (testgen -discriminate: the baselines, then the nulled runs). A web scenario is still one
+// scenario-host run per process.
+//
 // The switch is the package's TestMain, generated into null.gen_test.go beside the scenarios file: it
 // reads AIARCH_NULL_OPS (a comma list of "<Iface>.<Op>") and the scenarios construct their subject
 // through nullSubject<Iface>, which is the real subject when the variable is unset. Only the named
@@ -43,6 +49,10 @@ type Discrimination struct {
 	Package   string // the module-relative Go package holding the test ("" for a web scenario)
 	Test      string // the Go test function (the scenario id for a web scenario)
 	NullOp    string // the AIARCH_NULL_OPS value
+	// Batch is the Go package the run batches into: every run of one package is made as a subtest of the
+	// package's generated TestDiscriminate in one `go test` process (D13). "" for a web scenario, which
+	// is run through the scenario host one run per process.
+	Batch string
 	// UIDir is the Playwright project directory relative to the module root, and UIConfig the
 	// generated config relative to it; both are "" for a Go scenario. UIGrep selects the scenario's
 	// Playwright test by its title.
@@ -53,6 +63,13 @@ type Discrimination struct {
 
 // Web reports whether the run is a Playwright scenario run through the scenario host.
 func (d Discrimination) Web() bool { return d.UIConfig != "" }
+
+// DiscriminateTest is the generated test that runs a package's null-subject list in one process.
+const DiscriminateTest = "TestDiscriminate"
+
+// DiscriminateEnv names the JSON file holding the list TestDiscriminate runs: an array of
+// {"id": "<test>#<nullOps>", "test": "<TestScenario_...>", "nullOps": "<Iface>.<Op>,..."}.
+const DiscriminateEnv = "AIARCH_DISCRIMINATE"
 
 // DiscriminationSkip is a scenario the run cannot execute yet, so it is neither killed nor a survivor.
 type DiscriminationSkip struct {
@@ -202,7 +219,7 @@ func (g *goEmit) scenarioRuns(plan componentPlan, bs boundScenario) []Discrimina
 		seen = append(seen, st.Op.Name)
 		out = append(out, Discrimination{
 			Component: plan.Key, Scenario: bs.Scenario.ID, Op: st.Op.Name,
-			Package: g.goPkg, Test: g.testName(plan, bs.Scenario.ID),
+			Package: g.goPkg, Batch: g.goPkg, Test: g.testName(plan, bs.Scenario.ID),
 			NullOp: ifaceName(plan) + "." + st.Op.Name,
 		})
 	}
@@ -216,7 +233,7 @@ func (g *goEmit) nullFile(plans []componentPlan) ([]byte, error) {
 	b.WriteString(genHeader + "\n")
 	b.WriteString("// The package's TestMain, and the switch of the null-subject run (testgen -discriminate).\n")
 	fmt.Fprintf(&b, "\npackage %s_test\n\n", g.pkg)
-	imps := map[string]string{"os": "", "strings": "", "testing": "", scenarioHostImport: ""}
+	imps := map[string]string{"encoding/json": "", "os": "", "strings": "", "testing": "", scenarioHostImport: ""}
 	if g.subject {
 		imps[g.cfg.ModulePath+"/"+g.goPkg] = ""
 		imps[g.cfg.ModulePath+"/"+scenarioComposeDir] = ""
@@ -248,11 +265,55 @@ func (g *goEmit) nullFile(plans []componentPlan) ([]byte, error) {
 		fmt.Fprintf(&b, "\tif len(nullOps) == 0 {\n\t\treturn inner\n\t}\n")
 		fmt.Fprintf(&b, "\treturn %s.Null%s(inner, nullOps...)\n}\n\n", scenarioComposeName, iface)
 	}
+	g.writeDriver(&b, plans, true)
 	src, err := format.Source(b.Bytes())
 	if err != nil {
 		return nil, fmt.Errorf("testgen: %s: null file does not format: %w\n%s", g.goPkg, err, b.String())
 	}
 	return src, nil
+}
+
+// scenarioTestNames lists the scenario test functions the package's scenarios file declares, sorted.
+func (g *goEmit) scenarioTestNames(plans []componentPlan) []string {
+	var names []string
+	for _, plan := range plans {
+		for _, bs := range plan.Scenarios {
+			names = append(names, g.testName(plan, bs.Scenario.ID))
+		}
+	}
+	slices.Sort(names)
+	return slices.Compact(names)
+}
+
+// writeDriver writes the in-process driver of the null-subject run (D13): the table of the package's
+// scenario tests and TestDiscriminate, which runs a list of (test, null operations) entries as
+// sequential subtests of one process. Each entry sets AIARCH_NULL_OPS with t.Setenv, so an app a
+// scenario launches inherits it, and, when the package builds its subject in process (setsNullOps),
+// the package's nullOps too; both are restored when the entry ends. Without the list variable the
+// test skips. The file importing it needs encoding/json and os (and strings when setsNullOps).
+func (g *goEmit) writeDriver(b *bytes.Buffer, plans []componentPlan, setsNullOps bool) {
+	b.WriteString("// scenarioTests are the package's scenario tests by name, for the null-subject run's in-process driver.\n")
+	b.WriteString("var scenarioTests = map[string]func(*testing.T){\n")
+	for _, name := range g.scenarioTestNames(plans) {
+		fmt.Fprintf(b, "\t%q: %s,\n", name, name)
+	}
+	b.WriteString("}\n\n")
+	b.WriteString("// discriminateEntry is one null-subject run of the list " + DiscriminateEnv + " names.\n")
+	b.WriteString("type discriminateEntry struct {\n\tID      string `json:\"id\"`\n\tTest    string `json:\"test\"`\n\tNullOps string `json:\"nullOps\"`\n}\n\n")
+	b.WriteString("// " + DiscriminateTest + " runs the null-subject run's list (" + DiscriminateEnv + ": a JSON file of entries) as\n")
+	b.WriteString("// sequential subtests in this one process, each with its operations nulled (testgen -discriminate).\n")
+	b.WriteString("func " + DiscriminateTest + "(t *testing.T) {\n")
+	fmt.Fprintf(b, "\tfile := os.Getenv(%q)\n\tif file == \"\" {\n\t\tt.Skip(%q)\n\t}\n", DiscriminateEnv, DiscriminateEnv+" names no run list")
+	b.WriteString("\traw, err := os.ReadFile(file)\n\tif err != nil {\n\t\tt.Fatalf(\"reading the run list: %v\", err)\n\t}\n")
+	b.WriteString("\tvar entries []discriminateEntry\n\tif err := json.Unmarshal(raw, &entries); err != nil {\n\t\tt.Fatalf(\"decoding the run list: %v\", err)\n\t}\n")
+	b.WriteString("\tfor _, e := range entries {\n\t\tt.Run(e.ID, func(t *testing.T) {\n")
+	b.WriteString("\t\t\tscenario, ok := scenarioTests[e.Test]\n\t\t\tif !ok {\n\t\t\t\tt.Skipf(\"no scenario test %s in this package\", e.Test)\n\t\t\t}\n")
+	fmt.Fprintf(b, "\t\t\tt.Setenv(%q, e.NullOps)\n", nullOpsEnv)
+	if setsNullOps {
+		b.WriteString("\t\t\tprev := nullOps\n\t\t\tt.Cleanup(func() { nullOps = prev })\n")
+		b.WriteString("\t\t\tnullOps = nil\n\t\t\tif e.NullOps != \"\" {\n\t\t\t\tnullOps = strings.Split(e.NullOps, \",\")\n\t\t\t}\n")
+	}
+	b.WriteString("\t\t\tscenario(t)\n\t\t})\n\t}\n}\n")
 }
 
 // runsAny reports whether any of plan's bindings builds a subject.

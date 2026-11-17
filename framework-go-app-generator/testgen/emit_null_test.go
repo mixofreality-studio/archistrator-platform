@@ -3,6 +3,8 @@ package testgen
 import (
 	"go/parser"
 	"go/token"
+	"os"
+	"path/filepath"
 	"slices"
 	"strings"
 	"testing"
@@ -61,7 +63,7 @@ func TestNull_ListsDiscriminationRuns(t *testing.T) {
 	out := generate(t)
 	want := Discrimination{
 		Component: "billingManager", Scenario: "process-order-P2", Op: "RecordPayment",
-		Package: "internal/manager/billing", Test: "TestScenario_process_order_P2", NullOp: "BillingManager.RecordPayment",
+		Package: "internal/manager/billing", Batch: "internal/manager/billing", Test: "TestScenario_process_order_P2", NullOp: "BillingManager.RecordPayment",
 	}
 	if !slices.Contains(out.Discriminate, want) {
 		t.Errorf("missing %+v in %+v", want, out.Discriminate)
@@ -75,6 +77,93 @@ func TestNull_ListsDiscriminationRuns(t *testing.T) {
 		return strings.Compare(a.Package+a.Test+a.NullOp, b.Package+b.Test+b.NullOp)
 	}) {
 		t.Errorf("runs are not in a stable order: %+v", out.Discriminate)
+	}
+}
+
+// A package's scenarios run, nulled, as subtests of one process (D13): the null file carries the
+// table of the package's scenario tests and TestDiscriminate, which sets AIARCH_NULL_OPS (so a launched
+// app inherits it) and the package's nullOps per entry; a client package, which builds no subject in
+// process, carries the same driver in its scenarios file without the nullOps.
+func TestNull_EmitsInProcessDriver(t *testing.T) {
+	out := generate(t)
+	src := string(out.Generated[billingNull])
+	scenarios := string(out.Generated[billingGen])
+	var tests []string
+	for _, line := range strings.Split(scenarios, "\n") {
+		if name, ok := strings.CutPrefix(line, "func TestScenario_"); ok {
+			tests = append(tests, "TestScenario_"+strings.TrimSuffix(name, "(t *testing.T) {"))
+		}
+	}
+	if len(tests) == 0 {
+		t.Fatalf("no scenario tests in\n%s", scenarios)
+	}
+	for _, want := range []string{
+		"func TestDiscriminate(t *testing.T) {",
+		"os.Getenv(\"AIARCH_DISCRIMINATE\")",
+		"var scenarioTests = map[string]func(*testing.T){",
+		"t.Setenv(\"AIARCH_NULL_OPS\", e.NullOps)",
+		"nullOps = strings.Split(e.NullOps, \",\")",
+	} {
+		if !strings.Contains(src, want) {
+			t.Errorf("missing %q in\n%s", want, src)
+		}
+	}
+	flat := strings.Join(strings.Fields(src), " ") // gofmt aligns the table's values
+	for _, name := range tests {
+		if !strings.Contains(flat, "\""+name+"\": "+name+",") {
+			t.Errorf("scenarioTests lacks %s in\n%s", name, src)
+		}
+	}
+	shop := generateShopTools(t)
+	client := string(shop.Generated[toolsGen])
+	flatClient := strings.Join(strings.Fields(client), " ")
+	for _, want := range []string{"func TestDiscriminate(t *testing.T) {", "\"TestScenario_track_order_P1\": TestScenario_track_order_P1,", "t.Setenv(\"AIARCH_NULL_OPS\", e.NullOps)"} {
+		if !strings.Contains(flatClient, want) {
+			t.Errorf("the client scenarios file lacks %q", want)
+		}
+	}
+	if strings.Contains(client, "nullOps =") {
+		t.Errorf("a client package builds no subject in process, so it has no nullOps to set:\n%s", client)
+	}
+}
+
+// The compiled driver: one process runs a list of entries, each with its own operations nulled; the
+// real-subject entry passes and the nulled one fails, as the per-process runs did, and the package's
+// switch is restored between them. Without the list variable the test skips.
+func TestNull_DriverRunsEntriesInOneProcess(t *testing.T) {
+	if testing.Short() {
+		t.Skip("compiles a module")
+	}
+	out := generate(t)
+	root := writeModule(t, map[string]string{
+		"internal/manager/billing/billing.go":                    stubBilling,
+		"internal/scenariocompose/compose.go":                    nullStubCompose,
+		"internal/manager/billing/manager_scenarios.gen_test.go": string(out.Generated[billingGen]),
+		billingNull: string(out.Generated[billingNull]),
+	}, moduleOpts{})
+	list := filepath.Join(t.TempDir(), "list.json")
+	entries := `[{"id":"a#","test":"TestScenario_process_order_P2","nullOps":""},` +
+		`{"id":"a#BillingManager.RecordPayment","test":"TestScenario_process_order_P2","nullOps":"BillingManager.RecordPayment"},` +
+		`{"id":"b#","test":"TestScenario_process_order_P2","nullOps":""},` +
+		`{"id":"c#","test":"TestScenario_nope","nullOps":""}]`
+	if err := os.WriteFile(list, []byte(entries), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	args := []string{"test", "-count=1", "-v", "-run", "^TestDiscriminate$", "./internal/manager/billing/"}
+	got, _ := goIn(root, []string{"AIARCH_DISCRIMINATE=" + list}, args...)
+	for _, want := range []string{
+		"--- PASS: TestDiscriminate/a#",
+		"--- FAIL: TestDiscriminate/a#BillingManager.RecordPayment",
+		"--- PASS: TestDiscriminate/b#", // the switch was restored after the nulled entry
+		"--- SKIP: TestDiscriminate/c#", // an unknown test is a skip, never a verdict
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("missing %q in\n%s", want, got)
+		}
+	}
+	idle, _ := goIn(root, nil, args...)
+	if !strings.Contains(idle, "--- SKIP: TestDiscriminate") {
+		t.Errorf("without AIARCH_DISCRIMINATE the driver must skip:\n%s", idle)
 	}
 }
 

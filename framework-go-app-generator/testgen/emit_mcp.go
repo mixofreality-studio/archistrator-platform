@@ -163,7 +163,7 @@ func (g *goEmit) clientScenarioRuns(out *Output, plan componentPlan, bs boundSce
 		}
 		out.Discriminate = append(out.Discriminate, Discrimination{
 			Component: plan.Key, Scenario: bs.Scenario.ID, Op: st.Op.Name,
-			Package: g.goPkg, Test: g.testName(plan, bs.Scenario.ID),
+			Package: g.goPkg, Batch: g.goPkg, Test: g.testName(plan, bs.Scenario.ID),
 			NullOp: route.Manager + "." + route.Op,
 		})
 	}
@@ -314,9 +314,12 @@ func (g *goEmit) toolsFile(plan componentPlan, rest bool, routes map[string]rest
 	b.WriteString(genHeader + "\n")
 	fmt.Fprintf(&b, "// Source: project.json .phaseArtifacts.testPlan.%s × scenario.ForComponent(%q)\n", plan.Key, plan.Key)
 	fmt.Fprintf(&b, "\npackage %s_test\n\n", g.pkg)
-	g.writeImports(&b, g.toolsImports())
+	imps := g.toolsImports()
+	imps["encoding/json"], imps["os"] = "", "" // the null-subject driver's
+	g.writeImports(&b, imps)
 	fmt.Fprintf(&b, "func TestMain(m *testing.M) { scenariohost.Main(m, %s) }\n\n", strconv.Quote(plan.Key))
 	b.Write(g.body.Bytes())
+	g.writeDriver(&b, []componentPlan{plan}, false)
 	if g.subject {
 		if err := g.writeToolHelpers(&b, plan, rest, routes); err != nil {
 			return nil, err

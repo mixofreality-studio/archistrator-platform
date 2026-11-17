@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"errors"
 	"os"
 	"path/filepath"
@@ -36,15 +37,89 @@ func exitedRun() (string, error) {
 	return "scenariohost: Workflows.Register registered no workflow\nFAIL\texample.com/app/server/internal/manager/billing\t0.4s\nFAIL\n", errors.New("exit status 1")
 }
 
-// recorder is a go-test runner that answers by the AIARCH_NULL_OPS it is given ("" is the real
-// subject) and the test it is asked to run.
+// recorder is a go-test runner that answers by the AIARCH_NULL_OPS an entry carries ("" is the real
+// subject) and the test it is asked to run. The Go runs reach it as batches (one `go test` process per
+// package phase running the generated TestDiscriminate over the list AIARCH_DISCRIMINATE names): it
+// answers every entry of a batch as the per-run driver did and replies with the `go test -json` events
+// the generated driver's subtests would print. calls and envs hold one record per entry; processes counts
+// the runner's batch invocations and batches the ids each held.
 type recorder struct {
-	calls  []string
-	envs   [][]string
-	answer func(nullOps, test string) (string, error)
+	calls     []string
+	envs      [][]string
+	processes int
+	batches   [][]string
+	batchArgs [][]string
+	answer    func(nullOps, test string) (string, error)
+}
+
+// batchEvents renders one entry's answer as the -json events its subtest would produce; an answer that
+// proves nothing about the entry (a build failure, a TestMain exit) produces no event, only the
+// process's own output.
+func batchEvents(pkg, id, test, out string, err error) (events []string, raw string) {
+	name := "TestDiscriminate/" + id
+	event := func(action, output string) string {
+		b, _ := json.Marshal(map[string]string{"Action": action, "Package": pkg, "Test": name, "Output": output})
+		return string(b)
+	}
+	switch classify(out, err, test).(type) {
+	case ranPassed:
+		return []string{event("output", out), event("pass", "")}, ""
+	case ranFailed:
+		return []string{event("output", out), event("fail", "")}, ""
+	case ranInconclusive:
+		if strings.Contains(out, "--- SKIP") {
+			return []string{event("skip", "")}, ""
+		}
+	}
+	return nil, out
+}
+
+// runBatch answers one `go test -json -run ^TestDiscriminate$` of a package.
+func (r *recorder) runBatch(env []string, args []string) (string, error) {
+	file := ""
+	for _, e := range env {
+		if v, ok := strings.CutPrefix(e, "AIARCH_DISCRIMINATE="); ok {
+			file = v
+		}
+	}
+	rawList, err := os.ReadFile(file)
+	if err != nil {
+		return "", err
+	}
+	var list []struct{ ID, Test, NullOps string }
+	if err := json.Unmarshal(rawList, &list); err != nil {
+		return "", err
+	}
+	pkg := strings.TrimSuffix(strings.TrimPrefix(args[len(args)-1], "./"), "/")
+	r.processes++
+	r.batchArgs = append(r.batchArgs, args)
+	var ids, lines []string
+	var failed bool
+	var raws []string
+	for _, e := range list {
+		ids = append(ids, e.ID)
+		r.calls = append(r.calls, e.NullOps+" test -run ^"+e.Test+"$ ./"+pkg+"/")
+		r.envs = append(r.envs, env)
+		out, err := r.answer(e.NullOps, e.Test)
+		events, raw := batchEvents(pkg, e.ID, e.Test, out, err)
+		lines = append(lines, events...)
+		if raw != "" {
+			raws = append(raws, raw)
+		}
+		failed = failed || err != nil
+	}
+	r.batches = append(r.batches, ids)
+	out := strings.Join(append(lines, raws...), "\n") + "\n"
+	if failed {
+		return out, errors.New("exit status 1")
+	}
+	return out, nil
 }
 
 func (r *recorder) run(dir string, env []string, args ...string) (string, error) {
+	if slices.Contains(args, "^TestDiscriminate$") {
+		return r.runBatch(env, args)
+	}
 	nullOps, test := "", ""
 	for _, e := range env {
 		if v, ok := strings.CutPrefix(e, "AIARCH_NULL_OPS="); ok {
@@ -563,7 +638,158 @@ func TestDiscriminate_HostThatNeverBootsIsInconclusive(t *testing.T) {
 	if strings.Contains(out.String(), "TP-BROKEN") {
 		t.Errorf("a host that never boots is not a broken scenario: %q", out.String())
 	}
-	if len(r.calls) != hostBootAttempts {
-		t.Errorf("%d runs, want %d attempts at the first scenario", len(r.calls), hostBootAttempts)
+	if r.processes != hostBootAttempts {
+		t.Errorf("%d processes, want %d attempts at the first package's baselines", r.processes, hostBootAttempts)
+	}
+}
+
+// nulledIn returns the ids of a batch that null an operation (those not ending in "#").
+func nulledIn(batch []string) []string {
+	var nulled []string
+	for _, id := range batch {
+		if !strings.HasSuffix(id, "#") {
+			nulled = append(nulled, id)
+		}
+	}
+	return nulled
+}
+
+// A package's scenarios are run as two processes, not one per run: the baselines of all its scenarios
+// in one `go test -run ^TestDiscriminate$`, then the nulled runs of the scenarios that passed in a
+// second; the verdicts are the per-run driver's on the same answers.
+func TestDiscriminate_OneProcessPerPackagePhase(t *testing.T) {
+	args := discriminateArgs(t)
+	r := &recorder{answer: func(nullOps, test string) (string, error) {
+		if nullOps == "" || nullOps == "BillingManager.RecordPayment" {
+			return passedRun(test)
+		}
+		return failedRun(test)
+	}}
+	var out, errOut bytes.Buffer
+	err := runWith(args, &out, &errOut, r.run)
+	if !errors.Is(err, errSurvivors) {
+		t.Fatalf("err = %v, want errSurvivors\n%s", err, out.String())
+	}
+	if want := "TP-DISCRIMINATE billingManager process-order-P2 RecordPayment"; !strings.Contains(out.String(), want) || strings.Count(out.String(), "TP-DISCRIMINATE") != 1 {
+		t.Errorf("verdicts differ from the per-run driver's: %q", out.String())
+	}
+	pkgs := map[string]bool{}
+	for _, c := range r.calls {
+		pkgs[c[strings.Index(c, "./"):]] = true
+	}
+	if r.processes != 2*len(pkgs) {
+		t.Errorf("%d processes for %d packages, want exactly 2 each (baselines, then mutants)", r.processes, len(pkgs))
+	}
+	for _, a := range r.batchArgs {
+		if !slices.Contains(a, "-json") || !slices.Contains(a, "^TestDiscriminate$") || !slices.Contains(a, "-count=1") {
+			t.Errorf("a batch is not `go test -count=1 -json -run ^TestDiscriminate$`: %v", a)
+		}
+	}
+	for i, b := range r.batches {
+		nulled := nulledIn(b)
+		switch {
+		case i%2 == 0 && len(nulled) != 0:
+			t.Errorf("batch %d is a baseline batch but nulls %v", i, nulled)
+		case i%2 == 1 && len(nulled) != len(b):
+			t.Errorf("batch %d is a mutant batch but holds a baseline: %v", i, b)
+		}
+	}
+}
+
+// A scenario that fails against its real subject is TP-BROKEN, and none of its mutants is in the second
+// batch.
+func TestDiscriminate_BrokenBaselineRunsNoMutants(t *testing.T) {
+	args := discriminateArgs(t)
+	r := &recorder{answer: func(nullOps, test string) (string, error) {
+		if nullOps == "" && test == "TestScenario_process_order_P2" {
+			return failedRun(test)
+		}
+		if nullOps == "" {
+			return passedRun(test)
+		}
+		return failedRun(test)
+	}}
+	var out, errOut bytes.Buffer
+	err := runWith(args, &out, &errOut, r.run)
+	if !errors.Is(err, errBroken) || !strings.Contains(out.String(), "TP-BROKEN billingManager process-order-P2") {
+		t.Fatalf("err = %v, out = %q", err, out.String())
+	}
+	for _, b := range r.batches {
+		for _, id := range nulledIn(b) {
+			if strings.HasPrefix(id, "TestScenario_process_order_P2#") {
+				t.Errorf("a broken scenario's mutant %q was run", id)
+			}
+		}
+	}
+}
+
+// Entries whose output says the host did not boot are run again, in a batch of only those entries; the
+// entries that ran are judged on their first run.
+func TestDiscriminate_HostBootFailureRetriesOnlyThoseEntries(t *testing.T) {
+	args := discriminateArgs(t)
+	const flaky = "TestScenario_process_order_P2"
+	flaked := false
+	r := &recorder{answer: func(nullOps, test string) (string, error) {
+		if nullOps == "" && test == flaky && !flaked {
+			flaked = true
+			return bootFailedRun(test)
+		}
+		if nullOps == "" {
+			return passedRun(test)
+		}
+		return failedRun(test)
+	}}
+	var out, errOut bytes.Buffer
+	if err := runWith(args, &out, &errOut, r.run); err != nil {
+		t.Fatalf("the retry judged the scenario: %v\n%s", err, out.String())
+	}
+	retried := -1
+	for i, b := range r.batches {
+		if len(b) == 1 && b[0] == flaky+"#" {
+			retried = i
+		}
+	}
+	if retried < 1 {
+		t.Fatalf("no retry batch holding only the flaky entry: %v", r.batches)
+	}
+	if prev := r.batches[retried-1]; !slices.Contains(prev, flaky+"#") || len(prev) < 2 {
+		t.Errorf("the batch before the retry should have held the flaky entry among others: %v", prev)
+	}
+	if strings.Contains(out.String(), "TP-BROKEN") {
+		t.Errorf("a boot flake is not a broken scenario: %q", out.String())
+	}
+}
+
+// Web scenarios are not batched: each run is one `go tool webscenarios` process, never the generated
+// TestDiscriminate.
+func TestDiscriminate_WebStaysPerRun(t *testing.T) {
+	var webRuns int
+	goRuns := &recorder{answer: func(nullOps, test string) (string, error) {
+		if nullOps == "" {
+			return passedRun(test)
+		}
+		return failedRun(test)
+	}}
+	run := func(dir string, env []string, args ...string) (string, error) {
+		if len(args) >= 2 && args[0] == "tool" && args[1] == "webscenarios" {
+			webRuns++
+			if nullOpsOf(env) == "" {
+				return "  1 passed (1s)\n", nil
+			}
+			return "  1 failed\n", errors.New("exit status 1")
+		}
+		return goRuns.run(dir, env, args...)
+	}
+	var out, errOut bytes.Buffer
+	if err := runWith(webArgs(t), &out, &errOut, run); err != nil {
+		t.Fatalf("%v\n%s", err, out.String())
+	}
+	if webRuns != 2 {
+		t.Errorf("%d web runs, want one real-subject run and one nulled run", webRuns)
+	}
+	for _, c := range goRuns.calls {
+		if strings.Contains(c, "browse-orders") {
+			t.Errorf("a web scenario went through the Go driver: %q", c)
+		}
 	}
 }

@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -187,6 +188,175 @@ func groupByScenario(runs []testgen.Discrimination) []scenarioRuns {
 	return out
 }
 
+// batchEntry is one line of the run list a package's generated TestDiscriminate reads from the file
+// AIARCH_DISCRIMINATE names; the test's subtest of the same ID carries the entry's verdict.
+type batchEntry struct {
+	ID      string `json:"id"`
+	Test    string `json:"test"`
+	NullOps string `json:"nullOps"`
+}
+
+// entryID is the subtest name of d's run with nullOps nulled ("" is the real subject).
+func entryID(d testgen.Discrimination, nullOps string) string { return d.Test + "#" + nullOps }
+
+// testEvent is the part of a `go test -json` event the batch reads.
+type testEvent struct {
+	Action string
+	Test   string
+	Output string
+}
+
+// batchTimeout is the `go test -timeout` of a batch of n entries: the default ten minutes plus a
+// minute an entry, since the scenario host's own watchdog ends a scenario that hangs.
+func batchTimeout(n int) string { return fmt.Sprintf("%dm", 10+n) }
+
+// entryRun is what one process says about one entry: the outcome and the entry's own output.
+type entryRun struct {
+	outcome runOutcome
+	output  string
+}
+
+// parseBatch reads a batch's `go test -json` stream. entries maps a subtest name (its entry id under
+// TestDiscriminate) to its events; text is every line of output, the stream's own and any non-JSON
+// line the go tool printed.
+func parseBatch(raw string) (events map[string][]testEvent, text string) {
+	events = map[string][]testEvent{}
+	var b strings.Builder
+	for line := range strings.SplitSeq(raw, "\n") {
+		var ev testEvent
+		if err := json.Unmarshal([]byte(line), &ev); err != nil {
+			b.WriteString(line + "\n")
+			continue
+		}
+		b.WriteString(ev.Output)
+		if id, ok := strings.CutPrefix(ev.Test, testgen.DiscriminateTest+"/"); ok {
+			id, _, _ = strings.Cut(id, "/") // a scenario's own subtests belong to its entry
+			events[id] = append(events[id], ev)
+		}
+	}
+	return events, b.String()
+}
+
+// classifyEntry reads one entry's events. As for a single run, only an entry that executed the scenario
+// counts: a skip (the scenario's own, or an unknown test) and an entry that never reported (the process
+// ended first: a build failure, a TestMain exit, a crash) prove nothing either way.
+func classifyEntry(id string, evs []testEvent, text string, err error) entryRun {
+	verdict, output := entryVerdict(id, evs)
+	switch verdict {
+	case "skip":
+		return entryRun{ranInconclusive{"the scenario skipped itself (or no such test in the package)"}, output}
+	case "pass":
+		return entryRun{ranPassed{}, output}
+	case "fail":
+		return entryRun{ranFailed{}, output}
+	}
+	if out, ok := classify(text, err, testgen.DiscriminateTest).(ranInconclusive); ok {
+		return entryRun{out, text}
+	}
+	return entryRun{ranInconclusive{fmt.Sprintf("go test ended before %s reported a result (a TestMain exit or a crash): %v", id, err)}, text}
+}
+
+// entryVerdict is the terminal action of the entry's own subtest ("pass", "fail", "skip", or "" when it
+// never reported) and the entry's output. A skip of any subtest the scenario ran inside the entry is a
+// skip of the entry.
+func entryVerdict(id string, evs []testEvent) (verdict, output string) {
+	var b strings.Builder
+	for _, ev := range evs {
+		b.WriteString(ev.Output)
+		switch {
+		case ev.Test != testgen.DiscriminateTest+"/"+id:
+			if ev.Action == "skip" {
+				verdict = "skip"
+			}
+		case ev.Action == "pass" || ev.Action == "fail" || ev.Action == "skip":
+			if verdict != "skip" {
+				verdict = ev.Action
+			}
+		}
+	}
+	return verdict, b.String()
+}
+
+// outputTail is how much of a process's output an inconclusive entry keeps for the error message.
+const outputTail = 16 << 10
+
+// runBatchOnce runs entries of pkg in one `go test` process over the generated TestDiscriminate.
+func runBatchOnce(o options, pkg string, entries []testgen.Discrimination, run goTestRunner) (map[string]entryRun, string, error) {
+	list := make([]batchEntry, 0, len(entries))
+	for _, d := range entries {
+		list = append(list, batchEntry{ID: entryID(d, d.NullOp), Test: d.Test, NullOps: d.NullOp})
+	}
+	raw, err := json.Marshal(list)
+	if err != nil {
+		return nil, "", err
+	}
+	f, err := os.CreateTemp("", "testgen-discriminate-*.json")
+	if err != nil {
+		return nil, "", err
+	}
+	defer func() { _ = os.Remove(f.Name()) }()
+	if _, err := f.Write(raw); err != nil {
+		_ = f.Close()
+		return nil, "", err
+	}
+	if err := f.Close(); err != nil {
+		return nil, "", err
+	}
+	// AIARCH_NULL_OPS is set empty so a value inherited from the environment cannot leak into the
+	// process: each subtest sets its own.
+	out, runErr := run(o.root, []string{"GOWORK=off", "AIARCH_NULL_OPS=", testgen.DiscriminateEnv + "=" + f.Name()},
+		"test", "-count=1", "-json", "-timeout", batchTimeout(len(entries)), "-run", "^"+testgen.DiscriminateTest+"$", "./"+pkg+"/")
+	events, text := parseBatch(out)
+	res := map[string]entryRun{}
+	for _, d := range entries {
+		id := entryID(d, d.NullOp)
+		res[id] = classifyEntry(id, events[id], text, runErr)
+	}
+	return res, text, nil
+}
+
+// runBatch runs entries (every one a Go run of pkg; NullOp "" is the real subject) as subtests of the
+// package's generated TestDiscriminate in one `go test -count=1 -json -run '^TestDiscriminate$'
+// ./<pkg>/` process, and classifies each from its own subtest's events (pass: ranPassed; its own
+// failure: ranFailed; a skip, or no event: ranInconclusive). Entries whose output says the scenario host
+// did not boot are run again, only those, in a smaller batch, up to hostBootAttempts processes in all.
+// The map is keyed by entry id (entryID); the string is the tail of the last process's output.
+func runBatch(o options, pkg string, entries []testgen.Discrimination, run goTestRunner) (map[string]runOutcome, string) {
+	outcomes := map[string]runOutcome{}
+	pending := entries
+	tail := ""
+	for attempt := 0; attempt < hostBootAttempts && len(pending) > 0; attempt++ {
+		res, text, err := runBatchOnce(o, pkg, pending, run)
+		if err != nil {
+			res = map[string]entryRun{}
+			for _, d := range pending {
+				res[entryID(d, d.NullOp)] = entryRun{outcome: ranInconclusive{err.Error()}}
+			}
+		}
+		tail = text[max(0, len(text)-outputTail):]
+		pending = settle(pending, res, outcomes)
+	}
+	for _, d := range pending {
+		outcomes[entryID(d, d.NullOp)] = ranInconclusive{fmt.Sprintf("the scenario host did not boot in %d attempts", hostBootAttempts)}
+	}
+	return outcomes, tail
+}
+
+// settle records into outcomes the entries of pending that ran and returns those whose host did not boot.
+func settle(pending []testgen.Discrimination, res map[string]entryRun, outcomes map[string]runOutcome) []testgen.Discrimination {
+	var again []testgen.Discrimination
+	for _, d := range pending {
+		id := entryID(d, d.NullOp)
+		r := res[id]
+		if _, failed := r.outcome.(ranFailed); failed && hostBootFailure.MatchString(r.output) {
+			again = append(again, d)
+			continue
+		}
+		outcomes[id] = r.outcome
+	}
+	return again
+}
+
 // announceSkipped names every runnable scenario the run cannot execute yet.
 func announceSkipped(out io.Writer, skipped []testgen.DiscriminationSkip) error {
 	for _, s := range skipped {
@@ -259,6 +429,109 @@ func discriminateScenario(o options, sc scenarioRuns, out io.Writer, run goTestR
 	return nil
 }
 
+// packageRuns is one Go package's runs.
+type packageRuns struct {
+	name string
+	runs []testgen.Discrimination
+}
+
+// batchesOf splits the Go runs (sorted by package) into one batch per package.
+func batchesOf(runs []testgen.Discrimination) []packageRuns {
+	var out []packageRuns
+	for _, d := range runs {
+		if n := len(out); n > 0 && out[n-1].name == d.Batch {
+			out[n-1].runs = append(out[n-1].runs, d)
+			continue
+		}
+		out = append(out, packageRuns{name: d.Batch, runs: []testgen.Discrimination{d}})
+	}
+	return out
+}
+
+// discriminatePackage judges one package's scenarios in two processes: the baselines of all of them,
+// then the nulled runs of those that passed (D13). A scenario that fails against its real subject is
+// TP-BROKEN and none of its null runs is made; a run that proved nothing is the tool's error.
+func discriminatePackage(o options, pkg string, scenarios []scenarioRuns, out io.Writer, run goTestRunner, t *tally) error {
+	baselines := make([]testgen.Discrimination, 0, len(scenarios))
+	for _, sc := range scenarios {
+		d := sc.test
+		d.NullOp = ""
+		baselines = append(baselines, d)
+	}
+	base, output := runBatch(o, pkg, baselines, run)
+	var mutants []testgen.Discrimination
+	for _, sc := range scenarios {
+		t.scenarios++
+		passes, err := baselineVerdict(sc, base[entryID(sc.test, "")], output, out, t)
+		if err != nil {
+			return err
+		}
+		if passes {
+			mutants = append(mutants, sc.runs...)
+		}
+	}
+	if len(mutants) == 0 {
+		return nil
+	}
+	nulled, output := runBatch(o, pkg, mutants, run)
+	for _, d := range mutants {
+		t.runs++
+		if err := mutantVerdict(d, nulled[entryID(d, d.NullOp)], output, out, t); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// baselineVerdict reports whether sc passed against its real subject; one that failed is TP-BROKEN.
+func baselineVerdict(sc scenarioRuns, outcome runOutcome, output string, out io.Writer, t *tally) (bool, error) {
+	switch v := outcome.(type) {
+	case ranPassed:
+		return true, nil
+	case ranFailed:
+		t.broken++
+		return false, say(out, fmt.Sprintf("TP-BROKEN %s %s", sc.test.Component, sc.test.Scenario))
+	case ranInconclusive:
+		return false, inconclusive(sc.test, "", v.why, output)
+	}
+	return false, nil
+}
+
+// mutantVerdict judges one nulled run: a pass is a survivor.
+func mutantVerdict(d testgen.Discrimination, outcome runOutcome, output string, out io.Writer, t *tally) error {
+	switch v := outcome.(type) {
+	case ranPassed:
+		t.survivors++
+		return say(out, fmt.Sprintf("TP-DISCRIMINATE %s %s %s", d.Component, d.Scenario, d.Op))
+	case ranFailed:
+		return nil // killed
+	case ranInconclusive:
+		return inconclusive(d, d.NullOp, v.why, output)
+	}
+	return nil
+}
+
+// runAll judges every run: a web scenario's runs one process each through the scenario host, a Go
+// package's runs batched (discriminatePackage).
+func runAll(o options, runs []testgen.Discrimination, out io.Writer, run goTestRunner, t *tally) error {
+	var goRuns []testgen.Discrimination
+	for _, sc := range groupByScenario(runs) {
+		if sc.test.Batch != "" {
+			goRuns = append(goRuns, sc.runs...)
+			continue
+		}
+		if err := discriminateScenario(o, sc, out, run, t); err != nil {
+			return err
+		}
+	}
+	for _, pkg := range batchesOf(goRuns) {
+		if err := discriminatePackage(o, pkg.name, groupByScenario(pkg.runs), out, run, t); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // discriminate runs every scenario (Go, and web through the scenario host) once against its real
 // subject and, when that passes, once per stimulus operation with that operation nulled
 // (AIARCH_NULL_OPS). It prints
@@ -279,10 +552,8 @@ func discriminate(o options, gen testgen.Output, out io.Writer, run goTestRunner
 		return err
 	}
 	var t tally
-	for _, sc := range groupByScenario(gen.Discriminate) {
-		if err := discriminateScenario(o, sc, out, run, &t); err != nil {
-			return err
-		}
+	if err := runAll(o, gen.Discriminate, out, run, &t); err != nil {
+		return err
 	}
 	summary := fmt.Sprintf("discriminate: %d scenario(s), %d null run(s), %d survivor(s), %d broken", t.scenarios, t.runs, t.survivors, t.broken)
 	if webSkipped > 0 {
