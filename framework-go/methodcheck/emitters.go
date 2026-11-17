@@ -1,5 +1,7 @@
 package methodcheck
 
+import "sort"
+
 // emitters.go is the AUTHORITATIVE registry of every RuleID the validator can
 // actually emit — one entry per rule ID a suite constructs a Finding for. It is
 // the executable answer to "does this rule have an emitter?": the coverage matrix
@@ -12,6 +14,19 @@ package methodcheck
 // DISCIPLINE: when a rule func starts (or stops) emitting a rule ID, update this
 // registry in the same change. Grouped by the suite that owns the emitter so the
 // mapping stays reviewable.
+
+// EmittedRuleIDs is every rule ID the validator can emit, sorted. It is the exported view of
+// emittedRuleIDs: the doctrine registry (method-assets/doctrine) cites methodcheck rules by id and
+// its conformance test resolves each citation against this list.
+func EmittedRuleIDs() []RuleID {
+	set := emittedRuleIDs()
+	out := make([]RuleID, 0, len(set))
+	for id := range set {
+		out = append(out, id)
+	}
+	sort.Slice(out, func(i, j int) bool { return out[i] < out[j] })
+	return out
+}
 
 // emittedRuleIDs returns the set of every rule ID the validator emits.
 func emittedRuleIDs() map[RuleID]bool {

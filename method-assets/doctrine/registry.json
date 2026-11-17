@@ -1,0 +1,115 @@
+{
+  "entries": [
+    {
+      "id": "layer-a-interaction",
+      "statement": "A control the user flips shows its own state change at once, before the server answers: the generated flow tests assert it under an injected latency.",
+      "scope": "builtApp",
+      "enforcedBy": [
+        {"kind": "generatorInvariant", "module": "framework-go-app-generator", "package": "testgen", "test": "TestPlaywright_LayerA_ImmediateUnderLatency"}
+      ],
+      "promptRefs": ["claude/commands/frontend-construction.md#A control the user flips shows the change at once"]
+    },
+    {
+      "id": "a11y-always-on",
+      "statement": "Every designed element has a role and an accessible name; the generated tests find it by them.",
+      "scope": "builtApp",
+      "enforcedBy": [
+        {"kind": "methodcheck", "rule": "UID-ROLE", "firedBy": "TestUID_Role"},
+        {"kind": "methodcheck", "rule": "UID-NAME", "firedBy": "TestUID_Name"}
+      ],
+      "promptRefs": ["claude/commands/frontend-construction.md#Build the elements the approved design names, as the design names them"]
+    },
+    {
+      "id": "no-idp-resource",
+      "statement": "The platform owns identity: a design has no identity-provider Resource and no credential-verifying ResourceAccess.",
+      "scope": "builtApp",
+      "waiver": {"reason": "FIX-055 is prompt-only; a SYS rule is owed", "owner": "founder", "expires": "2026-12-31"},
+      "promptRefs": ["claude/commands/system-draft.md#Never draw an identity provider as a Resource"]
+    },
+    {
+      "id": "managers-temporal-hosted",
+      "statement": "Every Manager is Temporal-hosted: its Temporal layer is generated from its first construction task, before its hand-written code.",
+      "scope": "builtApp",
+      "enforcedBy": [
+        {"kind": "generatorInvariant", "module": "framework-go-app-generator", "package": "cmd/appgen", "test": "TestTemporalPrecedesTheManagersCode"}
+      ],
+      "promptRefs": ["claude/commands/service-detailed-design.md#Every Manager is Temporal-hosted"]
+    },
+    {
+      "id": "clients-contracted",
+      "statement": "Every built Client has a contract, so its flows can be bound and tested.",
+      "scope": "builtApp",
+      "enforcedBy": [
+        {"kind": "methodcheck", "rule": "TP-CLIENT-CONTRACTED", "firedBy": "TestTP_ClientContracted_Fires"}
+      ],
+      "promptRefs": ["claude/commands/core-use-cases-critique.md#TP-CLIENT-CONTRACTED"]
+    },
+    {
+      "id": "no-hooks",
+      "statement": "An agent writes no test code: the binding is a typed record and the subject comes from the generated scenariocompose package.",
+      "scope": "builtApp",
+      "enforcedBy": [
+        {"kind": "methodcheck", "rule": "TP-HOOK", "firedBy": "TestTP_Arrange_FiresOnSelfStimulus"},
+        {"kind": "arch", "rule": "ARCH-TEST-COMPOSE", "firedBy": "TestFileLayout_HooksFileIsViolation"}
+      ],
+      "promptRefs": ["claude/commands/service-test-plan.md#there are no hooks and no escape hatches"]
+    },
+    {
+      "id": "targets-are-design-elements",
+      "statement": "A UI step targets an element of the approved design whose role takes the action.",
+      "scope": "builtApp",
+      "enforcedBy": [
+        {"kind": "methodcheck", "rule": "TP-UI-TARGET", "firedBy": "TestTP_UITarget_RoleAgreement"}
+      ],
+      "promptRefs": ["claude/commands/frontend-test-plan.md#Targets are design element ids"]
+    },
+    {
+      "id": "both-surfaces-drawn",
+      "statement": "Every required surface is entered in every use case that an actor uses it in.",
+      "scope": "builtApp",
+      "enforcedBy": [
+        {"kind": "methodcheck", "rule": "SYS-SURFACE-ENTRY", "firedBy": "TestSYS_SurfaceEntry_FiresWithoutAlt"}
+      ],
+      "promptRefs": ["claude/commands/system-draft.md#In every use case an actor enters through a call into each required surface"]
+    },
+    {
+      "id": "required-surfaces",
+      "statement": "The System has a Client for each delivery surface the mission lists, of exactly that kind.",
+      "scope": "builtApp",
+      "enforcedBy": [
+        {"kind": "methodcheck", "rule": "SYS-SURFACE-REQUIRED", "firedBy": "TestSYS_SurfaceRequired_FiresOnMissingRest"}
+      ],
+      "promptRefs": ["claude/commands/system-draft.md#decide which Clients the System must have"]
+    },
+    {
+      "id": "composition-boots",
+      "statement": "The composed app boots through its run contract and answers /readyz, the SPA and every generated MCP tool.",
+      "scope": "builtApp",
+      "enforcedBy": [
+        {"kind": "generatorInvariant", "module": "framework-go-app-generator", "package": "devstack", "test": "TestSmoke_ReadyzMustAnswer200"}
+      ],
+      "promptRefs": ["claude/commands/frontend-integration.md#boots the composed app through its run contract"]
+    },
+    {
+      "id": "discriminating-tests",
+      "statement": "Every scenario fails against a null subject: a test that cannot fail is an error, not a pass.",
+      "scope": "builtApp",
+      "enforcedBy": [
+        {"kind": "generatorInvariant", "module": "framework-go-app-generator", "package": "cmd/testgen", "test": "TestDiscriminate_SurvivorIsAnError"}
+      ],
+      "promptRefs": ["claude/commands/service-integration.md#the null-subject run"]
+    },
+    {
+      "id": "generated-files-untouched",
+      "statement": "An agent never edits a generated path: the app's edit-scope gate holds every generated path byte-equal to regeneration (EDIT-GENERATED-DRIFT), and the generators' manifest lists exactly what they write.",
+      "scope": "agentConduct",
+      "enforcedBy": [
+        {"kind": "generatorInvariant", "module": "framework-go-app-generator", "package": "appgen", "test": "TestPlan_MatchesEmit"}
+      ],
+      "promptRefs": [
+        "claude/commands/frontend-construction.md#host-bridge seat",
+        "claude/commands/frontend-construction.md#[EDIT-GENERATED-DRIFT]"
+      ]
+    }
+  ]
+}

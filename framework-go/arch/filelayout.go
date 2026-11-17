@@ -157,7 +157,7 @@ func packageFileLayoutViolations(p *packages.Package, spec Spec, layer Layer) []
 		}
 		f := p.Syntax[i]
 		for _, call := range registerActivityCalls(f) {
-			out = append(out, fileLayoutViolation{p.PkgPath, base, "hand-activity-registration", call})
+			out = append(out, fileLayoutViolation{p.PkgPath, base, ruleHandActivityRegistration, call})
 		}
 		out = append(out, fileHandwrittenViolations(p.PkgPath, base, implFile, testFiles, layer, spec, workflowFuncs(f), workflowEntryFuncs(f))...)
 	}
@@ -180,13 +180,13 @@ func fileHandwrittenViolations(pkgPath, base, implFile, testFiles string, layer 
 	switch {
 	case base == implFile:
 		if len(wfFuncs) > 0 {
-			out = append(out, fileLayoutViolation{pkgPath, base, "workflow-in-impl-file",
+			out = append(out, fileLayoutViolation{pkgPath, base, ruleWorkflowInImplFile,
 				"workflow func " + wfFuncs[0] + " must live in its own per-workflow file, not " + implFile})
 		}
 	case len(wfFuncs) > 0:
 		out = append(out, workflowFileViolations(pkgPath, base, implFile, testFiles, layer, spec, wfFuncs, entryFuncs)...)
 	default:
-		out = append(out, fileLayoutViolation{pkgPath, base, "file-not-allowed",
+		out = append(out, fileLayoutViolation{pkgPath, base, ruleFileNotAllowed,
 			"handwritten files are limited to " + implFile + ", per-workflow files, " + testFiles})
 	}
 	return out
@@ -201,7 +201,7 @@ func fileHandwrittenViolations(pkgPath, base, implFile, testFiles string, layer 
 func workflowFileViolations(pkgPath, base, implFile, testFiles string, layer Layer, spec Spec, wfFuncs, entryFuncs []string) []fileLayoutViolation {
 	var out []fileLayoutViolation
 	if layer.Name != spec.TemporalLayer {
-		out = append(out, fileLayoutViolation{pkgPath, base, "workflow-func-outside-manager",
+		out = append(out, fileLayoutViolation{pkgPath, base, ruleWorkflowFuncOutsideManager,
 			"workflow func " + wfFuncs[0] + " found outside the " + spec.TemporalLayer + " layer"})
 		return out
 	}
@@ -209,19 +209,32 @@ func workflowFileViolations(pkgPath, base, implFile, testFiles string, layer Lay
 		// Context-taking func(s) present, but none is a workflow ENTRY
 		// func — this is not a workflow file (e.g. a helpers-only file),
 		// so it falls into the closed set's default: file-not-allowed.
-		out = append(out, fileLayoutViolation{pkgPath, base, "file-not-allowed",
+		out = append(out, fileLayoutViolation{pkgPath, base, ruleFileNotAllowed,
 			"handwritten files are limited to " + implFile + ", per-workflow files, " + testFiles})
 		return out
 	}
 	if len(entryFuncs) > 1 {
-		out = append(out, fileLayoutViolation{pkgPath, base, "workflow-file-multiple-funcs", strings.Join(entryFuncs, ",")})
+		out = append(out, fileLayoutViolation{pkgPath, base, ruleWorkflowFileMultipleFuncs, strings.Join(entryFuncs, ",")})
 	}
 	want := strings.ToLower(strings.TrimSuffix(entryFuncs[0], "Workflow")) + ".go"
 	if base != want {
-		out = append(out, fileLayoutViolation{pkgPath, base, "workflow-file-name", "want " + want})
+		out = append(out, fileLayoutViolation{pkgPath, base, ruleWorkflowFileName, "want " + want})
 	}
 	return out
 }
+
+// The file-layout rule ids a fileLayoutViolation can carry. Each is a named constant so RuleIDs
+// (ruleids.go) can list it and the doctrine registry can resolve a citation to it.
+const (
+	ruleHandActivityRegistration   = "hand-activity-registration"
+	ruleWorkflowInImplFile         = "workflow-in-impl-file"
+	ruleFileNotAllowed             = "file-not-allowed"
+	ruleWorkflowFuncOutsideManager = "workflow-func-outside-manager"
+	ruleWorkflowFileMultipleFuncs  = "workflow-file-multiple-funcs"
+	ruleWorkflowFileName           = "workflow-file-name"
+	ruleScenarioTestsOnly          = "scenario-tests-only"
+	ruleTestPackageNotExternal     = "test-package-not-external"
+)
 
 // ruleTestCompose is the rule id of the test-composition gate: the subject of
 // every generated test is built by the generated scenariocompose package, never
@@ -259,7 +272,7 @@ func scenarioTestViolations(p *packages.Package, scenariosFile string) []fileLay
 			out = append(out, fileLayoutViolation{p.PkgPath, name, ruleTestCompose,
 				"an agent never writes test code: the hooks file is retired, the subject comes from the generated scenariocompose package"})
 		case name != scenariosFile && name != nullTestFile:
-			out = append(out, fileLayoutViolation{p.PkgPath, name, "scenario-tests-only", "want only " + scenariosFile + " and " + nullTestFile})
+			out = append(out, fileLayoutViolation{p.PkgPath, name, ruleScenarioTestsOnly, "want only " + scenariosFile + " and " + nullTestFile})
 		default:
 			out = append(out, externalTestPackageViolations(p, filepath.Join(dir, name))...)
 		}
@@ -274,10 +287,10 @@ func externalTestPackageViolations(p *packages.Package, fpath string) []fileLayo
 	name := filepath.Base(fpath)
 	f, err := parser.ParseFile(token.NewFileSet(), fpath, nil, parser.PackageClauseOnly)
 	if err != nil {
-		return []fileLayoutViolation{{p.PkgPath, name, "scenario-tests-only", "unparseable: " + err.Error()}}
+		return []fileLayoutViolation{{p.PkgPath, name, ruleScenarioTestsOnly, "unparseable: " + err.Error()}}
 	}
 	if f.Name.Name != p.Name+"_test" {
-		return []fileLayoutViolation{{p.PkgPath, name, "test-package-not-external", "want package " + p.Name + "_test"}}
+		return []fileLayoutViolation{{p.PkgPath, name, ruleTestPackageNotExternal, "want package " + p.Name + "_test"}}
 	}
 	return nil
 }
