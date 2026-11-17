@@ -199,3 +199,40 @@ func TestWorkflowJobsDeclareTimeout(t *testing.T) {
 		}
 	}
 }
+
+// TestWorkflowTemplatesUploadTheExecutionLog pins the cloud half of typed failure causes (FPC plan
+// 6, Task 6.4): the server tells a run that never reached the model from one the agent failed by the
+// agent's own transcript, so the construct workflow gives the agent step an id and uploads the file
+// claude-code-action wrote, whatever the agent's outcome, under the name the server looks for.
+func TestWorkflowTemplatesUploadTheExecutionLog(t *testing.T) {
+	body, err := assetsFS.ReadFile("assets/workflows/aiarch-construct.yml.tmpl")
+	if err != nil {
+		t.Fatal(err)
+	}
+	s := string(body)
+	agent := regexp.MustCompile(`(?m)^      - name: Run construction step \(claude-code-action\)\n        id: agent\n`)
+	if !agent.MatchString(s) {
+		t.Error("the claude-code-action step must carry `id: agent`, so its execution_file output can be read")
+	}
+	_, after, ok := strings.Cut(s, "      - name: Upload the agent's execution log\n")
+	if !ok {
+		t.Fatal("the construct workflow has no `Upload the agent's execution log` step")
+	}
+	step, _, _ := strings.Cut(after, "\n      - name:")
+	for _, want := range []string{
+		"if: ${{ always() && steps.agent.outputs.execution_file != '' }}",
+		"uses: actions/upload-artifact@v4",
+		"name: execution-log-${{ inputs.activity_id }}-${{ github.run_id }}-${{ github.run_attempt }}",
+		"path: ${{ steps.agent.outputs.execution_file }}",
+		"retention-days: 90",
+	} {
+		if !strings.Contains(step, want) {
+			t.Errorf("the upload step lacks %q:\n%s", want, step)
+		}
+	}
+	// It runs after the agent and before the gates, so the log is kept even when a gate is red.
+	if strings.Index(s, "Upload the agent's execution log") < strings.Index(s, "id: agent") ||
+		strings.Index(s, "Upload the agent's execution log") > strings.Index(s, "Gate the edit scope") {
+		t.Error("the upload step must sit between the agent step and the gates")
+	}
+}
