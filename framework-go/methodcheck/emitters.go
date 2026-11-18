@@ -33,7 +33,7 @@ func emittedRuleIDs() map[RuleID]bool {
 	ids := []RuleID{
 		// ---- Phase-1 design predicates (rules.go) ----
 		ruleVolTrace, ruleVolGloss, ruleVolAxis, ruleVolNOB,
-		ruleCucCard, ruleUcActDiagram, ruleCucNameUniq, ruleCucActorUniq, ruleCucActorReq,
+		ruleCucCard, ruleUcActDiagram, ruleCucNameUniq, ruleCucActorUniq, ruleCucActorReq, ruleCucActorID,
 		ruleUcNodeIDUniq,
 		ruleOpcObjRef,
 		ruleStdWaive,
@@ -47,6 +47,7 @@ func emittedRuleIDs() map[RuleID]bool {
 
 		// ---- State-validation twins (rules_statevalidation.go) ----
 		ruleSysRAOrphan, ruleSysEncapsulates, ruleSysRelDup, ruleSysClientSurface,
+		ruleSysClientOpLabel, ruleSysClientMachineCall,
 		ruleUCActPresent, ruleUCGuardLabel, ruleUCVariationRef,
 		ruleVolAxisExplicit, ruleStdStatusExplicit, ruleStdFailOpen,
 		ruleGlossFourQ, ruleSRIDUnique, ruleOPCTopicCoverage,
@@ -70,6 +71,8 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleDepGraphIdentity, ruleDepCoverage, ruleDepNodeWellformed,
 		ruleDepContainerUsed, ruleDepMemberExclusive, ruleDepResourcePresent,
 		ruleDepPlannedSkipped,
+		// rules_deployment_edges.go
+		ruleDepKeyUnique, ruleDepEdgeRef, ruleDepEdgeIsolated, ruleDepFrontendPresent, ruleDepEdgeGateway,
 
 		// ---- Appendix-C (rules_appc.go) ----
 		ruleAppcDontClientMultiMgr, ruleAppcDontMgrMultiQueue, ruleAppcDontEngineQueue,
