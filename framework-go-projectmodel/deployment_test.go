@@ -202,7 +202,7 @@ func TestDefaultDeploymentDeclaresEachExternalEndpoint(t *testing.T) {
 			t.Errorf("profile %s: the ExternalHTTP binding must consume its endpoint, got %+v", profile, v)
 		}
 	}
-	if err := (&Model{Contracts: contracts, Deployment: d}).validateDeployment(); err != nil {
+	if err := (&Model{Contracts: contracts, Deployment: d}).validateDeployment(newResolver(contracts, nil)); err != nil {
 		t.Errorf("the default deployment must validate: %v", err)
 	}
 }

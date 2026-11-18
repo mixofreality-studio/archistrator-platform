@@ -138,11 +138,11 @@ func findDeployment(slots map[string]struct {
 // validateDeployment cross-checks the appgen sections against the environment profiles and the
 // parsed contracts. It reports nothing when no deployment slot was present, and validates only
 // the sections that are present (all optional).
-func (m *Model) validateDeployment() Problems {
+func (m *Model) validateDeployment(refs *resolver) Problems {
 	if m.Deployment == nil {
 		return nil
 	}
-	return deploymentProblems(m.Deployment, m.Contracts)
+	return deploymentProblems(m.Deployment, refs)
 }
 
 // ValidateDeployment parses a deployment object (operationalConcepts.model.deployment) and
@@ -158,9 +158,9 @@ func ValidateDeployment(raw json.RawMessage, _ *System) Problems {
 	return deploymentProblems(&d, nil)
 }
 
-// deploymentProblems is every deployment problem. A nil contracts map skips the checks that
-// resolve a binding's component to a contract.
-func deploymentProblems(d *Deployment, contracts map[string]*Contract) Problems {
+// deploymentProblems is every deployment problem. A nil resolver skips the checks that resolve a
+// binding's component to a contract.
+func deploymentProblems(d *Deployment, refs *resolver) Problems {
 	profiles := make(map[string]bool, len(d.Environments))
 	for _, e := range d.Environments {
 		profiles[e.Profile] = true
@@ -172,7 +172,7 @@ func deploymentProblems(d *Deployment, contracts map[string]*Contract) Problems 
 	var probs Problems
 	probs = append(probs, infrastructureProblems(d, profiles)...)
 	for i, b := range d.Bindings {
-		probs = append(probs, bindingProblems(fmt.Sprintf("deployment.bindings[%d]", i), b, contracts, profiles, infraKeys)...)
+		probs = append(probs, bindingProblems(fmt.Sprintf("deployment.bindings[%d]", i), b, refs, profiles, infraKeys)...)
 	}
 	return append(probs, settingsProblems("deployment.settings", "settings", d.Settings)...)
 }
@@ -206,17 +206,17 @@ func infraProfileProblems(path string, i InfraDecl, profiles map[string]bool) Pr
 	return probs
 }
 
-// bindingProblems checks one binding: component + provides resolve to contracts (when
-// contracts is non-nil), presence enum, perProfile keys are declared profiles, each variant's
-// infra keys resolve, and binding-scoped settings type enum.
-func bindingProblems(path string, b Binding, contracts map[string]*Contract, profiles, infraKeys map[string]bool) Problems {
+// bindingProblems checks one binding: component + provides resolve (when refs is non-nil; a
+// pending one is not a problem, see [reference]), presence enum, perProfile keys are declared
+// profiles, each variant's infra keys resolve, and binding-scoped settings type enum.
+func bindingProblems(path string, b Binding, refs *resolver, profiles, infraKeys map[string]bool) Problems {
 	var probs Problems
-	if contracts != nil {
-		if _, ok := contracts[b.Component]; !ok {
+	if refs != nil {
+		if dangling(refs.resolve(b.Component)) {
 			probs = append(probs, problem(path+".component", CodeDeployRef, "deployment binding: unknown component %q", b.Component))
 		}
 		for _, pv := range b.Provides {
-			if _, ok := contracts[pv]; !ok {
+			if dangling(refs.resolve(pv)) {
 				probs = append(probs, problem(path+".provides", CodeDeployRef, "deployment binding %q: provides unknown component %q", b.Component, pv))
 			}
 		}

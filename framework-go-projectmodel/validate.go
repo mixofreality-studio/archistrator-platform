@@ -44,9 +44,10 @@ var legalDepTargets = map[string]map[string]bool{
 // relationships (only when a systemDesign slot was present). The warn-level component joins
 // land in Warnings and are never problems.
 func (m *Model) validate() Problems {
+	refs := newResolver(m.Contracts, m.System)
 	var probs Problems
-	probs = append(probs, m.validateDeps()...)
-	probs = append(probs, m.validateDeployment()...)
+	probs = append(probs, m.validateDeps(refs)...)
+	probs = append(probs, m.validateDeployment(refs)...)
 	if m.System == nil {
 		return probs
 	}
@@ -55,19 +56,20 @@ func (m *Model) validate() Problems {
 	return probs
 }
 
-// validateDeps checks rule 1 (every Dep.Component resolves to a Contracts key) and rule 2
+// validateDeps checks rule 1 (every Dep.Component resolves, see [reference]) and rule 2
 // (dep-layer legality) for every contract's deps. A contract's own layer spelling is
 // ValidateContract's.
-func (m *Model) validateDeps() Problems {
+func (m *Model) validateDeps(refs *resolver) Problems {
 	var probs Problems
 	for _, c := range sortedContracts(m.Contracts) {
-		probs = append(probs, m.validateContractDeps(c)...)
+		probs = append(probs, m.validateContractDeps(c, refs)...)
 	}
 	return probs
 }
 
-// validateContractDeps validates one contract's deps against rules 1 and 2.
-func (m *Model) validateContractDeps(c *Contract) Problems {
+// validateContractDeps validates one contract's deps against rules 1 and 2. A dep whose target's
+// contract is pending meets rule 2 when that contract is recorded.
+func (m *Model) validateContractDeps(c *Contract, refs *resolver) Problems {
 	var probs Problems
 	for i, d := range c.Deps {
 		path := fmt.Sprintf("serviceContracts.%s.deps[%d]", c.Key, i)
@@ -75,21 +77,28 @@ func (m *Model) validateContractDeps(c *Contract) Problems {
 		if d.Component == "" {
 			continue // plain dep: exempt
 		}
-		target, ok := m.Contracts[d.Component]
-		if !ok {
+		switch r := refs.resolve(d.Component).(type) {
+		case danglingRef:
 			probs = append(probs, problem(path, CodeDepTarget, "contract %s dep %q: unknown component %q", c.Key, d.Name, d.Component))
-			continue
-		}
-		if target.Layer == "Utility" {
-			continue // Utility targets: exempt
-		}
-		// Utility sources have no dep restrictions; others have legality rules.
-		allowed, known := legalDepTargets[c.Layer]
-		if known && !allowed[target.Layer] {
-			probs = append(probs, problem(path, CodeDepTarget, "contract %s (%s) dep %q -> %s (%s): layer rule violation", c.Key, c.Layer, d.Name, d.Component, target.Layer))
+		case pendingRef:
+		case resolvedRef:
+			probs = append(probs, depLayerProblems(path, c, d, r.contract)...)
 		}
 	}
 	return probs
+}
+
+// depLayerProblems checks rule 2 for c's component dep d on target.
+func depLayerProblems(path string, c *Contract, d Dep, target *Contract) Problems {
+	if target.Layer == "Utility" {
+		return nil // Utility targets: exempt
+	}
+	// Utility sources have no dep restrictions; others have legality rules.
+	allowed, known := legalDepTargets[c.Layer]
+	if known && !allowed[target.Layer] {
+		return Problems{problem(path, CodeDepTarget, "contract %s (%s) dep %q -> %s (%s): layer rule violation", c.Key, c.Layer, d.Name, d.Component, target.Layer)}
+	}
+	return nil
 }
 
 // settingGoTypes maps a deployment setting type to the Go type a dependency linked to it must have.
