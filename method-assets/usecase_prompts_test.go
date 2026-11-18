@@ -29,6 +29,36 @@ func TestPrompts_UseTheSchemaFieldLinkedActorID(t *testing.T) {
 	}
 }
 
+// The core-use-cases critique runs at slot 4, where no Client and no contract exists: the coverage
+// table's Door column reads NONE on every row, and the derivation reports SCN-ACTOR-PATH-CLIENT on
+// every path an actor acts on. A critique told to send that back sends back every honest draft
+// (RUN-025's class of defect, in prose). So no line of it may make a NONE Door a REVISE, it must not
+// claim the contract-surface rules fire when the draft is recorded, and it judges the actor's door
+// by what slot 4 has: UC-ACTOR-DOOR, UC-PATH-OUTCOME and UC-START-NOT-ACTION. Which rules a REVISE
+// line may cite at all is held against methodcheck's prerequisite registry in
+// framework-go-conformance (critique_prerequisites_test.go).
+func TestCoreUseCasesCritique_JudgesOnlyWhatExistsAtSlot4(t *testing.T) {
+	files, err := ClaudeFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	const critique = ".claude/commands/core-use-cases-critique.md"
+	body := string(files[critique])
+	for i, line := range strings.Split(body, "\n") {
+		if strings.Contains(line, "Door") && strings.Contains(line, "NONE") && strings.Contains(line, "REVISE") {
+			t.Errorf("%s:%d makes a Door of NONE a REVISE; no Client exists at slot 4: %s", critique, i+1, line)
+		}
+	}
+	if regexp.MustCompile(`(?i)fire at record time`).MatchString(body) {
+		t.Errorf("%s says the rules fire at record time; the contract-surface rules wait for the architecture and the contracts", critique)
+	}
+	for _, want := range []string{"UC-ACTOR-DOOR", "UC-PATH-OUTCOME", "UC-START-NOT-ACTION", "judged at the architecture"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("%s does not say %q", critique, want)
+		}
+	}
+}
+
 func TestCoreUseCasesPrompts_CiteTheActorDoorRules(t *testing.T) {
 	files, err := ClaudeFiles()
 	if err != nil {
