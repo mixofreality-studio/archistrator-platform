@@ -115,9 +115,16 @@ func endWith(c *CoreUseCases, nodes ...ActivityNode) {
 	uc.Activity.Edges = append(uc.Activity.Edges, ActivityEdge{From: prev, To: "n10"})
 }
 
+// pathRules is every path rule of the family: the ones that run when the core use
+// cases are recorded (ucSlotPathFindings) and the one that needs the System
+// (ucPathFindings).
+func pathRules(c CoreUseCases, s System) []Finding {
+	return append(ucSlotPathFindings(c), ucPathFindings(c, s)...)
+}
+
 func TestUC_PathOutcome_FiresOnNoteOnlyPath(t *testing.T) {
 	s, c := ucPathFixture(t)
-	fs := ucPathFindings(c, s)
+	fs := pathRules(c, s)
 	msgs := messagesFor(fs, ruleUCPathOutcome)
 	if !anyContains(msgs, "reword-a-todo-P1") {
 		t.Fatalf("the note-only abandon path must be named; got %v", msgs)
@@ -132,7 +139,7 @@ func TestUC_PathOutcome_FiresOnNoteOnlyPath(t *testing.T) {
 func TestUC_PathOutcome_PassesWhenPathEndsInASignal(t *testing.T) {
 	s, c := ucPathFixture(t)
 	endWith(&c, ActivityNode{ID: "sig", Kind: kindSendSignal, Label: "title shown", LinkedActorID: "team-member"})
-	fs := ucPathFindings(c, s)
+	fs := pathRules(c, s)
 	if m := messagesFor(fs, ruleUCPathOutcome); len(m) != 0 {
 		t.Fatalf("every path now ends in a sendSignal: %v", m)
 	}
@@ -147,7 +154,7 @@ func TestUC_OutcomeAtAskingSurface_FiresWhenOnlyOtherSurfaces(t *testing.T) {
 	uc.Actors = append(uc.Actors, Actor{ID: "observer", Role: "Observer"})
 	// the signal reaches ANOTHER actor; the asker's Client shows nothing.
 	endWith(&c, ActivityNode{ID: "sig", Kind: kindSendSignal, Label: "told someone else", LinkedActorID: "observer"})
-	fs := ucPathFindings(c, s)
+	fs := pathRules(c, s)
 	if m := messagesFor(fs, ruleUCPathOutcome); len(m) != 0 {
 		t.Fatalf("a signal is on every path, so UC-PATH-OUTCOME is satisfied: %v", m)
 	}
@@ -210,18 +217,18 @@ func TestUC_OutcomeAtAskingSurface_ObjectNodeInAskingLane(t *testing.T) {
 }
 
 func TestUC_PathOutcome_NamesTheActorStimulusNotTheStart(t *testing.T) {
-	s, c := ucPathFixture(t)
-	msgs := messagesFor(ucPathFindings(c, s), ruleUCPathOutcome)
+	_, c := ucPathFixture(t)
+	msgs := messagesFor(ucSlotPathFindings(c), ruleUCPathOutcome)
 	if !anyContains(msgs, `input at node "n2"`) || anyContains(msgs, `input at node "n1"`) {
 		t.Fatalf("n1 is a structural start; the first actor input is n2: %v", msgs)
 	}
 }
 
 func TestUC_PathRules_ReportDerivationError(t *testing.T) {
-	s, c := ucPathFixture(t)
+	_, c := ucPathFixture(t)
 	uc := &c.Decisions[0].UseCase
 	uc.Activity.Nodes = append(uc.Activity.Nodes, uc.Activity.Nodes[0]) // duplicate node id
-	msgs := messagesFor(ucPathFindings(c, s), ruleUCPathOutcome)
+	msgs := messagesFor(ucSlotPathFindings(c), ruleUCPathOutcome)
 	if !anyContains(msgs, "derivation failed") || !anyContains(msgs, "duplicate node id") {
 		t.Fatalf("a derivation error must be a finding, not silence: %v", msgs)
 	}

@@ -867,63 +867,63 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Check the caller may make this change to this member's list",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n3",
                     "kind": "decision",
                     "label": "Change permitted?",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n4",
                     "kind": "action",
                     "label": "Apply the requested change to the list under the TodoMVC rules and keep it durably",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n5",
                     "kind": "fork",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n6",
                     "kind": "action",
                     "label": "Tally items left across the whole list",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n7",
                     "kind": "action",
                     "label": "Propagate the change to every other surface showing this list",
-                    "roleName": "Other Surfaces",
+                    "roleName": "Message Bus",
                     "linkedActorId": null
                   },
                   {
                     "id": "n8",
                     "kind": "join",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n9",
                     "kind": "note",
                     "label": "Refused: the caller is told the change is outside their reach; no todo changes",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n10",
                     "kind": "merge",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -944,7 +944,7 @@
                     "id": "n11",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -1082,49 +1082,49 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Check the caller may read this member's list",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n3",
                     "kind": "decision",
                     "label": "Read permitted?",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n4",
                     "kind": "fork",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n5",
                     "kind": "action",
                     "label": "Recall the whole list exactly as last kept",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n6",
                     "kind": "action",
                     "label": "Select the todos for the chosen view and tally items left across the whole list",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n7",
                     "kind": "action",
                     "label": "Subscribe this surface to later changes to the list",
-                    "roleName": "Other Surfaces",
+                    "roleName": "Message Bus",
                     "linkedActorId": null
                   },
                   {
                     "id": "n8",
                     "kind": "join",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -1138,14 +1138,14 @@
                     "id": "n10",
                     "kind": "note",
                     "label": "Refused: the caller is told the list is outside their reach",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n11",
                     "kind": "merge",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -1166,7 +1166,7 @@
                     "id": "n12",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -1306,35 +1306,35 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Judge whether the wording is an acceptable title",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n3",
                     "kind": "decision",
                     "label": "Title acceptable?",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n4",
                     "kind": "action",
                     "label": "Record a new active todo with that title at the end of the list",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n5",
                     "kind": "note",
                     "label": "Nothing is created for empty or whitespace-only wording",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n6",
                     "kind": "merge",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -1348,7 +1348,7 @@
                     "id": "n7",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -1460,35 +1460,35 @@
                     "id": "n4",
                     "kind": "action",
                     "label": "Judge whether the new wording is an acceptable title",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n5",
                     "kind": "decision",
                     "label": "Title acceptable?",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n6",
                     "kind": "action",
                     "label": "Retitle the todo in place, keeping its identity and completed state",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n7",
                     "kind": "action",
                     "label": "Remove the todo under the blank reword rule",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n8",
                     "kind": "merge",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -1502,14 +1502,14 @@
                     "id": "n9",
                     "kind": "merge",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n10",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -1630,7 +1630,7 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Remove the one todo from the list, leaving every other todo untouched",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -1644,7 +1644,7 @@
                     "id": "n9",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -1711,7 +1711,7 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Set the one todo's completed state to the requested value",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -1725,7 +1725,7 @@
                     "id": "n9",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -1792,35 +1792,35 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Judge the aggregate completion target for the whole list",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n3",
                     "kind": "decision",
                     "label": "Every todo already completed?",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n4",
                     "kind": "action",
                     "label": "Set every todo on the list active in one step",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n5",
                     "kind": "action",
                     "label": "Set every todo on the list completed in one step",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n6",
                     "kind": "merge",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -1834,7 +1834,7 @@
                     "id": "n7",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -1931,14 +1931,14 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Purge every completed todo from the list in one step, leaving active todos untouched",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n3",
                     "kind": "note",
                     "label": "When nothing is completed the purge changes nothing",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -1952,7 +1952,7 @@
                     "id": "n9",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -2025,35 +2025,35 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Check the agent's delegation covers this change to this member's list",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n3",
                     "kind": "decision",
                     "label": "Within delegation?",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n4",
                     "kind": "action",
                     "label": "Apply the change exactly as a person's change would be applied",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n5",
                     "kind": "note",
                     "label": "Refused: the agent is told the change is outside its delegation",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
                     "id": "n6",
                     "kind": "merge",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -2067,7 +2067,7 @@
                     "id": "n7",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -2164,7 +2164,7 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Select the todos belonging in the chosen view by completed state",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -2185,7 +2185,7 @@
                     "id": "n4",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -2258,7 +2258,7 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Tally the active todos across the whole list, regardless of the chosen view",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -2272,7 +2272,7 @@
                     "id": "n9",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],
@@ -2339,7 +2339,7 @@
                     "id": "n2",
                     "kind": "action",
                     "label": "Recall the member's whole list, with every title and completed state, exactly as last kept",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   },
                   {
@@ -2353,7 +2353,7 @@
                     "id": "n9",
                     "kind": "end",
                     "label": "",
-                    "roleName": "List Keeping",
+                    "roleName": "List Manager",
                     "linkedActorId": null
                   }
                 ],

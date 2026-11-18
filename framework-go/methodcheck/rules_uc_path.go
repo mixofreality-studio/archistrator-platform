@@ -19,6 +19,11 @@ import (
 //	                            INTO it on the path after the asking call) or drew in
 //	                            that Client's or the actor's lane
 //	UC-START-NOT-ACTION         an actor's act is an action node, not a labelled start
+//	UC-ACTOR-DOOR /
+//	UC-LANE-RESOLVES            the actor-classified rules above judge only nodes linked
+//	                            to a declared actor, so a diagram linking none passes
+//	                            them vacuously; these two close that door
+//	                            (rules_uc_door.go; RUN-024)
 //	SCN-UNADDRESSED /
 //	SCN-ACTOR-PATH-CLIENT       the scenario derivation's own Problems, as findings
 //
@@ -45,17 +50,24 @@ const (
 	ruleSCNActorPathClient       RuleID = "SCN-ACTOR-PATH-CLIENT"
 )
 
-// ucPathFindings runs UC-PATH-OUTCOME and UC-OUTCOME-AT-ASKING-SURFACE over every
-// derived scenario of every use case that carries an activity diagram.
+// ucPathRuleIDs is every rule this family (rules_uc_path.go, rules_uc_door.go) can
+// emit, for the emitters registry.
+var ucPathRuleIDs = []RuleID{
+	ruleUCPathOutcome, ruleUCOutcomeAtAskingSurface, ruleUCStartNotAction,
+	ruleUCActorDoor, ruleUCLaneResolves,
+	ruleSCNUnaddressed, ruleSCNActorPathClient,
+}
+
+// ucPathFindings runs UC-OUTCOME-AT-ASKING-SURFACE over every derived scenario of
+// every use case that carries an activity diagram. It is the one path rule that
+// needs the System's dynamic views, so it runs at architecture; the others
+// (UC-ACTOR-DOOR, UC-PATH-OUTCOME, UC-START-NOT-ACTION) run when the coreUseCases
+// slot is validated (ucSlotPathFindings, rules_uc_door.go), which is also where a
+// derivation failure is reported, once.
 func ucPathFindings(c CoreUseCases, s System) []Finding {
 	rep, err := scenario.DeriveReport(pathScenarioInput(c, s))
 	if err != nil {
-		// Not every derivation error is a UC-ACTDIAG finding, so name it here rather
-		// than let the path rules go silent for every use case.
-		return []Finding{{
-			RuleID: ruleUCPathOutcome, Severity: SeverityError, Location: loc(0, "core use cases"),
-			Message: fmt.Sprintf("the scenario derivation failed, so no use-case path could be checked for an outcome: %v", err),
-		}}
+		return nil
 	}
 	ucs := useCaseIndex(c)
 	clients := clientIDs(s)
@@ -65,9 +77,7 @@ func ucPathFindings(c CoreUseCases, s System) []Finding {
 		if !ok || uc.Activity == nil {
 			continue
 		}
-		p := newPathWalk(uc, s, sc, clients)
-		out = append(out, p.pathOutcome()...)
-		out = append(out, p.outcomeAtAskingSurface()...)
+		out = append(out, newPathWalk(uc, s, sc, clients).outcomeAtAskingSurface()...)
 	}
 	return out
 }
@@ -138,12 +148,15 @@ func newPathWalk(uc UseCase, s System, sc scenario.Scenario, clients map[string]
 // isActorNode: the node is performed or decided by an actor of the use case. The
 // outcome kinds, notes and the structural kinds are never an actor's act, even when
 // lane-linked; scenario.classify treats them the same way (a start is structural).
-func (p pathWalk) isActorNode(n ActivityNode) bool {
+func (p pathWalk) isActorNode(n ActivityNode) bool { return isActorNodeOf(p.actors, n) }
+
+// isActorNodeOf is isActorNode against an explicit actor-id set.
+func isActorNodeOf(actors map[string]bool, n ActivityNode) bool {
 	switch n.Kind {
 	case kindSendSignal, kindObjectNode, kindNote, nodeStart, nodeEnd, nodeMerge, nodeFork, nodeJoin:
 		return false
 	}
-	return (n.LinkedActorID != "" && p.actors[n.LinkedActorID]) || (n.DecidedBy != "" && p.actors[n.DecidedBy])
+	return (n.LinkedActorID != "" && actors[n.LinkedActorID]) || (n.DecidedBy != "" && actors[n.DecidedBy])
 }
 
 // firstActor is the index in the path of the first actor-classified node.

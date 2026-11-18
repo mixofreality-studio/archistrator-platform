@@ -1,0 +1,260 @@
+{
+ "decisions": [
+  {
+   "useCase": {
+    "id": "reword-a-todo",
+    "name": "Reword a todo",
+    "actors": [
+     {
+      "id": "team-member",
+      "role": "Team member"
+     },
+     {
+      "id": "team-agent",
+      "role": "Team agent",
+      "kind": "agent"
+     }
+    ],
+    "trigger": "clientAction",
+    "classification": "nonCore",
+    "variationOf": "change-the-list",
+    "activity": {
+     "nodes": [
+      {
+       "id": "s",
+       "kind": "start",
+       "label": "",
+       "roleName": "List owner",
+       "linkedActorId": null
+      },
+      {
+       "id": "a1",
+       "kind": "action",
+       "label": "Commit a new title for one todo",
+       "roleName": "List owner",
+       "linkedActorId": null
+      },
+      {
+       "id": "a2",
+       "kind": "action",
+       "label": "Check the proposed title against title acceptance",
+       "roleName": "Todo list",
+       "linkedActorId": null
+      },
+      {
+       "id": "d",
+       "kind": "decision",
+       "label": "Is the title acceptable?",
+       "roleName": "Todo list",
+       "linkedActorId": null
+      },
+      {
+       "id": "k",
+       "kind": "action",
+       "label": "Retitle the todo in place in the hosted record",
+       "roleName": "Todo list",
+       "linkedActorId": null
+      },
+      {
+       "id": "b",
+       "kind": "action",
+       "label": "Discard the todo whose new title is blank from the hosted record",
+       "roleName": "Todo list",
+       "linkedActorId": null
+      },
+      {
+       "id": "m",
+       "kind": "merge",
+       "label": "",
+       "roleName": "Todo list",
+       "linkedActorId": null
+      },
+      {
+       "id": "r",
+       "kind": "action",
+       "label": "Recount items left across the whole list",
+       "roleName": "Todo list",
+       "linkedActorId": null
+      },
+      {
+       "id": "p",
+       "kind": "action",
+       "label": "Announce the changed list and its items left to every entry point showing it",
+       "roleName": "Other entry points",
+       "linkedActorId": null
+      },
+      {
+       "id": "e",
+       "kind": "end",
+       "label": "",
+       "roleName": "Other entry points",
+       "linkedActorId": null
+      }
+     ],
+     "edges": [
+      {
+       "from": "s",
+       "to": "a1",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "a1",
+       "to": "a2",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "a2",
+       "to": "d",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "d",
+       "to": "k",
+       "kind": "guardedFlow",
+       "guard": "[acceptable]"
+      },
+      {
+       "from": "d",
+       "to": "b",
+       "kind": "guardedFlow",
+       "guard": "[else]"
+      },
+      {
+       "from": "k",
+       "to": "m",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "b",
+       "to": "m",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "m",
+       "to": "r",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "r",
+       "to": "p",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "p",
+       "to": "e",
+       "kind": "controlFlow",
+       "guard": ""
+      }
+     ]
+    }
+   },
+   "rejectionReason": "A permutation of Change the list: the reword case of the title-accepting change, including its blank-title removal."
+  },
+  {
+   "useCase": {
+    "id": "remove-a-todo",
+    "name": "Remove a todo",
+    "actors": [
+     {
+      "id": "team-member",
+      "role": "Team member"
+     },
+     {
+      "id": "team-agent",
+      "role": "Team agent",
+      "kind": "agent"
+     }
+    ],
+    "trigger": "clientAction",
+    "classification": "nonCore",
+    "variationOf": "change-the-list",
+    "activity": {
+     "nodes": [
+      {
+       "id": "s",
+       "kind": "start",
+       "label": "",
+       "roleName": "List owner",
+       "linkedActorId": null
+      },
+      {
+       "id": "a1",
+       "kind": "action",
+       "label": "Ask to remove one todo",
+       "roleName": "List owner",
+       "linkedActorId": null
+      },
+      {
+       "id": "a2",
+       "kind": "action",
+       "label": "Discard the todo from the hosted record",
+       "roleName": "Todo list",
+       "linkedActorId": null
+      },
+      {
+       "id": "a3",
+       "kind": "action",
+       "label": "Recount items left across the whole list",
+       "roleName": "Todo list",
+       "linkedActorId": null
+      },
+      {
+       "id": "a4",
+       "kind": "action",
+       "label": "Announce the changed list and its items left to every entry point showing it",
+       "roleName": "Other entry points",
+       "linkedActorId": null
+      },
+      {
+       "id": "e",
+       "kind": "end",
+       "label": "",
+       "roleName": "Other entry points",
+       "linkedActorId": null
+      }
+     ],
+     "edges": [
+      {
+       "from": "s",
+       "to": "a1",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "a1",
+       "to": "a2",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "a2",
+       "to": "a3",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "a3",
+       "to": "a4",
+       "kind": "controlFlow",
+       "guard": ""
+      },
+      {
+       "from": "a4",
+       "to": "e",
+       "kind": "controlFlow",
+       "guard": ""
+      }
+     ]
+    }
+   },
+   "rejectionReason": "A permutation of Change the list: the single-todo discard case; no new business behavior beyond the change workflow."
+  }
+ ]
+}

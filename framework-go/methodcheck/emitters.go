@@ -94,13 +94,10 @@ func emittedRuleIDs() map[RuleID]bool {
 
 		// ---- Use-case I/O kinds (rules_usecase_io.go) ----
 		ruleUCIOKinds, ruleUCNoIO, ruleUCStartRedundant,
-
-		// ---- Use-case paths and scenario problems (rules_uc_path.go) ----
-		ruleUCPathOutcome, ruleUCOutcomeAtAskingSurface, ruleUCStartNotAction,
-		ruleSCNUnaddressed, ruleSCNActorPathClient, ruleTPClientContracted,
+		ruleTPClientContracted,
 	}
 	set := make(map[RuleID]bool, len(ids))
-	for _, id := range append(append(append(ids, uiDesignRuleIDs...), acceptanceRuleIDs...), surfaceRuleIDs...) {
+	for _, id := range append(append(append(append(ids, uiDesignRuleIDs...), acceptanceRuleIDs...), surfaceRuleIDs...), ucPathRuleIDs...) {
 		set[id] = true
 	}
 	return set

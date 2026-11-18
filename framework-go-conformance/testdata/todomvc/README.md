@@ -69,6 +69,17 @@ holds the result to zero Error findings, with no waiver. Every judgement made:
   to read but its own operation, so it probes itself, with `before` equal to the expectation
   (the vacuity check needs a declared first state).
 
+### Lanes (UC-LANE-RESOLVES, RUN-024 escape)
+
+- UC-LANE-RESOLVES (an Error at architecture) holds every lane (`roleName`) to naming a
+  declared actor of its use case or a System component. The harvest drew the Manager's
+  steps in a lane called `List Keeping` (the volatility the Manager encapsulates, not a
+  component) and two propagation steps in `Other Surfaces`. Data fix only: `List Keeping`
+  is now `List Manager` (the `ListManager` component, 56 nodes) and `Other Surfaces` is
+  now `Message Bus` (the `MessageBus` component, the two nodes whose steps call it). No
+  node, edge, step or contract changed; the actors were already linked
+  (UC-ACTOR-DOOR passes unchanged).
+
 ### Not changed / known limits
 
 - The dialect has no type-and-submit: add-a-todo and the work-the-list steps keep a bare

@@ -83,6 +83,11 @@ func validateCoreUseCases(c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, ucActPresent(c)...)
 	findings = append(findings, ucGuardLabel(c)...)
 	findings = append(findings, variationRef(c)...)
+	// The path rules that read the diagrams alone run here, where the architect can
+	// still fix the draft; UC-OUTCOME-AT-ASKING-SURFACE needs the dynamic views and
+	// UC-LANE-RESOLVES the System's components, so both stay at architecture.
+	findings = append(findings, ucSlotPathFindings(c)...)
+	findings = append(findings, startNotActionFindings(c)...)
 	return finalize(findings), nil
 }
 
@@ -105,7 +110,7 @@ func validateArchitecture(s System, c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, callChainRules(s, c)...)
 	findings = append(findings, useCaseIORules(c, allActorIDs(c))...)
 	findings = append(findings, ucPathFindings(c, s)...)
-	findings = append(findings, startNotActionFindings(c)...)
+	findings = append(findings, ucLaneFindings(c, s)...)
 	return finalize(findings), nil
 }
 
