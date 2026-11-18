@@ -184,19 +184,101 @@ If they cannot agree, the dispute usually means one of:
 
 This is the normative task the CI draft job (and a local `/system-design` run) executes to produce the `CoreUseCases`. It is self-contained: everything a draft agent needs to draft a sound set of core use cases — including how to compose each use case's typed activity diagram — is stated here.
 
-Select the CORE use cases by ABSTRACTION, not by listing what the customer asked for. For each candidate ask: does this capture the ESSENCE of the business (what differentiates it, what creates value), or is it a permutation/utility (onboarding, payment, account admin)? Could a single higher abstraction — often a NEW name not in the customer's vocabulary — subsume several raw use cases? Target 2-6 core use cases; if you have more than 6 you have not abstracted enough. Sanity check: a one-slide brochure for the system would have roughly this many bullets. Record each rejected permutation with its rejection reason and link it to the core it permutes by setting its `variationOf` to that core use case's NAME (exactly as you wrote it). Record on each CORE decision its `essenceRationale` — the symmetric twin of the nonCore rejection reason: WHY this use case is the essence of the business (shared by all customers, nearly immutable, differentiating — an abstraction, not a feature). A core decision without one is flagged `DH-UC-ESSENCE-MISSING` (Warning); a rationale that just restates the feature is vacuous and will be sent back in critique.
+Select the CORE use cases by ABSTRACTION, not by listing what the customer asked for. For each candidate ask: does this capture the ESSENCE of the business (what differentiates it, what creates value), or is it a permutation/utility (onboarding, payment, account admin)? Could a single higher abstraction — often a NEW name not in the customer's vocabulary — subsume several raw use cases? Target 2-6 core use cases; if you have more than 6 you have not abstracted enough. Sanity check: a one-slide brochure for the system would have roughly this many bullets. Record each rejected permutation with its rejection reason and link it to the core it permutes by setting its `variationOf` to that core use case's `id` (exactly as you wrote it). Record on each CORE decision its `essenceRationale` — the symmetric twin of the nonCore rejection reason: WHY this use case is the essence of the business (shared by all customers, nearly immutable, differentiating — an abstraction, not a feature). A core decision without one is flagged `DH-UC-ESSENCE-MISSING` (Warning); a rationale that just restates the feature is vacuous and will be sent back in critique.
 
 EXERCISE THE VOLATILITIES: the committed `.volatilities` is an input to your flows, not a backdrop — each accepted volatility should be exercised, its seam crossed, by at least one core use case's flow, or its absence explicitly justified in the draft. Flows that exercise NO committed volatility are restating the customer's current manual process, not the product's required behavior.
 
-IDENTITY BY NAME: every use case and actor is identified by its human-readable NAME — you do NOT emit any id. Use case names must be UNIQUE; actor roles must be unique within a use case. Reference the core use case in `variationOf` by its name; the server assigns and resolves all internal ids.
+IDENTITY BY ID: every use case, actor and activity node carries an `id` that YOU write — a short lowercase kebab-case slug (`match-tradesman`, `customer`, `search-registry`) — and every reference to one of them is that `id`. Use case ids are UNIQUE across the whole `CoreUseCases`; actor ids are unique within their use case; node ids are unique within their diagram. `name` and `role` are the human-readable labels; they are never used as a reference. `variationOf` is the `id` of a CORE use case (never its name). An id is permanent: later slots (the architecture's dynamic views, the test plans) refer to your ids, so choose it once and never reuse it for a different use case.
+
+THE WIRE SHAPE, field for field (the schema refuses any other field, and a missing one):
+
+- `CoreUseCases`: `{"decisions": [ ... ]}` — one decision per use case, core AND nonCore, in one list.
+- Each decision: `{"useCase": {...}, "rejectionReason": "...", "essenceRationale": "..."}`. `rejectionReason` is a string and is `""` on a core decision; on a nonCore decision it is the one-line reason it is not core. `essenceRationale` is the essence argument on a core decision and `null` on a nonCore one.
+- Each `useCase`: `{"id", "name", "actors", "trigger", "classification", "variationOf", "activity"}`. `trigger` is `"clientAction"`, `"timer"` or `"busMessage"`; `classification` is `"core"` or `"nonCore"`; `variationOf` is `null` on a core use case and, on a nonCore one, the `id` of the core use case it permutes; `activity` is the diagram (never null).
+- Each actor: `{"id", "role"}` — nothing else. A node's `linkedActorId` and a decision's `decidedBy` name an actor by this `id`.
+- Each diagram: `{"nodes": [...], "edges": [...]}`.
+- Each node: `{"id", "kind", "label", "roleName", "linkedActorId"}`, plus `"decidedBy"` on a decision/switch that names who resolves it, plus `"inState"` on an `objectNode` (the state it shows, `"[requested]"`) and `"anchor"` on a `note` that points at one node (that node's `id`). `linkedActorId` is `null` when no actor performs the node.
+- Each edge: `{"from", "to", "kind", "guard"}` — `from` and `to` are node `id`s; `guard` is `""` on a `controlFlow`.
+
+A whole model in that shape — one core use case and one variation of it (the diagrams are minimal; yours walk the real flow):
+
+```json
+{
+  "decisions": [
+    {
+      "useCase": {
+        "id": "match-tradesman",
+        "name": "Match Tradesman",
+        "actors": [{"id": "customer", "role": "Customer"}],
+        "trigger": "clientAction",
+        "classification": "core",
+        "variationOf": null,
+        "activity": {
+          "nodes": [
+            {"id": "start", "kind": "start", "label": "", "roleName": "", "linkedActorId": null},
+            {"id": "request-match", "kind": "action", "label": "Customer describes the job to be done", "roleName": "Customer", "linkedActorId": "customer"},
+            {"id": "search-registry", "kind": "action", "label": "Search the registry for tradesmen who fit the job", "roleName": "", "linkedActorId": null},
+            {"id": "match-found", "kind": "decision", "label": "Match found?", "roleName": "", "linkedActorId": null},
+            {"id": "assign-tradesman", "kind": "action", "label": "Assign the best-fitting tradesman to the job", "roleName": "", "linkedActorId": null},
+            {"id": "escalate-request", "kind": "action", "label": "Escalate the request for manual matching", "roleName": "", "linkedActorId": null},
+            {"id": "outcome-merge", "kind": "merge", "label": "", "roleName": "", "linkedActorId": null},
+            {"id": "tell-customer", "kind": "sendSignal", "label": "Customer is told who was assigned, or that the request was escalated", "roleName": "Customer", "linkedActorId": "customer"},
+            {"id": "end", "kind": "end", "label": "", "roleName": "", "linkedActorId": null}
+          ],
+          "edges": [
+            {"from": "start", "to": "request-match", "kind": "controlFlow", "guard": ""},
+            {"from": "request-match", "to": "search-registry", "kind": "controlFlow", "guard": ""},
+            {"from": "search-registry", "to": "match-found", "kind": "controlFlow", "guard": ""},
+            {"from": "match-found", "to": "assign-tradesman", "kind": "guardedFlow", "guard": "[match found]"},
+            {"from": "match-found", "to": "escalate-request", "kind": "guardedFlow", "guard": "[else]"},
+            {"from": "assign-tradesman", "to": "outcome-merge", "kind": "controlFlow", "guard": ""},
+            {"from": "escalate-request", "to": "outcome-merge", "kind": "controlFlow", "guard": ""},
+            {"from": "outcome-merge", "to": "tell-customer", "kind": "controlFlow", "guard": ""},
+            {"from": "tell-customer", "to": "end", "kind": "controlFlow", "guard": ""}
+          ]
+        }
+      },
+      "rejectionReason": "",
+      "essenceRationale": "Matching is what every customer buys and what separates the marketplace from a directory: it is shared by all customers, survives any change of trade, region or channel, and is an abstraction over every customer-stated way of finding a tradesman."
+    },
+    {
+      "useCase": {
+        "id": "re-match-after-decline",
+        "name": "Re-match after a decline",
+        "actors": [{"id": "customer", "role": "Customer"}],
+        "trigger": "clientAction",
+        "classification": "nonCore",
+        "variationOf": "match-tradesman",
+        "activity": {
+          "nodes": [
+            {"id": "start", "kind": "start", "label": "", "roleName": "", "linkedActorId": null},
+            {"id": "decline-assignment", "kind": "action", "label": "Customer declines the assigned tradesman", "roleName": "Customer", "linkedActorId": "customer"},
+            {"id": "search-next", "kind": "action", "label": "Search the registry again, excluding the declined tradesman", "roleName": "", "linkedActorId": null},
+            {"id": "tell-customer", "kind": "sendSignal", "label": "Customer is told who is assigned next", "roleName": "Customer", "linkedActorId": "customer"},
+            {"id": "end", "kind": "end", "label": "", "roleName": "", "linkedActorId": null}
+          ],
+          "edges": [
+            {"from": "start", "to": "decline-assignment", "kind": "controlFlow", "guard": ""},
+            {"from": "decline-assignment", "to": "search-next", "kind": "controlFlow", "guard": ""},
+            {"from": "search-next", "to": "tell-customer", "kind": "controlFlow", "guard": ""},
+            {"from": "tell-customer", "to": "end", "kind": "controlFlow", "guard": ""}
+          ]
+        }
+      },
+      "rejectionReason": "A permutation of matching: the same search re-run after the customer declines the first tradesman.",
+      "essenceRationale": null
+    }
+  ]
+}
+```
 
 ### Activity diagram rules
 
 The CI draft job emits each use case's `activity` as a typed node/edge model (not PlantUML — the PlantUML guidance above is for human-readable rendering; the committed draft carries the typed graph the server validates). The rules below are what the machine validates and are copied verbatim from the draft doctrine.
 
-ACTIVITY DIAGRAM: EVERY use case — CORE and SUPPORTING (nonCore) alike — MUST carry a NON-EMPTY `activity`: a WELL-FORMED UML activity diagram, a graph of `nodes` (each `{ref, kind, label, roleName, linkedActorId, decidedBy?}`) and `edges` (each `{from, to, kind, guard}`). There is NO "purely linear, so leave it null" exemption — a use case with a null or empty `activity` (missing `nodes` or `edges`) is an INCOMPLETE DRAFT and will be rejected. At an ABSOLUTE MINIMUM the diagram has an ENTRY (see below), at least one action node, and an end node wired entry -> action -> end; a use case that branches or runs steps concurrently adds decision/merge or fork/join per the rules below. Walk the use case's real flow — do not stub a placeholder one-action diagram to satisfy the rule when the use case genuinely has steps. NEVER emit a bare string for `activity` — it is always a non-empty object with `nodes` and `edges`.
+ACTIVITY DIAGRAM: EVERY use case — CORE and SUPPORTING (nonCore) alike — MUST carry a NON-EMPTY `activity`: a WELL-FORMED UML activity diagram, a graph of `nodes` (each `{id, kind, label, roleName, linkedActorId, decidedBy?}`) and `edges` (each `{from, to, kind, guard}`). There is NO "purely linear, so leave it null" exemption — a use case with a null or empty `activity` (missing `nodes` or `edges`) is an INCOMPLETE DRAFT and will be rejected. At an ABSOLUTE MINIMUM the diagram has an ENTRY (see below), at least one action node, and an end node wired entry -> action -> end; a use case that branches or runs steps concurrently adds decision/merge or fork/join per the rules below. Walk the use case's real flow — do not stub a placeholder one-action diagram to satisfy the rule when the use case genuinely has steps. NEVER emit a bare string for `activity` — it is always a non-empty object with `nodes` and `edges`.
 
-IDENTITY BY NAME (no ids): you NEVER emit any opaque id or uuid. Give each node a short `ref` slug of your own (e.g. `n1`, `n2`) UNIQUE within the diagram; edges reference nodes by that `ref` in `from`/`to`. `linkedActorId` is the `id` of one of THIS use case's declared actors (the actor's `id` field, not its role name): it is the one link from a node to who performs it, and it is NOT optional on the node where an actor acts (see "The actor's door" below). The server resolves the other references by name.
+NODE IDS: give each node a short kebab-case `id` of your own (`request-match`, `outcome-merge`), UNIQUE within the diagram, that says what the node is; edges reference nodes by that `id` in `from`/`to`, and a later `anchor` or the architecture's `activityNodeId` does the same. `linkedActorId` is the `id` of one of THIS use case's declared actors (the actor's `id` field, not its role name): it is the one link from a node to who performs it, and it is NOT optional on the node where an actor acts (see "The actor's door" below).
 
 THE ACTOR'S DOOR: every rule that asks what an actor does or sees (`UC-PATH-OUTCOME`, `UC-OUTCOME-AT-ASKING-SURFACE`, `UC-START-NOT-ACTION`) judges only nodes linked to a declared actor, so a diagram that links none is judged by nothing. Two Error rules close that door. `UC-ACTOR-DOOR`: every `clientAction` use case has at least one node whose `linkedActorId` (or, on a decision, `decidedBy`) is a declared actor's `id`, and EVERY path from entry to end passes through such a node; the finding reads "set linkedActorId to one of: <declared actor ids>". `UC-LANE-RESOLVES`: every node's `roleName` names a declared actor of the use case (its role or id) or a System component (checked once the architecture exists), so lane the actor's own acts in the actor's role, and lane the system's work in the name of the component that will do it — never in an area-of-interest label like "Other entry points" that is neither. These rules fire the moment you record the draft (`putDraftModel`): UC-ACTOR-DOOR, UC-PATH-OUTCOME and UC-START-NOT-ACTION at once; UC-LANE-RESOLVES and UC-OUTCOME-AT-ASKING-SURFACE when the architecture is recorded.
 
@@ -220,9 +302,9 @@ A diagram MAY have more than one entry, and a `timer`/`busMessage` use case MAY 
 
 TRIGGER ALIGNMENT (machine-checked, `CC-TRIGGER-EVENT`, Error): a `timer` use case MUST have >=1 edge-less `timeEvent` entry; a `busMessage` use case MUST have >=1 edge-less `acceptEvent` entry; a `clientAction` use case MUST have NO event-node entries. And a `clientAction` use case MUST declare >=1 actor (`CUC-ACTOR-REQUIRED`, Error) — with none, nothing can root its chain.
 
-DECIDEDBY (optional, `decision`/`switch` ONLY): names WHO makes the choice at a branch — a System component NAME or an actor ROLE of this use case. Set it when the honest decider is not the Manager running the flow: the verdict is an Engine's output (a policy engine returning Retry|Escalate), a human's act (approve, revoke, take over), or an external provider's answer (a gateway approving a charge). LEAVE IT ABSENT when the guard is the Manager's own state read — absence reads as the Manager, which is then the honest attribution, and a wrong explicit decider is worse than none. Placement rule: the decider must be a plausible endpoint of the eventual call chain — for a component, the chain can reach it; for an actor, the diagram has an actor->Client touchpoint. `decidedBy` on any other node kind, or a value resolving to neither a component nor one of THIS use case's actors, is `CC-DECIDED-BY` (Error). NOTE: `decidedBy` puts component names into the requirements artifact, so a later component RENAME must retarget this field in the SAME amendment as the model — renames are cross-slot events.
+DECIDEDBY (optional, `decision`/`switch` ONLY): names WHO makes the choice at a branch — the `id` of a System component or the `id` of an actor of this use case. Set it when the honest decider is not the Manager running the flow: the verdict is an Engine's output (a policy engine returning Retry|Escalate), a human's act (approve, revoke, take over), or an external provider's answer (a gateway approving a charge). LEAVE IT ABSENT when the guard is the Manager's own state read — absence reads as the Manager, which is then the honest attribution, and a wrong explicit decider is worse than none. Placement rule: the decider must be a plausible endpoint of the eventual call chain — for a component, the chain can reach it; for an actor, the diagram has an actor->Client touchpoint. `decidedBy` on any other node kind, or a value resolving to neither a component nor one of THIS use case's actors, is `CC-DECIDED-BY` (Error). NOTE: `decidedBy` puts a component `id` into the requirements artifact, so a later component id change must retarget this field in the SAME amendment as the model — it is a cross-slot event (a rename of the component's `name` alone does not touch it).
 
-Put every node in its business-role swim-lane via `roleName` (e.g. "Customer", "Trusted System") — a business role or area of interest, NOT a Method layer or subsystem name.
+Put a node in its swim-lane via `roleName`: a declared actor's `role` for the actor's own acts (e.g. "Customer"), and `""` for the system's own work until [[the-method-architecture]] names the component that does it — never a Method layer or an area-of-interest label (`UC-LANE-RESOLVES`).
 
 Edge kinds:
 - guardedFlow: carries a `guard` condition; used ONLY on the outgoing edges of a decision.
@@ -237,32 +319,32 @@ Composition rules you MUST follow (a violation is rejected and redrafted):
 
 Decision/merge model an ALTERNATIVE (exactly one branch taken); fork/join model CONCURRENCY (all paths taken) — do not confuse them.
 
-Worked examples (each node carries your own short `ref` slug — NOT a uuid; edges reference those refs):
+Worked diagram fragments (each node carries its own `id`; edges reference those ids; `roleName` is `""` for the system's own work, per the lane rule above):
 
 if/else — a decision's two branches reconverge at a merge:
 
 ```json
-{"nodes":[{"ref":"n1","kind":"decision","label":"Is the item actionable?","roleName":"Trusted System"},{"ref":"n2","kind":"action","label":"Create next step and assign context","roleName":"Trusted System"},{"ref":"n3","kind":"action","label":"File or incubate item","roleName":"Trusted System"},{"ref":"n4","kind":"merge","label":"","roleName":"Trusted System"}],"edges":[{"from":"n1","to":"n2","kind":"guardedFlow","guard":"[actionable]"},{"from":"n1","to":"n3","kind":"guardedFlow","guard":"[else]"},{"from":"n2","to":"n4","kind":"controlFlow","guard":""},{"from":"n3","to":"n4","kind":"controlFlow","guard":""}]}
+{"nodes":[{"id":"is-actionable","kind":"decision","label":"Is the item actionable?","roleName":"","linkedActorId":null},{"id":"create-next-step","kind":"action","label":"Create next step and assign context","roleName":"","linkedActorId":null},{"id":"file-item","kind":"action","label":"File or incubate item","roleName":"","linkedActorId":null},{"id":"item-handled","kind":"merge","label":"","roleName":"","linkedActorId":null}],"edges":[{"from":"is-actionable","to":"create-next-step","kind":"guardedFlow","guard":"[actionable]"},{"from":"is-actionable","to":"file-item","kind":"guardedFlow","guard":"[else]"},{"from":"create-next-step","to":"item-handled","kind":"controlFlow","guard":""},{"from":"file-item","to":"item-handled","kind":"controlFlow","guard":""}]}
 ```
 
 fork/join — two concurrent paths synchronize:
 
 ```json
-{"nodes":[{"ref":"n1","kind":"fork","label":"","roleName":"Marketplace"},{"ref":"n2","kind":"action","label":"Search the registry","roleName":"Marketplace"},{"ref":"n3","kind":"action","label":"Notify the tradesman","roleName":"Tradesman"},{"ref":"n4","kind":"join","label":"","roleName":"Marketplace"}],"edges":[{"from":"n1","to":"n2","kind":"controlFlow","guard":""},{"from":"n1","to":"n3","kind":"controlFlow","guard":""},{"from":"n2","to":"n4","kind":"controlFlow","guard":""},{"from":"n3","to":"n4","kind":"controlFlow","guard":""}]}
+{"nodes":[{"id":"split","kind":"fork","label":"","roleName":"","linkedActorId":null},{"id":"search-registry","kind":"action","label":"Search the registry","roleName":"","linkedActorId":null},{"id":"notify-tradesman","kind":"action","label":"Notify the tradesman","roleName":"","linkedActorId":null},{"id":"synchronize","kind":"join","label":"","roleName":"","linkedActorId":null}],"edges":[{"from":"split","to":"search-registry","kind":"controlFlow","guard":""},{"from":"split","to":"notify-tradesman","kind":"controlFlow","guard":""},{"from":"search-registry","to":"synchronize","kind":"controlFlow","guard":""},{"from":"notify-tradesman","to":"synchronize","kind":"controlFlow","guard":""}]}
 ```
 
 event entry — a `timer` use case enters at an edge-less `timeEvent` (no `start` node anywhere in the diagram), and a `decision` names its decider:
 
 ```json
-{"nodes":[{"ref":"n1","kind":"timeEvent","label":"Settlement cycle comes due","roleName":"Trusted System"},{"ref":"n2","kind":"action","label":"Charge the customer for the cycle","roleName":"Trusted System"},{"ref":"n3","kind":"decision","label":"Charge succeeded?","roleName":"Trusted System","decidedBy":"MerchantGateway"},{"ref":"n4","kind":"action","label":"Close the cycle settled","roleName":"Trusted System"},{"ref":"n5","kind":"action","label":"Record the decline and close the cycle unpaid","roleName":"Trusted System"},{"ref":"n6","kind":"merge","label":"","roleName":"Trusted System"}],"edges":[{"from":"n1","to":"n2","kind":"controlFlow","guard":""},{"from":"n2","to":"n3","kind":"controlFlow","guard":""},{"from":"n3","to":"n4","kind":"guardedFlow","guard":"[paid]"},{"from":"n3","to":"n5","kind":"guardedFlow","guard":"[else]"},{"from":"n4","to":"n6","kind":"controlFlow","guard":""},{"from":"n5","to":"n6","kind":"controlFlow","guard":""}]}
+{"nodes":[{"id":"cycle-due","kind":"timeEvent","label":"Settlement cycle comes due","roleName":"","linkedActorId":null},{"id":"charge-customer","kind":"action","label":"Charge the customer for the cycle","roleName":"","linkedActorId":null},{"id":"charge-succeeded","kind":"decision","label":"Charge succeeded?","roleName":"","linkedActorId":null,"decidedBy":"merchant-gateway"},{"id":"close-settled","kind":"action","label":"Close the cycle settled","roleName":"","linkedActorId":null},{"id":"close-unpaid","kind":"action","label":"Record the decline and close the cycle unpaid","roleName":"","linkedActorId":null},{"id":"cycle-closed","kind":"merge","label":"","roleName":"","linkedActorId":null}],"edges":[{"from":"cycle-due","to":"charge-customer","kind":"controlFlow","guard":""},{"from":"charge-customer","to":"charge-succeeded","kind":"controlFlow","guard":""},{"from":"charge-succeeded","to":"close-settled","kind":"guardedFlow","guard":"[paid]"},{"from":"charge-succeeded","to":"close-unpaid","kind":"guardedFlow","guard":"[else]"},{"from":"close-settled","to":"cycle-closed","kind":"controlFlow","guard":""},{"from":"close-unpaid","to":"cycle-closed","kind":"controlFlow","guard":""}]}
 ```
 
-(`decidedBy` names the gateway because the succeed/decline verdict is genuinely the provider's, not the Manager's — and the gateway is reachable from this chain through its ResourceAccess, so the placement rule holds. The decision itself needs no realization step: its guard is answered by the charge call `n2` already draws.)
+(`decidedBy` holds the gateway component's `id` (`merchant-gateway`) because the succeed/decline verdict is genuinely the provider's, not the Manager's — and the gateway is reachable from this chain through its ResourceAccess, so the placement rule holds. The decision itself needs no realization step: its guard is answered by the `charge-customer` call the diagram already draws.)
 
 while-loop — a decision back-edges to the loop-head merge:
 
 ```json
-{"nodes":[{"ref":"n1","kind":"merge","label":"","roleName":"Trusted System"},{"ref":"n2","kind":"action","label":"Process the next item","roleName":"Trusted System"},{"ref":"n3","kind":"decision","label":"More items?","roleName":"Trusted System"},{"ref":"n4","kind":"end","label":"","roleName":"Trusted System"}],"edges":[{"from":"n1","to":"n2","kind":"controlFlow","guard":""},{"from":"n2","to":"n3","kind":"controlFlow","guard":""},{"from":"n3","to":"n1","kind":"guardedFlow","guard":"[more]"},{"from":"n3","to":"n4","kind":"guardedFlow","guard":"[else]"}]}
+{"nodes":[{"id":"loop-head","kind":"merge","label":"","roleName":"","linkedActorId":null},{"id":"process-item","kind":"action","label":"Process the next item","roleName":"","linkedActorId":null},{"id":"more-items","kind":"decision","label":"More items?","roleName":"","linkedActorId":null},{"id":"done","kind":"end","label":"","roleName":"","linkedActorId":null}],"edges":[{"from":"loop-head","to":"process-item","kind":"controlFlow","guard":""},{"from":"process-item","to":"more-items","kind":"controlFlow","guard":""},{"from":"more-items","to":"loop-head","kind":"guardedFlow","guard":"[more]"},{"from":"more-items","to":"done","kind":"guardedFlow","guard":"[else]"}]}
 ```
 
 ## Exit criteria (for router)

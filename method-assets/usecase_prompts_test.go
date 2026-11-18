@@ -51,3 +51,51 @@ func TestCoreUseCasesPrompts_CiteTheActorDoorRules(t *testing.T) {
 		}
 	}
 }
+
+// RUN-024 also lost seven putDraftModel calls to a skill that described use cases, actors and
+// nodes as identified by name with no ids, `ref` slugs on nodes and `variationOf` by name, when the
+// schema keys all of them by `id`. These phrases are the stale vocabulary; the strict decode of the
+// skill's example JSON lives in framework-go-conformance (usecase_wire_prompts_test.go).
+var staleUseCaseVocabulary = []*regexp.Regexp{
+	regexp.MustCompile(`(?i)identity by name \(no ids\)`),
+	regexp.MustCompile(`(?i)you (do not|never) emit any (opaque )?id`),
+	regexp.MustCompile(`"ref":`),
+	regexp.MustCompile(`\{ref,`),
+	regexp.MustCompile("(?i)`ref` slug"),
+	regexp.MustCompile("(?i)variationOf` by its name"),
+	regexp.MustCompile("(?i)variationOf` that does not resolve to a core use case's name"),
+	regexp.MustCompile("(?i)every use case and actor is identified by its human-readable name"),
+	regexp.MustCompile("(?i)use case names must be unique"),
+	regexp.MustCompile("(?i)set `useCase` to that use case's name"),
+	regexp.MustCompile("(?i)`activityNode` names a node"),
+	regexp.MustCompile("(?i)component names or an actor role"),
+}
+
+func TestPrompts_DoNotDescribeUseCasesByNameWhenTheSchemaKeysThemByID(t *testing.T) {
+	files, err := ClaudeFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	for path, body := range files {
+		for _, re := range staleUseCaseVocabulary {
+			if loc := re.FindIndex(body); loc != nil {
+				from := max(loc[0]-40, 0)
+				to := min(loc[1]+40, len(body))
+				t.Errorf("%s matches stale wire vocabulary %s: ...%s...", path, re, body[from:to])
+			}
+		}
+	}
+}
+
+func TestCoreUseCasesSkill_TeachesTheIDKeyedWireShape(t *testing.T) {
+	files, err := ClaudeFiles()
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(files[".claude/skills/the-method-core-use-cases/SKILL.md"])
+	for _, want := range []string{"IDENTITY BY ID", "`variationOf`", "`essenceRationale`", "`linkedActorId`", "`decidedBy`", "`rejectionReason`"} {
+		if !strings.Contains(body, want) {
+			t.Errorf("the core-use-cases skill does not mention %s", want)
+		}
+	}
+}
