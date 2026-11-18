@@ -3,7 +3,10 @@ package conformance
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
+	"slices"
 	"strconv"
+	"strings"
 	"testing"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
@@ -20,20 +23,43 @@ import (
 // be satisfied until construction.
 //
 // So each fixture is replayed in Method order: the slots by kind ordinal (Phase 1, then Phase 2),
-// then the construction records (the service contracts, the UI designs, the component test plans,
-// the acceptance plan). After each step the prefix validates with zero Error findings, and a step
-// whose artifact a generator reads passes Tier 1 admission with no Local problem: what the write
-// verbs would do at that step. A construction record also loads under Tier 0 (projectmodel.Load),
-// which the construction record verbs refuse on; the design-slot verbs do not run it, so neither
-// does the replay at a design slot.
+// then the construction records, as construction records them: the service contracts ONE AT A
+// TIME (once in key order, once in reverse), then the UI designs, the component test plans and the
+// acceptance plan. Nobody records a Client's contract: a machine client's (rest, mcpTools) is
+// derived in the mutation that records the Manager behind it, and a browser surface's (web, mcpApp)
+// when its UI design is recorded, so the replay adds each in that step.
+//
+// After each step the prefix loads under Tier 0 (projectmodel.Load, which the construction record
+// verbs refuse on and every generator loads through), validates with zero Error findings under the
+// severity the record verb applies, and, at a step whose artifact a generator reads, passes Tier 1
+// admission with no Local problem: what the write verbs would do at that step. Tier 0 runs at the
+// design slots too: a design whose deployment binds a component is a prefix every later contract
+// record must load, so a slot that Tier 0 refuses would refuse the first contract (greenfield's
+// slot 6 did, with PM-DEPLOY-REF, until a reference to a System component whose contract is still
+// to come became pending).
 
-// replayStep is one recorded artifact: what the prefix gains, the kind Tier 1 admits it as ("" when
-// no generator reads it), and whether its verb gates on Tier 0.
+// replayStep is one recorded artifact: what the prefix gains and the kind Tier 1 admits it as (""
+// when no generator reads it).
 type replayStep struct {
 	name  string
 	admit appgen.ArtifactKind
-	tier0 bool
 	add   func(prefix map[string]any)
+}
+
+// contractOrder is the order a replay records the service contracts in.
+type contractOrder struct {
+	name  string
+	order func(keys []string) []string
+}
+
+// replayContractOrders are the two recording orders every replay runs: key order and its reverse.
+var replayContractOrders = []contractOrder{
+	{"key order", func(keys []string) []string { return slices.Sorted(slices.Values(keys)) }},
+	{"reverse key order", func(keys []string) []string {
+		o := slices.Sorted(slices.Values(keys))
+		slices.Reverse(o)
+		return o
+	}},
 }
 
 // slotAdmitKinds is the Tier 1 kind of the slots a generator reads, by kind ordinal.
@@ -43,15 +69,141 @@ var slotAdmitKinds = map[int]appgen.ArtifactKind{
 	6: appgen.KindOperationalConcepts,
 }
 
-// replay splits a fixture into its empty envelope and its steps in Method order.
-func replay(t *testing.T, raw []byte) (map[string]any, []replayStep) {
+// replaySystem is the part of the System the replay schedules contracts by.
+type replaySystem struct {
+	Components []struct {
+		ID          string `json:"id"`
+		Kind        string `json:"kind"`
+		Surface     string `json:"surface"`
+		ContractKey string `json:"contractKey"`
+		BuildStatus string `json:"buildStatus"`
+	} `json:"components"`
+	Relationships []struct {
+		From string `json:"from"`
+		To   string `json:"to"`
+	} `json:"relationships"`
+}
+
+// systemOf is the System among slots (kind 5), the zero System when there is none.
+func systemOf(t *testing.T, slots map[string]any) replaySystem {
+	t.Helper()
+	var sys replaySystem
+	for _, s := range slots {
+		slot, _ := s.(map[string]any)
+		if k, _ := slot["kind"].(float64); k != 5 {
+			continue
+		}
+		b, err := json.Marshal(slot["model"])
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(b, &sys); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return sys
+}
+
+// contractKeyOf is the key a component's contract is filed under: its contractKey, else
+// lowerCamel(id) (the app's projectstate.ContractKeyFor).
+func contractKeyOf(id, contractKey string) string {
+	if contractKey != "" {
+		return contractKey
+	}
+	parts := strings.Split(id, "-")
+	for i := 1; i < len(parts); i++ {
+		if parts[i] != "" {
+			parts[i] = strings.ToUpper(parts[i][:1]) + parts[i][1:]
+		}
+	}
+	return strings.Join(parts, "")
+}
+
+// contractSchedule splits the contract keys into those an agent records (the non-Client ones), the
+// machine-client contracts derived with a Manager's (by that Manager's key: the last Manager the
+// client calls, in order), and the browser-surface contracts derived with the UI design.
+func contractSchedule(t *testing.T, sys replaySystem, keys []string, co contractOrder) (recorded []string, withManager map[string][]string, withUIDesign []string) {
+	t.Helper()
+	have := map[string]bool{}
+	for _, k := range keys {
+		have[k] = true
+	}
+	keyOfID := map[string]string{}
+	kindOfID := map[string]string{}
+	clientSurface := map[string]string{} // contract key -> surface, for Clients
+	for _, c := range sys.Components {
+		key := contractKeyOf(c.ID, c.ContractKey)
+		keyOfID[c.ID] = key
+		kindOfID[c.ID] = strings.ToLower(c.Kind)
+		if strings.EqualFold(c.Kind, "client") {
+			clientSurface[key] = c.Surface
+		}
+	}
+	var agent []string
+	for _, k := range keys {
+		if _, client := clientSurface[k]; !client {
+			agent = append(agent, k)
+		}
+	}
+	recorded = co.order(agent)
+	position := map[string]int{}
+	for i, k := range recorded {
+		position[k] = i
+	}
+	withManager = map[string][]string{}
+	for _, c := range sys.Components {
+		key := keyOfID[c.ID]
+		surface, client := clientSurface[key]
+		if !client || !have[key] {
+			continue
+		}
+		switch surface {
+		case "web", "mcpApp":
+			withUIDesign = append(withUIDesign, key)
+		case "rest", "mcpTools":
+			last := ""
+			for _, r := range sys.Relationships {
+				m := keyOfID[r.To]
+				if r.From != c.ID || kindOfID[r.To] != "manager" || !have[m] {
+					continue
+				}
+				if last == "" || position[m] > position[last] {
+					last = m
+				}
+			}
+			if last == "" {
+				t.Fatalf("machine client %s has a contract but calls no contracted Manager: the replay cannot tell when it is derived", c.ID)
+			}
+			withManager[last] = append(withManager[last], key)
+		default:
+			t.Fatalf("client %s has surface %q: the replay knows when a web, mcpApp, rest or mcpTools contract is recorded; extend it", c.ID, surface)
+		}
+	}
+	return recorded, withManager, withUIDesign
+}
+
+// addContracts files the named contracts into the prefix's serviceContracts.
+func addContracts(p map[string]any, contracts map[string]any, keys ...string) {
+	sc, _ := p["serviceContracts"].(map[string]any)
+	if sc == nil {
+		sc = map[string]any{}
+		p["serviceContracts"] = sc
+	}
+	for _, k := range keys {
+		sc[k] = contracts[k]
+	}
+}
+
+// replay splits a fixture into its empty envelope and its steps in Method order, recording the
+// service contracts one at a time in co's order.
+func replay(t *testing.T, raw []byte, co contractOrder) (map[string]any, []replayStep) {
 	t.Helper()
 	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		t.Fatal(err)
 	}
 	slots, _ := doc["slots"].(map[string]any)
-	contracts, hasContracts := doc["serviceContracts"]
+	contracts, _ := doc["serviceContracts"].(map[string]any)
 	artifacts, _ := doc["phaseArtifacts"].(map[string]any)
 	envelope := map[string]any{}
 	for k, v := range doc {
@@ -86,10 +238,15 @@ func replay(t *testing.T, raw []byte) (map[string]any, []replayStep) {
 	for kind := range byKind {
 		t.Fatalf("slot kind %d is outside the Method order the replay knows (0-16): extend it", kind)
 	}
-	if hasContracts {
-		steps = append(steps, replayStep{name: "serviceContracts", admit: appgen.KindServiceContract, tier0: true, add: func(p map[string]any) {
-			p["serviceContracts"] = contracts
+	recorded, withManager, withUIDesign := contractSchedule(t, systemOf(t, slots), slices.Collect(maps.Keys(contracts)), co)
+	for _, key := range recorded {
+		keys := append([]string{key}, withManager[key]...)
+		steps = append(steps, replayStep{name: "serviceContracts." + key, admit: appgen.KindServiceContract, add: func(p map[string]any) {
+			addContracts(p, contracts, keys...)
 		}})
+	}
+	if _, ok := artifacts["uiDesign"]; !ok && len(withUIDesign) > 0 {
+		t.Fatalf("browser surfaces %v have contracts but the fixture records no UI design to derive them with", withUIDesign)
 	}
 	for _, rec := range []struct {
 		key   string
@@ -100,13 +257,18 @@ func replay(t *testing.T, raw []byte) (map[string]any, []replayStep) {
 			continue
 		}
 		key := rec.key
-		steps = append(steps, replayStep{name: "phaseArtifacts." + key, admit: rec.admit, tier0: true, add: func(p map[string]any) {
+		var derived []string
+		if key == "uiDesign" {
+			derived = withUIDesign
+		}
+		steps = append(steps, replayStep{name: "phaseArtifacts." + key, admit: rec.admit, add: func(p map[string]any) {
 			pa, _ := p["phaseArtifacts"].(map[string]any)
 			if pa == nil {
 				pa = map[string]any{}
 				p["phaseArtifacts"] = pa
 			}
 			pa[key] = v
+			addContracts(p, contracts, derived...)
 		}})
 		delete(artifacts, key)
 	}
@@ -116,14 +278,41 @@ func replay(t *testing.T, raw []byte) (map[string]any, []replayStep) {
 	return envelope, steps
 }
 
-// stepProblems validates the prefix as the write verbs would after recording the step: Tier 0
-// (the project model every generator loads) where the verb gates on it, the methodcheck design
-// rules (Error findings), then Tier 1 admission of the step's kind (Local problems).
-func stepProblems(prefix []byte, st replayStep) ([]string, error) {
-	if st.tier0 {
-		if _, err := projectmodel.Load(prefix); err != nil {
-			return nil, fmt.Errorf("tier 0 projectmodel.Load: %w", err)
+// contractsPendingRules are the rules the construction record verb holds as advisory while a
+// contract-bearing component of the System has no contract (the app's staleness.go,
+// applyContractsPendingDowngrades): they read the whole contract set, so the first contracts
+// recorded would otherwise be refused for the ones still to come. Every other rule keeps its
+// severity.
+var contractsPendingRules = map[methodcheck.RuleID]bool{
+	"SCN-UNADDRESSED":       true,
+	"SCN-ACTOR-PATH-CLIENT": true,
+	"TP-CLIENT-CONTRACTED":  true,
+}
+
+// contractsPending reports whether the prefix's System has a built, non-Resource component with no
+// contract recorded under its key (the app's uncontractedComponents). False before the System.
+func contractsPending(t *testing.T, prefix map[string]any) bool {
+	t.Helper()
+	slots, _ := prefix["slots"].(map[string]any)
+	sc, _ := prefix["serviceContracts"].(map[string]any)
+	for _, c := range systemOf(t, slots).Components {
+		if strings.EqualFold(c.Kind, "resource") || c.BuildStatus == "planned" || c.BuildStatus == "external" {
+			continue
 		}
+		if _, ok := sc[contractKeyOf(c.ID, c.ContractKey)]; !ok {
+			return true
+		}
+	}
+	return false
+}
+
+// stepProblems validates the prefix as the write verbs would after recording the step: Tier 0
+// (the project model every generator loads), the methodcheck design rules (Error findings, with
+// contractsPendingRules advisory while pending), then Tier 1 admission of the step's kind (Local
+// problems).
+func stepProblems(prefix []byte, st replayStep, pending bool) ([]string, error) {
+	if _, err := projectmodel.Load(prefix); err != nil {
+		return nil, fmt.Errorf("tier 0 projectmodel.Load: %w", err)
 	}
 	findings, err := methodcheck.ValidateProjectJSON(prefix, methodcheck.ValidateOptions{SupportedSurfaces: appgen.SupportedSurfaces()})
 	if err != nil {
@@ -131,7 +320,7 @@ func stepProblems(prefix []byte, st replayStep) ([]string, error) {
 	}
 	var out []string
 	for _, f := range findings {
-		if f.Severity == methodcheck.SeverityError {
+		if f.Severity == methodcheck.SeverityError && (!pending || !contractsPendingRules[f.RuleID]) {
 			out = append(out, fmt.Sprintf("%s: %s", f.RuleID, f.Message))
 		}
 	}
@@ -147,37 +336,89 @@ func stepProblems(prefix []byte, st replayStep) ([]string, error) {
 	return out, nil
 }
 
-// Every slot of every fixture validates with only its upstream slots recorded.
+// Every slot of every fixture validates with only its upstream slots recorded, and so does every
+// contract, recorded one at a time in key order and in reverse.
 func TestSlotPrefixReplay_EverySlotPassesWithOnlyItsUpstream(t *testing.T) {
 	names := FixtureNames()
 	if len(names) == 0 {
 		t.Fatal("no conformance fixtures embedded")
 	}
 	for _, name := range names {
-		t.Run(name, func(t *testing.T) {
-			raw, err := Fixture(name)
-			if err != nil {
-				t.Fatal(err)
-			}
-			prefix, steps := replay(t, raw)
-			if len(steps) < 2 {
-				t.Fatalf("%d replay step(s): the replay is vacuous", len(steps))
-			}
-			for _, st := range steps {
-				st.add(prefix)
+		for _, co := range replayContractOrders {
+			t.Run(name+"/"+co.name, func(t *testing.T) {
+				raw, err := Fixture(name)
+				if err != nil {
+					t.Fatal(err)
+				}
+				prefix, steps := replay(t, raw, co)
+				contractSteps := 0
+				for _, st := range steps {
+					if strings.HasPrefix(st.name, "serviceContracts.") {
+						contractSteps++
+					}
+				}
+				if len(steps) < 2 || contractSteps < 2 {
+					t.Fatalf("%d replay step(s), %d of them contracts: the replay is vacuous", len(steps), contractSteps)
+				}
+				for _, st := range steps {
+					st.add(prefix)
+					b, err := json.Marshal(prefix)
+					if err != nil {
+						t.Fatal(err)
+					}
+					problems, err := stepProblems(b, st, contractsPending(t, prefix))
+					if err != nil {
+						t.Errorf("after %s: %v", st.name, err)
+						continue
+					}
+					for _, p := range problems {
+						t.Errorf("after %s: %s", st.name, p)
+					}
+				}
+				// The advisory window hides nothing at the end: the whole replayed fixture holds at
+				// full severity.
 				b, err := json.Marshal(prefix)
 				if err != nil {
 					t.Fatal(err)
 				}
-				problems, err := stepProblems(b, st)
+				problems, err := stepProblems(b, replayStep{name: "the whole fixture"}, false)
 				if err != nil {
-					t.Errorf("after %s: %v", st.name, err)
-					continue
+					t.Fatal(err)
 				}
 				for _, p := range problems {
-					t.Errorf("after %s: %s", st.name, p)
+					t.Errorf("the whole fixture at full severity: %s", p)
 				}
-			}
-		})
+			})
+		}
+	}
+}
+
+// The replay schedules a Client's contract where construction derives it, never as a record of
+// its own: todomvc's machine clients ride with listManager, its browser surfaces with the UI design.
+func TestSlotPrefixReplay_ClientContractsAreDerivedNotRecorded(t *testing.T) {
+	raw, err := Fixture("todomvc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, steps := replay(t, raw, replayContractOrders[0])
+	var names []string
+	for _, st := range steps {
+		if strings.HasPrefix(st.name, "serviceContracts.") {
+			names = append(names, strings.TrimPrefix(st.name, "serviceContracts."))
+		}
+	}
+	want := []string{"accessGrantingEngine", "listManager", "listRulingEngine", "messageBus", "todoListAccess"}
+	if !slices.Equal(names, want) {
+		t.Fatalf("contract record steps = %v, want %v", names, want)
+	}
+	prefix := map[string]any{}
+	for _, st := range steps {
+		if st.name == "serviceContracts.listManager" {
+			st.add(prefix)
+		}
+	}
+	got := slices.Sorted(maps.Keys(prefix["serviceContracts"].(map[string]any)))
+	if !slices.Equal(got, []string{"listManager", "todoApi", "todoMcpServer"}) {
+		t.Fatalf("the listManager step records %v, want listManager with its machine clients todoApi and todoMcpServer", got)
 	}
 }
