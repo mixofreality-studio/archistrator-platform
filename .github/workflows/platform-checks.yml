@@ -8,9 +8,15 @@ on:
   pull_request:
     branches: [main, fpc/main]
 
+# Every job is pinned to ubuntu-24.04, not ubuntu-latest. On 2026-11-18 (between run
+# 44232739221, green on 24.04, and run 44343106047) ubuntu-latest moved to 26.04,
+# which Playwright 1.60 does not support: `npx playwright install --with-deps
+# chromium` exits "Playwright does not support chromium on ubuntu26.04-x64", failing
+# `web` and every conformance job that drives a browser. Move this pin only together
+# with a Playwright release that supports the new image.
 jobs:
   go:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     steps:
@@ -56,7 +62,7 @@ jobs:
           done
       # The seated workflows are templates, so lint what the scaffold actually
       # RENDERS: dump them (an env-gated method-assets test) and run actionlint,
-      # which runs shellcheck (preinstalled on ubuntu-latest) over every run: body.
+      # which runs shellcheck (preinstalled on ubuntu-24.04) over every run: body.
       - name: Lint the rendered method-assets workflows (actionlint + shellcheck)
         run: |
           render_dir="${RUNNER_TEMP}/method-assets-render"
@@ -68,7 +74,7 @@ jobs:
   # command chain (gen-models, gen, gen-null, gen-tests, webgen, go build, go vet,
   # npm typecheck), then the composed todomvc app is booted and probed (GET /,
   # POST /mcp initialize + tools/list) and a double boot must leave no Docker
-  # orphans. Docker is preinstalled on ubuntu-latest. The job names are load-bearing:
+  # orphans. Docker is preinstalled on ubuntu-24.04. The job names are load-bearing:
   # release-gate.yml requires a green check run of each of `conformance`,
   # `conformance-proof`, `conformance-mcpapp`, `conformance-manifests`, `conformance-discriminate` and
   # `conformance-discriminate-impl` on the tagged SHA.
@@ -87,7 +93,7 @@ jobs:
   # starts; one boot per package needs the null set switchable per run.
   conformance:
     needs: go
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 120
     permissions:
       contents: read
@@ -114,7 +120,7 @@ jobs:
         run: GOWORK=off go test -tags conformance ./ -run 'TestConformance_(Chain|Boot|BootTwice_NoOrphans|ClientsOverWire|Discriminate_Web)$|TestConformance_Acceptance(_RedRoutesToTheClient)?$|TestDevPrincipals_PerRequestHeaderOnlyWhenAllowlisted|TestDevstackLaunch_|TestMCP_OverWire|TestREST_OverWire|TestPlaywright_ArrangeFailNextRoundTrip' -v -timeout 115m
   conformance-proof:
     needs: go
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 50
     permissions:
       contents: read
@@ -145,7 +151,7 @@ jobs:
           done
   conformance-mcpapp:
     needs: go
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 70
     permissions:
       contents: read
@@ -174,7 +180,7 @@ jobs:
           grep -q -- "--- PASS: TestConformance_McpAppSurface " proof.log || { echo "::error::TestConformance_McpAppSurface did not run and pass"; exit 1; }
   conformance-manifests:
     needs: go
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 70
     permissions:
       contents: read
@@ -198,7 +204,7 @@ jobs:
           grep -q -- "--- PASS: TestConformance_Manifests " proof.log || { echo "::error::TestConformance_Manifests did not run and pass"; exit 1; }
   conformance-discriminate:
     needs: go
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 50
     permissions:
       contents: read
@@ -229,7 +235,7 @@ jobs:
           done
   conformance-discriminate-impl:
     needs: go
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 150
     permissions:
       contents: read
@@ -259,7 +265,7 @@ jobs:
             grep -q -- "--- PASS: TestConformance_RUN021Proof/${sub} " proof.log || { echo "::error::RUN-021 subtest ${sub} did not run and pass"; exit 1; }
           done
   web:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     permissions:
       contents: read
     defaults:
