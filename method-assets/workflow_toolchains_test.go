@@ -220,3 +220,34 @@ func TestConstructWorkflow_ProvisionsBeforeTheAgent(t *testing.T) {
 		}
 	}
 }
+
+// TestBrowserJobsPinUbuntu2404 pins that a job installing or running Playwright
+// is not on ubuntu-latest: GitHub moved it to ubuntu-26.04 (2026-11-18), which
+// Playwright 1.60 refuses ("does not support chromium on ubuntu26.04-x64").
+func TestBrowserJobsPinUbuntu2404(t *testing.T) {
+	for name, doc := range renderedWorkflows(t) {
+		inJobs, job := false, ""
+		jobs := map[string][]string{}
+		for _, line := range strings.Split(doc, "\n") {
+			if line == "jobs:" {
+				inJobs = true
+				continue
+			}
+			if inJobs && strings.HasPrefix(line, "  ") && len(line) > 2 && line[2] != ' ' && line[2] != '#' && strings.HasSuffix(line, ":") {
+				job = strings.TrimSpace(line)
+			}
+			if inJobs && job != "" {
+				jobs[job] = append(jobs[job], line)
+			}
+		}
+		for j, lines := range jobs {
+			body := strings.Join(lines, "\n")
+			if !strings.Contains(strings.ToLower(body), "playwright") {
+				continue
+			}
+			if strings.Contains(body, "runs-on: ubuntu-latest") || !strings.Contains(body, "runs-on: ubuntu-24.04") {
+				t.Errorf("%s job %s mentions playwright and must run on ubuntu-24.04", name, j)
+			}
+		}
+	}
+}
