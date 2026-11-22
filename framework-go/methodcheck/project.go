@@ -709,12 +709,15 @@ const (
 // operation surface); the app-side owner also carries codegen metadata (goPackage,
 // deps, infra, stub) the rules do not consult. Decoded omit-empty-tolerant.
 type ServiceContract struct {
-	Component string                     `json:"component"`
-	Layer     string                     `json:"layer"`
-	GoPackage string                     `json:"goPackage,omitempty"`
-	Title     string                     `json:"title,omitempty"`
-	Defs      map[string]json.RawMessage `json:"$defs,omitempty"`
-	Interface ContractInterface          `json:"interface"`
+	Component string `json:"component"`
+	Layer     string `json:"layer"`
+	GoPackage string `json:"goPackage,omitempty"`
+	// OwnedPaths mirrors the contract's ownedPaths: module-relative directories the
+	// component owns besides its goPackage (the app's decode validates their shape).
+	OwnedPaths []string                   `json:"ownedPaths,omitempty"`
+	Title      string                     `json:"title,omitempty"`
+	Defs       map[string]json.RawMessage `json:"$defs,omitempty"`
+	Interface  ContractInterface          `json:"interface"`
 }
 
 // ContractInterface mirrors the contract document's `interface`: the RPC surface's
