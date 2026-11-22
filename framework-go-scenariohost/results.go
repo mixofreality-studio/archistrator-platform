@@ -284,12 +284,19 @@ func ScenarioTimeout() time.Duration {
 // venue's raw `go test -json` stream, which is uploaded next to results.json,
 // carries that text.
 //
+// Every git repository the host keeps is reset to its seed (main at the initial
+// commit, no other branch) before fn runs, so what one scenario arranged or wrote
+// is never the next scenario's starting state.
+//
 // A scenario still running after ScenarioTimeout() is recorded as timeout, the
 // verdicts of this process are flushed (the replay gate is skipped), and the
 // process exits with code 1: a hung scenario cannot be interrupted in-process.
 func (h *Host) RunScenario(t *testing.T, component, id string, fn func(t *testing.T)) {
 	t.Helper()
 	t.Run(id, func(t *testing.T) {
+		if err := h.resetGitRepos(); err != nil {
+			t.Fatalf("scenariohost: %v", err)
+		}
 		start := time.Now()
 		limit := ScenarioTimeout()
 		timer := time.AfterFunc(limit, func() {
