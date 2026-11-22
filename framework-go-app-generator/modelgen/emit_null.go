@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"path/filepath"
+	"slices"
 	"sort"
 	"strings"
 )
@@ -78,6 +79,9 @@ func emitNullGoPackage(goPkg string, keys []string, contracts map[string]json.Ra
 	}
 	if !wrote {
 		return nil, false, nil
+	}
+	if err := emitHandWrittenPlaceholders(&buf, keys, contracts); err != nil {
+		return nil, false, fmt.Errorf("modelgen null %q: %w", goPkg, err)
 	}
 	src, err := assembleFormatted(filepath.Base(goPkg), nullHeader, &buf)
 	if err != nil {
@@ -162,10 +166,10 @@ func emitNullInfraBuilders(buf *bytes.Buffer, iface Interface, infra []string) e
 		if !ok {
 			return fmt.Errorf("unapproved/unknown infra %q (no framework binding)", name)
 		}
-		for _, f := range binding.params {
-			maps.Copy(pendingImports, f.imports)
-		}
 		if binding.delegated {
+			for _, f := range binding.params {
+				maps.Copy(pendingImports, f.imports)
+			}
 			emitNullDelegatedBuilder(buf, iface, name, binding)
 		} else {
 			emitNullMethods(buf, "*"+name+iface.Name, iface)
@@ -214,4 +218,90 @@ func emitNullMethods(buf *bytes.Buffer, recv string, iface Interface) {
 		}
 		buf.WriteString("}\n\n")
 	}
+}
+
+// emitHandWrittenPlaceholders declares, once per package, an opaque type for every bare exported
+// x-go-type the package's contracts name that no $def of theirs defines: such a binding is a type the
+// app hand-writes in the contract package (qualifyBareXGoType), and a model with nothing built has
+// not written it, so the generated contract and its null would not compile. The placeholder is the
+// null build's stand-in and goes with null.gen.go when the component is built.
+func emitHandWrittenPlaceholders(buf *bytes.Buffer, keys []string, contracts map[string]json.RawMessage) error {
+	names := map[string]bool{}
+	defined := map[string]bool{}
+	for _, k := range keys {
+		if err := collectHandWrittenNames(contracts[k], names, defined); err != nil {
+			return err
+		}
+	}
+	for _, n := range slices.Sorted(maps.Keys(names)) {
+		if !defined[n] {
+			fmt.Fprintf(buf, "// %s stands in for the type the app hand-writes in this package.\ntype %s struct{}\n\n", n, n)
+		}
+	}
+	return nil
+}
+
+// collectHandWrittenNames adds one contract's hand-written type names to names (its bare x-go-type
+// bindings and the package-local types its infra bindings spell) and its $def names to defined.
+func collectHandWrittenNames(raw json.RawMessage, names, defined map[string]bool) error {
+	var doc struct {
+		Defs  map[string]json.RawMessage `json:"$defs"`
+		Infra []string                   `json:"infra"`
+	}
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return err
+	}
+	for d := range doc.Defs {
+		defined[d] = true
+	}
+	var node any
+	if err := json.Unmarshal(raw, &node); err != nil {
+		return err
+	}
+	collectBareXGoTypes(node, names)
+	for _, in := range doc.Infra {
+		for _, n := range infraBindings[in].handWritten {
+			names[n] = true
+		}
+	}
+	return nil
+}
+
+// collectBareXGoTypes adds to into every exported, package-dot-free x-go-type of a schema node that
+// carries no x-go-import, at any depth of the decoded JSON value v.
+func collectBareXGoTypes(v any, into map[string]bool) {
+	switch t := v.(type) {
+	case map[string]any:
+		if n, ok := bareXGoType(t); ok {
+			into[n] = true
+		}
+		for _, c := range t {
+			collectBareXGoTypes(c, into)
+		}
+	case []any:
+		for _, c := range t {
+			collectBareXGoTypes(c, into)
+		}
+	}
+}
+
+// bareXGoType is the hand-written type name a schema node binds, if it binds one.
+func bareXGoType(node map[string]any) (string, bool) {
+	gt, ok := node["x-go-type"].(string)
+	if !ok || !isPlainIdent(gt) || !isExportedIdent(gt) {
+		return "", false
+	}
+	imp, _ := node["x-go-import"].(string)
+	return gt, imp == ""
+}
+
+// isPlainIdent reports whether name is a single Go identifier (letters, digits, underscore), so a
+// composite spelling such as "[]Node" or a qualified "uuid.UUID" is not mistaken for a type name.
+func isPlainIdent(name string) bool {
+	for _, r := range name {
+		if r != '_' && (r < '0' || r > '9') && (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') {
+			return false
+		}
+	}
+	return name != ""
 }

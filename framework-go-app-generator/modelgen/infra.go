@@ -58,6 +58,9 @@ type infraBinding struct {
 	delegated    bool
 	returnsError bool
 	params       []infraField
+	// handWritten names the package-local types params spell that the app hand-writes in the
+	// contract package (the null build stands in for them with placeholders).
+	handWritten []string
 }
 
 // infraBindings maps an APPROVED framework infra name to the field(s) its client
@@ -147,6 +150,7 @@ var infraBindings = map[string]infraBinding{
 			{name: "cl", typ: "client.Client", imports: map[string]string{"go.temporal.io/sdk/client": ""}},
 			{name: "tables", typ: "...map[ExecutionKind]KindBinding"}, // variadic: one ExecutionKinds() per Manager
 		},
+		handWritten: []string{"KindBinding"},
 	},
 
 	// constructionpipeline → GitHubActions. The hand-written builder wires the
@@ -196,6 +200,7 @@ var infraBindings = map[string]infraBinding{
 			{name: "mode", typ: "ReplayMode"},
 			{name: "delegate", typ: "WorkerAccess"},
 		},
+		handWritten: []string{"ReplayMode"},
 	},
 
 	// operatedRuntime → Profiled. The tenant runtime (GitOps/kubernetes + observability)
@@ -212,5 +217,6 @@ var infraBindings = map[string]infraBinding{
 			{name: "profile", typ: "RuntimeProfile"},
 			{name: "config", typ: "RuntimeConfig"},
 		},
+		handWritten: []string{"RuntimeProfile", "RuntimeConfig"},
 	},
 }

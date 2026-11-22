@@ -75,3 +75,76 @@ func TestGenerateNulls_EveryShape(t *testing.T) {
 		t.Error("a stub's implementation is fully generated; it needs no builder")
 	}
 }
+
+// A bare exported x-go-type names a type hand-written in the contract package. The null build has
+// no such file, so null.gen.go declares an opaque placeholder for each, once per package, and
+// never for a $def, an x-go-import binding or a builtin.
+func TestGenerateNulls_PlaceholdersForHandWrittenTypes(t *testing.T) {
+	const project = `{"serviceContracts":{
+"a":{"component":"a","layer":"ResourceAccess","goPackage":"internal/resourceaccess/a","infra":["Postgres"],
+ "$defs":{"Local":{"type":"object","properties":{
+   "r":{"x-go-type":"Receipt"},"u":{"x-go-type":"uuid.UUID","x-go-import":"github.com/google/uuid"},"b":{"x-go-type":"[]byte"},"l":{"x-go-type":"Local"}}}},
+ "interface":{"name":"AAccess","layer":"resourceaccess","operations":[
+  {"name":"Get","params":[],"result":{"x-go-type":"Receipt"},"error":true}]}},
+"b":{"component":"b","layer":"ResourceAccess","goPackage":"internal/resourceaccess/a","infra":["Postgres"],"$defs":{},
+ "interface":{"name":"BAccess","layer":"resourceaccess","operations":[
+  {"name":"Get","params":[{"name":"n","schema":{"items":{"x-go-type":"Node"},"type":"array"}}],"error":true}]}}
+}}`
+	got, err := GenerateNulls([]byte(project), Config{ModulePath: "example.com/app"})
+	if err != nil {
+		t.Fatalf("GenerateNulls: %v", err)
+	}
+	src := string(got["internal/resourceaccess/a"])
+	for _, want := range []string{"type Receipt struct{}", "type Node struct{}"} {
+		if strings.Count(src, want) != 1 {
+			t.Errorf("want exactly one %q in\n%s", want, src)
+		}
+	}
+	for _, not := range []string{"type UUID", "type Local ", "type byte"} {
+		if strings.Contains(src, not) {
+			t.Errorf("unexpected %q in\n%s", not, src)
+		}
+	}
+}
+
+// An infra binding whose constructor takes a package-local type (the Temporal bus's KindBinding, the
+// Profiled runtime's RuntimeProfile and RuntimeConfig) names a type the app hand-writes, so the null
+// build gets a placeholder for it too.
+func TestGenerateNulls_PlaceholdersForInfraBindingTypes(t *testing.T) {
+	const project = `{"serviceContracts":{
+"bus":{"component":"bus","layer":"Utility","goPackage":"internal/utility/bus","infra":["Temporal"],
+ "$defs":{"ExecutionKind":{"type":"string"}},
+ "interface":{"name":"Bus","layer":"utility","operations":[{"name":"Send","params":[],"error":true}]}},
+"rt":{"component":"rt","layer":"ResourceAccess","goPackage":"internal/resourceaccess/rt","infra":["Profiled"],"$defs":{},
+ "interface":{"name":"RtAccess","layer":"resourceaccess","operations":[{"name":"Run","params":[],"error":true}]}}
+}}`
+	got, err := GenerateNulls([]byte(project), Config{ModulePath: "example.com/app"})
+	if err != nil {
+		t.Fatalf("GenerateNulls: %v", err)
+	}
+	for pkg, wants := range map[string][]string{
+		"internal/utility/bus":       {"type KindBinding struct{}"},
+		"internal/resourceaccess/rt": {"type RuntimeProfile struct{}", "type RuntimeConfig struct{}"},
+	} {
+		for _, want := range wants {
+			if !strings.Contains(string(got[pkg]), want) {
+				t.Errorf("%s: missing %q in\n%s", pkg, want, got[pkg])
+			}
+		}
+	}
+}
+
+// An ARTIFACT-mode (Git) null writes methods only, so it imports nothing the constructor params
+// would have used: an import the file never names does not compile.
+func TestGenerateNulls_ArtifactModeImportsOnlyWhatItUses(t *testing.T) {
+	got, err := GenerateNulls([]byte(nullProject), Config{ModulePath: "example.com/app"})
+	if err != nil {
+		t.Fatalf("GenerateNulls: %v", err)
+	}
+	src := string(got["internal/resourceaccess/blobs"])
+	for _, not := range []string{`"context"`, "fwgithub"} {
+		if strings.Contains(src, not) {
+			t.Errorf("the artifact-mode null imports %s it never uses:\n%s", not, src)
+		}
+	}
+}
