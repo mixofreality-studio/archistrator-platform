@@ -522,6 +522,20 @@
                     "label": "",
                     "roleName": "List Manager",
                     "linkedActorId": null
+                  },
+                  {
+                    "id": "n1s",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "Team Agent",
+                    "linkedActorId": "team-agent"
+                  },
+                  {
+                    "id": "n1b",
+                    "kind": "action",
+                    "label": "Ask, through the tool surface, for a change to a todo list",
+                    "roleName": "Team Agent",
+                    "linkedActorId": "team-agent"
                   }
                 ],
                 "edges": [
@@ -612,6 +626,18 @@
                   {
                     "from": "out-team-agent",
                     "to": "n11",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n1s",
+                    "to": "n1b",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n1b",
+                    "to": "n2",
                     "kind": "controlFlow",
                     "guard": ""
                   }
@@ -744,6 +770,20 @@
                     "label": "",
                     "roleName": "List Manager",
                     "linkedActorId": null
+                  },
+                  {
+                    "id": "n1s",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "Team Agent",
+                    "linkedActorId": "team-agent"
+                  },
+                  {
+                    "id": "n1b",
+                    "kind": "action",
+                    "label": "Ask, through the tool surface, for a todo list in a chosen view",
+                    "roleName": "Team Agent",
+                    "linkedActorId": "team-agent"
                   }
                 ],
                 "edges": [
@@ -840,6 +880,18 @@
                   {
                     "from": "out-team-agent",
                     "to": "n12",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n1s",
+                    "to": "n1b",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n1b",
+                    "to": "n2",
                     "kind": "controlFlow",
                     "guard": ""
                   }

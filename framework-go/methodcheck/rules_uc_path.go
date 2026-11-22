@@ -54,7 +54,7 @@ const (
 // emit, for the emitters registry.
 var ucPathRuleIDs = []RuleID{
 	ruleUCPathOutcome, ruleUCOutcomeAtAskingSurface, ruleUCStartNotAction,
-	ruleUCActorDoor, ruleUCLaneResolves,
+	ruleUCActorDoor, ruleUCActorUnserved, ruleUCLaneResolves,
 	ruleSCNUnaddressed, ruleSCNActorPathClient,
 }
 

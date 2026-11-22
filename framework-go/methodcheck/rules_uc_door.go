@@ -39,8 +39,9 @@ import (
 // alone, as it leaves a clientAction use case with no declared actor to that rule.
 
 const (
-	ruleUCActorDoor    RuleID = "UC-ACTOR-DOOR"
-	ruleUCLaneResolves RuleID = "UC-LANE-RESOLVES"
+	ruleUCActorDoor     RuleID = "UC-ACTOR-DOOR"
+	ruleUCActorUnserved RuleID = "UC-ACTOR-UNSERVED"
+	ruleUCLaneResolves  RuleID = "UC-LANE-RESOLVES"
 )
 
 // ucSlotPathFindings runs the path rules that need nothing but the committed core use
@@ -61,6 +62,7 @@ func ucSlotPathFindings(c CoreUseCases) []Finding {
 	var out []Finding
 	for i, d := range c.Decisions {
 		out = append(out, useCaseDoorFindings(i, d.UseCase)...)
+		out = append(out, actorServedFindings(i, d.UseCase)...)
 	}
 	ucs := useCaseIndex(c)
 	for _, sc := range rep.Scenarios {
@@ -137,6 +139,91 @@ func (p pathWalk) actorDoor() []Finding {
 			"on the node where an actor acts, set linkedActorId to one of: %s (or set decidedBy on a decision the actor resolves)",
 			p.sc.ID, p.uc.ID, strings.Join(declaredActorIDs(p.uc), ", ")),
 	}}
+}
+
+// actorServing is the verdict on one declared actor of a use case somebody initiates:
+// a sealed sum, so every consumer handles each case (gochecksumtype).
+//
+//sumtype:decl
+type actorServing interface{ isActorServing() }
+
+// servedActor has a door (a node it performs or decides) and an outcome it receives.
+type servedActor struct{}
+
+// noDoorActor is declared but no node is linked to it: nothing it does enters the use case.
+type noDoorActor struct{}
+
+// noOutcomeActor has a door but nothing the use case ends in is shown to it.
+type noOutcomeActor struct{}
+
+func (servedActor) isActorServing()    {}
+func (noDoorActor) isActorServing()    {}
+func (noOutcomeActor) isActorServing() {}
+
+// servingOf judges one declared actor of uc: a door is a non-outcome node the actor
+// performs or decides; an outcome is a sendSignal linked to the actor, or an
+// objectNode drawn in the actor's own lane.
+func servingOf(uc UseCase, a Actor) actorServing {
+	one := map[string]bool{a.ID: true}
+	door, outcome := false, false
+	for _, n := range uc.Activity.Nodes {
+		door = door || isActorNodeOf(one, n)
+		outcome = outcome || outcomeShownTo(n, a)
+	}
+	switch {
+	case !door:
+		return noDoorActor{}
+	case !outcome:
+		return noOutcomeActor{}
+	}
+	return servedActor{}
+}
+
+// outcomeShownTo reports whether n is an outcome shown to actor a: a sendSignal linked
+// to it, or an objectNode drawn in its own lane.
+func outcomeShownTo(n ActivityNode, a Actor) bool {
+	switch n.Kind {
+	case kindSendSignal:
+		return n.LinkedActorID == a.ID
+	case kindObjectNode:
+		lane := scenario.Normalize(n.RoleName)
+		return n.RoleName != "" && (lane == scenario.Normalize(a.Role) || lane == scenario.Normalize(a.ID))
+	}
+	return false
+}
+
+// actorServedFindings is UC-ACTOR-UNSERVED: UC-ACTOR-DOOR asks only that SOME declared
+// actor acts, so a second declared actor could be decoration. Here EACH declared actor
+// of a use case somebody initiates needs its own door and an outcome it is told.
+// A use case with no actor node at all is UC-ACTOR-DOOR's finding, not repeated here.
+func actorServedFindings(ordinal int, uc UseCase) []Finding {
+	if !needsActorDoor(uc) || !hasActorNode(uc) {
+		return nil
+	}
+	var out []Finding
+	seen := map[string]bool{}
+	for _, a := range uc.Actors {
+		if a.ID == "" || seen[a.ID] {
+			continue
+		}
+		seen[a.ID] = true
+		var msg string
+		switch servingOf(uc, a).(type) {
+		case servedActor:
+			continue
+		case noDoorActor:
+			msg = fmt.Sprintf("use case %s declares actor %s but no node is linked to it, so nothing it does enters the use case; "+
+				"link its own entry act (linkedActorId %s, in its lane) or drop the declaration", uc.ID, a.ID, a.ID)
+		case noOutcomeActor:
+			msg = fmt.Sprintf("use case %s: actor %s acts but no outcome is shown to it; "+
+				"add a sendSignal with linkedActorId %s (or an objectNode in its lane) stating what it is told when its request ends", uc.ID, a.ID, a.ID)
+		}
+		out = append(out, Finding{
+			RuleID: ruleUCActorUnserved, Severity: SeverityError,
+			Location: loc(ordinal+1, "useCases["+uc.ID+"].activity"), Message: msg,
+		})
+	}
+	return out
 }
 
 // ucLaneFindings is UC-LANE-RESOLVES: one finding per use case and lane that names
