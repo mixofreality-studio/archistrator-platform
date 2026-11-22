@@ -66,7 +66,7 @@ func ParseContract(key string, raw json.RawMessage) (*Contract, error) {
 // parses a newer document; ValidateContract refuses it, because a field no schema defines is a
 // misspelling (goPackge) or a guess that no generator will ever read.
 var (
-	contractFields  = fieldSet("component", "layer", "goPackage", "infra", "stub", "deps", "title", "$id", "$schema", "$defs", "interface", "notes", "railAuthority")
+	contractFields  = fieldSet("component", "layer", "goPackage", "infra", "stub", "deps", "title", "$id", "$schema", "$defs", "interface", "notes", "railAuthority", "ownedPaths")
 	interfaceFields = fieldSet("name", "layer", "operations")
 	operationFields = fieldSet("name", "params", "result", "error", "readOnly", "ui")
 	paramFields     = fieldSet("name", "pointer", "schema")

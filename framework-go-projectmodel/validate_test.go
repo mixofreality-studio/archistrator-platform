@@ -110,6 +110,15 @@ func TestValidateContract_UnknownField(t *testing.T) {
 	}
 }
 
+// ownedPaths is a defined contract field: the directories a component owns besides its goPackage.
+func TestValidateContract_OwnedPathsIsAKnownField(t *testing.T) {
+	raw := json.RawMessage(`{"component":"m","layer":"Engine","goPackage":"internal/engine/m","ownedPaths":["cmd/rig"],"title":"t","$defs":{},` +
+		`"interface":{"name":"M","layer":"Engine","operations":[{"name":"Do","params":null,"error":true}]}}`)
+	if got := ValidateContract("m", raw); got.Has(CodeFieldUnknown) {
+		t.Fatalf("ownedPaths must be a known contract field: %v", got)
+	}
+}
+
 func TestValidateContract_UnknownLayer(t *testing.T) {
 	probs := ValidateContract("messageBus", problemFixture(t, "bad-layer.json"))
 	findProblem(t, probs, CodeLayerUnknown)
