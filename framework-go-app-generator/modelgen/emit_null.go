@@ -221,7 +221,8 @@ func emitNullMethods(buf *bytes.Buffer, recv string, iface Interface) {
 }
 
 // emitHandWrittenPlaceholders declares, once per package, an opaque type for every bare exported
-// x-go-type the package's contracts name that no $def of theirs defines: such a binding is a type the
+// x-go-type the package's contracts name that the generated contract.gen.go does not declare (no
+// $def, interface, sum envelope or infra struct of that name): such a binding is a type the
 // app hand-writes in the contract package (qualifyBareXGoType), and a model with nothing built has
 // not written it, so the generated contract and its null would not compile. The placeholder is the
 // null build's stand-in and goes with null.gen.go when the component is built.
@@ -242,18 +243,19 @@ func emitHandWrittenPlaceholders(buf *bytes.Buffer, keys []string, contracts map
 }
 
 // collectHandWrittenNames adds one contract's hand-written type names to names (its bare x-go-type
-// bindings and the package-local types its infra bindings spell) and its $def names to defined.
+// bindings and the package-local types its infra bindings spell) and every type name the generated contract declares to defined.
 func collectHandWrittenNames(raw json.RawMessage, names, defined map[string]bool) error {
 	var doc struct {
-		Defs  map[string]json.RawMessage `json:"$defs"`
-		Infra []string                   `json:"infra"`
+		Defs      map[string]json.RawMessage `json:"$defs"`
+		Infra     []string                   `json:"infra"`
+		Interface struct {
+			Name string `json:"name"`
+		} `json:"interface"`
 	}
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return err
 	}
-	for d := range doc.Defs {
-		defined[d] = true
-	}
+	addGeneratedNames(defined, doc.Defs, doc.Interface.Name, doc.Infra)
 	var node any
 	if err := json.Unmarshal(raw, &node); err != nil {
 		return err
@@ -304,4 +306,31 @@ func isPlainIdent(name string) bool {
 		}
 	}
 	return name != ""
+}
+
+// addGeneratedNames adds to defined every exported type name contract.gen.go declares for one
+// contract: its $defs, each sum's interface and <Iface>Envelope, the contract's interface, and the
+// ARTIFACT-mode <Infra><Iface> struct.
+func addGeneratedNames(defined map[string]bool, defs map[string]json.RawMessage, iface string, infra []string) {
+	for d, def := range defs {
+		defined[d] = true
+		var sum struct {
+			SumType struct {
+				Iface string `json:"iface"`
+			} `json:"x-go-sumtype"`
+		}
+		if json.Unmarshal(def, &sum) == nil && sum.SumType.Iface != "" {
+			defined[sum.SumType.Iface] = true
+			defined[sum.SumType.Iface+"Envelope"] = true
+		}
+	}
+	if iface == "" {
+		return
+	}
+	defined[iface] = true
+	for _, in := range infra {
+		if b, ok := infraBindings[in]; ok && !b.delegated {
+			defined[in+iface] = true
+		}
+	}
 }

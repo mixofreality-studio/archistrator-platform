@@ -1,6 +1,7 @@
 package modelgen
 
 import (
+	"regexp"
 	"strings"
 	"testing"
 )
@@ -115,6 +116,8 @@ func TestGenerateNulls_PlaceholdersForInfraBindingTypes(t *testing.T) {
 "bus":{"component":"bus","layer":"Utility","goPackage":"internal/utility/bus","infra":["Temporal"],
  "$defs":{"ExecutionKind":{"type":"string"}},
  "interface":{"name":"Bus","layer":"utility","operations":[{"name":"Send","params":[],"error":true}]}},
+"rp":{"component":"rp","layer":"ResourceAccess","goPackage":"internal/resourceaccess/rp","infra":["Replay"],"$defs":{},
+ "interface":{"name":"RpAccess","layer":"resourceaccess","operations":[{"name":"Run","params":[],"error":true}]}},
 "rt":{"component":"rt","layer":"ResourceAccess","goPackage":"internal/resourceaccess/rt","infra":["Profiled"],"$defs":{},
  "interface":{"name":"RtAccess","layer":"resourceaccess","operations":[{"name":"Run","params":[],"error":true}]}}
 }}`
@@ -124,6 +127,7 @@ func TestGenerateNulls_PlaceholdersForInfraBindingTypes(t *testing.T) {
 	}
 	for pkg, wants := range map[string][]string{
 		"internal/utility/bus":       {"type KindBinding struct{}"},
+		"internal/resourceaccess/rp": {"type ReplayMode struct{}"},
 		"internal/resourceaccess/rt": {"type RuntimeProfile struct{}", "type RuntimeConfig struct{}"},
 	} {
 		for _, want := range wants {
@@ -145,6 +149,65 @@ func TestGenerateNulls_ArtifactModeImportsOnlyWhatItUses(t *testing.T) {
 	for _, not := range []string{`"context"`, "fwgithub"} {
 		if strings.Contains(src, not) {
 			t.Errorf("the artifact-mode null imports %s it never uses:\n%s", not, src)
+		}
+	}
+}
+
+// A bare x-go-type that names a type contract.gen.go itself declares (the contract's interface, a sum's
+// <Iface>Envelope, the ARTIFACT-mode <Infra><Iface> struct, the sum interface) must not get a
+// placeholder: it would redeclare the generated type.
+func TestGenerateNulls_NoPlaceholderForGeneratedTypeNames(t *testing.T) {
+	const project = `{"serviceContracts":{
+"o":{"component":"o","layer":"ResourceAccess","goPackage":"internal/resourceaccess/o","infra":["Git"],
+ "$defs":{"Door":{"x-go-sumtype":{"iface":"Door","marker":"isDoor","discriminatorKey":"kind","kindEnum":"DoorKind","variants":[]}}},
+ "interface":{"name":"OAccess","layer":"resourceaccess","operations":[
+  {"name":"A","params":[],"result":{"x-go-type":"DoorEnvelope"},"error":true},
+  {"name":"B","params":[],"result":{"x-go-type":"OAccess"},"error":true},
+  {"name":"C","params":[],"result":{"x-go-type":"GitOAccess"},"error":true},
+  {"name":"D","params":[],"result":{"x-go-type":"Door"},"error":true},
+  {"name":"E","params":[],"result":{"x-go-type":"Other"},"error":true}]}}
+}}`
+	got, err := GenerateNulls([]byte(project), Config{ModulePath: "example.com/app"})
+	if err != nil {
+		t.Fatalf("GenerateNulls: %v", err)
+	}
+	src := string(got["internal/resourceaccess/o"])
+	for _, not := range []string{"type DoorEnvelope ", "type OAccess struct", "type GitOAccess struct", "type Door struct"} {
+		if strings.Contains(src, not) {
+			t.Errorf("unexpected placeholder %q in\n%s", not, src)
+		}
+	}
+	if !strings.Contains(src, "type Other struct{}") {
+		t.Errorf("a genuinely hand-written type lost its placeholder:\n%s", src)
+	}
+}
+
+// Every bare exported identifier an infra binding's params spell is either listed in handWritten or
+// is a type the contract itself supplies, so the placeholder lists cannot drift from params.
+func TestInfraBindings_HandWrittenCoversParams(t *testing.T) {
+	contractSupplied := map[string]bool{"ExecutionKind": true, "WorkerClass": true, "WorkerAccess": true}
+	ident := regexp.MustCompile(`[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?`)
+	for name, b := range infraBindings {
+		listed := map[string]bool{}
+		for _, n := range b.handWritten {
+			listed[n] = true
+		}
+		seen := map[string]bool{}
+		for _, p := range b.params {
+			for _, id := range ident.FindAllString(p.typ, -1) {
+				if strings.Contains(id, ".") || id == "map" || !isExportedIdent(id) {
+					continue
+				}
+				seen[id] = true
+				if !listed[id] && !contractSupplied[id] {
+					t.Errorf("%s: params spell %q, neither handWritten nor contract-supplied", name, id)
+				}
+			}
+		}
+		for n := range listed {
+			if !seen[n] {
+				t.Errorf("%s: handWritten %q is not spelled by any param", name, n)
+			}
 		}
 	}
 }
