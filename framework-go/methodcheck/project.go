@@ -712,8 +712,10 @@ type ServiceContract struct {
 	Component string `json:"component"`
 	Layer     string `json:"layer"`
 	GoPackage string `json:"goPackage,omitempty"`
-	// OwnedPaths mirrors the contract's ownedPaths: module-relative directories the
-	// component owns besides its goPackage (the app's decode validates their shape).
+	// OwnedPaths mirrors the contract's ownedPaths: directories the component owns besides
+	// its goPackage, as wire strings the app's decode validates and parses (a
+	// module-relative directory, or "@<repo>/<dir>" for a directory of a workspace repo the
+	// project declares). The platform reads neither shape.
 	OwnedPaths []string                   `json:"ownedPaths,omitempty"`
 	Title      string                     `json:"title,omitempty"`
 	Defs       map[string]json.RawMessage `json:"$defs,omitempty"`
