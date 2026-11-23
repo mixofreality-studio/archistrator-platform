@@ -13,8 +13,18 @@ func servedByTeamMember(t *testing.T) (*UseCase, CoreUseCases) {
 	return uc, c
 }
 
-func TestUCActorUnserved_FiresForADeclaredActorWithNoDoor(t *testing.T) {
-	_, c := servedByTeamMember(t)
+// asHuman makes the use case's second actor a human (an agent is asked only for an outcome).
+func asHuman(uc *UseCase) {
+	for i := range uc.Actors {
+		if uc.Actors[i].ID == "team-agent" {
+			uc.Actors[i].Role, uc.Actors[i].Kind = "Reviewer", ""
+		}
+	}
+}
+
+func TestUCActorUnserved_FiresForADeclaredHumanActorWithNoDoor(t *testing.T) {
+	uc, c := servedByTeamMember(t)
+	asHuman(uc)
 	m := messagesFor(ucSlotPathFindings(c), ruleUCActorUnserved)
 	if !anyContains(m, "remove-a-todo declares actor team-agent but no node is linked to it") {
 		t.Fatalf("team-agent has no door: %v", m)
@@ -26,9 +36,10 @@ func TestUCActorUnserved_FiresForADeclaredActorWithNoDoor(t *testing.T) {
 
 func TestUCActorUnserved_FiresForAnActorWithADoorButNoOutcome(t *testing.T) {
 	uc, c := servedByTeamMember(t)
-	linkActorNodes(uc, "team-agent", "Team agent", "a2")
+	asHuman(uc)
+	linkActorNodes(uc, "team-agent", "Reviewer", "a2")
 	m := messagesFor(ucSlotPathFindings(c), ruleUCActorUnserved)
-	if !anyContains(m, "actor team-agent acts but no outcome is shown to it") {
+	if !anyContains(m, "actor team-agent is shown no outcome") {
 		t.Fatalf("team-agent acts and is told nothing: %v", m)
 	}
 }
@@ -67,5 +78,41 @@ func TestUCActorUnserved_LeavesAnActorlessDiagramToActorDoor(t *testing.T) {
 	c := run024CoreUseCases(t)
 	if m := messagesFor(ucSlotPathFindings(c), ruleUCActorUnserved); anyContains(m, "remove-a-todo") {
 		t.Fatalf("UC-ACTOR-DOOR owns the no-actor-node case: %v", m)
+	}
+}
+
+func TestUCActorUnserved_ExemptsASystemActorAndStillOwesAnAgentAnOutcome(t *testing.T) {
+	uc, c := servedByTeamMember(t)
+	uc.Activity.Nodes = append(uc.Activity.Nodes,
+		ActivityNode{ID: "sigm", Kind: kindSendSignal, Label: "member told", LinkedActorID: "team-member"})
+	for i := range uc.Actors {
+		if uc.Actors[i].ID == "team-agent" {
+			uc.Actors[i].Kind = actorKindSystem
+		}
+	}
+	if m := messagesFor(ucSlotPathFindings(c), ruleUCActorUnserved); anyContains(m, "remove-a-todo") {
+		t.Fatalf("a system actor is a lane, not a participant: %v", m)
+	}
+	for i := range uc.Actors {
+		if uc.Actors[i].ID == "team-agent" {
+			uc.Actors[i].Kind = "agent"
+		}
+	}
+	if m := messagesFor(ucSlotPathFindings(c), ruleUCActorUnserved); !anyContains(m, "actor team-agent is shown no outcome") {
+		t.Fatalf("an agent actor is still owed an outcome: %v", m)
+	}
+}
+
+func TestUCActorUnserved_AnAgentIsAskedOnlyForItsOutcome(t *testing.T) {
+	uc, c := servedByTeamMember(t)
+	m := messagesFor(ucSlotPathFindings(c), ruleUCActorUnserved)
+	if anyContains(m, "no node is linked") || !anyContains(m, "actor team-agent is shown no outcome") {
+		t.Fatalf("an agent enters through its principal's act, so only its outcome is missing: %v", m)
+	}
+	uc.Activity.Nodes = append(uc.Activity.Nodes,
+		ActivityNode{ID: "sigm", Kind: kindSendSignal, LinkedActorID: "team-member"},
+		ActivityNode{ID: "siga", Kind: kindSendSignal, LinkedActorID: "team-agent"})
+	if m := messagesFor(ucSlotPathFindings(c), ruleUCActorUnserved); len(m) != 0 {
+		t.Fatalf("the agent is told its outcome: %v", m)
 	}
 }

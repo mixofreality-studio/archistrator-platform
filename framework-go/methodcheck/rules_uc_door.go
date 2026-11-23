@@ -44,6 +44,9 @@ const (
 	ruleUCLaneResolves  RuleID = "UC-LANE-RESOLVES"
 )
 
+// actorKindSystem is Actor.Kind of an external system: a lane, not a participant.
+const actorKindSystem = "system"
+
 // ucSlotPathFindings runs the path rules that need nothing but the committed core use
 // cases: UC-ACTOR-DOOR and UC-PATH-OUTCOME. (UC-START-NOT-ACTION is startNotActionFindings,
 // also run at the slot.) The derivation reads the diagrams alone here: no dynamic view
@@ -165,13 +168,14 @@ func (noOutcomeActor) isActorServing() {}
 // objectNode drawn in the actor's own lane.
 func servingOf(uc UseCase, a Actor) actorServing {
 	one := map[string]bool{a.ID: true}
+	actsThroughPrincipal := isAgentActor(a)
 	door, outcome := false, false
 	for _, n := range uc.Activity.Nodes {
 		door = door || isActorNodeOf(one, n)
 		outcome = outcome || outcomeShownTo(n, a)
 	}
 	switch {
-	case !door:
+	case !door && !actsThroughPrincipal:
 		return noDoorActor{}
 	case !outcome:
 		return noOutcomeActor{}
@@ -196,6 +200,15 @@ func outcomeShownTo(n ActivityNode, a Actor) bool {
 // actor acts, so a second declared actor could be decoration. Here EACH declared actor
 // of a use case somebody initiates needs its own door and an outcome it is told.
 // A use case with no actor node at all is UC-ACTOR-DOOR's finding, not repeated here.
+//
+// Two kinds of declared actor are not asked for a door of their own. An actor of kind
+// "system" (an external system such as an infrastructure provider or a payment processor)
+// does not initiate a Client's request and is told nothing through a surface: it is a lane
+// by roleName alone, never linked to a node (a linked node's call step must have the actor
+// as an endpoint, CC-ACTOR-LANE), so neither a door nor an outcome can be asked of it. An
+// agent actor (isAgentActor) acts on a principal's behalf (TP-PRINCIPAL-DELEGATION): its
+// request enters through the principal's own act, so it is asked only for the outcome it
+// is told; a decoration agent still fails for want of one. Human actors need both.
 func actorServedFindings(ordinal int, uc UseCase) []Finding {
 	if !needsActorDoor(uc) || !hasActorNode(uc) {
 		return nil
@@ -203,7 +216,7 @@ func actorServedFindings(ordinal int, uc UseCase) []Finding {
 	var out []Finding
 	seen := map[string]bool{}
 	for _, a := range uc.Actors {
-		if a.ID == "" || seen[a.ID] {
+		if a.ID == "" || seen[a.ID] || a.Kind == actorKindSystem {
 			continue
 		}
 		seen[a.ID] = true
@@ -215,7 +228,7 @@ func actorServedFindings(ordinal int, uc UseCase) []Finding {
 			msg = fmt.Sprintf("use case %s declares actor %s but no node is linked to it, so nothing it does enters the use case; "+
 				"link its own entry act (linkedActorId %s, in its lane) or drop the declaration", uc.ID, a.ID, a.ID)
 		case noOutcomeActor:
-			msg = fmt.Sprintf("use case %s: actor %s acts but no outcome is shown to it; "+
+			msg = fmt.Sprintf("use case %s: actor %s is shown no outcome; "+
 				"add a sendSignal with linkedActorId %s (or an objectNode in its lane) stating what it is told when its request ends", uc.ID, a.ID, a.ID)
 		}
 		out = append(out, Finding{

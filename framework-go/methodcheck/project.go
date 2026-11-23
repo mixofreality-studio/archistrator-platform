@@ -243,7 +243,7 @@ type UseCase struct {
 type Actor struct {
 	ID   string `json:"id"`
 	Role string `json:"role"`
-	// Kind classifies the actor ("agent" for an automated actor that acts on someone's behalf);
+	// Kind classifies the actor ("agent" for an automated actor that acts on someone's behalf, "system" for an external system that is a lane only);
 	// empty is a human. TP-PRINCIPAL-DELEGATION reads it, and the actor's role when it is empty.
 	Kind string `json:"kind,omitempty"`
 }
