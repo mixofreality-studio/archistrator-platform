@@ -224,7 +224,15 @@ func TestGenerateErrorEmptyModulePath(t *testing.T) {
 // contracts, so every entry point succeeds with no files; a malformed slot
 // (array, string) is still refused.
 func TestAbsentOrNullServiceContractsIsZeroContracts(t *testing.T) {
-	const sys = `"systemDesign":{"kind":5,"system":{"components":[{"name":"c","layer":"manager"}]}}`
+	// The System sits where a real project.json carries it: the systemDesign
+	// slot (slots."5", kind 5), its model holding the components.
+	const sys = `"slots":{"5":{"kind":5,"model":{"components":[{"id":"todo-list-manager","name":"TodoListManager","kind":"manager","layer":"manager","encapsulates":"Cross-surface freshness volatility","encapsulatesVolatilities":["Cross-surface freshness volatility"],"atomicBusinessVerbs":null,"contractKey":"todoListManager"}],"relationships":[],"dynamicViews":[]}}}`
+	// A real project harvested before any contract was committed: it has a
+	// System and no serviceContracts key at all.
+	harvested, err := os.ReadFile(filepath.Join("testdata", "run027_main_project.json"))
+	if err != nil {
+		t.Fatalf("read harvested project: %v", err)
+	}
 	entries := map[string]func([]byte, modelgen.Config) (map[string][]byte, error){
 		"Generate":      modelgen.Generate,
 		"GenerateNulls": modelgen.GenerateNulls,
@@ -240,6 +248,7 @@ func TestAbsentOrNullServiceContractsIsZeroContracts(t *testing.T) {
 		{"empty object", `{` + sys + `,"serviceContracts":{}}`, false},
 		{"array", `{` + sys + `,"serviceContracts":[]}`, true},
 		{"string", `{` + sys + `,"serviceContracts":"x"}`, true},
+		{"harvested run027 project", string(harvested), false},
 	}
 	for ename, fn := range entries {
 		for _, tc := range cases {
