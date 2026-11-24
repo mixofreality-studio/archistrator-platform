@@ -196,8 +196,9 @@ func (p pathWalk) pathOutcome() []Finding {
 
 // distinctOutcomeFindings is UC-PATH-OUTCOME-DISTINCT over the derived scenarios of one
 // use case (in derivation order): for each pair whose paths are equal up to a decision
-// (or switch) node and then take different next nodes, the sendSignal and objectNode
-// ids after that decision must not be the same non-empty set on both. A fork is not a
+// (or switch) node and then take different next nodes, each side's sendSignal and objectNode
+// ids after that decision must include at least one the other side lacks (equal sets and
+// strict subsets both fire). A fork is not a
 // guard, so only a decision or switch can separate the pair; an empty set is
 // UC-PATH-OUTCOME's business. One finding per (use case, decision, scenario pair).
 func distinctOutcomeFindings(uc UseCase, scs []scenario.Scenario) []Finding {
@@ -217,28 +218,70 @@ func distinctOutcomeFindings(uc UseCase, scs []scenario.Scenario) []Finding {
 }
 
 // sharedOutcomeAfterDecision is the finding for the pair a, b when their paths are equal
-// up to a decision or switch node, then diverge, and carry the same non-empty set of
-// outcome nodes after it.
+// up to a decision or switch node, then diverge, and one side's outcome nodes after it are
+// all shared by the other (equal or a subset).
 func sharedOutcomeAfterDecision(uc UseCase, kinds map[string]string, a, b scenario.Scenario) (Finding, bool) {
-	k := 0
-	for k < len(a.Path) && k < len(b.Path) && a.Path[k] == b.Path[k] {
-		k++
-	}
+	k := commonPrefixLen(a.Path, b.Path)
 	if k == 0 || k >= len(a.Path) || k >= len(b.Path) || !ccResolvesBranch(kinds[a.Path[k-1]]) {
 		return Finding{}, false
 	}
+	// A side that comes back to the decision before it ends has repeated the guarded arm
+	// (a retry or steer loop): its last pass takes the other arm's tail, so its outcomes
+	// contain the other side's by construction and no drawing can give the shorter side
+	// an outcome of its own. The looped path is judged against the arms it iterates.
+	if slices.Contains(a.Path[k:], a.Path[k-1]) || slices.Contains(b.Path[k:], a.Path[k-1]) {
+		return Finding{}, false
+	}
 	oa, ob := outcomeIDs(kinds, a.Path[k:]), outcomeIDs(kinds, b.Path[k:])
-	if len(oa) == 0 || !slices.Equal(oa, ob) {
+	if !outcomesIndistinct(oa, ob) {
 		return Finding{}, false
 	}
 	return Finding{
 		RuleID: ruleUCPathOutcomeDistinct, Severity: SeverityError,
 		Location: loc(0, "useCase "+uc.ID+" scenario "+a.ID),
-		Message: fmt.Sprintf("use case %s: scenarios %s and %s are separated by decision %q (they take %q and %q) but end on the same outcome node(s) %s, "+
-			"so a test derived from either cannot tell which branch ran; give each guarded branch its own outcome "+
+		Message: fmt.Sprintf("use case %s: scenarios %s and %s are separated by decision %q (they take %q and %q) but one of them has no outcome the other lacks (shared outcome node(s) %s), "+
+			"so a test derived from that branch passes when the other ran; give each guarded branch its own outcome "+
 			"(split a \"X, or Y\" sendSignal into one sendSignal per branch, drawn before the merge)",
-			uc.ID, a.ID, b.ID, a.Path[k-1], a.Path[k], b.Path[k], strings.Join(oa, ", ")),
+			uc.ID, a.ID, b.ID, a.Path[k-1], a.Path[k], b.Path[k], strings.Join(sharedIDs(oa, ob), ", ")),
 	}, true
+}
+
+// outcomesIndistinct: both sides carry outcomes, yet one has none the other lacks. Each
+// side needs an outcome of its own: equal sets, or one a subset of the other, leave a
+// test derived from the smaller side passing when the wrong branch ran. An empty side is
+// UC-PATH-OUTCOME's business.
+func outcomesIndistinct(oa, ob []string) bool {
+	return len(oa) > 0 && len(ob) > 0 && (!hasOwnOutcome(oa, ob) || !hasOwnOutcome(ob, oa))
+}
+
+// commonPrefixLen is the length of the longest shared prefix of two paths.
+func commonPrefixLen(a, b []string) int {
+	k := 0
+	for k < len(a) && k < len(b) && a[k] == b[k] {
+		k++
+	}
+	return k
+}
+
+// sharedIDs is the ids of a that b also carries.
+func sharedIDs(a, b []string) []string {
+	var out []string
+	for _, id := range a {
+		if slices.Contains(b, id) {
+			out = append(out, id)
+		}
+	}
+	return out
+}
+
+// hasOwnOutcome reports whether mine carries an outcome id that other lacks.
+func hasOwnOutcome(mine, other []string) bool {
+	for _, id := range mine {
+		if !slices.Contains(other, id) {
+			return true
+		}
+	}
+	return false
 }
 
 // outcomeIDs is the sorted, de-duplicated ids of the sendSignal and objectNode nodes of path.

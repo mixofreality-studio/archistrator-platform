@@ -402,6 +402,41 @@ func TestUC_PathOutcomeDistinct_PassesWhenEachBranchHasItsOwnOutcome(t *testing.
 	}
 }
 
+func TestUC_PathOutcomeDistinct_FiresWhenOneBranchOutcomesAreASubsetOfTheOther(t *testing.T) {
+	c := distinctFixture(
+		[]ActivityNode{
+			{ID: "n6", Kind: nodeMerge},
+			{ID: "sigCommon", Kind: kindSendSignal, Label: "shows done", LinkedActorID: "team-member"},
+			{ID: "sigB", Kind: kindSendSignal, Label: "shows B happened", LinkedActorID: "team-member"},
+		},
+		[]ActivityEdge{
+			{From: "n3", To: "n4", Guard: "[a]"}, {From: "n3", To: "n5", Guard: "[else]"},
+			{From: "n4", To: "n6"}, {From: "n5", To: "sigB"}, {From: "sigB", To: "n6"},
+			{From: "n6", To: "sigCommon"}, {From: "sigCommon", To: "end"},
+		})
+	msgs := messagesFor(ucSlotPathFindings(c), ruleUCPathOutcomeDistinct)
+	if len(msgs) != 1 || !strings.Contains(msgs[0], "sigCommon") || strings.Contains(msgs[0], "sigB,") {
+		t.Fatalf("the branch whose outcomes are a subset of the other's must fire, naming the shared outcome: %v", msgs)
+	}
+}
+
+func TestUC_PathOutcomeDistinct_LoopBackPathsAreJudgedAgainstTheArmsTheyIterate(t *testing.T) {
+	c := distinctFixture(
+		[]ActivityNode{{ID: "sig", Kind: kindSendSignal, Label: "shows done", LinkedActorID: "team-member"}},
+		[]ActivityEdge{
+			{From: "n3", To: "sig", Guard: "[yes]"}, {From: "n3", To: "n4", Guard: "[no: retry]"},
+			{From: "n4", To: "n3"}, {From: "sig", To: "end"},
+		})
+	rep, err := scenario.DeriveReport(pathScenarioInput(c, System{}))
+	if err != nil || len(rep.Scenarios) < 2 {
+		t.Fatalf("fixture must derive the direct and the looped scenario: %v %+v", err, rep.Scenarios)
+	}
+	fs := ucSlotPathFindings(c)
+	if m := messagesFor(fs, ruleUCPathOutcomeDistinct); len(m) != 0 {
+		t.Fatalf("the looped path ends on the direct path's outcome by construction: %v", m)
+	}
+}
+
 func TestUC_PathOutcomeDistinct_ForkBranchesNeverFire(t *testing.T) {
 	c := distinctFixture(
 		[]ActivityNode{
