@@ -45,19 +45,24 @@ func TestStepManifestRegenerationIsNoOp(t *testing.T) {
 	}
 }
 
-// TestEveryConstructStepHoldsOperatorNotes pins the prompt half of operator-note
-// delivery (archistrator B1, amendment §C.1 item 3): every construct step is granted
-// getOperatorNotes, no other mode is, and every construct command tells the agent to
-// call it first. A construct step without the grant would have the tool filtered out of
-// its MCP surface while its command tells it to call the tool.
-func TestEveryConstructStepHoldsOperatorNotes(t *testing.T) {
+// TestEveryNoteReadingStepHoldsOperatorNotes pins the prompt half of operator-note
+// delivery (archistrator B1 / BLK-APP-DESIGN-OPERATOR-NOTE-DROPPED): every construct,
+// draft and critique step is granted getOperatorNotes and its command tells the agent to
+// call it first; answer steps are granted neither the tool nor the instruction. A step
+// without the grant would have the tool filtered out of its MCP surface while its command
+// tells it to call the tool.
+func TestEveryNoteReadingStepHoldsOperatorNotes(t *testing.T) {
 	const tool = "mcp__aiarch-state__getOperatorNotes"
 	const preamble = "First call `getOperatorNotes`; if it returns notes, act on them before anything else."
+	// Stable phrases of the one sentence each mode adds after the preamble.
+	const draftRule = "do not re-affirm a draft unchanged while a note asks for a change"
+	const draftOutranks = "outranks any critic verdict item that contradicts it or that it puts out of scope"
+	const critiqueRule = "do not send back the change the note directs, nor ask for what the note rules out of scope"
 	files, err := ClaudeFiles()
 	if err != nil {
 		t.Fatal(err)
 	}
-	construct := 0
+	counts := map[string]int{}
 	for slug, m := range Manifests() {
 		has := false
 		for _, name := range m.Tools {
@@ -66,26 +71,47 @@ func TestEveryConstructStepHoldsOperatorNotes(t *testing.T) {
 			}
 		}
 		body := string(files[".claude/commands/"+slug+".md"])
+		counts[m.Mode]++
 		switch m.Mode {
-		case "construct":
-			construct++
+		case "construct", "draft", "critique":
 			if !has {
-				t.Errorf("%s: a construct step must be granted getOperatorNotes", slug)
+				t.Errorf("%s (mode %s): the step must be granted getOperatorNotes", slug, m.Mode)
 			}
 			if !strings.Contains(body, preamble) {
-				t.Errorf("%s: a construct command must tell the agent to call getOperatorNotes first", slug)
+				t.Errorf("%s (mode %s): the command must tell the agent to call getOperatorNotes first", slug, m.Mode)
+			}
+			// first in its steps: the preamble precedes every other step item.
+			steps := body[strings.Index(body, "\n## Steps"):]
+			if p := strings.Index(steps, preamble); p < 0 || strings.Contains(steps[:p], "\n1. ") {
+				t.Errorf("%s (mode %s): the preamble must come first in the steps", slug, m.Mode)
 			}
 		default:
 			if has {
-				t.Errorf("%s (mode %s): only construct steps are granted getOperatorNotes", slug, m.Mode)
+				t.Errorf("%s (mode %s): answer steps are not granted getOperatorNotes", slug, m.Mode)
 			}
 			if strings.Contains(body, "getOperatorNotes") {
-				t.Errorf("%s (mode %s): only construct commands name getOperatorNotes", slug, m.Mode)
+				t.Errorf("%s (mode %s): answer commands do not name getOperatorNotes", slug, m.Mode)
+			}
+		}
+		switch m.Mode {
+		case "draft":
+			if !strings.Contains(body, draftRule) || !strings.Contains(body, draftOutranks) {
+				t.Errorf("%s: a draft command must say the note outranks critic verdict items and a draft is never re-affirmed unchanged against a note", slug)
+			}
+		case "critique":
+			if !strings.Contains(body, critiqueRule) || !strings.Contains(body, "Judge the draft against the note too") {
+				t.Errorf("%s: a critique command must say to judge the draft against the note", slug)
 			}
 		}
 	}
-	if construct < 20 {
-		t.Fatalf("found %d construct steps; the manifest lost the construction commands", construct)
+	if counts["construct"] < 20 {
+		t.Fatalf("found %d construct steps; the manifest lost the construction commands", counts["construct"])
+	}
+	if counts["draft"] < 15 {
+		t.Fatalf("found %d draft steps; the manifest lost the draft commands", counts["draft"])
+	}
+	if counts["critique"] < 6 {
+		t.Fatalf("found %d critique steps; the manifest lost the critique commands", counts["critique"])
 	}
 }
 

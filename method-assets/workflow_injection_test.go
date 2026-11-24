@@ -410,3 +410,38 @@ func TestDesignWorkflow_ValidateRunsWhenDraftFails(t *testing.T) {
 		t.Error("the draft job must expose inputs_ok from the validation step's ok output")
 	}
 }
+
+// TestDesignWorkflow_OperatorNoteIsOptionalAndReachesOnlyTheMCPConfig mirrors the
+// construct template's pins: an optional string input, referenced once (the MCP-config
+// step's env), passed through jq --arg and added to the server env only when non-empty.
+func TestDesignWorkflow_OperatorNoteIsOptionalAndReachesOnlyTheMCPConfig(t *testing.T) {
+	doc := renderedDesignWorkflow(t)
+	re := regexp.MustCompile(`(?m)^      operator_note:\n        description: "([^"\n]*)"\n        required: false\n        type: string\n        default: ""$`)
+	m := re.FindStringSubmatch(doc)
+	if m == nil {
+		t.Fatal("workflow_dispatch must declare `operator_note` (required: false, type: string, default \"\")")
+	}
+	if !strings.Contains(m[1], "MCP") || !strings.Contains(m[1], "never the prompt") {
+		t.Errorf("operator_note's description must say it reaches the agent through the MCP server, never the prompt; got %q", m[1])
+	}
+	if got := strings.Count(doc, "inputs.operator_note"); got != 1 {
+		t.Fatalf("inputs.operator_note is referenced %d times; exactly one reference (the MCP-config step's env) is allowed", got)
+	}
+	steps := parseSteps(t, doc)
+	for _, v := range steps[0].env {
+		if strings.Contains(v, "operator_note") {
+			t.Error("the validation step must not read operator_note")
+		}
+	}
+	cfg := stepNamed(t, steps, "Write the aiarch-state MCP config")
+	if cfg.env["AIARCH_OPERATOR_NOTE"] != "${{ inputs.operator_note }}" {
+		t.Errorf("the MCP-config step must take the note from env AIARCH_OPERATOR_NOTE; env = %v", cfg.env)
+	}
+	if !strings.Contains(cfg.run, "jq -n") || strings.Contains(cfg.run, "<<") {
+		t.Errorf("the MCP config must be built with jq -n from env, never a heredoc:\n%s", cfg.run)
+	}
+	if !strings.Contains(cfg.run, `--arg note "${AIARCH_OPERATOR_NOTE}"`) ||
+		!strings.Contains(cfg.run, `if $note == "" then {} else {AIARCH_OPERATOR_NOTE: $note} end`) {
+		t.Errorf("the note must be passed via jq --arg and set only when non-empty:\n%s", cfg.run)
+	}
+}

@@ -10,6 +10,8 @@
 
 ## Steps
 
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a dispatch note or a send-back) and outrank the defaults below. Judge the draft against the note too: do not send back the change the note directs, nor ask for what the note rules out of scope.
+
 1. **Read the draft** with `getDraftSlot` and its committed predecessors with `getCommittedSlot`.
 2. **Read the ledger first** with `getReviewThread`. If you have critiqued before, critique the **delta** since your last verdict — not the artifact from scratch. Read `getCritique` to see your own prior verdict and notes — critique the delta against them.
 3. **Apply verdict discipline** (anti-thrash — binding):

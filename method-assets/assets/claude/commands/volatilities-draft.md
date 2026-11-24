@@ -10,6 +10,8 @@
 
 ## Steps
 
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a dispatch note or a send-back) and outrank the defaults below. The note also outranks any critic verdict item that contradicts it or that it puts out of scope: make the amendment it asks for even with no open comment or verdict, and do not re-affirm a draft unchanged while a note asks for a change.
+
 > **State changes go through the `aiarch-state` MCP tools, not hand-edits.** Never hand-edit `.aiarch/state/project.json`; never run `git` for state.
 
 1. **Read your inputs.** `getCommittedSlot` for every committed predecessor slot this artifact builds on; on an amendment, `getDraftSlot` for the current draft (basis: `.mission`, `.glossary`, `.scrubbedRequirements`).

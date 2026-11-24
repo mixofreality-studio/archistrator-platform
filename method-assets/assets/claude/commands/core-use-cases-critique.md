@@ -10,6 +10,8 @@
 
 ## Steps
 
+> **Operator notes first.** First call `getOperatorNotes`; if it returns notes, act on them before anything else. They are the operator's steer for this attempt (a dispatch note or a send-back) and outrank the defaults below. Judge the draft against the note too: do not send back the change the note directs, nor ask for what the note rules out of scope.
+
 1. **Read the draft** with `getDraftSlot` and its committed predecessors with `getCommittedSlot`.
 1a. **Read the coverage table** with `getUseCaseCoverage`. It is derived from the draft and stores nothing: one row per path the diagrams derive, with the columns **Use case · Path · Guards · Door · Outcomes the actor sees · Problems**. *Door* is the Client the actor's first act enters through, with its surface; *Outcomes the actor sees* are the `sendSignal` and `objectNode` labels on the path, verbatim; *Problems* are the derivation's `SCN-*` codes. Judge the customer-facing half — is each outcome the one the raw use case promises? — and leave the structural half to the rules.
     - **Outcomes.** A row whose *Outcomes the actor sees* reads **NONE** is a path that ends in nothing the actor is shown: that is a REVISE `[UC-PATH-OUTCOME]`, and the comment names the path id.
