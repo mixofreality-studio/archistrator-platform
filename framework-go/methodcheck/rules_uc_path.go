@@ -227,13 +227,13 @@ func sharedOutcomeAfterDecision(uc UseCase, kinds map[string]string, a, b scenar
 	}
 	// A side that comes back to the decision before it ends has repeated the guarded arm
 	// (a retry or steer loop): its last pass takes the other arm's tail, so its outcomes
-	// contain the other side's by construction and no drawing can give the shorter side
-	// an outcome of its own. The looped path is judged against the arms it iterates.
-	if slices.Contains(a.Path[k:], a.Path[k-1]) || slices.Contains(b.Path[k:], a.Path[k-1]) {
-		return Finding{}, false
-	}
+	// contain the other side's by construction and no drawing can give the DIRECT side an
+	// outcome of its own; that direction is exempt. The LOOPING side can be given one (a
+	// "retry requested" signal on the retry arm), so it must carry an outcome the other lacks.
+	dec := a.Path[k-1]
+	loopA, loopB := slices.Contains(a.Path[k:], dec), slices.Contains(b.Path[k:], dec)
 	oa, ob := outcomeIDs(kinds, a.Path[k:]), outcomeIDs(kinds, b.Path[k:])
-	if !outcomesIndistinct(oa, ob) {
+	if !outcomesIndistinctLoop(oa, ob, loopA, loopB) {
 		return Finding{}, false
 	}
 	return Finding{
@@ -252,6 +252,21 @@ func sharedOutcomeAfterDecision(uc UseCase, kinds map[string]string, a, b scenar
 // UC-PATH-OUTCOME's business.
 func outcomesIndistinct(oa, ob []string) bool {
 	return len(oa) > 0 && len(ob) > 0 && (!hasOwnOutcome(oa, ob) || !hasOwnOutcome(ob, oa))
+}
+
+// outcomesIndistinctLoop is outcomesIndistinct with the loop exemption: when exactly one
+// side loops back to the decision, only that side must carry an outcome the other lacks.
+func outcomesIndistinctLoop(oa, ob []string, loopA, loopB bool) bool {
+	if len(oa) == 0 || len(ob) == 0 {
+		return false
+	}
+	switch {
+	case loopA && !loopB:
+		return !hasOwnOutcome(oa, ob)
+	case loopB && !loopA:
+		return !hasOwnOutcome(ob, oa)
+	}
+	return outcomesIndistinct(oa, ob)
 }
 
 // commonPrefixLen is the length of the longest shared prefix of two paths.

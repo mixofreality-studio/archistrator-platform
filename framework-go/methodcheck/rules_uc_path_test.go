@@ -420,20 +420,39 @@ func TestUC_PathOutcomeDistinct_FiresWhenOneBranchOutcomesAreASubsetOfTheOther(t
 	}
 }
 
-func TestUC_PathOutcomeDistinct_LoopBackPathsAreJudgedAgainstTheArmsTheyIterate(t *testing.T) {
-	c := distinctFixture(
-		[]ActivityNode{{ID: "sig", Kind: kindSendSignal, Label: "shows done", LinkedActorID: "team-member"}},
-		[]ActivityEdge{
-			{From: "n3", To: "sig", Guard: "[yes]"}, {From: "n3", To: "n4", Guard: "[no: retry]"},
-			{From: "n4", To: "n3"}, {From: "sig", To: "end"},
-		})
+func loopFixture(retryOutcome bool) CoreUseCases {
+	nodes := []ActivityNode{{ID: "sig", Kind: kindSendSignal, Label: "shows done", LinkedActorID: "team-member"}}
+	edges := []ActivityEdge{
+		{From: "n3", To: "sig", Guard: "[yes]"}, {From: "n3", To: "n4", Guard: "[no: retry]"},
+		{From: "n4", To: "n3"}, {From: "sig", To: "end"},
+	}
+	if retryOutcome {
+		nodes = append(nodes, ActivityNode{ID: "sigRetry", Kind: kindSendSignal, Label: "shows retry requested", LinkedActorID: "team-member"})
+		edges[2] = ActivityEdge{From: "n4", To: "sigRetry"}
+		edges = append(edges, ActivityEdge{From: "sigRetry", To: "n3"})
+	}
+	return distinctFixture(nodes, edges)
+}
+
+func TestUC_PathOutcomeDistinct_FiresWhenTheLoopingArmDrawsNoOutcomeOfItsOwn(t *testing.T) {
+	c := loopFixture(false)
 	rep, err := scenario.DeriveReport(pathScenarioInput(c, System{}))
 	if err != nil || len(rep.Scenarios) < 2 {
 		t.Fatalf("fixture must derive the direct and the looped scenario: %v %+v", err, rep.Scenarios)
 	}
-	fs := ucSlotPathFindings(c)
-	if m := messagesFor(fs, ruleUCPathOutcomeDistinct); len(m) != 0 {
-		t.Fatalf("the looped path ends on the direct path's outcome by construction: %v", m)
+	if m := messagesFor(ucSlotPathFindings(c), ruleUCPathOutcomeDistinct); len(m) == 0 {
+		t.Fatal("a retry arm with no outcome leaves the retry and direct scenarios indistinguishable")
+	}
+}
+
+func TestUC_PathOutcomeDistinct_PassesWhenTheLoopingArmHasItsOwnOutcome(t *testing.T) {
+	c := loopFixture(true)
+	rep, err := scenario.DeriveReport(pathScenarioInput(c, System{}))
+	if err != nil || len(rep.Scenarios) < 2 {
+		t.Fatalf("fixture must derive the direct and the looped scenario: %v %+v", err, rep.Scenarios)
+	}
+	if m := messagesFor(ucSlotPathFindings(c), ruleUCPathOutcomeDistinct); len(m) != 0 {
+		t.Fatalf("the retry arm states its own outcome; the direct side is exempt: %v", m)
 	}
 }
 
