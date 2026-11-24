@@ -1026,43 +1026,43 @@
                   {
                     "from": "n8",
                     "to": "out-team-member",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member",
                     "to": "out-team-agent",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-agent",
                     "to": "n10",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n9",
                     "to": "out-team-member-refused",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member-refused",
                     "to": "out-team-agent-refused",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-agent-refused",
                     "to": "n10",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n10",
                     "to": "n11",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   }
                 ]
@@ -1280,43 +1280,43 @@
                   {
                     "from": "n9",
                     "to": "out-team-member",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member",
                     "to": "out-team-agent",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-agent",
                     "to": "n11",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n10",
                     "to": "out-team-member-refused",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member-refused",
                     "to": "out-team-agent-refused",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-agent-refused",
                     "to": "n11",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n11",
                     "to": "n12",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   }
                 ]
@@ -1445,31 +1445,31 @@
                   {
                     "from": "n4",
                     "to": "out-team-member",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member",
                     "to": "n6",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n5",
                     "to": "out-team-member-unchanged",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member-unchanged",
                     "to": "n6",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n6",
                     "to": "n7",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   }
                 ]
@@ -1643,31 +1643,31 @@
                   {
                     "from": "n6",
                     "to": "out-team-member",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member",
                     "to": "n8",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n7",
                     "to": "out-team-member-removed",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member-removed",
                     "to": "n8",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n8",
                     "to": "n9",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   }
                 ]
@@ -1957,31 +1957,31 @@
                   {
                     "from": "n4",
                     "to": "out-team-member-active",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member-active",
                     "to": "n6",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n5",
                     "to": "out-team-member",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member",
                     "to": "n6",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n6",
                     "to": "n7",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   }
                 ]
@@ -2203,31 +2203,31 @@
                   {
                     "from": "n4",
                     "to": "out-team-agent",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-agent",
                     "to": "n6",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n5",
                     "to": "out-team-agent-refused",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "out-team-agent-refused",
                     "to": "n6",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   },
                   {
                     "from": "n6",
                     "to": "n7",
-                    "kind": "",
+                    "kind": "controlFlow",
                     "guard": ""
                   }
                 ]
