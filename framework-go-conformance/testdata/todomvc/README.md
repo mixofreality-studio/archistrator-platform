@@ -31,15 +31,20 @@ holds the result to zero Error findings, with no waiver. Every judgement made:
   became an unlabelled start followed by the actor's act as its own `action` node
   `n1a` (lane and `linkedActorId` = the actor). The actor-to-Client calls of the
   system's first step moved onto a step of `n1a`; the Client-to-Manager calls stay.
-- UC-PATH-OUTCOME / UC-OUTCOME-AT-ASKING-SURFACE: every path now ends in one
-  `sendSignal` per originating actor (`out-<actor>`, in the actor's lane), placed after
-  the last merge so refused and permitted paths both carry it. Where two actors originate
-  (work-the-list, resume-the-list) there are two, in sequence.
+- UC-PATH-OUTCOME / UC-OUTCOME-AT-ASKING-SURFACE / UC-PATH-OUTCOME-DISTINCT: every path
+  now ends in one `sendSignal` per originating actor (`out-<actor>`, in the actor's lane).
+  Each guarded branch has its own, drawn before the merge, so two paths a decision separates
+  never end on the same outcome nodes: the permitted, accepted or primary branch keeps
+  `out-<actor>`, the other takes a suffixed id (`-refused` in work-the-list, resume-the-list
+  and drive-the-list-from-agent-tooling; `-unchanged` in add-a-todo; `-active` in
+  toggle-all-todos; `-removed` in reword-a-todo). Where two actors originate (work-the-list,
+  resume-the-list) each branch has two, in sequence. The probes of the bound plans
+  (`testPlan`, `acceptancePlan`) name the signal their scenario's path carries.
 - reword-a-todo (the RUN-021 Escape path): `n1a` is the member double-clicking the title
   (a call into `todo-web-app`); `n2` (decided by the member) has a step in which the
   member calls `todo-web-app` (CC-DECIDED-BY-ACTOR-STEP); `n3` is a `sendSignal` to the
-  member saying the title is unchanged; the commit paths end in `out-team-member` after
-  the `n8` merge. `n4` keeps its web and MCP actor calls, so the commit is a third web
+  member saying the title is unchanged; the retitle path ends in `out-team-member` and the
+  blank-reword path in `out-team-member-removed`, each before the `n8` merge. `n4` keeps its web and MCP actor calls, so the commit is a third web
   stimulus (dblclick, fill, press Enter).
 
 ### Contracts

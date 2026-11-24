@@ -189,7 +189,7 @@ var rulePrerequisites = func() map[RuleID][]Prerequisite {
 	add(onUseCases,
 		ruleCucCard, ruleUcActDiagram, ruleCucNameUniq, ruleCucActorUniq, ruleCucActorReq, ruleCucActorID,
 		ruleUcNodeIDUniq, ruleUCActPresent, ruleUCGuardLabel, ruleUCVariationRef,
-		ruleUCPathOutcome, ruleUCStartNotAction, ruleUCActorDoor, ruleUCActorUnserved,
+		ruleUCPathOutcome, ruleUCPathOutcomeDistinct, ruleUCStartNotAction, ruleUCActorDoor, ruleUCActorUnserved,
 		// A start family that is the tail of an event entry's path is redundant by the diagram's
 		// shape alone (a Warning, so the architect hears it while the draft is still theirs).
 		ruleUCStartRedundant)

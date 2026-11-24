@@ -65,13 +65,13 @@ func TestCoreUseCasesPrompts_CiteTheActorDoorRules(t *testing.T) {
 		t.Fatal(err)
 	}
 	for path, wants := range map[string][]string{
-		".claude/commands/core-use-cases-critique.md": {"UC-ACTOR-DOOR", "UC-ACTOR-UNSERVED", "UC-LANE-RESOLVES", "linkedActorId", "kind: agent", "kind: system", "owes only its outcome"},
+		".claude/commands/core-use-cases-critique.md": {"UC-ACTOR-DOOR", "UC-ACTOR-UNSERVED", "UC-LANE-RESOLVES", "UC-PATH-OUTCOME-DISTINCT", "linkedActorId", "kind: agent", "kind: system", "owes only its outcome"},
 		".claude/commands/core-use-cases-draft.md": {
-			"UC-ACTOR-DOOR", "UC-ACTOR-UNSERVED", "UC-LANE-RESOLVES", "UC-PATH-OUTCOME", "UC-START-NOT-ACTION", "linkedActorId",
+			"UC-ACTOR-DOOR", "UC-ACTOR-UNSERVED", "UC-LANE-RESOLVES", "UC-PATH-OUTCOME", "UC-PATH-OUTCOME-DISTINCT", "UC-START-NOT-ACTION", "linkedActorId",
 			"kind: agent", "kind: system", "owes only its outcome",
 		},
 		".claude/skills/the-method-core-use-cases/SKILL.md": {
-			"UC-ACTOR-DOOR", "UC-LANE-RESOLVES", "UC-PATH-OUTCOME", "UC-START-NOT-ACTION", "linkedActorId",
+			"UC-ACTOR-DOOR", "UC-LANE-RESOLVES", "UC-PATH-OUTCOME", "UC-PATH-OUTCOME-DISTINCT", "UC-START-NOT-ACTION", "linkedActorId",
 		},
 	} {
 		body := string(files[path])

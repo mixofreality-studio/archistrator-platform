@@ -1,0 +1,3349 @@
+{
+  "id": "todomvc-run026",
+  "slots": {
+    "0": {
+      "status": 2,
+      "kind": 0,
+      "model": {
+        "vision": "A simple, dependable todo list that a small team's people and agent tooling can rely on.",
+        "objectives": [
+          {
+            "number": 1,
+            "statement": "People never lose work they have recorded: every todo is intact, in wording and completion, whenever they return to the list, with zero todos lost to closing, reloading or restarting."
+          },
+          {
+            "number": 2,
+            "statement": "Keeping the list true costs people almost nothing: a first-time user can take a todo from entry through correction and completion to removal without training or assistance."
+          },
+          {
+            "number": 3,
+            "statement": "People always know where they stand: at any moment, what remains to be done is visible at a glance and is never misstated, however they choose to review the list."
+          },
+          {
+            "number": 4,
+            "statement": "Finished work stops competing for attention: people can retire it in bulk whenever they choose, with no unfinished todo ever lost in doing so."
+          },
+          {
+            "number": 5,
+            "statement": "The team's other tooling, agents included, can work the list on people's behalf, completing every list task a person can, with the same outcome."
+          },
+          {
+            "number": 6,
+            "statement": "The team can start on the first day of release, working the list as an ordinary destination of its own or embedded among the tools it already uses."
+          }
+        ],
+        "mission": "Settle one meaning for each thing that can be done to a todo, and keep every todo in one lasting record that outlives any session. Let people and agent tooling alike work that same record under those same rules, so that another way of reaching or reviewing the list never changes what the list means.",
+        "deliverySurfaces": [
+          {
+            "kind": "web",
+            "audience": "human",
+            "source": "an ordinary web app",
+            "objective": 6
+          },
+          {
+            "kind": "mcpApp",
+            "audience": "human",
+            "source": "an MCP Apps surface so it can be embedded the same way our other MCP-hosted UIs are",
+            "objective": 6
+          },
+          {
+            "kind": "rest",
+            "audience": "machine",
+            "source": "reachable both as an ordinary web API",
+            "objective": 5
+          },
+          {
+            "kind": "mcpTools",
+            "audience": "machine",
+            "source": "as an MCP surface, so our other agent tooling can drive it too",
+            "objective": 5
+          }
+        ]
+      },
+      "critiqueVerdict": "approve",
+      "revisions": 1
+    },
+    "1": {
+      "status": 2,
+      "kind": 1,
+      "model": {
+        "items": [
+          {
+            "term": "Person",
+            "definition": "Someone on the team who keeps a todo list, whether working it directly or through agent tooling.",
+            "category": "Who"
+          },
+          {
+            "term": "Team",
+            "definition": "The small group of people who use the product, each keeping their own todo list.",
+            "category": "Who"
+          },
+          {
+            "term": "Agent tooling",
+            "definition": "The team's other tooling, agents included, that works a person's todo list on that person's behalf, under the same rules and with the same outcome.",
+            "category": "Who"
+          },
+          {
+            "term": "Host tool",
+            "definition": "A tool the team already uses, inside which a person can work the todo list without leaving it.",
+            "category": "Who"
+          },
+          {
+            "term": "Todo",
+            "definition": "One thing a person means to get done, known by its wording and its completion.",
+            "category": "What"
+          },
+          {
+            "term": "Todo list",
+            "definition": "All of one person's todos, in the order they were recorded; never shared with another person.",
+            "category": "What"
+          },
+          {
+            "term": "Wording",
+            "definition": "The free text that says what a todo is; it is never blank.",
+            "category": "What"
+          },
+          {
+            "term": "Blank wording",
+            "definition": "Offered text that is empty or holds only whitespace, and so cannot be a todo's wording.",
+            "category": "What"
+          },
+          {
+            "term": "Completion",
+            "definition": "Whether a todo is done (completed) or still to be done (active).",
+            "category": "What"
+          },
+          {
+            "term": "Active todo",
+            "definition": "A todo that is still to be done.",
+            "category": "What"
+          },
+          {
+            "term": "Completed todo",
+            "definition": "A todo that has been marked done and is still on the todo list.",
+            "category": "What"
+          },
+          {
+            "term": "View",
+            "definition": "A way of looking at the todo list: All (every todo), Active (only active todos) or Completed (only completed todos). Exactly one is current, and the person can always tell which.",
+            "category": "What"
+          },
+          {
+            "term": "Remaining count",
+            "definition": "How many active todos the whole todo list holds right now, whichever view is current.",
+            "category": "What"
+          },
+          {
+            "term": "Record a todo",
+            "definition": "Put a new active todo at the end of the todo list; blank wording records nothing.",
+            "category": "What"
+          },
+          {
+            "term": "Reword a todo",
+            "definition": "Replace an existing todo's wording without changing its completion or its place in the todo list; settling on blank wording removes the todo.",
+            "category": "What"
+          },
+          {
+            "term": "Abandon a rewording",
+            "definition": "Give up a rewording in progress, so the todo keeps its original wording.",
+            "category": "What"
+          },
+          {
+            "term": "Remove a todo",
+            "definition": "Take one todo off the todo list for good, whatever its completion, leaving every other todo untouched.",
+            "category": "What"
+          },
+          {
+            "term": "Complete a todo",
+            "definition": "Mark one active todo as done, leaving every other todo untouched.",
+            "category": "What"
+          },
+          {
+            "term": "Reopen a todo",
+            "definition": "Turn one completed todo back into an active todo, leaving every other todo untouched.",
+            "category": "What"
+          },
+          {
+            "term": "Mark the whole list",
+            "definition": "In one act, complete every todo; or, when every todo is already completed, reopen every todo.",
+            "category": "What"
+          },
+          {
+            "term": "Sweep completed todos",
+            "definition": "In one act, remove every completed todo from the todo list, leaving every active todo untouched; with no completed todos, nothing changes.",
+            "category": "What"
+          },
+          {
+            "term": "Review the list",
+            "definition": "Look at the todo list under a chosen view; choosing a view changes only which todos are shown, never the todos themselves.",
+            "category": "What"
+          },
+          {
+            "term": "Return to the list",
+            "definition": "Come back to the todo list after closing, reloading or restarting, and find every todo with the same wording and completion.",
+            "category": "What"
+          },
+          {
+            "term": "Wording judgement",
+            "definition": "The activity of deciding whether offered wording is blank and what follows: nothing is recorded when the todo is new, and the todo is removed when it is being reworded.",
+            "category": "How"
+          },
+          {
+            "term": "Whole-list judgement",
+            "definition": "The activity of deciding, from the completion of every todo, whether marking the whole list completes all of them or reopens all of them.",
+            "category": "How"
+          },
+          {
+            "term": "Sweep selection",
+            "definition": "The activity of determining which todos a sweep removes: those completed at that moment, and no others.",
+            "category": "How"
+          },
+          {
+            "term": "View selection",
+            "definition": "The activity of determining which todos belong in a view, from each todo's completion.",
+            "category": "How"
+          },
+          {
+            "term": "Remaining tally",
+            "definition": "The activity of working out the remaining count from the whole todo list, anew whenever an act changes which todos are active.",
+            "category": "How"
+          },
+          {
+            "term": "Enter todo",
+            "definition": "Place a newly recorded todo in the lasting record, at the end of its todo list.",
+            "category": "How"
+          },
+          {
+            "term": "Amend wording",
+            "definition": "Put a todo's new wording into the lasting record in place of the old.",
+            "category": "How"
+          },
+          {
+            "term": "Settle completion",
+            "definition": "Set the completion of one or many todos in the lasting record, as a single act.",
+            "category": "How"
+          },
+          {
+            "term": "Retire todos",
+            "definition": "Take one or many todos out of the lasting record for good, as a single act.",
+            "category": "How"
+          },
+          {
+            "term": "Recall list",
+            "definition": "Obtain a person's todo list from the lasting record, with every todo's wording, completion and place.",
+            "category": "How"
+          },
+          {
+            "term": "Lasting record",
+            "definition": "The one enduring home of every todo list, outliving any visit, closure, reload or restart, and the same record for people and agent tooling alike.",
+            "category": "Where"
+          }
+        ]
+      },
+      "critiqueVerdict": "approve",
+      "revisions": 1
+    },
+    "3": {
+      "status": 2,
+      "kind": 3,
+      "model": {
+        "items": [
+          {
+            "name": "List-work volatility",
+            "rationale": "What: the sequence of acts by which a person or agent tooling keeps a todo list true (record, reword, complete, reopen, mark whole list, sweep, return). Why: it is the part a team asks to change first once it uses the product daily; the brief itself leaves the shape of the product open. Likelihood: high, several times a year in early use. Effect: unencapsulated, each new or reordered act is rebuilt separately on all four delivery surfaces and their outcomes drift apart, breaking objective 5. Grounding: mission objectives 2, 4, 5; behavior reference sections 1-6. Traces are empty because no Required Behaviors (scrubbedRequirements) exist on this branch to trace to; not claimed as longevity-grounded. Add B-NN traces once they exist.",
+            "axis": "sameCustomerOverTime"
+          },
+          {
+            "name": "List-rule volatility",
+            "rationale": "What: the judgements that decide what an act means: what blank wording leads to, whether marking the whole list completes or reopens, which todos a sweep retires and what becomes of them. Why: todo products differ here (a blank rewording may be refused, restored or treated as removal; finished work may be kept or discarded), and the team is likely to revisit these choices as it lives with them. Likelihood: moderate, an adjustment every year or so. Effect: unencapsulated, a rule is restated in every act and surface, so people and agents get different outcomes for the same act, against the mission's 'one meaning' and objectives 4 and 5. Grounding: mission; behavior reference sections 1, 2, 5, 6. Traces are empty because no Required Behaviors exist on this branch; not claimed as longevity-grounded. Add B-NN traces once they exist.",
+            "axis": "sameCustomerOverTime"
+          },
+          {
+            "name": "List-record volatility",
+            "rationale": "What: where and how the lasting record is kept, and what it holds for a todo. Why: the brief fixes only that todos survive and leaves the todo's shape open; the reference says a todo has 'at minimum' wording and completion. Likelihood: moderate, a change to what is held within a year or two and a change of storage technology once or twice in the system's life. Effect: unencapsulated, storage detail leaks into every act and any move puts recorded todos at risk, breaking objective 1. Grounding: mission objective 1; behavior reference section 9. Traces are empty because no Required Behaviors exist on this branch; not claimed as longevity-grounded. Add B-NN traces once they exist.",
+            "axis": "sameCustomerOverTime"
+          },
+          {
+            "name": "Access-channel volatility",
+            "rationale": "What: the way a person or agent tooling reaches the list. Why: at release the same list is already reached four different ways (an ordinary web app, embedded in a host tool, a web API, an MCP surface) by different users at once, and the set is open-ended as the team's tools vary. Likelihood: high; the four coexist on day one, and host tools and agent conventions are still young. Effect: unencapsulated, a channel's conventions leak into the list's rules, so adding or altering one touches all the others and outcomes stop matching, breaking objectives 5 and 6. Grounding: mission objectives 5, 6 and its delivery surfaces; founder brief, delivery paragraph. Traces are empty because no Required Behaviors exist on this branch; not claimed as longevity-grounded. Add B-NN traces once they exist.",
+            "axis": "allCustomersAtOneTime"
+          },
+          {
+            "name": "Review-perspective volatility",
+            "rationale": "What: how a person chooses to look over the list and gauge where they stand. Why: people review differently at the same moment ('however they like to review their list'), agent tooling wants an answer rather than a screen, and the mission expects further ways of reviewing. Likelihood: moderate, a new perspective or summary every year or so. Effect: unencapsulated, each surface selects and counts for itself, so the remaining count or the contents of a view disagree between surfaces, breaking objective 3. This is the weakest entry: today's three views alone are merely variable (see rejected), and it stands on the mission's 'another way of reviewing' only. Grounding: mission objective 3; behavior reference sections 7, 8. Traces are empty because no Required Behaviors exist on this branch; not claimed as longevity-grounded. Add B-NN traces once they exist.",
+            "axis": "allCustomersAtOneTime"
+          },
+          {
+            "name": "List-authority volatility",
+            "rationale": "What: who may see or change which todo list, keyed on the caller the platform supplies. Why: callers already differ at one time: a person works their own list, while agent tooling works it on that person's behalf; and the sources disagree on reach (the brief says 'our team', the reference says a single user/session; mission review left this for founder confirmation). Likelihood: moderate to high, since the open question must be answered and any answer may be revised as more tooling is trusted. Effect: unencapsulated, ownership checks scatter over every act and channel, and one missed check exposes or alters another person's list. Grounding: mission objective 5; glossary Todo list and Agent tooling; founder brief. This covers business authority only, never sign-in. Traces are empty because no Required Behaviors exist on this branch; not claimed as longevity-grounded. Add B-NN traces once they exist.",
+            "axis": "allCustomersAtOneTime"
+          }
+        ],
+        "rejected": [
+          {
+            "name": "Current three views (All, Active, Completed)",
+            "reason": "Three fixed selections decided by one completion value; a condition handles them. Only the open-ended way of reviewing is kept.",
+            "class": "variableNotVolatile"
+          },
+          {
+            "name": "Active or completed state of a todo",
+            "reason": "A single two-valued fact on a todo; data, with no structural consequence.",
+            "class": "variableNotVolatile"
+          },
+          {
+            "name": "Wording length and whitespace trimming",
+            "reason": "A bound or trim on free text is a value check inside the wording judgement.",
+            "class": "variableNotVolatile"
+          },
+          {
+            "name": "Rewording gestures (double-click, Enter, Escape, loss of focus)",
+            "reason": "Interaction detail local to one surface; the reference itself allows 'or otherwise explicitly activates'.",
+            "class": "variableNotVolatile"
+          },
+          {
+            "name": "Number of todos and people",
+            "reason": "The brief is for a small team; the expected range is a capacity setting and does not alter the structure.",
+            "class": "variableNotVolatile"
+          },
+          {
+            "name": "Todos are recorded, completed and removed at all",
+            "reason": "Every todo product does this; without it the product is not a todo list.",
+            "class": "natureOfTheBusiness"
+          },
+          {
+            "name": "Todos outlive the visit",
+            "reason": "Any usable todo product keeps its list; losing it is never a wanted variation. How it is kept is List-record.",
+            "class": "natureOfTheBusiness"
+          },
+          {
+            "name": "Due dates, priorities, tags and categories",
+            "reason": "The reference puts them out of scope and says they must not be assumed.",
+            "class": "speculative"
+          },
+          {
+            "name": "Sharing a list among people",
+            "reason": "Multi-user sharing is explicitly out of scope; only who may act on one person's list is evidenced.",
+            "class": "speculative"
+          },
+          {
+            "name": "Reordering todos by hand",
+            "reason": "Drag-to-reorder is explicitly out of scope; order is simply that of recording.",
+            "class": "speculative"
+          },
+          {
+            "name": "Undo and redo history",
+            "reason": "Explicitly out of scope; nothing in the brief asks for restoring past acts beyond reopening.",
+            "class": "speculative"
+          },
+          {
+            "name": "Offline work and later reconciliation",
+            "reason": "Offline sync is explicitly out of scope and the record lives behind a real service.",
+            "class": "speculative"
+          },
+          {
+            "name": "How people and agents are authenticated",
+            "reason": "The platform's Security utility and front door already own who is acting; encapsulating it again would duplicate a utility.",
+            "class": "speculative"
+          },
+          {
+            "name": "Hosting and deployment arrangement",
+            "reason": "The brief asks for it to be built the usual way; the platform treats the deployment scenario as configuration, so no system change is evidenced.",
+            "class": "speculative"
+          },
+          {
+            "name": "Notifying people of unfinished todos",
+            "reason": "No source asks for reminders; the count is shown on the list and nothing is sent.",
+            "class": "speculative"
+          },
+          {
+            "name": "Reporting on completed work",
+            "reason": "A reflex reporting block; the founder wants finished work swept away, not analysed.",
+            "class": "speculative"
+          },
+          {
+            "name": "Live refresh across several open surfaces",
+            "reason": "The count must follow acts on the list, but no source asks an idle surface to follow acts made elsewhere.",
+            "class": "speculative"
+          },
+          {
+            "name": "Host tool embedding conventions",
+            "reason": "Folded into Access-channel volatility: a host tool is one way of reaching the list.",
+            "class": "foldedInto"
+          },
+          {
+            "name": "Agent tooling conventions",
+            "reason": "Folded into Access-channel volatility: a change in how agents call is a channel change, the acts being identical.",
+            "class": "foldedInto"
+          },
+          {
+            "name": "Todo composition",
+            "reason": "Folded into List-record volatility: what is held for a todo changes with the record that holds it.",
+            "class": "foldedInto"
+          },
+          {
+            "name": "Simultaneous work by a person and agent tooling",
+            "reason": "Folded into List-record volatility: the glossary settles completion and retirement as single acts on the one record.",
+            "class": "foldedInto"
+          },
+          {
+            "name": "Whole-list marking behavior",
+            "reason": "Folded into List-rule volatility: choosing to complete or reopen is one of its judgements.",
+            "class": "foldedInto"
+          },
+          {
+            "name": "Disposition of finished todos",
+            "reason": "Folded into List-rule volatility: what a sweep selects and does with its selection is a rule of meaning.",
+            "class": "foldedInto"
+          },
+          {
+            "name": "Remaining-count calculation",
+            "reason": "Folded into Review-perspective volatility: the count is one summary of where a person stands.",
+            "class": "foldedInto"
+          }
+        ]
+      },
+      "revisions": 1
+    },
+    "4": {
+      "status": 2,
+      "kind": 4,
+      "model": {
+        "decisions": [
+          {
+            "useCase": {
+              "id": "keep-the-list-true",
+              "name": "Keep the List True",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "core",
+              "variationOf": null,
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "ask-for-act",
+                    "kind": "action",
+                    "label": "Person, directly or through agent tooling, asks for an act on one todo or on the whole list",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may act on this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-act",
+                    "kind": "decision",
+                    "label": "May the caller act on this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall the todo list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "judge-act",
+                    "kind": "action",
+                    "label": "Judge what the act means for the list: which todos it touches and what becomes of them",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "what-follows",
+                    "kind": "decision",
+                    "label": "What does the act do to the list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "enter-todo",
+                    "kind": "action",
+                    "label": "Enter the new active todo at the end of the list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "amend-wording",
+                    "kind": "action",
+                    "label": "Amend the todo's wording, keeping its completion and place",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "settle-completion",
+                    "kind": "action",
+                    "label": "Settle the completion of every todo the act touches, as a single act",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "retire-todos",
+                    "kind": "action",
+                    "label": "Retire every todo the act takes out, as a single act, leaving all others untouched",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "nothing-changes",
+                    "kind": "note",
+                    "label": "Nothing changes: the wording for a new todo was blank, no todo qualified, or the todo is already gone",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "act-settled",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list as it now stands",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-list",
+                    "kind": "sendSignal",
+                    "label": "Person sees the list as it now stands and the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the act was refused and nothing changed",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "ask-for-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-for-act",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may act]"
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "judge-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "judge-act",
+                    "to": "what-follows",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "enter-todo",
+                    "kind": "guardedFlow",
+                    "guard": "[a todo is added]"
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "amend-wording",
+                    "kind": "guardedFlow",
+                    "guard": "[wording changes]"
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "settle-completion",
+                    "kind": "guardedFlow",
+                    "guard": "[completion changes]"
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "retire-todos",
+                    "kind": "guardedFlow",
+                    "guard": "[todos are taken out]"
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "nothing-changes",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "enter-todo",
+                    "to": "act-settled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "amend-wording",
+                    "to": "act-settled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "settle-completion",
+                    "to": "act-settled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "retire-todos",
+                    "to": "act-settled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "nothing-changes",
+                    "to": "act-settled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "act-settled",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "see-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-list",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "",
+            "essenceRationale": "This is what the product is for: whatever is asked of the list, by a person or by agent tooling, is given one settled meaning and one lasting effect. Every person on the team relies on it; it stays the same when acts, rules, storage or ways of reaching the list change; and it is what sets a dependable shared-rule list apart from a toy that lives in one browser. It abstracts every act the sources name, single or whole-list (record, reword, remove, complete, reopen, mark all, sweep), none of which is the essence alone. It crosses List-work, List-rule, List-record, List-authority and Access-channel volatility, the last because the one flow serves both declared actors."
+          },
+          {
+            "useCase": {
+              "id": "take-stock",
+              "name": "Take Stock",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "core",
+              "variationOf": null,
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "ask-where-stand",
+                    "kind": "action",
+                    "label": "Person, directly or through agent tooling, asks where they stand, under a chosen view",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may see this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-see",
+                    "kind": "decision",
+                    "label": "May the caller see this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall the todo list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "split",
+                    "kind": "fork",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "select-view",
+                    "kind": "action",
+                    "label": "Determine which todos belong in the chosen view",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list, whichever view is chosen",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "synchronize",
+                    "kind": "join",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-standing",
+                    "kind": "sendSignal",
+                    "label": "Person sees the todos in the view, which view is current, and the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the list may not be seen",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "ask-where-stand",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-where-stand",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-see",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-see",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may see]"
+                  },
+                  {
+                    "from": "may-see",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "split",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "split",
+                    "to": "select-view",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "split",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "select-view",
+                    "to": "synchronize",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "synchronize",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "synchronize",
+                    "to": "see-standing",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-standing",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "",
+            "essenceRationale": "A list is kept only so that someone can trust what it says: people record work in order to stop carrying it in their heads, and that bargain holds only if what remains is never misstated. Every person needs it on every visit; it outlives any particular view, summary or surface; and one answer drawn from one lasting record, whoever asks and however, is what a list held in each browser cannot give. It abstracts choosing a view, reading the count and returning after an absence, and is distinct from keeping the list true because it never changes a todo. It crosses Review-perspective, List-record, List-authority and Access-channel volatility."
+          },
+          {
+            "useCase": {
+              "id": "add-a-todo",
+              "name": "Add a todo",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "keep-the-list-true",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "offer-wording",
+                    "kind": "action",
+                    "label": "Person offers the wording of a new todo",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may act on this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-act",
+                    "kind": "decision",
+                    "label": "May the caller act on this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "judge-wording",
+                    "kind": "action",
+                    "label": "Judge whether the offered wording is blank",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "is-blank",
+                    "kind": "decision",
+                    "label": "Is the wording blank?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "enter-todo",
+                    "kind": "action",
+                    "label": "Enter the new active todo at the end of the list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "nothing-recorded",
+                    "kind": "note",
+                    "label": "Blank wording: nothing is recorded",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "wording-handled",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list as it now stands",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-list",
+                    "kind": "sendSignal",
+                    "label": "Person sees the list as it now stands and the remaining count, with the entry field cleared if a todo was recorded",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the act was refused and nothing changed",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "offer-wording",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "offer-wording",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "judge-wording",
+                    "kind": "guardedFlow",
+                    "guard": "[may act]"
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "judge-wording",
+                    "to": "is-blank",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "is-blank",
+                    "to": "nothing-recorded",
+                    "kind": "guardedFlow",
+                    "guard": "[blank]"
+                  },
+                  {
+                    "from": "is-blank",
+                    "to": "enter-todo",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "enter-todo",
+                    "to": "wording-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "nothing-recorded",
+                    "to": "wording-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "wording-handled",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "see-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-list",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "The variation of keeping the list true in which the act adds a todo; entry mechanics every todo product shares."
+          },
+          {
+            "useCase": {
+              "id": "reword-a-todo",
+              "name": "Reword a todo",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "keep-the-list-true",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "open-rewording",
+                    "kind": "action",
+                    "label": "Person opens a todo for rewording, starting from its current wording",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "settle-or-abandon",
+                    "kind": "decision",
+                    "label": "Settle the new wording or abandon it?",
+                    "roleName": "Person",
+                    "linkedActorId": "person",
+                    "decidedBy": "person"
+                  },
+                  {
+                    "id": "settle-wording",
+                    "kind": "action",
+                    "label": "Person settles on the new wording",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may act on this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-act",
+                    "kind": "decision",
+                    "label": "May the caller act on this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall the todo list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "judge-wording",
+                    "kind": "action",
+                    "label": "Judge what the new wording means for the todo",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "what-follows",
+                    "kind": "decision",
+                    "label": "What follows from the new wording?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "amend-wording",
+                    "kind": "action",
+                    "label": "Amend the todo's wording, keeping its completion and place",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "retire-todo",
+                    "kind": "action",
+                    "label": "Retire the todo, since its wording was settled as blank",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "nothing-changes",
+                    "kind": "note",
+                    "label": "Nothing changes: the todo is already gone or its wording is the same",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "wording-handled",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list as it now stands",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-list",
+                    "kind": "sendSignal",
+                    "label": "Person sees the list as it now stands and the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the act was refused and nothing changed",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "see-original",
+                    "kind": "sendSignal",
+                    "label": "Person sees the todo with its original wording",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "open-rewording",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "open-rewording",
+                    "to": "settle-or-abandon",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "settle-or-abandon",
+                    "to": "settle-wording",
+                    "kind": "guardedFlow",
+                    "guard": "[settles]"
+                  },
+                  {
+                    "from": "settle-or-abandon",
+                    "to": "see-original",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "settle-wording",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may act]"
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "judge-wording",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "judge-wording",
+                    "to": "what-follows",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "amend-wording",
+                    "kind": "guardedFlow",
+                    "guard": "[wording changes]"
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "retire-todo",
+                    "kind": "guardedFlow",
+                    "guard": "[settled as blank]"
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "nothing-changes",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "amend-wording",
+                    "to": "wording-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "retire-todo",
+                    "to": "wording-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "nothing-changes",
+                    "to": "wording-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "wording-handled",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "see-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-list",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-original",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "The variation of keeping the list true in which the act changes one todo's wording, or is abandoned before it begins."
+          },
+          {
+            "useCase": {
+              "id": "delete-a-todo",
+              "name": "Delete a todo",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "keep-the-list-true",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "ask-removal",
+                    "kind": "action",
+                    "label": "Person asks for one todo to be removed",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may act on this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-act",
+                    "kind": "decision",
+                    "label": "May the caller act on this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall the todo list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "on-list",
+                    "kind": "decision",
+                    "label": "Is the todo still on the list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "retire-todo",
+                    "kind": "action",
+                    "label": "Retire the todo for good, whatever its completion, leaving all others untouched",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "already-gone",
+                    "kind": "note",
+                    "label": "Nothing changes: the todo is already gone",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "removal-handled",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list as it now stands",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-list",
+                    "kind": "sendSignal",
+                    "label": "Person sees the list without the todo and the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the act was refused and nothing changed",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "ask-removal",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-removal",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may act]"
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "on-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "on-list",
+                    "to": "retire-todo",
+                    "kind": "guardedFlow",
+                    "guard": "[on the list]"
+                  },
+                  {
+                    "from": "on-list",
+                    "to": "already-gone",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "retire-todo",
+                    "to": "removal-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "already-gone",
+                    "to": "removal-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "removal-handled",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "see-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-list",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "The variation of keeping the list true in which the act takes one todo out; a mechanic, not the essence."
+          },
+          {
+            "useCase": {
+              "id": "mark-a-todo-done-or-not-done",
+              "name": "Mark a todo done or not done",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "keep-the-list-true",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "ask-completion",
+                    "kind": "action",
+                    "label": "Person asks for one todo to be completed or reopened",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may act on this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-act",
+                    "kind": "decision",
+                    "label": "May the caller act on this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall the todo list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "on-list",
+                    "kind": "decision",
+                    "label": "Is the todo still on the list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "settle-completion",
+                    "kind": "action",
+                    "label": "Settle the todo's completion as asked, leaving all others untouched",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "already-gone",
+                    "kind": "note",
+                    "label": "Nothing changes: the todo is already gone",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "completion-handled",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list as it now stands",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-list",
+                    "kind": "sendSignal",
+                    "label": "Person sees the todo's completion as it now stands and the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the act was refused and nothing changed",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "ask-completion",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-completion",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may act]"
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "on-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "on-list",
+                    "to": "settle-completion",
+                    "kind": "guardedFlow",
+                    "guard": "[on the list]"
+                  },
+                  {
+                    "from": "on-list",
+                    "to": "already-gone",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "settle-completion",
+                    "to": "completion-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "already-gone",
+                    "to": "completion-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "completion-handled",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "see-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-list",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "The variation of keeping the list true in which the act settles one todo's completion; completing and reopening are the same act in two directions."
+          },
+          {
+            "useCase": {
+              "id": "mark-everything-done-at-once",
+              "name": "Mark everything done at once",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "keep-the-list-true",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "ask-mark-all",
+                    "kind": "action",
+                    "label": "Person asks for the whole list to be marked",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may act on this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-act",
+                    "kind": "decision",
+                    "label": "May the caller act on this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall the todo list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "judge-whole-list",
+                    "kind": "action",
+                    "label": "Judge from every todo's completion whether marking completes all or reopens all",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "what-follows",
+                    "kind": "decision",
+                    "label": "What does marking the whole list do?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "complete-all",
+                    "kind": "action",
+                    "label": "Settle every todo as completed, as a single act",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "reopen-all",
+                    "kind": "action",
+                    "label": "Settle every todo as active, as a single act",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "nothing-changes",
+                    "kind": "note",
+                    "label": "Nothing changes: the list holds no todos",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "list-marked",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list as it now stands",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-list",
+                    "kind": "sendSignal",
+                    "label": "Person sees the list as it now stands and the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the act was refused and nothing changed",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "ask-mark-all",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-mark-all",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may act]"
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "judge-whole-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "judge-whole-list",
+                    "to": "what-follows",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "complete-all",
+                    "kind": "guardedFlow",
+                    "guard": "[some todo is still active]"
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "reopen-all",
+                    "kind": "guardedFlow",
+                    "guard": "[the list has todos and every one is completed]"
+                  },
+                  {
+                    "from": "what-follows",
+                    "to": "nothing-changes",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "complete-all",
+                    "to": "list-marked",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "reopen-all",
+                    "to": "list-marked",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "nothing-changes",
+                    "to": "list-marked",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "list-marked",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "see-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-list",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "The variation of keeping the list true in which the act touches every todo at once, including undoing that: the same recall, judge and settle as for one todo, over a wider reach."
+          },
+          {
+            "useCase": {
+              "id": "clear-completed-todos",
+              "name": "Clear completed todos",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "keep-the-list-true",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "ask-sweep",
+                    "kind": "action",
+                    "label": "Person asks for finished todos to be swept away",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may act on this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-act",
+                    "kind": "decision",
+                    "label": "May the caller act on this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall the todo list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "select-sweep",
+                    "kind": "action",
+                    "label": "Judge which todos the sweep takes: those completed at this moment and no others",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "any-completed",
+                    "kind": "decision",
+                    "label": "Does the sweep take any todos?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "retire-todos",
+                    "kind": "action",
+                    "label": "Retire the swept todos as a single act, leaving every active todo untouched",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "nothing-changes",
+                    "kind": "note",
+                    "label": "Nothing changes: no todo is completed",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "sweep-handled",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list as it now stands",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-list",
+                    "kind": "sendSignal",
+                    "label": "Person sees the list as it now stands and the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the act was refused and nothing changed",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "ask-sweep",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-sweep",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may act]"
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "select-sweep",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "select-sweep",
+                    "to": "any-completed",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "any-completed",
+                    "to": "retire-todos",
+                    "kind": "guardedFlow",
+                    "guard": "[some todos are taken]"
+                  },
+                  {
+                    "from": "any-completed",
+                    "to": "nothing-changes",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "retire-todos",
+                    "to": "sweep-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "nothing-changes",
+                    "to": "sweep-handled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "sweep-handled",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "see-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-list",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "The variation of keeping the list true in which the act takes out many todos at once; valued by the founder (objective 4) but the same recall, judge and retire flow."
+          },
+          {
+            "useCase": {
+              "id": "switch-views",
+              "name": "Switch views",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "take-stock",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "choose",
+                    "kind": "action",
+                    "label": "Person chooses the All, Active or Completed view",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may see this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-see",
+                    "kind": "decision",
+                    "label": "May the caller see this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall the todo list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "split",
+                    "kind": "fork",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "select-view",
+                    "kind": "action",
+                    "label": "Determine which todos belong in the chosen view, changing none of them",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list, whichever view is chosen",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "synchronize",
+                    "kind": "join",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-view",
+                    "kind": "sendSignal",
+                    "label": "Person sees the todos in the chosen view, that it is now current, and the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the list may not be seen",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "choose",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "choose",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-see",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-see",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may see]"
+                  },
+                  {
+                    "from": "may-see",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "split",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "split",
+                    "to": "select-view",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "split",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "select-view",
+                    "to": "synchronize",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "synchronize",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "synchronize",
+                    "to": "see-view",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-view",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "The variation of taking stock in which one of today's three views is picked; the choice of views is a detail of how people review."
+          },
+          {
+            "useCase": {
+              "id": "see-how-many-todos-are-left",
+              "name": "See how many todos are left",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "take-stock",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "ask-left",
+                    "kind": "action",
+                    "label": "Person looks for how many todos are left",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may see this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-see",
+                    "kind": "decision",
+                    "label": "May the caller see this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-count",
+                    "kind": "sendSignal",
+                    "label": "Person sees the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the list may not be seen",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "ask-left",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-left",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-see",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-see",
+                    "to": "tally-remaining",
+                    "kind": "guardedFlow",
+                    "guard": "[may see]"
+                  },
+                  {
+                    "from": "may-see",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "see-count",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-count",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "The variation of taking stock that asks only for the summary and no todos; the count after an act is already part of keeping the list true."
+          },
+          {
+            "useCase": {
+              "id": "come-back-and-find-the-list-intact",
+              "name": "Come back and find the list intact",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                },
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "take-stock",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "come-back",
+                    "kind": "action",
+                    "label": "Person reopens the list after closing, reloading or restarting",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may see this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-see",
+                    "kind": "decision",
+                    "label": "May the caller see this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall every todo from the lasting record with its wording, completion and place",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "split",
+                    "kind": "fork",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "select-view",
+                    "kind": "action",
+                    "label": "Determine which todos belong in the current view",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list, whichever view is current",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "synchronize",
+                    "kind": "join",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-intact",
+                    "kind": "sendSignal",
+                    "label": "Person sees the same todos, with the same wording and completion, and the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told the list may not be seen",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "come-back",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "come-back",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-see",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-see",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may see]"
+                  },
+                  {
+                    "from": "may-see",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "split",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "split",
+                    "to": "select-view",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "split",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "select-view",
+                    "to": "synchronize",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "synchronize",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "synchronize",
+                    "to": "see-intact",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-intact",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "The variation of taking stock after an absence: the lasting record makes it the same recall as any other, and lasting itself is required of every todo product."
+          },
+          {
+            "useCase": {
+              "id": "let-agent-tooling-drive-the-list",
+              "name": "Let agent tooling drive the list",
+              "actors": [
+                {
+                  "id": "agent-tooling",
+                  "role": "Agent tooling"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "keep-the-list-true",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "ask-on-behalf",
+                    "kind": "action",
+                    "label": "Agent tooling asks, on a person's behalf, to review their list or act on it",
+                    "roleName": "Agent tooling",
+                    "linkedActorId": "agent-tooling"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the tooling may work this person's todo list on their behalf",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-work",
+                    "kind": "decision",
+                    "label": "May the tooling work this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall the todo list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "act-or-review",
+                    "kind": "decision",
+                    "label": "Was an act asked for, or a review?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "judge-act",
+                    "kind": "action",
+                    "label": "Judge what the act means for the list, under the same rules as for a person",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "any-change",
+                    "kind": "decision",
+                    "label": "Does the act change the list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "apply-change",
+                    "kind": "action",
+                    "label": "Put the judged change into the lasting record as a single act",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "nothing-changes",
+                    "kind": "note",
+                    "label": "Nothing changes: the act had nothing to do",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "act-settled",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "select-view",
+                    "kind": "action",
+                    "label": "Determine which todos belong in the view asked for",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "asked-work-done",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list as it now stands",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "given-outcome",
+                    "kind": "sendSignal",
+                    "label": "Agent tooling is given the same outcome a person would see, with the remaining count",
+                    "roleName": "Agent tooling",
+                    "linkedActorId": "agent-tooling"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Agent tooling is told the request was refused and nothing changed",
+                    "roleName": "Agent tooling",
+                    "linkedActorId": "agent-tooling"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "ask-on-behalf",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-on-behalf",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-work",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-work",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may work]"
+                  },
+                  {
+                    "from": "may-work",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "act-or-review",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "act-or-review",
+                    "to": "judge-act",
+                    "kind": "guardedFlow",
+                    "guard": "[an act]"
+                  },
+                  {
+                    "from": "act-or-review",
+                    "to": "select-view",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "judge-act",
+                    "to": "any-change",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "any-change",
+                    "to": "apply-change",
+                    "kind": "guardedFlow",
+                    "guard": "[changes the list]"
+                  },
+                  {
+                    "from": "any-change",
+                    "to": "nothing-changes",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "apply-change",
+                    "to": "act-settled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "nothing-changes",
+                    "to": "act-settled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "act-settled",
+                    "to": "asked-work-done",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "select-view",
+                    "to": "asked-work-done",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "asked-work-done",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "given-outcome",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "given-outcome",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "A differentiator, but as another caller and channel: the mission requires the same acts, rules and outcomes, so both core flows already carry it and a core of its own would split the one meaning in two."
+          },
+          {
+            "useCase": {
+              "id": "work-the-list-embedded-in-a-host-tool",
+              "name": "Work the list embedded in a host tool",
+              "actors": [
+                {
+                  "id": "person",
+                  "role": "Person"
+                }
+              ],
+              "trigger": "clientAction",
+              "classification": "nonCore",
+              "variationOf": "keep-the-list-true",
+              "activity": {
+                "nodes": [
+                  {
+                    "id": "start",
+                    "kind": "start",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "ask-in-host",
+                    "kind": "action",
+                    "label": "Person asks for an act on their list from inside a host tool",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "check-authority",
+                    "kind": "action",
+                    "label": "Check whether the caller may act on this person's todo list",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "may-act",
+                    "kind": "decision",
+                    "label": "May the caller act on this list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "recall-list",
+                    "kind": "action",
+                    "label": "Recall the todo list as it stands in the lasting record",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "judge-act",
+                    "kind": "action",
+                    "label": "Judge what the act means for the list, under the same rules as anywhere else",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "any-change",
+                    "kind": "decision",
+                    "label": "Does the act change the list?",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "apply-change",
+                    "kind": "action",
+                    "label": "Put the judged change into the lasting record as a single act",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "nothing-changes",
+                    "kind": "note",
+                    "label": "Nothing changes: the act had nothing to do",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "act-settled",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "tally-remaining",
+                    "kind": "action",
+                    "label": "Tally the remaining count over the whole list as it now stands",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "see-list",
+                    "kind": "sendSignal",
+                    "label": "Person sees, inside the host tool, the list as it now stands and the remaining count",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "told-refused",
+                    "kind": "sendSignal",
+                    "label": "Person is told, inside the host tool, that the act was refused and nothing changed",
+                    "roleName": "Person",
+                    "linkedActorId": "person"
+                  },
+                  {
+                    "id": "finish",
+                    "kind": "merge",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  },
+                  {
+                    "id": "end",
+                    "kind": "end",
+                    "label": "",
+                    "roleName": "",
+                    "linkedActorId": null
+                  }
+                ],
+                "edges": [
+                  {
+                    "from": "start",
+                    "to": "ask-in-host",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "ask-in-host",
+                    "to": "check-authority",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "check-authority",
+                    "to": "may-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "recall-list",
+                    "kind": "guardedFlow",
+                    "guard": "[may act]"
+                  },
+                  {
+                    "from": "may-act",
+                    "to": "told-refused",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "recall-list",
+                    "to": "judge-act",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "judge-act",
+                    "to": "any-change",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "any-change",
+                    "to": "apply-change",
+                    "kind": "guardedFlow",
+                    "guard": "[changes the list]"
+                  },
+                  {
+                    "from": "any-change",
+                    "to": "nothing-changes",
+                    "kind": "guardedFlow",
+                    "guard": "[else]"
+                  },
+                  {
+                    "from": "apply-change",
+                    "to": "act-settled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "nothing-changes",
+                    "to": "act-settled",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "act-settled",
+                    "to": "tally-remaining",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "tally-remaining",
+                    "to": "see-list",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "see-list",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "told-refused",
+                    "to": "finish",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "finish",
+                    "to": "end",
+                    "kind": "controlFlow",
+                    "guard": ""
+                  }
+                ]
+              }
+            },
+            "rejectionReason": "The variation of keeping the list true in which the list is reached inside another tool; only the channel differs."
+          }
+        ]
+      },
+      "critiqueVerdict": "revise",
+      "critiqueNotes": "The two cores (Keep the List True, Take Stock) are right. Both are real abstractions with real essence arguments, so keep them as they are. The fixes below concern what the actor is shown, plus one channel-shaped entry.\n\nREQUIRED\n\n1. Channel-shaped use case: `work-the-list-embedded-in-a-host-tool`. Its own rejection reason says \"only the channel differs\", and its flow is keep-the-list-true with \"inside the host tool\" added. Remove it as a use case. The founder's MCP Apps ask is not lost: it is mission objective 6 and the `mcpApp` delivery surface, and the architecture must serve both cores there. The entry also omitted reviewing the list while embedded, which is what happens when a channel is drawn as a use case.\n\n2. Agent tooling asks, but the outcome goes to someone else. Both cores declare actor `agent-tooling`, and their first act reads \"Person, directly or through agent tooling, asks...\". Every act and outcome is nonetheless linked to `person` only (`see-list`, `told-refused`, `see-standing`). As drawn, an agent-made request enters through no act of the agent's and ends in nothing the agent is told. Objective 5 promises the tooling the same outcome. The essence claim that Access-channel volatility is crossed \"because the one flow serves both declared actors\" rests on this too.\n   - In `keep-the-list-true` and `take-stock`: give Agent tooling its own linked act (for example, a second start-rooted entry) and its own linked outcome and refusal `sendSignal`s. Drop \"directly or through agent tooling\" from the Person's act.\n   - In the eight human-worded variations (`add-a-todo`, `reword-a-todo`, `delete-a-todo`, `mark-a-todo-done-or-not-done`, `mark-everything-done-at-once`, `clear-completed-todos`, `switch-views`, `see-how-many-todos-are-left`) and in `come-back-and-find-the-list-intact`: drop the declared `agent-tooling` actor, or link its acts and outcomes. Do not declare an actor the diagram never uses.\n   - `let-agent-tooling-drive-the-list` may stay. It has its own actor and the on-behalf-of authority question, so I do not read it as channel-shaped. Restate its rejection reason on that basis rather than \"another caller and channel\".\n\n3. Outcomes that are not the ones the raw use case promises. Different branches merge into one generic label, so a test derived from them cannot tell right behavior from wrong. Give each differing branch its own outcome `sendSignal`/`objectNode`, or put the branch's result on an `objectNode` with `inState`:\n   - `mark-a-todo-done-or-not-done-P1` (todo already gone): \"Person sees the todo's completion as it now stands\" is impossible, because there is no such todo. Say the list is shown without it. P2 should say the todo is shown completed or reopened as asked, with every other todo unchanged.\n   - `add-a-todo-P1` / `P2`: one conditional label (\"cleared if a todo was recorded\") covers both. P1: the new todo is shown active, last on the list, count up by one, entry field cleared. P2 (blank): the list and count are shown unchanged.\n   - `reword-a-todo-P2` / `P3` / `P4`: all read \"the list as it now stands\". P2: the todo shows its new wording, same completion and place. P4 (blank): the todo is no longer on the list. P3: nothing differs.\n   - `mark-everything-done-at-once-P1` / `P3` / `P2`: P1: every todo is shown completed, none remaining. P3: every todo is shown active, all remaining. P2: the list is still empty.\n   - `clear-completed-todos-P2` / `P1`: P2: no completed todo remains, every active todo is still there, count unchanged. P1: the list is unchanged.\n   - `let-agent-tooling-drive-the-list-P1` / `P2` / `P3`: \"the same outcome a person would see\" names no outcome. State it for a changing act, for an act with nothing to do, and for a review (the todos in the view asked for, plus the count).\n   - `keep-the-list-true`: distinguish at least \"the act's effect is shown\" from \"nothing changed\" (P3).\n\nNON-BLOCKING (no need to answer to pass)\n\na. `add-a-todo` shows \"the list as it now stands\" but no node recalls the list, unlike its siblings.\nb. Reference section 7: an act does not change the current view. After an act, \"the list\" means the todos in the view the person was in (completing under Active makes the todo leave that view). Worth a note on `keep-the-list-true`.\nc. Reference section 2: opening a rewording shows the current wording. Carry this to the architecture.\nd. `come-back-and-find-the-list-intact` does not show which view is current, though reference section 7 says it is always visible.\ne. Carry to the architecture: every select/judge action (`select-view`, `select-sweep`, `judge-*`) needs a real call of its own beside `recall-list`.\nf. No Required Behaviors exist on this branch, so I checked the raw list against the founder brief and behavior reference, and the staged mission, glossary and volatilities. It is complete against the brief's nine asks. The founder still needs to confirm list authority scope (team vs single user).\n",
+      "revisions": 1
+    }
+  }
+}

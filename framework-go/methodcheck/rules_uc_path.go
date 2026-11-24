@@ -2,6 +2,9 @@ package methodcheck
 
 import (
 	"fmt"
+	"slices"
+	"sort"
+	"strings"
 
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
@@ -13,6 +16,8 @@ import (
 //
 //	UC-PATH-OUTCOME             every path with an actor-classified node carries a
 //	                            sendSignal or objectNode after the first of them
+//	UC-PATH-OUTCOME-DISTINCT    two paths a decision separates do not end on the same
+//	                            outcome nodes: each guarded branch states its own
 //	UC-OUTCOME-AT-ASKING-SURFACE the Client the asking actor used shows the outcome:
 //	                            a sendSignal to that actor drawn on that surface, or an
 //	                            objectNode the system returned to that Client (a call
@@ -44,6 +49,7 @@ import (
 
 const (
 	ruleUCPathOutcome            RuleID = "UC-PATH-OUTCOME"
+	ruleUCPathOutcomeDistinct    RuleID = "UC-PATH-OUTCOME-DISTINCT"
 	ruleUCOutcomeAtAskingSurface RuleID = "UC-OUTCOME-AT-ASKING-SURFACE"
 	ruleUCStartNotAction         RuleID = "UC-START-NOT-ACTION"
 	ruleSCNUnaddressed           RuleID = "SCN-UNADDRESSED"
@@ -53,7 +59,7 @@ const (
 // ucPathRuleIDs is every rule this family (rules_uc_path.go, rules_uc_door.go) can
 // emit, for the emitters registry.
 var ucPathRuleIDs = []RuleID{
-	ruleUCPathOutcome, ruleUCOutcomeAtAskingSurface, ruleUCStartNotAction,
+	ruleUCPathOutcome, ruleUCPathOutcomeDistinct, ruleUCOutcomeAtAskingSurface, ruleUCStartNotAction,
 	ruleUCActorDoor, ruleUCActorUnserved, ruleUCLaneResolves,
 	ruleSCNUnaddressed, ruleSCNActorPathClient,
 }
@@ -186,6 +192,65 @@ func (p pathWalk) pathOutcome() []Finding {
 			"state what the actor sees when this path ends (a sendSignal to the actor, or an objectNode in its state), not only a note",
 			p.sc.ID, p.uc.ID, p.sc.Path[first]),
 	}}
+}
+
+// distinctOutcomeFindings is UC-PATH-OUTCOME-DISTINCT over the derived scenarios of one
+// use case (in derivation order): for each pair whose paths are equal up to a decision
+// (or switch) node and then take different next nodes, the sendSignal and objectNode
+// ids after that decision must not be the same non-empty set on both. A fork is not a
+// guard, so only a decision or switch can separate the pair; an empty set is
+// UC-PATH-OUTCOME's business. One finding per (use case, decision, scenario pair).
+func distinctOutcomeFindings(uc UseCase, scs []scenario.Scenario) []Finding {
+	kinds := map[string]string{}
+	for _, n := range uc.Activity.Nodes {
+		kinds[n.ID] = n.Kind
+	}
+	var out []Finding
+	for i, a := range scs {
+		for _, b := range scs[i+1:] {
+			if f, ok := sharedOutcomeAfterDecision(uc, kinds, a, b); ok {
+				out = append(out, f)
+			}
+		}
+	}
+	return out
+}
+
+// sharedOutcomeAfterDecision is the finding for the pair a, b when their paths are equal
+// up to a decision or switch node, then diverge, and carry the same non-empty set of
+// outcome nodes after it.
+func sharedOutcomeAfterDecision(uc UseCase, kinds map[string]string, a, b scenario.Scenario) (Finding, bool) {
+	k := 0
+	for k < len(a.Path) && k < len(b.Path) && a.Path[k] == b.Path[k] {
+		k++
+	}
+	if k == 0 || k >= len(a.Path) || k >= len(b.Path) || !ccResolvesBranch(kinds[a.Path[k-1]]) {
+		return Finding{}, false
+	}
+	oa, ob := outcomeIDs(kinds, a.Path[k:]), outcomeIDs(kinds, b.Path[k:])
+	if len(oa) == 0 || !slices.Equal(oa, ob) {
+		return Finding{}, false
+	}
+	return Finding{
+		RuleID: ruleUCPathOutcomeDistinct, Severity: SeverityError,
+		Location: loc(0, "useCase "+uc.ID+" scenario "+a.ID),
+		Message: fmt.Sprintf("use case %s: scenarios %s and %s are separated by decision %q (they take %q and %q) but end on the same outcome node(s) %s, "+
+			"so a test derived from either cannot tell which branch ran; give each guarded branch its own outcome "+
+			"(split a \"X, or Y\" sendSignal into one sendSignal per branch, drawn before the merge)",
+			uc.ID, a.ID, b.ID, a.Path[k-1], a.Path[k], b.Path[k], strings.Join(oa, ", ")),
+	}, true
+}
+
+// outcomeIDs is the sorted, de-duplicated ids of the sendSignal and objectNode nodes of path.
+func outcomeIDs(kinds map[string]string, path []string) []string {
+	var ids []string
+	for _, id := range path {
+		if k := kinds[id]; k == kindSendSignal || k == kindObjectNode {
+			ids = append(ids, id)
+		}
+	}
+	sort.Strings(ids)
+	return slices.Compact(ids)
 }
 
 // outcomeAtAskingSurface is UC-OUTCOME-AT-ASKING-SURFACE: for each Client the first

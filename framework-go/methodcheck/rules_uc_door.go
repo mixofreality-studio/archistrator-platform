@@ -68,6 +68,8 @@ func ucSlotPathFindings(c CoreUseCases) []Finding {
 		out = append(out, actorServedFindings(i, d.UseCase)...)
 	}
 	ucs := useCaseIndex(c)
+	byUC := map[string][]scenario.Scenario{}
+	var order []string
 	for _, sc := range rep.Scenarios {
 		uc, ok := ucs[sc.UseCase]
 		if !ok || uc.Activity == nil {
@@ -76,6 +78,13 @@ func ucSlotPathFindings(c CoreUseCases) []Finding {
 		p := newPathWalk(uc, System{}, sc, nil)
 		out = append(out, p.pathOutcome()...)
 		out = append(out, p.actorDoor()...)
+		if _, seen := byUC[sc.UseCase]; !seen {
+			order = append(order, sc.UseCase)
+		}
+		byUC[sc.UseCase] = append(byUC[sc.UseCase], sc)
+	}
+	for _, id := range order {
+		out = append(out, distinctOutcomeFindings(ucs[id], byUC[id])...)
 	}
 	return out
 }

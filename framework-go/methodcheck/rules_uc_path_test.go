@@ -335,3 +335,96 @@ func TestScenarioProblems_UnknownCodeIsNotMislabelled(t *testing.T) {
 		t.Fatalf("the unknown code must be named, as an Error: %+v", fs[0])
 	}
 }
+
+// distinctFixture is one clientAction use case: the team member acts (n2), then a
+// node n3 (a decision, or a fork in the fork test) separates branches n4 and n5; the
+// caller supplies the rest of the nodes and the edges.
+func distinctFixture(nodes []ActivityNode, edges []ActivityEdge) CoreUseCases {
+	base := []ActivityNode{
+		{ID: "n1", Kind: nodeStart},
+		{ID: "n2", Kind: "action", Label: "member asks", LinkedActorID: "team-member"},
+		{ID: "n3", Kind: nodeDecision, Label: "which?", DecidedBy: "team-member"},
+		{ID: "n4", Kind: "action", Label: "system does A"},
+		{ID: "n5", Kind: "action", Label: "system does B"},
+		{ID: "end", Kind: nodeEnd},
+	}
+	uc := UseCase{
+		ID: "do-it", Name: "Do it", Classification: classCore, Trigger: triggerClientAction,
+		Actors: []Actor{{ID: "team-member", Role: "Team Member"}},
+		Activity: &ActivityDiagram{Nodes: append(base, nodes...), Edges: append([]ActivityEdge{
+			{From: "n1", To: "n2"}, {From: "n2", To: "n3"},
+		}, edges...)},
+	}
+	return CoreUseCases{Decisions: []UseCaseDecision{{UseCase: uc}}}
+}
+
+func TestUC_PathOutcomeDistinct_FiresOnSharedOutcomeAfterMerge(t *testing.T) {
+	c := distinctFixture(
+		[]ActivityNode{{ID: "n6", Kind: nodeMerge}, {ID: "sig", Kind: kindSendSignal, Label: "shows A, or B", LinkedActorID: "team-member"}},
+		[]ActivityEdge{
+			{From: "n3", To: "n4", Guard: "[a]"}, {From: "n3", To: "n5", Guard: "[else]"},
+			{From: "n4", To: "n6"}, {From: "n5", To: "n6"}, {From: "n6", To: "sig"}, {From: "sig", To: "end"},
+		})
+	fs := ucSlotPathFindings(c)
+	msgs := messagesFor(fs, ruleUCPathOutcomeDistinct)
+	if len(msgs) != 1 {
+		t.Fatalf("one finding per (use case, decision, scenario pair); got %v", msgs)
+	}
+	for _, want := range []string{"do-it", `"n3"`, "do-it-P1", "do-it-P2", "sig", "own outcome"} {
+		if !strings.Contains(msgs[0], want) {
+			t.Fatalf("finding must name %q: %s", want, msgs[0])
+		}
+	}
+	for _, f := range fs {
+		if f.RuleID == ruleUCPathOutcomeDistinct && f.Severity != SeverityError {
+			t.Fatalf("UC-PATH-OUTCOME-DISTINCT must be an Error: %+v", f)
+		}
+	}
+	if m := messagesFor(fs, ruleUCPathOutcome); len(m) != 0 {
+		t.Fatalf("each path does carry an outcome, so UC-PATH-OUTCOME is satisfied: %v", m)
+	}
+}
+
+func TestUC_PathOutcomeDistinct_PassesWhenEachBranchHasItsOwnOutcome(t *testing.T) {
+	c := distinctFixture(
+		[]ActivityNode{
+			{ID: "n6", Kind: nodeMerge},
+			{ID: "sigA", Kind: kindSendSignal, Label: "shows A", LinkedActorID: "team-member"},
+			{ID: "sigB", Kind: kindSendSignal, Label: "shows B", LinkedActorID: "team-member"},
+		},
+		[]ActivityEdge{
+			{From: "n3", To: "n4", Guard: "[a]"}, {From: "n3", To: "n5", Guard: "[else]"},
+			{From: "n4", To: "sigA"}, {From: "n5", To: "sigB"},
+			{From: "sigA", To: "n6"}, {From: "sigB", To: "n6"}, {From: "n6", To: "end"},
+		})
+	if m := messagesFor(ucSlotPathFindings(c), ruleUCPathOutcomeDistinct); len(m) != 0 {
+		t.Fatalf("each branch states its own outcome: %v", m)
+	}
+}
+
+func TestUC_PathOutcomeDistinct_ForkBranchesNeverFire(t *testing.T) {
+	c := distinctFixture(
+		[]ActivityNode{
+			{ID: "j", Kind: nodeJoin},
+			{ID: "sig", Kind: kindSendSignal, Label: "shows A and B", LinkedActorID: "team-member"},
+		},
+		[]ActivityEdge{
+			{From: "n3", To: "n4"}, {From: "n3", To: "n5"}, {From: "n4", To: "j"}, {From: "n5", To: "j"},
+			{From: "j", To: "sig"}, {From: "sig", To: "end"},
+		})
+	c.Decisions[0].UseCase.Activity.Nodes[2] = ActivityNode{ID: "n3", Kind: nodeFork} // the "decision" slot is a fork here
+	if m := messagesFor(ucSlotPathFindings(c), ruleUCPathOutcomeDistinct); len(m) != 0 {
+		t.Fatalf("a fork is not a guard: %v", m)
+	}
+}
+
+// RUN-026 drafted guarded branches that rejoin before one "shows X, or Y" signal.
+func TestUC_PathOutcomeDistinct_FiresOnRUN026(t *testing.T) {
+	fs, err := ValidateProjectJSON(readFixture(t, "run026_todomvc_through_core_use_cases.json"), ValidateOptions{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if countRule(fs, ruleUCPathOutcomeDistinct) == 0 {
+		t.Fatalf("RUN-026's shared-outcome branches must fire UC-PATH-OUTCOME-DISTINCT: %s", dumpFindings(fs))
+	}
+}

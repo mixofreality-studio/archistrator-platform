@@ -929,14 +929,28 @@
                   {
                     "id": "out-team-member",
                     "kind": "sendSignal",
-                    "label": "The surface shows the member the list as kept, with the true items-left count, or that the change is outside their reach",
+                    "label": "The surface shows the member the list as kept, with the true items-left count",
+                    "roleName": "Team Member",
+                    "linkedActorId": "team-member"
+                  },
+                  {
+                    "id": "out-team-member-refused",
+                    "kind": "sendSignal",
+                    "label": "The surface shows the member that the change is outside their reach",
                     "roleName": "Team Member",
                     "linkedActorId": "team-member"
                   },
                   {
                     "id": "out-team-agent",
                     "kind": "sendSignal",
-                    "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+                    "label": "The agent is told the outcome of its change",
+                    "roleName": "Team Agent",
+                    "linkedActorId": "team-agent"
+                  },
+                  {
+                    "id": "out-team-agent-refused",
+                    "kind": "sendSignal",
+                    "label": "The agent is told the change is outside its delegation",
                     "roleName": "Team Agent",
                     "linkedActorId": "team-agent"
                   },
@@ -1011,32 +1025,44 @@
                   },
                   {
                     "from": "n8",
-                    "to": "n10",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n9",
-                    "to": "n10",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n10",
                     "to": "out-team-member",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member",
                     "to": "out-team-agent",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   },
                   {
                     "from": "out-team-agent",
+                    "to": "n10",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n9",
+                    "to": "out-team-member-refused",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "out-team-member-refused",
+                    "to": "out-team-agent-refused",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "out-team-agent-refused",
+                    "to": "n10",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n10",
                     "to": "n11",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   }
                 ]
@@ -1151,14 +1177,28 @@
                   {
                     "id": "out-team-member",
                     "kind": "sendSignal",
-                    "label": "The surface shows the member the chosen view with the true items-left count, or that the list is outside their reach",
+                    "label": "The surface shows the member the chosen view with the true items-left count",
+                    "roleName": "Team Member",
+                    "linkedActorId": "team-member"
+                  },
+                  {
+                    "id": "out-team-member-refused",
+                    "kind": "sendSignal",
+                    "label": "The surface shows the member that the list is outside their reach",
                     "roleName": "Team Member",
                     "linkedActorId": "team-member"
                   },
                   {
                     "id": "out-team-agent",
                     "kind": "sendSignal",
-                    "label": "The agent is given the list in the chosen view, or told the list is outside its delegation",
+                    "label": "The agent is given the list in the chosen view",
+                    "roleName": "Team Agent",
+                    "linkedActorId": "team-agent"
+                  },
+                  {
+                    "id": "out-team-agent-refused",
+                    "kind": "sendSignal",
+                    "label": "The agent is told the list is outside its delegation",
                     "roleName": "Team Agent",
                     "linkedActorId": "team-agent"
                   },
@@ -1239,32 +1279,44 @@
                   },
                   {
                     "from": "n9",
-                    "to": "n11",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n10",
-                    "to": "n11",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n11",
                     "to": "out-team-member",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member",
                     "to": "out-team-agent",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   },
                   {
                     "from": "out-team-agent",
+                    "to": "n11",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n10",
+                    "to": "out-team-member-refused",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "out-team-member-refused",
+                    "to": "out-team-agent-refused",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "out-team-agent-refused",
+                    "to": "n11",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n11",
                     "to": "n12",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   }
                 ]
@@ -1340,7 +1392,14 @@
                   {
                     "id": "out-team-member",
                     "kind": "sendSignal",
-                    "label": "The surface shows the member the new todo at the end of the list, or an unchanged list for empty wording",
+                    "label": "The surface shows the member the new todo at the end of the list",
+                    "roleName": "Team Member",
+                    "linkedActorId": "team-member"
+                  },
+                  {
+                    "id": "out-team-member-unchanged",
+                    "kind": "sendSignal",
+                    "label": "The surface shows the member an unchanged list, because the wording was empty",
                     "roleName": "Team Member",
                     "linkedActorId": "team-member"
                   },
@@ -1385,26 +1444,32 @@
                   },
                   {
                     "from": "n4",
-                    "to": "n6",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n5",
-                    "to": "n6",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n6",
                     "to": "out-team-member",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member",
+                    "to": "n6",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n5",
+                    "to": "out-team-member-unchanged",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "out-team-member-unchanged",
+                    "to": "n6",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n6",
                     "to": "n7",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   }
                 ]
@@ -1494,7 +1559,14 @@
                   {
                     "id": "out-team-member",
                     "kind": "sendSignal",
-                    "label": "The surface shows the member the todo retitled in place, or removed under the blank reword rule",
+                    "label": "The surface shows the member the todo retitled in place",
+                    "roleName": "Team Member",
+                    "linkedActorId": "team-member"
+                  },
+                  {
+                    "id": "out-team-member-removed",
+                    "kind": "sendSignal",
+                    "label": "The surface shows the member the todo removed under the blank reword rule",
                     "roleName": "Team Member",
                     "linkedActorId": "team-member"
                   },
@@ -1557,30 +1629,6 @@
                     "guard": "[else]"
                   },
                   {
-                    "from": "n6",
-                    "to": "n8",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n7",
-                    "to": "n8",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n8",
-                    "to": "out-team-member",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "out-team-member",
-                    "to": "n9",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
                     "from": "n3",
                     "to": "n9",
                     "kind": "controlFlow",
@@ -1590,6 +1638,36 @@
                     "from": "n9",
                     "to": "n10",
                     "kind": "controlFlow",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n6",
+                    "to": "out-team-member",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "out-team-member",
+                    "to": "n8",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n7",
+                    "to": "out-team-member-removed",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "out-team-member-removed",
+                    "to": "n8",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n8",
+                    "to": "n9",
+                    "kind": "",
                     "guard": ""
                   }
                 ]
@@ -1826,7 +1904,14 @@
                   {
                     "id": "out-team-member",
                     "kind": "sendSignal",
-                    "label": "The surface shows the member every todo in the ruled completed state and the new items-left count",
+                    "label": "The surface shows the member every todo completed and the new items-left count",
+                    "roleName": "Team Member",
+                    "linkedActorId": "team-member"
+                  },
+                  {
+                    "id": "out-team-member-active",
+                    "kind": "sendSignal",
+                    "label": "The surface shows the member every todo active again and the new items-left count",
                     "roleName": "Team Member",
                     "linkedActorId": "team-member"
                   },
@@ -1871,26 +1956,32 @@
                   },
                   {
                     "from": "n4",
+                    "to": "out-team-member-active",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "out-team-member-active",
                     "to": "n6",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   },
                   {
                     "from": "n5",
-                    "to": "n6",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n6",
                     "to": "out-team-member",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   },
                   {
                     "from": "out-team-member",
+                    "to": "n6",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n6",
                     "to": "n7",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   }
                 ]
@@ -2059,7 +2150,14 @@
                   {
                     "id": "out-team-agent",
                     "kind": "sendSignal",
-                    "label": "The agent is told the outcome of its change, or that the change is outside its delegation",
+                    "label": "The agent is told the outcome of its change",
+                    "roleName": "Team Agent",
+                    "linkedActorId": "team-agent"
+                  },
+                  {
+                    "id": "out-team-agent-refused",
+                    "kind": "sendSignal",
+                    "label": "The agent is told the change is outside its delegation",
                     "roleName": "Team Agent",
                     "linkedActorId": "team-agent"
                   },
@@ -2104,26 +2202,32 @@
                   },
                   {
                     "from": "n4",
-                    "to": "n6",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n5",
-                    "to": "n6",
-                    "kind": "controlFlow",
-                    "guard": ""
-                  },
-                  {
-                    "from": "n6",
                     "to": "out-team-agent",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   },
                   {
                     "from": "out-team-agent",
+                    "to": "n6",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n5",
+                    "to": "out-team-agent-refused",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "out-team-agent-refused",
+                    "to": "n6",
+                    "kind": "",
+                    "guard": ""
+                  },
+                  {
+                    "from": "n6",
                     "to": "n7",
-                    "kind": "controlFlow",
+                    "kind": "",
                     "guard": ""
                   }
                 ]
@@ -14269,7 +14373,7 @@
                     }
                   },
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-removed",
                     "component": "messageBus",
                     "operation": "Subscribe",
                     "inputs": [
@@ -14358,7 +14462,7 @@
                     }
                   },
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-active",
                     "component": "messageBus",
                     "operation": "Subscribe",
                     "inputs": [
@@ -15241,7 +15345,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -15306,7 +15410,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -15361,7 +15465,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -15426,7 +15530,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -15471,7 +15575,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -15516,7 +15620,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -15738,7 +15842,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -15760,7 +15864,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18252,7 +18356,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18274,7 +18378,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18339,7 +18443,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18361,7 +18465,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18416,7 +18520,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18438,7 +18542,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18503,7 +18607,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18525,7 +18629,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18570,7 +18674,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18592,7 +18696,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18637,7 +18741,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -18659,7 +18763,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -21917,7 +22021,7 @@
                     }
                   },
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-unchanged",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -23696,7 +23800,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -23761,7 +23865,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -23816,7 +23920,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -23881,7 +23985,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -23926,7 +24030,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -23993,7 +24097,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -24469,7 +24573,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -24491,7 +24595,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -26076,7 +26180,7 @@
                     }
                   },
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-removed",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -26669,7 +26773,7 @@
                     }
                   },
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-active",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -28853,7 +28957,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -28875,7 +28979,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -28940,7 +29044,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -28962,7 +29066,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -29017,7 +29121,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -29039,7 +29143,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -29104,7 +29208,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -29126,7 +29230,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -29171,7 +29275,7 @@
                 },
                 "probes": [
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -29193,7 +29297,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -29260,7 +29364,7 @@
                     }
                   },
                   {
-                    "for": "out-team-member",
+                    "for": "out-team-member-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -29282,7 +29386,7 @@
                     }
                   },
                   {
-                    "for": "out-team-agent",
+                    "for": "out-team-agent-refused",
                     "component": "todoListAccess",
                     "operation": "RecallList",
                     "inputs": [
@@ -33718,7 +33822,7 @@
               },
               "probes": [
                 {
-                  "for": "out-team-member",
+                  "for": "out-team-member-refused",
                   "component": "todoWebApp",
                   "operation": "OpenList",
                   "as": "team-member",
@@ -33746,7 +33850,7 @@
                   }
                 },
                 {
-                  "for": "out-team-agent",
+                  "for": "out-team-agent-refused",
                   "component": "listManager",
                   "operation": "OpenList",
                   "as": "team-agent",
@@ -36499,7 +36603,7 @@
                   }
                 },
                 {
-                  "for": "out-team-member",
+                  "for": "out-team-member-removed",
                   "component": "todoWebApp",
                   "operation": "OpenList",
                   "as": "team-member",
@@ -38429,7 +38533,7 @@
               },
               "probes": [
                 {
-                  "for": "out-team-member",
+                  "for": "out-team-member-refused",
                   "component": "todoWebApp",
                   "operation": "OpenList",
                   "as": "team-member",
@@ -38457,7 +38561,7 @@
                   }
                 },
                 {
-                  "for": "out-team-agent",
+                  "for": "out-team-agent-refused",
                   "component": "todoApi",
                   "operation": "ListOpenList",
                   "as": "team-agent",
@@ -38533,7 +38637,7 @@
               },
               "probes": [
                 {
-                  "for": "out-team-member",
+                  "for": "out-team-member-refused",
                   "component": "todoWebApp",
                   "operation": "OpenList",
                   "as": "team-member",
@@ -38561,7 +38665,7 @@
                   }
                 },
                 {
-                  "for": "out-team-agent",
+                  "for": "out-team-agent-refused",
                   "component": "todoApi",
                   "operation": "ListOpenList",
                   "as": "team-agent",
@@ -38627,7 +38731,7 @@
               },
               "probes": [
                 {
-                  "for": "out-team-member",
+                  "for": "out-team-member-refused",
                   "component": "todoWebApp",
                   "operation": "OpenList",
                   "as": "team-member",
@@ -38655,7 +38759,7 @@
                   }
                 },
                 {
-                  "for": "out-team-agent",
+                  "for": "out-team-agent-refused",
                   "component": "todoApi",
                   "operation": "ListOpenList",
                   "as": "team-agent",
@@ -38731,7 +38835,7 @@
               },
               "probes": [
                 {
-                  "for": "out-team-member",
+                  "for": "out-team-member-refused",
                   "component": "todoWebApp",
                   "operation": "OpenList",
                   "as": "team-member",
@@ -38759,7 +38863,7 @@
                   }
                 },
                 {
-                  "for": "out-team-agent",
+                  "for": "out-team-agent-refused",
                   "component": "todoApi",
                   "operation": "ListOpenList",
                   "as": "team-agent",
@@ -38815,7 +38919,7 @@
               },
               "probes": [
                 {
-                  "for": "out-team-member",
+                  "for": "out-team-member-refused",
                   "component": "todoWebApp",
                   "operation": "OpenList",
                   "as": "team-member",
@@ -38843,7 +38947,7 @@
                   }
                 },
                 {
-                  "for": "out-team-agent",
+                  "for": "out-team-agent-refused",
                   "component": "todoApi",
                   "operation": "ListOpenList",
                   "as": "team-agent",
@@ -38899,7 +39003,7 @@
               },
               "probes": [
                 {
-                  "for": "out-team-member",
+                  "for": "out-team-member-refused",
                   "component": "todoWebApp",
                   "operation": "OpenList",
                   "as": "team-member",
@@ -38927,7 +39031,7 @@
                   }
                 },
                 {
-                  "for": "out-team-agent",
+                  "for": "out-team-agent-refused",
                   "component": "todoApi",
                   "operation": "ListOpenList",
                   "as": "team-agent",

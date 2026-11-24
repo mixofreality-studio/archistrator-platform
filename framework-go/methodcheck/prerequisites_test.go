@@ -33,8 +33,18 @@ func TestValidateProject_RUN025_CoreUseCasesSlotBeforeArchitecture(t *testing.T)
 	if err != nil {
 		t.Fatalf("ValidateProjectJSON: %v", err)
 	}
+	// The recording predates UC-PATH-OUTCOME-DISTINCT: its guarded branches share one
+	// outcome sendSignal after the merge, so that rule fires and nothing else does.
+	distinct := 0
 	for _, f := range errorFindings(fs) {
+		if f.RuleID == ruleUCPathOutcomeDistinct {
+			distinct++
+			continue
+		}
 		t.Errorf("%s: %s", f.RuleID, f.Message)
+	}
+	if distinct == 0 {
+		t.Errorf("the RUN-025 recording has guarded branches ending on one shared outcome; UC-PATH-OUTCOME-DISTINCT must fire")
 	}
 }
 
