@@ -31,6 +31,7 @@ package modelgen
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"path/filepath"
 	"slices"
@@ -121,8 +122,8 @@ func Generate(projectJSON []byte, cfg Config) (map[string][]byte, error) {
 		}
 		out[goPkg] = src
 	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("no built service contracts (with goPackage) found")
+	if err := errNoneBuilt(len(out), len(contracts), "no built service contracts (with goPackage) found"); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
@@ -223,16 +224,33 @@ func emitContract(k string, entry json.RawMessage, modulePath string, resolver m
 // parseServiceContracts pulls each contract entry out of project.json as RAW
 // JSON so $defs property order and interface param order survive untouched (the
 // basis of the byte-identical regen) — exactly as the old per-component file did.
+//
+// An absent or null serviceContracts slot is zero contracts (a project has no
+// such key until its first detailed design records a contract), the same as
+// projectmodel.Load; a malformed value (array, string, ...) is refused.
 func parseServiceContracts(projectJSON []byte) (map[string]json.RawMessage, error) {
-	var top map[string]json.RawMessage
-	if err := json.Unmarshal(projectJSON, &top); err != nil {
-		return nil, fmt.Errorf("parse project.json: %w", err)
+	var top struct {
+		ServiceContracts map[string]json.RawMessage `json:"serviceContracts"`
 	}
-	var contracts map[string]json.RawMessage
-	if err := json.Unmarshal(top["serviceContracts"], &contracts); err != nil {
+	if err := json.Unmarshal(projectJSON, &top); err != nil {
+		// A bad top level and a bad slot value are both json errors here;
+		// tell them apart so the message names what is wrong.
+		var probe map[string]json.RawMessage
+		if json.Unmarshal(projectJSON, &probe) != nil {
+			return nil, fmt.Errorf("parse project.json: %w", err)
+		}
 		return nil, fmt.Errorf("parse .serviceContracts: %w", err)
 	}
-	return contracts, nil
+	return top.ServiceContracts, nil
+}
+
+// errNoneBuilt reports that contracts existed but none produced output. A
+// project with zero contracts (no slot yet) legitimately yields zero files.
+func errNoneBuilt(built, contracts int, msg string) error {
+	if built == 0 && contracts > 0 {
+		return errors.New(msg)
+	}
+	return nil
 }
 
 // buildResolver maps each contract key → its published interface coordinates

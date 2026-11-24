@@ -219,6 +219,49 @@ func TestGenerateErrorEmptyModulePath(t *testing.T) {
 	}
 }
 
+// TestAbsentOrNullServiceContractsIsZeroContracts pins the same reading as
+// projectmodel.Load: a project with no serviceContracts key (or null) has zero
+// contracts, so every entry point succeeds with no files; a malformed slot
+// (array, string) is still refused.
+func TestAbsentOrNullServiceContractsIsZeroContracts(t *testing.T) {
+	const sys = `"systemDesign":{"kind":5,"system":{"components":[{"name":"c","layer":"manager"}]}}`
+	entries := map[string]func([]byte, modelgen.Config) (map[string][]byte, error){
+		"Generate":      modelgen.Generate,
+		"GenerateNulls": modelgen.GenerateNulls,
+		"GenerateFakes": modelgen.GenerateFakes,
+	}
+	cases := []struct {
+		name    string
+		project string
+		wantErr bool
+	}{
+		{"absent", `{` + sys + `}`, false},
+		{"null", `{` + sys + `,"serviceContracts":null}`, false},
+		{"empty object", `{` + sys + `,"serviceContracts":{}}`, false},
+		{"array", `{` + sys + `,"serviceContracts":[]}`, true},
+		{"string", `{` + sys + `,"serviceContracts":"x"}`, true},
+	}
+	for ename, fn := range entries {
+		for _, tc := range cases {
+			t.Run(ename+"/"+tc.name, func(t *testing.T) {
+				out, err := fn([]byte(tc.project), modelgen.Config{ModulePath: "example.com/x"})
+				if tc.wantErr {
+					if err == nil || !contains(err.Error(), "parse .serviceContracts") {
+						t.Fatalf("want parse .serviceContracts error, got %v", err)
+					}
+					return
+				}
+				if err != nil {
+					t.Fatalf("unexpected error: %v", err)
+				}
+				if len(out) != 0 {
+					t.Fatalf("want zero files, got %v", keysOf(out))
+				}
+			})
+		}
+	}
+}
+
 func keysOf(m map[string][]byte) []string {
 	out := make([]string, 0, len(m))
 	for k := range m {

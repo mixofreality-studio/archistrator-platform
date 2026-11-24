@@ -65,8 +65,8 @@ func GenerateFakes(projectJSON []byte, cfg Config) (map[string][]byte, error) {
 		}
 		out[goPkg+"/fake"] = src
 	}
-	if len(out) == 0 {
-		return nil, fmt.Errorf("no built service contracts with an interface found (nothing to fake)")
+	if err := errNoneBuilt(len(out), len(contracts), "no built service contracts with an interface found (nothing to fake)"); err != nil {
+		return nil, err
 	}
 	return out, nil
 }
