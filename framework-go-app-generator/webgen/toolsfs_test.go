@@ -74,3 +74,46 @@ func TestLoadInputsFS(t *testing.T) {
 		t.Errorf("an optional tool directory: %v, %v", in.Tools, err)
 	}
 }
+
+// A design whose browser surface fronts no exposed Manager yet has an OAS with no paths and no
+// generated tool table: that is an empty binding set, not a refusal. Anything else stays one.
+func TestLoadInputsNoOperationsNeedsNoTools(t *testing.T) {
+	c := Config{App: "app", OAS: "../api/openapi.yaml", MCPTools: "../internal/client", FixturesEnv: "APP_PREVIEW_FIXTURES"}
+	empty := "openapi: 3.1.0\ninfo: {title: t, version: '1'}\npaths: {}\n"
+	withOp := "openapi: 3.1.0\ninfo: {title: t, version: '1'}\npaths:\n  /api/v1/list/recall:\n    get: {operationId: Recall}\n"
+	table := func(src string) fstest.MapFS {
+		return fstest.MapFS{"internal/client/a/a_tools.gen.go": &fstest.MapFile{Data: []byte(src)}}
+	}
+	cases := []struct {
+		name    string
+		oas     string
+		repo    fstest.MapFS
+		wantErr bool
+	}{
+		{"no tool directory, no operations", empty, fstest.MapFS{}, false},
+		{"empty tool directory, no operations", empty, fstest.MapFS{"internal/client/.keep": &fstest.MapFile{}}, false},
+		{"no tool directory, operations", withOp, fstest.MapFS{}, true},
+		{"unreadable table, no operations", empty, table("package a\nfunc ("), true},
+		{"table registering nothing, no operations", empty, table("package a\n" + sdkImport), true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			repo := tc.repo
+			repo["api/openapi.yaml"] = &fstest.MapFile{Data: []byte(tc.oas)}
+			in, err := LoadInputsFS(repo, "webApp", c)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("want a refusal, got tools %v", in.Tools)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			bs, err := in.Bindings()
+			if err != nil || len(bs) != 0 {
+				t.Errorf("want an empty binding set, got %v, %v", bs, err)
+			}
+		})
+	}
+}

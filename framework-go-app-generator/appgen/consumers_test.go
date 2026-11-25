@@ -337,6 +337,43 @@ func TestWebGenerate_InMemoryEqualsFromDisk(t *testing.T) {
 	}
 }
 
+// A design recorded before its first Manager contract still generates its browser surface: the
+// clients' emission is an OpenAPI document with no paths and no tool table, and webgen binds
+// zero operations rather than refusing (ISS-027-4: every such activity failed admission:tier2).
+func TestWebGenerate_BeforeAnyManagerContract(t *testing.T) {
+	raw := testfixtures.Fixture(t, "todomvc")
+	var doc map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	doc["serviceContracts"] = json.RawMessage(`{}`)
+	bare, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	in := Input{Project: bare, ModulePath: "example.com/app", Config: DefaultConfig()}
+	clients, _ := ConsumerNamed("appgen clients")
+	emitted, err := clients.Emit(in)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var oas bool
+	for _, f := range emitted {
+		oas = oas || f.Path == "api/openapi.yaml"
+	}
+	if !oas {
+		t.Fatalf("appgen clients must emit api/openapi.yaml even with no exposed Manager: %v", emitted)
+	}
+	generate, _ := ConsumerNamed("webgen generate")
+	got, err := generate.Emit(in)
+	if err != nil {
+		t.Fatalf("webgen generate before any Manager contract: %v", err)
+	}
+	if len(got) == 0 {
+		t.Fatal("webgen generate emits nothing: the surface has no transport")
+	}
+}
+
 func writeTemp(t *testing.T, p string, content []byte) {
 	t.Helper()
 	if err := os.MkdirAll(filepath.Dir(p), 0o750); err != nil {

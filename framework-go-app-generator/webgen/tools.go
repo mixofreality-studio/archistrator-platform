@@ -1,6 +1,7 @@
 package webgen
 
 import (
+	"errors"
 	"fmt"
 	"go/ast"
 	"go/parser"
@@ -15,6 +16,11 @@ import (
 
 // mcpSDK is the import path of the MCP Go SDK whose AddTool the tables call.
 const mcpSDK = "github.com/modelcontextprotocol/go-sdk/mcp"
+
+// errNoTools marks the one refusal that only means "the server has no generated MCP tool tables
+// (yet)": a missing directory, or a directory holding no *tools.gen.go. A table that exists and
+// cannot be read is never this error.
+var errNoTools = errors.New("webgen: no generated MCP tools")
 
 // LoadMCPTools returns the names of the MCP tools a server REALLY registers, read
 // from its generated Go tool tables: every *tools.gen.go file under dir (the
@@ -39,7 +45,7 @@ const mcpSDK = "github.com/modelcontextprotocol/go-sdk/mcp"
 //     is missing or not a resolvable string constant.
 func LoadMCPTools(dir string) (map[string]bool, error) {
 	if st, err := os.Stat(dir); err != nil || !st.IsDir() {
-		return nil, fmt.Errorf("webgen: no generated MCP tool directory at %s", dir)
+		return nil, fmt.Errorf("%w: no generated MCP tool directory at %s", errNoTools, dir)
 	}
 	return loadMCPTools(os.DirFS(dir), ".", func(p string) string { return filepath.Join(dir, filepath.FromSlash(p)) })
 }
@@ -49,7 +55,7 @@ func LoadMCPTools(dir string) (map[string]bool, error) {
 // memory, so a manifest and a drift check never need the tree on disk.
 func LoadMCPToolsFS(fsys fs.FS, dir string) (map[string]bool, error) {
 	if st, err := fs.Stat(fsys, dir); err != nil || !st.IsDir() {
-		return nil, fmt.Errorf("webgen: no generated MCP tool directory at %s", dir)
+		return nil, fmt.Errorf("%w: no generated MCP tool directory at %s", errNoTools, dir)
 	}
 	return loadMCPTools(fsys, dir, func(p string) string { return p })
 }
@@ -69,7 +75,7 @@ func loadMCPTools(fsys fs.FS, root string, show func(string) string) (map[string
 		return nil, err
 	}
 	if tables == 0 {
-		return nil, fmt.Errorf("webgen: no *tools.gen.go tool table under %s", show(root))
+		return nil, fmt.Errorf("%w: no *tools.gen.go tool table under %s", errNoTools, show(root))
 	}
 	return tools, nil
 }

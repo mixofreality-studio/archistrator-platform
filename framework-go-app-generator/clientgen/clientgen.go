@@ -5,6 +5,7 @@
 //	internal/client/<leaf>/<pkg>/<base>_tools.gen.go one MCP tool table per Manager an MCP client
 //	                                                 fronts (surface mcpTools or mcpApp)
 //	api/openapi.yaml                                 every exposed Manager's REST surface, merged
+//	                                                 (always written: empty paths while none is exposed)
 //
 // A web surface gets no Go of its own: it reaches the shared REST transport, and a REST client
 // (surface rest) is that transport. <leaf> is the MCP client's name without its stereotype, the same rule the
@@ -87,9 +88,6 @@ func Generate(p Project, cfg Config) (map[string][]byte, error) {
 		return nil, errors.New("clientgen: ModulePath is required")
 	}
 	exposed := exposedManagers(p, cfg)
-	if len(exposed) == 0 {
-		return map[string][]byte{}, nil
-	}
 	files := map[string][]byte{}
 	keys := slices.Sorted(maps.Keys(exposed))
 	docs := make([]contractOAS, 0, len(keys))
@@ -100,8 +98,12 @@ func Generate(p Project, cfg Config) (map[string][]byte, error) {
 		}
 		docs = append(docs, doc)
 	}
-	if err := wiring(files); err != nil {
-		return nil, err
+	// The wiring serves the exposed Managers' handlers: with none, only the (empty) OpenAPI
+	// document is written, so a browser surface fronting no Manager yet still has its input.
+	if len(exposed) > 0 {
+		if err := wiring(files); err != nil {
+			return nil, err
+		}
 	}
 	merged, err := MergeOpenAPI(docs, titleOf(cfg))
 	if err != nil {

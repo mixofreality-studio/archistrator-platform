@@ -1,6 +1,7 @@
 package webgen
 
 import (
+	"errors"
 	"fmt"
 	"io/fs"
 	"os"
@@ -238,12 +239,24 @@ func inputsFrom(c Config, oas []byte, loadTools func() (map[string]bool, error))
 	}
 	tools, err := loadTools()
 	if err != nil {
-		if !c.MCPOptional {
+		if !c.MCPOptional && !noOperations(doc, err) {
 			return Inputs{}, err
 		}
 		tools = map[string]bool{}
 	}
 	return Inputs{Config: c, OAS: doc, Tools: tools}, nil
+}
+
+// noOperations reports whether err is only the absence of MCP tool tables and the OAS declares
+// no operation: a design whose browser surfaces front no exposed Manager yet has nothing for a
+// tool to serve, so the empty tool set is the right one and the surface carries zero API
+// operations. A malformed table, or tables missing while the OAS has operations, still fails.
+func noOperations(oas Value, err error) bool {
+	if !errors.Is(err, errNoTools) {
+		return false
+	}
+	paths := obj(path(oas, "paths"))
+	return paths == nil || len(paths.Keys()) == 0
 }
 
 // Bindings is every binding the OpsClient carries: the OAS ops and the

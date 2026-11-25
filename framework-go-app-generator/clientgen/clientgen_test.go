@@ -7,6 +7,8 @@ import (
 	"strings"
 	"testing"
 
+	"gopkg.in/yaml.v3"
+
 	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 )
 
@@ -175,13 +177,33 @@ func TestRESTClientGetsNoToolTable(t *testing.T) {
 	}
 }
 
-// An unbuilt Manager is simply absent: nothing is generated that would not compile.
+// An unbuilt Manager is simply absent: nothing is generated that would not compile. The merged
+// OpenAPI document is still written, valid and with no paths, because a browser surface reads
+// it (gen:api) before any Manager has a contract. This replaces the test that pinned "no files
+// at all": that was the cause of every pre-Manager design failing the Tier-2 admission chain.
 func TestGenerateNothingBeforeAManagerIsBuilt(t *testing.T) {
 	p := appProject()
 	p.Contracts = map[string]json.RawMessage{}
 	files, err := Generate(p, Config{ModulePath: "example.com/todomvc"})
-	if err != nil || len(files) != 0 {
-		t.Fatalf("got %v, %v", files, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(files) != 1 {
+		t.Fatalf("want only the OpenAPI document, got %v", slices.Sorted(maps.Keys(files)))
+	}
+	oas, ok := files["api/openapi.yaml"]
+	if !ok {
+		t.Fatalf("no api/openapi.yaml in %v", slices.Sorted(maps.Keys(files)))
+	}
+	var doc struct {
+		OpenAPI string         `yaml:"openapi"`
+		Paths   map[string]any `yaml:"paths"`
+	}
+	if err := yaml.Unmarshal(oas, &doc); err != nil {
+		t.Fatalf("the document must parse: %v", err)
+	}
+	if doc.OpenAPI != "3.1.0" || doc.Paths == nil || len(doc.Paths) != 0 {
+		t.Errorf("want a 3.1.0 document with empty (non-nil) paths, got %+v\n%s", doc, oas)
 	}
 }
 
