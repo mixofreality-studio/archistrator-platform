@@ -112,8 +112,8 @@ func TestPlan_MatchesEmit(t *testing.T) {
 // ever emits a subset of it.
 //
 // The trees really are partial: an empty one (nothing built) and one holding only the
-// ResourceAccess and Engine packages. todomvc's `appgen compose` is the one known refusal on an
-// empty tree (its mcpApp fronts a Manager that is not built yet); it is asserted, not skipped.
+// ResourceAccess and Engine packages. todomvc's mcpApp fronts a Manager that is not built yet: compose
+// leaves it unbuilt with that Manager rather than refusing, so it emits like every other consumer.
 // The non-vacuity guard fails unless, per fixture, some consumer emits strictly fewer files than Plan.
 func TestPlan_CoversPartialEmit(t *testing.T) {
 	strictlyFewer := map[string][]string{}
@@ -137,13 +137,6 @@ func TestPlan_CoversPartialEmit(t *testing.T) {
 					partial := in
 					partial.Tree = tree
 					files, err := c.Emit(partial)
-					if fx == "todomvc" && c.Name == "appgen compose" {
-						// No Manager is built in either tree.
-						if err == nil {
-							t.Errorf("%s over the %s tree: want the refusal for an mcpApp fronting an unbuilt Manager, got %d files", c.Name, name, len(files))
-						}
-						continue
-					}
 					if err != nil {
 						t.Errorf("%s tree: %v", name, err)
 						continue

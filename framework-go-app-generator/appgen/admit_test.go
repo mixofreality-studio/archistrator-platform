@@ -116,8 +116,9 @@ func TestAdmitTier1_IncompleteIsWarning(t *testing.T) {
 }
 
 // The design is recorded one contract at a time: an mcpApp client whose Manager is not recorded yet
-// is the design in progress. Each contract of the todomvc fixture, recorded in layer order with no
-// plan yet, admits with no Local problem, and the first ones carry the warning.
+// is the design in progress: composegen leaves the mcpApp unbuilt with it, so composing fails with
+// nothing. Each contract of the todomvc fixture, recorded in layer order with no plan yet, admits
+// with no Local problem, and the design reads as incomplete until the last Manager is recorded.
 func TestAdmitTier1_ContractsRecordedOneAtATimeAreNeverLocal(t *testing.T) {
 	raw := testfixtures.Fixture(t, "todomvc")
 	var doc map[string]any
@@ -141,7 +142,7 @@ func TestAdmitTier1_ContractsRecordedOneAtATimeAreNeverLocal(t *testing.T) {
 		return strings.Compare(a, b)
 	})
 	recorded := map[string]any{}
-	var warned bool
+	var incomplete bool
 	for _, k := range keys {
 		recorded[k] = all[k]
 		doc["serviceContracts"] = recorded
@@ -155,11 +156,11 @@ func TestAdmitTier1_ContractsRecordedOneAtATimeAreNeverLocal(t *testing.T) {
 			if hasLocal(ps) {
 				t.Fatalf("after recording %s, %s admits a Local problem: %v", k, kind, ps)
 			}
-			warned = warned || len(ps) > 0
 		}
+		incomplete = incomplete || designIncomplete(b)
 	}
-	if !warned {
-		t.Error("an mcpApp client whose Manager is unrecorded must warn at least once: the proof is vacuous")
+	if !incomplete {
+		t.Error("an mcpApp client whose Manager is unrecorded must read as an incomplete design at least once: the proof is vacuous")
 	}
 }
 

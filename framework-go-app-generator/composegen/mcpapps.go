@@ -17,7 +17,8 @@ const MCPAppsFile = "mcpapps.gen.go"
 // resolveMCPApps records the built mcpApp Clients whose UI bundles the composed server serves as
 // MCP resources. An mcpApp is an MCP-served Client: its resource is reachable only through the
 // /mcp server its Managers' tool tables are mounted on, so one that fronts no mounted Manager
-// would be a UI the delivered binary never offers.
+// would be a UI the delivered binary never offers. An mcpApp whose Managers are not built yet is
+// left unbuilt with them (see classifyMCPApp).
 func (r *resolved) resolveMCPApps(m *projectmodel.Model) error {
 	for _, c := range mcpClients(m.System) {
 		kind, err := projectmodel.ParseSurface(string(c.Surface))
@@ -29,13 +30,58 @@ func (r *resolved) resolveMCPApps(m *projectmodel.Model) error {
 		case projectmodel.WebSurface, projectmodel.RESTSurface, projectmodel.MCPToolsSurface:
 			continue
 		}
-		if !r.mcpAppFrontsMounted(m.System, c) {
+		switch r.classifyMCPApp(m.System, c) {
+		case mcpAppMounted:
+			r.mcpApps = append(r.mcpApps, c.ID)
+		case mcpAppAwaitsManager:
+			continue
+		case mcpAppUnmounted:
 			return fmt.Errorf("composegen: mcpApp client %q fronts no Manager the composed /mcp server mounts: its ui:// resource would be offered by nothing", c.Name)
 		}
-		r.mcpApps = append(r.mcpApps, c.ID)
 	}
 	slices.Sort(r.mcpApps)
 	return nil
+}
+
+type mcpAppState int
+
+const (
+	mcpAppMounted       mcpAppState = iota // built: a fronted Manager is mounted
+	mcpAppAwaitsManager                    // left unbuilt: a related Manager has no built contract yet
+	mcpAppUnmounted                        // a design defect: refused
+)
+
+// classifyMCPApp decides what becomes of one mcpApp Client:
+//
+//	(i)   some Manager it fronts is mounted: it is built;
+//	(ii)  else, it relates to a Manager component that no built Manager resolves to (its contract is
+//	      not recorded yet, or skipped as unbuilt): it is left unbuilt like that Manager, with no
+//	      error. Contracts are recorded one detailedDesign at a time, Managers after the
+//	      ResourceAccess and Engines below them, and every commit composes the model; refusing here
+//	      would fail every earlier detailedDesign. The design-incomplete signal is AdmitTier1's;
+//	(iii) else (no relationship to any Manager, or only to built-but-unmounted ones): a design
+//	      defect no later contract fixes, so it is refused.
+func (r *resolved) classifyMCPApp(s *projectmodel.System, c projectmodel.SystemComponent) mcpAppState {
+	if r.mcpAppFrontsMounted(s, c) {
+		return mcpAppMounted
+	}
+	built := map[string]bool{}
+	for _, mc := range r.managers {
+		if comp, ok := s.ComponentByContractKey(mc.key); ok {
+			built[comp.ID] = true
+		}
+	}
+	for _, rel := range s.Relationships {
+		if rel.From != c.ID {
+			continue
+		}
+		for _, comp := range s.Components {
+			if comp.ID == rel.To && strings.EqualFold(comp.Kind, "manager") && !built[comp.ID] {
+				return mcpAppAwaitsManager
+			}
+		}
+	}
+	return mcpAppUnmounted
 }
 
 // mcpAppFrontsMounted reports whether some Manager the client fronts has its tool table mounted.
