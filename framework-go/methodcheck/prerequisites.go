@@ -4,6 +4,7 @@ import (
 	"slices"
 	"strings"
 
+	projectmodel "github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
 
@@ -26,7 +27,7 @@ import (
 // contracts are recorded one component at a time, so a rule that reads the whole contract set sees
 // the components still to come as uncontracted. Such a rule runs on the first contract (its
 // prerequisites are recorded) but reports as Warning, annotated with the ids still owing a contract,
-// until RequiresEveryContract holds (downgradeUntilFullyRecorded). The registry carries the window,
+// until RequiresContractsSettled holds (downgradeUntilFullyRecorded). The registry carries the window,
 // so the record verb and the app's gate (Check, via GateFindings) judge the same findings.
 //
 // DISCIPLINE: a new RuleID constant gets its entry in the same change. The registry test
@@ -72,9 +73,12 @@ type RequiresStandardCheck struct{}
 // report as Warning, because the components still to come read as uncontracted.
 type RequiresContracts struct{}
 
-// RequiresEveryContract: the committed System has no uncontracted contract-bearing component
-// (UncontractedComponents is empty). Vacuously recorded while no System is committed.
-type RequiresEveryContract struct{}
+// RequiresContractsSettled: no contract-bearing component is both uncontracted and still to be
+// constructed (ContractsStillToCome is empty). A component whose construction activity has
+// completed (or that no activity covers) and that still has no contract is a defect of the finished
+// design, so it closes the window: the signal is the activity's own completion, never the fact the
+// rules check. Vacuously recorded while no System is committed.
+type RequiresContractsSettled struct{}
 
 // RequiresTestPlan: at least one component test plan is recorded (.phaseArtifacts.testPlan).
 type RequiresTestPlan struct{}
@@ -91,8 +95,8 @@ func (RequiresSystem) artifact() string               { return "system" }
 func (RequiresOperationalConcepts) artifact() string  { return "operationalConcepts" }
 func (RequiresStandardCheck) artifact() string        { return "standardCheck" }
 func (RequiresContracts) artifact() string            { return "serviceContracts" }
-func (RequiresEveryContract) artifact() string {
-	return "serviceContracts for every contract-bearing component"
+func (RequiresContractsSettled) artifact() string {
+	return "serviceContracts for every contract-bearing component whose construction is still to come"
 }
 func (RequiresTestPlan) artifact() string { return "phaseArtifacts.testPlan" }
 func (RequiresUIDesign) artifact() string { return "phaseArtifacts.uiDesign" }
@@ -112,8 +116,8 @@ func (RequiresOperationalConcepts) recordedIn(p Project) bool {
 	return slotRecorded(p, kindOperationalConcepts)
 }
 func (RequiresContracts) recordedIn(p Project) bool { return len(p.ServiceContracts) > 0 }
-func (RequiresEveryContract) recordedIn(p Project) bool {
-	return len(UncontractedComponents(p)) == 0
+func (RequiresContractsSettled) recordedIn(p Project) bool {
+	return len(ContractsStillToCome(p)) == 0
 }
 func (RequiresTestPlan) recordedIn(p Project) bool {
 	return p.PhaseArtifacts != nil && len(p.PhaseArtifacts.TestPlan) > 0
@@ -125,11 +129,12 @@ func (RequiresUIDesign) recordedIn(p Project) bool {
 // PrerequisiteName is the artifact pr names, as project.json spells it.
 func PrerequisiteName(pr Prerequisite) string { return pr.artifact() }
 
-// IsContractBearing reports whether construction owes component c a contract: every component
-// except a Resource and one nobody builds here (buildStatus planned or external). A Client is
-// contract-bearing: a later activity records its contract, and the scenario rules read it.
+// IsContractBearing reports whether construction owes component c a contract: the one definition
+// shared with projectmodel and the app generator (projectmodel.SystemComponent.OwesContract), so
+// every consumer counts the same set. A Client is contract-bearing; a Resource and a component
+// nobody builds here (buildStatus planned or external) are not.
 func IsContractBearing(c Component) bool {
-	return !strings.EqualFold(c.Kind, kindResource) && c.isBuilt()
+	return projectmodel.SystemComponent{Kind: c.Kind, BuildStatus: c.BuildStatus}.OwesContract()
 }
 
 // UncontractedComponents is the id of every contract-bearing component of the committed System
@@ -139,6 +144,10 @@ func UncontractedComponents(p Project) []string {
 	if err != nil || !ok {
 		return nil
 	}
+	return uncontracted(p, sys)
+}
+
+func uncontracted(p Project, sys System) []string {
 	keys := map[string]bool{}
 	for k := range p.ServiceContracts {
 		keys[scenario.Normalize(k)] = true
@@ -154,6 +163,29 @@ func UncontractedComponents(p Project) []string {
 		out = append(out, c.ID)
 	}
 	return out
+}
+
+// ContractsStillToCome is the id of every uncontracted contract-bearing component whose
+// construction is yet to complete: the components whose contract may legitimately still arrive,
+// which keep the contracts-pending window open. Construction progress is the one the alignment
+// check reads (componentProgress and withGeneratedClientsPending): a component is pending until a
+// covering activity completes. Once it has completed, a missing contract is a defect, so the
+// component leaves this list and the rules that read the contract set hold Error again.
+func ContractsStillToCome(p Project) []string {
+	sys, ok, err := p.system()
+	if err != nil || !ok {
+		return nil
+	}
+	owing := uncontracted(p, sys)
+	if len(owing) == 0 {
+		return nil
+	}
+	pending, _, err := p.componentProgress()
+	if err != nil {
+		return nil
+	}
+	withGeneratedClientsPending(sys, pending)
+	return slices.DeleteFunc(owing, func(id string) bool { return !pending[id] })
 }
 
 // recorded reports whether p records the artifact pr names: a committed slot of its kind, or a
@@ -182,12 +214,12 @@ func RuleFullSeverityPrerequisites(id RuleID) (prs []Prerequisite, ok bool) {
 // downgradeUntilFullyRecorded turns the Error findings of a full-severity-tier rule into Warnings
 // while the rule's full-severity prerequisites are not all recorded.
 func downgradeUntilFullyRecorded(p Project, fs []Finding) []Finding {
-	pending := UncontractedComponents(p)
+	pending := ContractsStillToCome(p)
 	if len(pending) == 0 {
 		return fs
 	}
 	note := " [advisory: contracts are still being recorded (none yet for " + strings.Join(pending, ", ") +
-		"); this rule regains Error severity once every contract-bearing component has one]"
+		"); this rule regains Error severity once the construction of each has completed or its contract is recorded]"
 	out := make([]Finding, len(fs))
 	for i, f := range fs {
 		out[i] = f
@@ -266,9 +298,9 @@ var (
 // their rulePrerequisites are recorded but hold Error severity only once every contract-bearing
 // component has a contract. A new entry names a rule that rulePrerequisites also declares.
 var ruleFullSeverity = map[RuleID][]Prerequisite{
-	ruleSCNUnaddressed:     {RequiresEveryContract{}},
-	ruleSCNActorPathClient: {RequiresEveryContract{}},
-	ruleTPClientContracted: {RequiresEveryContract{}},
+	ruleSCNUnaddressed:     {RequiresContractsSettled{}},
+	ruleSCNActorPathClient: {RequiresContractsSettled{}},
+	ruleTPClientContracted: {RequiresContractsSettled{}},
 }
 
 // rulePrerequisites is every rule's prerequisites, grouped by the slot at which the rule first

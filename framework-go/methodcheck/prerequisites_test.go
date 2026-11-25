@@ -248,6 +248,36 @@ func systemProject(t *testing.T, comps [][3]string, contractKeys ...string) Proj
 	return p
 }
 
+// withActivities commits an activity list covering the named components (activity C-<id>), with
+// the given completion state: a component in completed has a finished activity, the rest are
+// still to be constructed. It models the project's own progress, which is the window's closing signal.
+func withActivities(t *testing.T, p Project, ids []string, completed ...string) Project {
+	t.Helper()
+	type activity struct {
+		Name        string `json:"name"`
+		ComponentID string `json:"componentId"`
+	}
+	acts := make([]activity, 0, len(ids))
+	for _, id := range ids {
+		acts = append(acts, activity{Name: "C-" + id, ComponentID: id})
+	}
+	model, err := json.Marshal(map[string]any{"activities": acts})
+	if err != nil {
+		t.Fatal(err)
+	}
+	slots := map[string]Slot{}
+	for k, s := range p.Slots {
+		slots[k] = s
+	}
+	slots["9"] = Slot{Status: reviewCommitted, Kind: slotKindActivityList, Model: model}
+	p.Slots = slots
+	p.ActivityExecution = map[string]ActivityRow{}
+	for _, id := range completed {
+		p.ActivityExecution["C-"+id] = ActivityRow{CompletedAt: done}
+	}
+	return p
+}
+
 // A contract is owed by every component except a Resource and one nobody builds here; a Client owes
 // one. UncontractedComponents lists the ones still owing, in System order, and is nil with no
 // committed System.
@@ -260,6 +290,7 @@ func TestUncontractedComponents(t *testing.T) {
 		{"vendor-api", "utility", "external"},
 		{"todo-list-access", "resourceAccess", ""},
 	}
+	all := []string{"list-manager", "todo-web", "todo-list-access"}
 	tests := []struct {
 		name      string
 		p         Project
@@ -270,15 +301,24 @@ func TestUncontractedComponents(t *testing.T) {
 		{"nothing recorded", systemProject(t, comps), []string{"list-manager", "todo-web", "todo-list-access"}, false, nil},
 		{"a Client still owes", systemProject(t, comps, "listManager", "todoListAccess"), []string{"todo-web"}, false, nil},
 		{"complete", systemProject(t, comps, "listManager", "todoWeb", "todoListAccess"), nil, true, nil},
+		// The window's closing signal: the Client's activity completed and it still has no contract.
+		{"a Client built without a contract", withActivities(t, systemProject(t, comps, "listManager", "todoListAccess"), all, "todo-web"), []string{"todo-web"}, true, nil},
+		{"no activity covers the Client", withActivities(t, systemProject(t, comps, "listManager", "todoListAccess"), []string{"list-manager", "todo-list-access"}), []string{"todo-web"}, true, nil},
+		{"no activity list at all", systemProject(t, comps, "listManager", "todoListAccess"), []string{"todo-web"}, true, nil},
 		{"no System", Project{ServiceContracts: map[string]ServiceContract{"a": {}}}, nil, true, nil},
+	}
+	for i := range tests {
+		if _, covered := tests[i].p.Slots["9"]; !covered && tests[i].name != "no System" && tests[i].name != "no activity list at all" {
+			tests[i].p = withActivities(t, tests[i].p, all)
+		}
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			if got := UncontractedComponents(tc.p); !slices.Equal(got, tc.want) {
 				t.Errorf("UncontractedComponents = %v, want %v", got, tc.want)
 			}
-			if got := (RequiresEveryContract{}).recordedIn(tc.p); got != tc.recorded {
-				t.Errorf("RequiresEveryContract recorded = %v, want %v", got, tc.recorded)
+			if got := (RequiresContractsSettled{}).recordedIn(tc.p); got != tc.recorded {
+				t.Errorf("RequiresContractsSettled recorded = %v, want %v", got, tc.recorded)
 			}
 		})
 	}
@@ -292,6 +332,7 @@ func TestDowngradeUntilFullyRecorded(t *testing.T) {
 		{"list-manager", "manager", ""}, {"todo-web", "client", ""},
 		{"todo-store", "resource", ""}, {"later-engine", "engine", "planned"}, {"vendor-api", "utility", "external"},
 	}
+	act := []string{"list-manager", "todo-web"}
 	fs := func() []Finding {
 		return []Finding{
 			{RuleID: ruleSCNUnaddressed, Severity: SeverityError, Message: "a"},
@@ -308,9 +349,12 @@ func TestDowngradeUntilFullyRecorded(t *testing.T) {
 		ids       string
 		wantFirst []Severity
 	}{
-		{"Client uncontracted", systemProject(t, comps, "listManager"), true, "todo-web", nil},
-		{"Manager uncontracted", systemProject(t, comps, "todoWeb"), true, "list-manager", nil},
-		{"complete", systemProject(t, comps, "listManager", "todoWeb"), false, "", nil},
+		{"Client uncontracted", withActivities(t, systemProject(t, comps, "listManager"), act), true, "todo-web", nil},
+		{"Manager uncontracted", withActivities(t, systemProject(t, comps, "todoWeb"), act), true, "list-manager", nil},
+		{"complete", withActivities(t, systemProject(t, comps, "listManager", "todoWeb"), act), false, "", nil},
+		// Closing signal: the Client's construction completed and no contract was recorded for it.
+		{"Client built, never contracted", withActivities(t, systemProject(t, comps, "listManager"), act, "todo-web"), false, "", nil},
+		{"no construction progress recorded", systemProject(t, comps, "listManager"), false, "", nil},
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
@@ -320,7 +364,7 @@ func TestDowngradeUntilFullyRecorded(t *testing.T) {
 				tiered := i < 3
 				switch {
 				case tc.advisory && tiered:
-					wantNote := " [advisory: contracts are still being recorded (none yet for " + tc.ids + "); this rule regains Error severity once every contract-bearing component has one]"
+					wantNote := " [advisory: contracts are still being recorded (none yet for " + tc.ids + "); this rule regains Error severity once the construction of each has completed or its contract is recorded]"
 					if f.Severity != SeverityWarning || f.Message != want.Message+wantNote {
 						t.Errorf("%s: got %s %q, want Warning with the pending note", f.RuleID, severityLabel(f.Severity), f.Message)
 					}
@@ -350,19 +394,27 @@ func TestValidateProject_ContractWindowSeverity(t *testing.T) {
 		}
 		return out
 	}
+	ids := []string{"shop-client", "order-manager", "billing-manager"}
 	full := loadProject(t, "tp_clean.json")
 	if pending := UncontractedComponents(full); len(pending) != 0 {
 		t.Skipf("tp_clean.json leaves %v uncontracted; the complete case needs a complete fixture", pending)
 	}
-	got := sev(full)
+	got := sev(withActivities(t, full, ids))
 	if len(got) == 0 || slices.Contains(got, SeverityWarning) {
 		t.Errorf("complete contracts: severities %v, want only Error", got)
 	}
+	// A contract withdrawn while its component's construction is still to come: advisory.
 	partial := loadProject(t, "tp_clean.json")
 	delete(partial.ServiceContracts, "orderManager")
-	got = sev(partial)
+	got = sev(withActivities(t, partial, ids))
 	if len(got) == 0 || slices.Contains(got, SeverityError) {
-		t.Errorf("a contract withdrawn: severities %v, want only Warning", got)
+		t.Errorf("a contract withdrawn, construction to come: severities %v, want only Warning", got)
+	}
+	// The same withdrawal once that component's construction completed: the window is closed, so a
+	// finished project with a built component that never got its contract is held at Error.
+	got = sev(withActivities(t, partial, ids, "order-manager"))
+	if len(got) == 0 || slices.Contains(got, SeverityWarning) {
+		t.Errorf("a contract missing after construction completed: severities %v, want only Error", got)
 	}
 }
 

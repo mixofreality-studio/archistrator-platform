@@ -126,6 +126,40 @@ func (c SystemComponent) IsBuilt() bool {
 	return c.BuildStatus != "planned" && c.BuildStatus != "external"
 }
 
+// KindBearsContract reports whether a component kind has a service contract at all: every kind
+// but a Resource, a Client included (the surface its use-case steps and test plans bind to). This
+// is the one definition of "contract-bearing" the Method's checks (methodcheck.IsContractBearing)
+// hold the design to; kind is compared without spaces or case.
+func KindBearsContract(kind string) bool {
+	switch strings.ToLower(strings.ReplaceAll(kind, " ", "")) {
+	case "client", "manager", "engine", "resourceaccess", "utility":
+		return true
+	}
+	return false
+}
+
+// KindAuthorsContract reports whether a component kind's contract is authored by a construction
+// activity of its own: a contract-bearing kind other than a Client, whose contract is derived in the
+// mutation that records the Manager behind it (a machine client) or the surface's UI design (a
+// browser one). The contract resolver and the app generator count the design complete by this set:
+// a Client whose contract is still to be derived leaves nothing for them to wait on. It is
+// KindBearsContract minus Client by construction, so the two cannot drift apart.
+func KindAuthorsContract(kind string) bool {
+	return KindBearsContract(kind) && strings.ToLower(strings.ReplaceAll(kind, " ", "")) != "client"
+}
+
+// OwesContract reports a component construction owes a service contract: a built component of a
+// contract-bearing kind.
+func (c SystemComponent) OwesContract() bool {
+	return c.IsBuilt() && KindBearsContract(c.Kind)
+}
+
+// OwesAuthoredContract reports a built component whose contract a construction activity authors
+// (KindAuthorsContract).
+func (c SystemComponent) OwesAuthoredContract() bool {
+	return c.IsBuilt() && KindAuthorsContract(c.Kind)
+}
+
 // Relationship is one systemDesign edge between two components.
 type Relationship struct {
 	From  string `json:"from"` // kebab component id

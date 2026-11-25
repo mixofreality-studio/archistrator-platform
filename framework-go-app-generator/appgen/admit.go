@@ -155,18 +155,8 @@ func modelIncomplete(m *projectmodel.Model) bool {
 		}
 	}
 	return slices.ContainsFunc(m.System.Components, func(c projectmodel.SystemComponent) bool {
-		return c.BuildStatus == "" && bearsContract(c.Kind) && !have[c.ID]
+		return c.OwesAuthoredContract() && !have[c.ID]
 	})
-}
-
-// bearsContract reports whether a component kind records a service contract: a Client's is derived
-// and a Resource has none.
-func bearsContract(kind string) bool {
-	switch strings.ToLower(strings.ReplaceAll(kind, " ", "")) {
-	case "manager", "engine", "resourceaccess", "utility":
-		return true
-	}
-	return false
 }
 
 // firstLine is an emit error's message up to its first line break: a generator that fails on its

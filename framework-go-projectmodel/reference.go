@@ -2,7 +2,6 @@ package projectmodel
 
 import (
 	"slices"
-	"strings"
 )
 
 // Contract order. Construction records the service contracts one component at a time, and the
@@ -84,17 +83,6 @@ func contractsIncomplete(contracts map[string]*Contract, system *System) bool {
 		}
 	}
 	return slices.ContainsFunc(system.Components, func(c SystemComponent) bool {
-		return c.IsBuilt() && bearsContract(c.Kind) && !have[c.ID]
+		return c.OwesAuthoredContract() && !have[c.ID]
 	})
-}
-
-// bearsContract reports whether a component kind owes a recorded service contract: a Client's is
-// derived and a Resource has none. It is the set appgen's Tier 1 admission counts the design
-// complete by (appgen/admit.go bearsContract).
-func bearsContract(kind string) bool {
-	switch strings.ToLower(strings.ReplaceAll(kind, " ", "")) {
-	case "manager", "engine", "resourceaccess", "utility":
-		return true
-	}
-	return false
 }

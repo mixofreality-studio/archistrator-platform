@@ -3,6 +3,9 @@ package conformance
 import (
 	"encoding/json"
 	"fmt"
+	"go/ast"
+	"go/parser"
+	"go/token"
 	"maps"
 	"slices"
 	"strconv"
@@ -12,6 +15,7 @@ import (
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/appgen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
+	methodassets "github.com/mixofreality-studio/archistrator-platform/method-assets"
 )
 
 // slot-prefix replay (RUN-025). A design is recorded one slot at a time, and every slot is
@@ -423,26 +427,145 @@ func TestSlotPrefixReplay_ClientContractsAreDerivedNotRecorded(t *testing.T) {
 	}
 }
 
-// The record verb and the gate judge a design alike: at every prefix of every replay, the Error
-// findings ValidateProjectJSON reports (what the record verb applies) are the ones the gate's
-// GateFindings reports. The test is not vacuous: some prefix still owes a contract and holds one of
-// the three contract-set rules as a Warning.
-func TestSlotPrefixReplay_RecordVerbVerdictIsTheGateVerdict(t *testing.T) {
+// templateGateSpecFields is the field names of the methodcheck.ProjectSpec literal the scaffold's
+// generated TestMethod passes to methodcheck.Check, read off the rendered template.
+func templateGateSpecFields(t *testing.T) []string {
+	t.Helper()
+	files, err := methodassets.ScaffoldFiles(methodassets.ScaffoldData{
+		ModulePath: "example.com/conformance/todomvc", AppSlug: "aiarch-app",
+		ProjectID: "todomvc", Owner: "conformance", Name: "todomvc",
+		StateMcpModulePath:    "example.com/conformance/aiarch-state-mcp",
+		StateMcpModuleVersion: "v0.0.0-conformance",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	src, ok := files[methodassets.ArchGatePath]
+	if !ok {
+		t.Fatalf("the scaffold renders no %s", methodassets.ArchGatePath)
+	}
+	f, err := parser.ParseFile(token.NewFileSet(), methodassets.ArchGatePath, src, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fields []string
+	calls := 0
+	ast.Inspect(f, func(n ast.Node) bool {
+		call, ok := n.(*ast.CallExpr)
+		if !ok {
+			return true
+		}
+		sel, ok := call.Fun.(*ast.SelectorExpr)
+		if !ok || sel.Sel.Name != "Check" || len(call.Args) != 2 {
+			return true
+		}
+		if pkg, ok := sel.X.(*ast.Ident); !ok || pkg.Name != "methodcheck" {
+			return true
+		}
+		calls++
+		lit, ok := call.Args[1].(*ast.CompositeLit)
+		if !ok {
+			t.Fatalf("methodcheck.Check is not passed a ProjectSpec literal: the replay cannot know the gate's policy")
+		}
+		for _, el := range lit.Elts {
+			if kv, ok := el.(*ast.KeyValueExpr); ok {
+				fields = append(fields, kv.Key.(*ast.Ident).Name)
+			}
+		}
+		return true
+	})
+	if calls != 1 {
+		t.Fatalf("the scaffold's gate calls methodcheck.Check %d times, want exactly one", calls)
+	}
+	slices.Sort(fields)
+	return fields
+}
+
+// The replay judges every prefix through the entry point a built app's gate calls: the scaffold's
+// TestMethod hands methodcheck.Check a ProjectSpec with no FindingPolicy, so GateFindings with the
+// replay's spec (SupportedSurfaces only) is that gate's design verdict. If the template ever adds a
+// field that changes how findings are judged, this fails and the replay must follow it.
+func TestSlotPrefixReplay_JudgesThroughTheScaffoldsGate(t *testing.T) {
+	got := templateGateSpecFields(t)
+	want := []string{"Arch", "NameNormalizer", "RepoRoot", "SupportedSurfaces"}
+	if !slices.Equal(got, want) {
+		t.Fatalf("the scaffold's TestMethod passes ProjectSpec fields %v, the replay models %v (a FindingPolicy would change the verdict)", got, want)
+	}
+}
+
+// The contracts-pending window opens and closes inside methodcheck, so the gate a built app runs
+// holds the finished project to the contract-set rules. On the todomvc design with a built Client's
+// contract withdrawn: while construction is still to come the three rules are advisory, and once
+// every activity has completed the same state fails the gate. The first half is the RUN-029
+// deadlock (the first component of a construction could never pass command:arch); the second is the
+// backstop that a finished project with an uncontracted built Client cannot pass.
+func TestSlotPrefixReplay_ContractsWindowOpensAndCloses(t *testing.T) {
+	raw, err := Fixture("todomvc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		t.Fatal(err)
+	}
+	delete(doc, "phaseArtifacts")
+	delete(doc["serviceContracts"].(map[string]any), "todoWebApp")
+	var activities []string
+	for _, s := range doc["slots"].(map[string]any) {
+		slot := s.(map[string]any)
+		if slot["kind"].(float64) != 9 {
+			continue
+		}
+		for _, a := range slot["model"].(map[string]any)["activities"].([]any) {
+			activities = append(activities, a.(map[string]any)["name"].(string))
+		}
+	}
+	if len(activities) == 0 {
+		t.Fatal("the todomvc fixture records no activity list")
+	}
+	contractRules := map[methodcheck.RuleID]bool{"SCN-UNADDRESSED": true, "SCN-ACTOR-PATH-CLIENT": true, "TP-CLIENT-CONTRACTED": true}
+	severities := func(completed bool) map[methodcheck.Severity]int {
+		rows := map[string]any{}
+		if completed {
+			for _, name := range activities {
+				rows[name] = map[string]any{"activityID": name, "completedAt": "2026-11-25T10:00:00Z"}
+			}
+		}
+		doc["activityExecution"] = rows
+		b, err := json.Marshal(doc)
+		if err != nil {
+			t.Fatal(err)
+		}
+		findings, err := gateFindingsOf(b)
+		if err != nil {
+			t.Fatal(err)
+		}
+		out := map[methodcheck.Severity]int{}
+		for _, f := range findings {
+			if contractRules[f.RuleID] {
+				out[f.Severity]++
+			}
+		}
+		return out
+	}
+	building := severities(false)
+	if building[methodcheck.SeverityWarning] == 0 || building[methodcheck.SeverityError] != 0 {
+		t.Errorf("construction still to come: contract-set rule severities %v, want Warnings only", building)
+	}
+	finished := severities(true)
+	if finished[methodcheck.SeverityError] == 0 || finished[methodcheck.SeverityWarning] != 0 {
+		t.Errorf("every activity completed with todoWebApp uncontracted: contract-set rule severities %v, want Errors only", finished)
+	}
+}
+
+// Some prefix of the todomvc replay holds a contract-set rule as a Warning, so the replay (which
+// judges through the gate's entry point) is not vacuous about the window.
+func TestSlotPrefixReplay_ReplayMeetsTheContractsWindow(t *testing.T) {
 	raw, err := Fixture("todomvc")
 	if err != nil {
 		t.Fatal(err)
 	}
 	contractRules := map[methodcheck.RuleID]bool{"SCN-UNADDRESSED": true, "SCN-ACTOR-PATH-CLIENT": true, "TP-CLIENT-CONTRACTED": true}
-	errorsOf := func(fs []methodcheck.Finding) []string {
-		var out []string
-		for _, f := range fs {
-			if f.Severity == methodcheck.SeverityError {
-				out = append(out, string(f.RuleID)+": "+f.Message)
-			}
-		}
-		slices.Sort(out)
-		return out
-	}
 	advisory := false
 	for _, co := range replayContractOrders {
 		prefix, steps := replay(t, raw, co)
@@ -452,29 +575,16 @@ func TestSlotPrefixReplay_RecordVerbVerdictIsTheGateVerdict(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			verb, err := methodcheck.ValidateProjectJSON(b, methodcheck.ValidateOptions{SupportedSurfaces: appgen.SupportedSurfaces()})
-			if err != nil {
-				t.Fatalf("%s, after %s: record verb: %v", co.name, st.name, err)
-			}
 			gate, err := gateFindingsOf(b)
 			if err != nil {
 				t.Fatalf("%s, after %s: %v", co.name, st.name, err)
 			}
-			if v, g := errorsOf(verb), errorsOf(gate); !slices.Equal(v, g) {
-				t.Errorf("%s, after %s: the record verb's Errors %v differ from the gate's %v", co.name, st.name, v, g)
-			}
-			p, _, _ := methodcheck.DecodeProject(b)
-			if len(methodcheck.UncontractedComponents(p)) == 0 {
-				continue
-			}
 			for _, f := range gate {
-				if f.Severity == methodcheck.SeverityWarning && contractRules[f.RuleID] {
-					advisory = true
-				}
+				advisory = advisory || (f.Severity == methodcheck.SeverityWarning && contractRules[f.RuleID])
 			}
 		}
 	}
 	if !advisory {
-		t.Error("no prefix owed a contract and held SCN-UNADDRESSED, SCN-ACTOR-PATH-CLIENT or TP-CLIENT-CONTRACTED as a Warning: the comparison is vacuous")
+		t.Error("no prefix held SCN-UNADDRESSED, SCN-ACTOR-PATH-CLIENT or TP-CLIENT-CONTRACTED as a Warning: the replay never meets the window")
 	}
 }
