@@ -4,10 +4,10 @@ go 1.25.4
 
 require (
 	github.com/mixofreality-studio/archistrator-platform/framework-go v0.33.0
-	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.30.2
+	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.30.3
 	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.8.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost v0.10.0
-	github.com/mixofreality-studio/archistrator-platform/method-assets v0.36.1
+	github.com/mixofreality-studio/archistrator-platform/method-assets v0.36.2
 )
 
 require (
