@@ -1,6 +1,7 @@
 package methodcheck
 
 import (
+	"encoding/json"
 	"go/ast"
 	"go/parser"
 	"go/token"
@@ -222,5 +223,171 @@ func TestPrerequisiteGate_KeepsUnknownRules(t *testing.T) {
 	got := withPrerequisitesRecorded(Project{}, fs)
 	if len(got) != 1 || got[0].RuleID != "SCN-FUTURE" {
 		t.Fatalf("want only the unknown rule kept over an empty project, got %s", dumpFindings(got))
+	}
+}
+
+// systemProject is a project whose committed System holds the given components (id, kind,
+// buildStatus) and whose contracts are filed under the given keys.
+func systemProject(t *testing.T, comps [][3]string, contractKeys ...string) Project {
+	t.Helper()
+	var cs []Component
+	for _, c := range comps {
+		cs = append(cs, Component{ID: c[0], Kind: c[1], BuildStatus: c[2]})
+	}
+	model, err := json.Marshal(System{Components: cs})
+	if err != nil {
+		t.Fatal(err)
+	}
+	p := Project{
+		Slots:            map[string]Slot{"5": {Status: reviewCommitted, Kind: kindSystem, Model: model}},
+		ServiceContracts: map[string]ServiceContract{},
+	}
+	for _, k := range contractKeys {
+		p.ServiceContracts[k] = ServiceContract{}
+	}
+	return p
+}
+
+// A contract is owed by every component except a Resource and one nobody builds here; a Client owes
+// one. UncontractedComponents lists the ones still owing, in System order, and is nil with no
+// committed System.
+func TestUncontractedComponents(t *testing.T) {
+	comps := [][3]string{
+		{"list-manager", "manager", ""},
+		{"todo-web", "client", ""},
+		{"todo-store", "resource", ""},
+		{"later-engine", "engine", "planned"},
+		{"vendor-api", "utility", "external"},
+		{"todo-list-access", "resourceAccess", ""},
+	}
+	tests := []struct {
+		name      string
+		p         Project
+		want      []string
+		recorded  bool
+		contracts []string
+	}{
+		{"nothing recorded", systemProject(t, comps), []string{"list-manager", "todo-web", "todo-list-access"}, false, nil},
+		{"a Client still owes", systemProject(t, comps, "listManager", "todoListAccess"), []string{"todo-web"}, false, nil},
+		{"complete", systemProject(t, comps, "listManager", "todoWeb", "todoListAccess"), nil, true, nil},
+		{"no System", Project{ServiceContracts: map[string]ServiceContract{"a": {}}}, nil, true, nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := UncontractedComponents(tc.p); !slices.Equal(got, tc.want) {
+				t.Errorf("UncontractedComponents = %v, want %v", got, tc.want)
+			}
+			if got := (RequiresEveryContract{}).recordedIn(tc.p); got != tc.recorded {
+				t.Errorf("RequiresEveryContract recorded = %v, want %v", got, tc.recorded)
+			}
+		})
+	}
+}
+
+// The three full-severity rules keep Error only once every contract-bearing component has a
+// contract: until then an Error is a Warning that names the ids still owing one. Other rules and
+// non-Error findings pass through.
+func TestDowngradeUntilFullyRecorded(t *testing.T) {
+	comps := [][3]string{
+		{"list-manager", "manager", ""}, {"todo-web", "client", ""},
+		{"todo-store", "resource", ""}, {"later-engine", "engine", "planned"}, {"vendor-api", "utility", "external"},
+	}
+	fs := func() []Finding {
+		return []Finding{
+			{RuleID: ruleSCNUnaddressed, Severity: SeverityError, Message: "a"},
+			{RuleID: ruleSCNActorPathClient, Severity: SeverityError, Message: "b"},
+			{RuleID: ruleTPClientContracted, Severity: SeverityError, Message: "c"},
+			{RuleID: ruleTPClientContracted, Severity: SeverityInfo, Message: "d"},
+			{RuleID: ruleSysNoUp, Severity: SeverityError, Message: "e"},
+		}
+	}
+	tests := []struct {
+		name      string
+		p         Project
+		advisory  bool
+		ids       string
+		wantFirst []Severity
+	}{
+		{"Client uncontracted", systemProject(t, comps, "listManager"), true, "todo-web", nil},
+		{"Manager uncontracted", systemProject(t, comps, "todoWeb"), true, "list-manager", nil},
+		{"complete", systemProject(t, comps, "listManager", "todoWeb"), false, "", nil},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			got := downgradeUntilFullyRecorded(tc.p, fs())
+			for i, want := range fs() {
+				f := got[i]
+				tiered := i < 3
+				switch {
+				case tc.advisory && tiered:
+					wantNote := " [advisory: contracts are still being recorded (none yet for " + tc.ids + "); this rule regains Error severity once every contract-bearing component has one]"
+					if f.Severity != SeverityWarning || f.Message != want.Message+wantNote {
+						t.Errorf("%s: got %s %q, want Warning with the pending note", f.RuleID, severityLabel(f.Severity), f.Message)
+					}
+				default:
+					if f.Severity != want.Severity || f.Message != want.Message {
+						t.Errorf("%s %q: changed to %s %q", want.RuleID, want.Message, severityLabel(f.Severity), f.Message)
+					}
+				}
+			}
+		})
+	}
+}
+
+// ValidateProject applies the window end to end: tp_clean.json's SCN-ACTOR-PATH-CLIENT finding is
+// an Error with every contract of its System recorded and a Warning once one is withdrawn.
+func TestValidateProject_ContractWindowSeverity(t *testing.T) {
+	sev := func(p Project) []Severity {
+		fs, err := ValidateProject(p, ValidateOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var out []Severity
+		for _, f := range fs {
+			if f.RuleID == ruleSCNActorPathClient {
+				out = append(out, f.Severity)
+			}
+		}
+		return out
+	}
+	full := loadProject(t, "tp_clean.json")
+	if pending := UncontractedComponents(full); len(pending) != 0 {
+		t.Skipf("tp_clean.json leaves %v uncontracted; the complete case needs a complete fixture", pending)
+	}
+	got := sev(full)
+	if len(got) == 0 || slices.Contains(got, SeverityWarning) {
+		t.Errorf("complete contracts: severities %v, want only Error", got)
+	}
+	partial := loadProject(t, "tp_clean.json")
+	delete(partial.ServiceContracts, "orderManager")
+	got = sev(partial)
+	if len(got) == 0 || slices.Contains(got, SeverityError) {
+		t.Errorf("a contract withdrawn: severities %v, want only Warning", got)
+	}
+}
+
+// Every full-severity entry names a known rule that also runs on a prerequisite tier of its own,
+// and the tier is spent on contracts alone.
+func TestRuleFullSeverity_EveryEntryIsAKnownRuleWithARunTier(t *testing.T) {
+	if len(ruleFullSeverity) == 0 {
+		t.Fatal("ruleFullSeverity is empty")
+	}
+	consts := ruleIDConstants(t)
+	for id, prs := range ruleFullSeverity {
+		if _, ok := consts[id]; !ok {
+			t.Errorf("ruleFullSeverity names %s, which no RuleID constant names", id)
+		}
+		if run, ok := rulePrerequisites[id]; !ok || len(run) == 0 {
+			t.Errorf("%s has a full-severity tier but no run-tier entry in rulePrerequisites", id)
+		}
+		if len(prs) == 0 {
+			t.Errorf("%s has an empty full-severity tier", id)
+		}
+		if got, ok := RuleFullSeverityPrerequisites(id); !ok || len(got) != len(prs) {
+			t.Errorf("RuleFullSeverityPrerequisites(%s) = %v, %v", id, got, ok)
+		}
+	}
+	if _, ok := RuleFullSeverityPrerequisites(ruleSysNoUp); ok {
+		t.Errorf("%s has no full-severity tier", ruleSysNoUp)
 	}
 }

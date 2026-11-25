@@ -278,49 +278,39 @@ func replay(t *testing.T, raw []byte, co contractOrder) (map[string]any, []repla
 	return envelope, steps
 }
 
-// contractsPendingRules are the rules the construction record verb holds as advisory while a
-// contract-bearing component of the System has no contract (the app's staleness.go,
-// applyContractsPendingDowngrades): they read the whole contract set, so the first contracts
-// recorded would otherwise be refused for the ones still to come. Every other rule keeps its
-// severity.
-var contractsPendingRules = map[methodcheck.RuleID]bool{
-	"SCN-UNADDRESSED":       true,
-	"SCN-ACTOR-PATH-CLIENT": true,
-	"TP-CLIENT-CONTRACTED":  true,
-}
-
-// contractsPending reports whether the prefix's System has a built, non-Resource component with no
-// contract recorded under its key (the app's uncontractedComponents). False before the System.
-func contractsPending(t *testing.T, prefix map[string]any) bool {
-	t.Helper()
-	slots, _ := prefix["slots"].(map[string]any)
-	sc, _ := prefix["serviceContracts"].(map[string]any)
-	for _, c := range systemOf(t, slots).Components {
-		if strings.EqualFold(c.Kind, "resource") || c.BuildStatus == "planned" || c.BuildStatus == "external" {
-			continue
-		}
-		if _, ok := sc[contractKeyOf(c.ID, c.ContractKey)]; !ok {
-			return true
-		}
+// gateFindingsOf is the verdict of the gate a built app runs (scaffold aiarch_arch_test.go.tmpl:
+// methodcheck.Check over this spec, no FindingPolicy) on the prefix's design.
+func gateFindingsOf(prefix []byte) ([]methodcheck.Finding, error) {
+	p, ok, err := methodcheck.DecodeProject(prefix)
+	if err != nil {
+		return nil, fmt.Errorf("methodcheck.DecodeProject: %w", err)
 	}
-	return false
+	if !ok {
+		return nil, nil
+	}
+	findings, err := methodcheck.GateFindings(p, methodcheck.ProjectSpec{SupportedSurfaces: appgen.SupportedSurfaces()})
+	if err != nil {
+		return nil, fmt.Errorf("methodcheck.GateFindings: %w", err)
+	}
+	return findings, nil
 }
 
 // stepProblems validates the prefix as the write verbs would after recording the step: Tier 0
-// (the project model every generator loads), the methodcheck design rules (Error findings, with
-// contractsPendingRules advisory while pending), then Tier 1 admission of the step's kind (Local
+// (the project model every generator loads), the methodcheck design rules as the gate every built
+// app runs judges them (GateFindings with the template's spec and no FindingPolicy: the
+// contracts-pending window is methodcheck's own), then Tier 1 admission of the step's kind (Local
 // problems).
-func stepProblems(prefix []byte, st replayStep, pending bool) ([]string, error) {
+func stepProblems(prefix []byte, st replayStep) ([]string, error) {
 	if _, err := projectmodel.Load(prefix); err != nil {
 		return nil, fmt.Errorf("tier 0 projectmodel.Load: %w", err)
 	}
-	findings, err := methodcheck.ValidateProjectJSON(prefix, methodcheck.ValidateOptions{SupportedSurfaces: appgen.SupportedSurfaces()})
+	findings, err := gateFindingsOf(prefix)
 	if err != nil {
-		return nil, fmt.Errorf("methodcheck.ValidateProjectJSON: %w", err)
+		return nil, err
 	}
 	var out []string
 	for _, f := range findings {
-		if f.Severity == methodcheck.SeverityError && (!pending || !contractsPendingRules[f.RuleID]) {
+		if f.Severity == methodcheck.SeverityError {
 			out = append(out, fmt.Sprintf("%s: %s", f.RuleID, f.Message))
 		}
 	}
@@ -366,7 +356,7 @@ func TestSlotPrefixReplay_EverySlotPassesWithOnlyItsUpstream(t *testing.T) {
 					if err != nil {
 						t.Fatal(err)
 					}
-					problems, err := stepProblems(b, st, contractsPending(t, prefix))
+					problems, err := stepProblems(b, st)
 					if err != nil {
 						t.Errorf("after %s: %v", st.name, err)
 						continue
@@ -375,13 +365,23 @@ func TestSlotPrefixReplay_EverySlotPassesWithOnlyItsUpstream(t *testing.T) {
 						t.Errorf("after %s: %s", st.name, p)
 					}
 				}
-				// The advisory window hides nothing at the end: the whole replayed fixture holds at
-				// full severity.
+				// The advisory window hides nothing at the end: a whole replayed fixture with every
+				// contract-bearing component contracted holds at full severity. A fixture that records
+				// no contract for some component (greenfield's web-client: no UI design) still reports
+				// every Error problem, and the uncontracted ids are logged.
 				b, err := json.Marshal(prefix)
 				if err != nil {
 					t.Fatal(err)
 				}
-				problems, err := stepProblems(b, replayStep{name: "the whole fixture"}, false)
+				if p, ok, derr := methodcheck.DecodeProject(b); derr != nil || !ok {
+					t.Fatalf("decode the whole fixture: %v (ok=%v)", derr, ok)
+				} else if pending := methodcheck.UncontractedComponents(p); len(pending) != 0 {
+					if name == "todomvc" {
+						t.Errorf("the whole todomvc fixture leaves %v without a contract: the full-severity end state is unasserted", pending)
+					}
+					t.Logf("the whole fixture still leaves %v without a contract", pending)
+				}
+				problems, err := stepProblems(b, replayStep{name: "the whole fixture"})
 				if err != nil {
 					t.Fatal(err)
 				}
@@ -420,5 +420,61 @@ func TestSlotPrefixReplay_ClientContractsAreDerivedNotRecorded(t *testing.T) {
 	got := slices.Sorted(maps.Keys(prefix["serviceContracts"].(map[string]any)))
 	if !slices.Equal(got, []string{"listManager", "todoApi", "todoMcpServer"}) {
 		t.Fatalf("the listManager step records %v, want listManager with its machine clients todoApi and todoMcpServer", got)
+	}
+}
+
+// The record verb and the gate judge a design alike: at every prefix of every replay, the Error
+// findings ValidateProjectJSON reports (what the record verb applies) are the ones the gate's
+// GateFindings reports. The test is not vacuous: some prefix still owes a contract and holds one of
+// the three contract-set rules as a Warning.
+func TestSlotPrefixReplay_RecordVerbVerdictIsTheGateVerdict(t *testing.T) {
+	raw, err := Fixture("todomvc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	contractRules := map[methodcheck.RuleID]bool{"SCN-UNADDRESSED": true, "SCN-ACTOR-PATH-CLIENT": true, "TP-CLIENT-CONTRACTED": true}
+	errorsOf := func(fs []methodcheck.Finding) []string {
+		var out []string
+		for _, f := range fs {
+			if f.Severity == methodcheck.SeverityError {
+				out = append(out, string(f.RuleID)+": "+f.Message)
+			}
+		}
+		slices.Sort(out)
+		return out
+	}
+	advisory := false
+	for _, co := range replayContractOrders {
+		prefix, steps := replay(t, raw, co)
+		for _, st := range steps {
+			st.add(prefix)
+			b, err := json.Marshal(prefix)
+			if err != nil {
+				t.Fatal(err)
+			}
+			verb, err := methodcheck.ValidateProjectJSON(b, methodcheck.ValidateOptions{SupportedSurfaces: appgen.SupportedSurfaces()})
+			if err != nil {
+				t.Fatalf("%s, after %s: record verb: %v", co.name, st.name, err)
+			}
+			gate, err := gateFindingsOf(b)
+			if err != nil {
+				t.Fatalf("%s, after %s: %v", co.name, st.name, err)
+			}
+			if v, g := errorsOf(verb), errorsOf(gate); !slices.Equal(v, g) {
+				t.Errorf("%s, after %s: the record verb's Errors %v differ from the gate's %v", co.name, st.name, v, g)
+			}
+			p, _, _ := methodcheck.DecodeProject(b)
+			if len(methodcheck.UncontractedComponents(p)) == 0 {
+				continue
+			}
+			for _, f := range gate {
+				if f.Severity == methodcheck.SeverityWarning && contractRules[f.RuleID] {
+					advisory = true
+				}
+			}
+		}
+	}
+	if !advisory {
+		t.Error("no prefix owed a contract and held SCN-UNADDRESSED, SCN-ACTOR-PATH-CLIENT or TP-CLIENT-CONTRACTED as a Warning: the comparison is vacuous")
 	}
 }

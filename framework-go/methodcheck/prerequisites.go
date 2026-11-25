@@ -1,6 +1,11 @@
 package methodcheck
 
-import "slices"
+import (
+	"slices"
+	"strings"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
+)
 
 // prerequisites.go is what every rule needs recorded before it can judge anything (RUN-025).
 //
@@ -13,10 +18,16 @@ import "slices"
 // no contract, exists before the architecture and construction record them.
 //
 // So every rule declares its prerequisites here, and ValidateProject keeps a rule's findings only
-// once all of them are recorded (withPrerequisitesRecorded). Once they are, the rule runs in full:
-// nothing about what it judges changes. A rule whose subject is a record of its own (a test plan, a
-// UI design, an acceptance plan) declares the artifacts upstream of that record; the record's
-// absence already means there is nothing to judge.
+// once all of them are recorded (withPrerequisitesRecorded). Once they are, the rule runs. A rule
+// whose subject is a record of its own (a test plan, a UI design, an acceptance plan) declares the
+// artifacts upstream of that record; the record's absence already means there is nothing to judge.
+//
+// A second tier, ruleFullSeverity, is what a rule needs recorded to hold its findings at Error. The
+// contracts are recorded one component at a time, so a rule that reads the whole contract set sees
+// the components still to come as uncontracted. Such a rule runs on the first contract (its
+// prerequisites are recorded) but reports as Warning, annotated with the ids still owing a contract,
+// until RequiresEveryContract holds (downgradeUntilFullyRecorded). The registry carries the window,
+// so the record verb and the app's gate (Check, via GateFindings) judge the same findings.
 //
 // DISCIPLINE: a new RuleID constant gets its entry in the same change. The registry test
 // (TestRulePrerequisites_EveryRuleDeclaresThem) fails on a constant with none.
@@ -56,10 +67,14 @@ type RequiresOperationalConcepts struct{}
 type RequiresStandardCheck struct{}
 
 // RequiresContracts: at least one service contract is recorded (.serviceContracts). Contracts are
-// recorded one component at a time during construction; while the set is incomplete the rules
-// that read it see the components still to come as uncontracted, which the app's gate policy
-// reports as advisory until every contract-bearing component has one.
+// recorded one component at a time during construction; a rule that reads the set runs from the
+// first one. While the set is incomplete the rules of the full-severity tier (ruleFullSeverity)
+// report as Warning, because the components still to come read as uncontracted.
 type RequiresContracts struct{}
+
+// RequiresEveryContract: the committed System has no uncontracted contract-bearing component
+// (UncontractedComponents is empty). Vacuously recorded while no System is committed.
+type RequiresEveryContract struct{}
 
 // RequiresTestPlan: at least one component test plan is recorded (.phaseArtifacts.testPlan).
 type RequiresTestPlan struct{}
@@ -76,8 +91,11 @@ func (RequiresSystem) artifact() string               { return "system" }
 func (RequiresOperationalConcepts) artifact() string  { return "operationalConcepts" }
 func (RequiresStandardCheck) artifact() string        { return "standardCheck" }
 func (RequiresContracts) artifact() string            { return "serviceContracts" }
-func (RequiresTestPlan) artifact() string             { return "phaseArtifacts.testPlan" }
-func (RequiresUIDesign) artifact() string             { return "phaseArtifacts.uiDesign" }
+func (RequiresEveryContract) artifact() string {
+	return "serviceContracts for every contract-bearing component"
+}
+func (RequiresTestPlan) artifact() string { return "phaseArtifacts.testPlan" }
+func (RequiresUIDesign) artifact() string { return "phaseArtifacts.uiDesign" }
 
 func (RequiresMission) recordedIn(p Project) bool      { return slotRecorded(p, kindMission) }
 func (RequiresGlossary) recordedIn(p Project) bool     { return slotRecorded(p, kindGlossary) }
@@ -94,6 +112,9 @@ func (RequiresOperationalConcepts) recordedIn(p Project) bool {
 	return slotRecorded(p, kindOperationalConcepts)
 }
 func (RequiresContracts) recordedIn(p Project) bool { return len(p.ServiceContracts) > 0 }
+func (RequiresEveryContract) recordedIn(p Project) bool {
+	return len(UncontractedComponents(p)) == 0
+}
 func (RequiresTestPlan) recordedIn(p Project) bool {
 	return p.PhaseArtifacts != nil && len(p.PhaseArtifacts.TestPlan) > 0
 }
@@ -103,6 +124,37 @@ func (RequiresUIDesign) recordedIn(p Project) bool {
 
 // PrerequisiteName is the artifact pr names, as project.json spells it.
 func PrerequisiteName(pr Prerequisite) string { return pr.artifact() }
+
+// IsContractBearing reports whether construction owes component c a contract: every component
+// except a Resource and one nobody builds here (buildStatus planned or external). A Client is
+// contract-bearing: a later activity records its contract, and the scenario rules read it.
+func IsContractBearing(c Component) bool {
+	return !strings.EqualFold(c.Kind, kindResource) && c.isBuilt()
+}
+
+// UncontractedComponents is the id of every contract-bearing component of the committed System
+// that has no contract recorded, in System order. Nil when no System is committed or none is owed.
+func UncontractedComponents(p Project) []string {
+	sys, ok, err := p.system()
+	if err != nil || !ok {
+		return nil
+	}
+	keys := map[string]bool{}
+	for k := range p.ServiceContracts {
+		keys[scenario.Normalize(k)] = true
+	}
+	var out []string
+	for _, c := range sys.Components {
+		if !IsContractBearing(c) {
+			continue
+		}
+		if keys[scenario.Normalize(c.ID)] || (c.ContractKey != "" && keys[scenario.Normalize(c.ContractKey)]) {
+			continue
+		}
+		out = append(out, c.ID)
+	}
+	return out
+}
 
 // recorded reports whether p records the artifact pr names: a committed slot of its kind, or a
 // non-empty top-level record.
@@ -118,6 +170,47 @@ func slotRecorded(p Project, kind int) bool {
 func RulePrerequisites(id RuleID) (prs []Prerequisite, ok bool) {
 	prs, ok = rulePrerequisites[id]
 	return slices.Clone(prs), ok
+}
+
+// RuleFullSeverityPrerequisites is what rule id needs recorded, beyond RulePrerequisites, to keep
+// Error severity; ok is false for a rule with no such tier.
+func RuleFullSeverityPrerequisites(id RuleID) (prs []Prerequisite, ok bool) {
+	prs, ok = ruleFullSeverity[id]
+	return slices.Clone(prs), ok
+}
+
+// downgradeUntilFullyRecorded turns the Error findings of a full-severity-tier rule into Warnings
+// while the rule's full-severity prerequisites are not all recorded.
+func downgradeUntilFullyRecorded(p Project, fs []Finding) []Finding {
+	pending := UncontractedComponents(p)
+	if len(pending) == 0 {
+		return fs
+	}
+	note := " [advisory: contracts are still being recorded (none yet for " + strings.Join(pending, ", ") +
+		"); this rule regains Error severity once every contract-bearing component has one]"
+	out := make([]Finding, len(fs))
+	for i, f := range fs {
+		out[i] = f
+		if f.Severity != SeverityError {
+			continue
+		}
+		prs, tiered := ruleFullSeverity[f.RuleID]
+		if !tiered || allRecorded(p, prs) {
+			continue
+		}
+		out[i].Severity = SeverityWarning
+		out[i].Message += note
+	}
+	return out
+}
+
+func allRecorded(p Project, prs []Prerequisite) bool {
+	for _, pr := range prs {
+		if !recorded(p, pr) {
+			return false
+		}
+	}
+	return true
 }
 
 // prerequisitesRecorded reports whether p records every prerequisite of id. An id the registry
@@ -168,6 +261,15 @@ var (
 	onTestPlan      = []Prerequisite{RequiresTestPlan{}}
 	onUIDesign      = []Prerequisite{RequiresUIDesign{}}
 )
+
+// ruleFullSeverity is the second tier: the rules that read the whole contract set, which run once
+// their rulePrerequisites are recorded but hold Error severity only once every contract-bearing
+// component has a contract. A new entry names a rule that rulePrerequisites also declares.
+var ruleFullSeverity = map[RuleID][]Prerequisite{
+	ruleSCNUnaddressed:     {RequiresEveryContract{}},
+	ruleSCNActorPathClient: {RequiresEveryContract{}},
+	ruleTPClientContracted: {RequiresEveryContract{}},
+}
 
 // rulePrerequisites is every rule's prerequisites, grouped by the slot at which the rule first
 // runs. An entry with an empty list would declare a rule that reads nothing recorded.

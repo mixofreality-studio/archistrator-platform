@@ -35,7 +35,9 @@ func ValidateProject(p Project, o ValidateOptions) ([]Finding, error) {
 	// A verb's own gate is the slot it validates; a rule inside it can read more than that.
 	// Each rule runs only once every artifact it reads is recorded (prerequisites.go, RUN-025):
 	// before that, its findings would name a later slot's absence as this slot's defect.
-	return withPrerequisitesRecorded(p, all), nil
+	// A rule that reads the whole contract set holds Error only once every contract-bearing
+	// component has a contract (ruleFullSeverity): until then it is advisory.
+	return downgradeUntilFullyRecorded(p, withPrerequisitesRecorded(p, all)), nil
 }
 
 // scenarioFindings derives the project's scenarios ONCE and runs the rules that

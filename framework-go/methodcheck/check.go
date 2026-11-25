@@ -85,17 +85,28 @@ func Check(t *testing.T, spec ProjectSpec) {
 	if !ok {
 		return
 	}
-	findings, runErr := ValidateProject(proj, ValidateOptions{SupportedSurfaces: spec.SupportedSurfaces})
+	findings, runErr := GateFindings(proj, spec)
 	handleValidationError(t, runErr)
-	if spec.FindingPolicy != nil {
-		findings = spec.FindingPolicy(findings)
-	}
 	reportFindings(t, findings)
 	committedSlots := proj.committedSlotCount()
 	loadedPkgs := runArchPhase(t, spec, proj)
 	if committedSlots == 0 && loadedPkgs == 0 {
 		t.Logf("methodcheck: project.json decoded but has zero committed slots and no code packages were loaded — nothing was validated")
 	}
+}
+
+// GateFindings is the design-findings half of Check: ValidateProject over p with the spec's
+// supported surfaces, then the spec's FindingPolicy when set. It is the verdict the app's gate
+// reports, so a caller that must predict the gate runs this and nothing else.
+func GateFindings(p Project, spec ProjectSpec) ([]Finding, error) {
+	findings, err := ValidateProject(p, ValidateOptions{SupportedSurfaces: spec.SupportedSurfaces})
+	if err != nil {
+		return nil, err
+	}
+	if spec.FindingPolicy != nil {
+		findings = spec.FindingPolicy(findings)
+	}
+	return findings, nil
 }
 
 func readAndDecodeProject(t *testing.T, spec ProjectSpec) (Project, bool) {
