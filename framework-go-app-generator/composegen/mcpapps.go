@@ -65,23 +65,26 @@ func (r *resolved) classifyMCPApp(s *projectmodel.System, c projectmodel.SystemC
 	if r.mcpAppFrontsMounted(s, c) {
 		return mcpAppMounted
 	}
+	if r.relatesToUnbuiltManager(s, c) {
+		return mcpAppAwaitsManager
+	}
+	return mcpAppUnmounted
+}
+
+// relatesToUnbuiltManager reports whether c has a relationship to a manager-kind component that no
+// built Manager resolves to.
+func (r *resolved) relatesToUnbuiltManager(s *projectmodel.System, c projectmodel.SystemComponent) bool {
 	built := map[string]bool{}
 	for _, mc := range r.managers {
 		if comp, ok := s.ComponentByContractKey(mc.key); ok {
 			built[comp.ID] = true
 		}
 	}
-	for _, rel := range s.Relationships {
-		if rel.From != c.ID {
-			continue
-		}
-		for _, comp := range s.Components {
-			if comp.ID == rel.To && strings.EqualFold(comp.Kind, "manager") && !built[comp.ID] {
-				return mcpAppAwaitsManager
-			}
-		}
-	}
-	return mcpAppUnmounted
+	return slices.ContainsFunc(s.Relationships, func(rel projectmodel.Relationship) bool {
+		return rel.From == c.ID && slices.ContainsFunc(s.Components, func(comp projectmodel.SystemComponent) bool {
+			return comp.ID == rel.To && strings.EqualFold(comp.Kind, "manager") && !built[comp.ID]
+		})
+	})
 }
 
 // mcpAppFrontsMounted reports whether some Manager the client fronts has its tool table mounted.
