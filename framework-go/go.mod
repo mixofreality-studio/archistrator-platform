@@ -3,7 +3,7 @@ module github.com/mixofreality-studio/archistrator-platform/framework-go
 go 1.25.0
 
 require (
-	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.8.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.9.0
 	go.opentelemetry.io/contrib/bridges/otelslog v0.18.0
 	go.opentelemetry.io/otel v1.43.0
 	go.opentelemetry.io/otel/log v0.19.0
@@ -45,6 +45,6 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
 
-// The Method's checks share projectmodel's definition of a contract-bearing component. Until the
-// next projectmodel release carries it, framework-go builds against the sibling module.
+// The Method's checks share projectmodel's definition of a contract-bearing component; the sibling
+// replace keeps cross-module changes atomic in this repo.
 replace github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel => ../framework-go-projectmodel
