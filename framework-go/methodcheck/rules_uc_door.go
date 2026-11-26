@@ -25,8 +25,11 @@ import (
 //	                  that names neither is a stranger the rules above cannot join to
 //	                  anything
 //
-// Where they run. The path rules read the diagram alone except UC-OUTCOME-AT-ASKING-
-// SURFACE, which reads the System's dynamic views. So UC-ACTOR-DOOR, UC-PATH-OUTCOME
+// Where they run. The path rules read the diagram alone except the surface half of the
+// asking-surface check, UC-OUTCOME-AT-ASKING-SURFACE, which reads the System's dynamic
+// views (which Client the asker used) and so runs at architecture. Its actor half,
+// UC-OUTCOME-TO-ASKER (the outcome is not addressed only to another actor than the
+// asker), needs no System. So UC-ACTOR-DOOR, UC-PATH-OUTCOME, UC-OUTCOME-TO-ASKER
 // and UC-START-NOT-ACTION run when the coreUseCases slot is validated
 // (ucSlotPathFindings), where the draft is still the architect's to fix. UC-LANE-
 // RESOLVES resolves a lane against the System's components, which do not exist until
@@ -48,7 +51,8 @@ const (
 const actorKindSystem = "system"
 
 // ucSlotPathFindings runs the path rules that need nothing but the committed core use
-// cases: UC-ACTOR-DOOR and UC-PATH-OUTCOME. (UC-START-NOT-ACTION is startNotActionFindings,
+// cases: UC-ACTOR-DOOR, UC-PATH-OUTCOME and UC-OUTCOME-TO-ASKER (the actor half of the
+// asking-surface check; its surface half, UC-OUTCOME-AT-ASKING-SURFACE, needs the System). (UC-START-NOT-ACTION is startNotActionFindings,
 // also run at the slot.) The derivation reads the diagrams alone here: no dynamic view
 // exists yet, so the paths are the diagrams' own elementary paths and no stimulus is
 // derived. A derivation failure is reported as a finding, once, for every path rule.
@@ -77,6 +81,7 @@ func ucSlotPathFindings(c CoreUseCases) []Finding {
 		}
 		p := newPathWalk(uc, System{}, sc, nil)
 		out = append(out, p.pathOutcome()...)
+		out = append(out, p.outcomeToAsker()...)
 		out = append(out, p.actorDoor()...)
 		if _, seen := byUC[sc.UseCase]; !seen {
 			order = append(order, sc.UseCase)

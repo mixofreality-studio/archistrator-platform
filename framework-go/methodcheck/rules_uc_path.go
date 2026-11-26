@@ -18,6 +18,10 @@ import (
 //	                            sendSignal or objectNode after the first of them
 //	UC-PATH-OUTCOME-DISTINCT    two paths a decision separates do not end on the same
 //	                            outcome nodes: each guarded branch states its own
+//	UC-OUTCOME-TO-ASKER         the outcome is not told only to another actor than the one
+//	                            who asked: some outcome of the path is addressed to the
+//	                            asker or to nobody (the actor half of the asking-surface
+//	                            check; needs no System, so it runs at the slot)
 //	UC-OUTCOME-AT-ASKING-SURFACE the Client the asking actor used shows the outcome:
 //	                            a sendSignal to that actor drawn on that surface, or an
 //	                            objectNode the system returned to that Client (a call
@@ -51,6 +55,7 @@ const (
 	ruleUCPathOutcome            RuleID = "UC-PATH-OUTCOME"
 	ruleUCPathOutcomeDistinct    RuleID = "UC-PATH-OUTCOME-DISTINCT"
 	ruleUCOutcomeAtAskingSurface RuleID = "UC-OUTCOME-AT-ASKING-SURFACE"
+	ruleUCOutcomeToAsker         RuleID = "UC-OUTCOME-TO-ASKER"
 	ruleUCStartNotAction         RuleID = "UC-START-NOT-ACTION"
 	ruleSCNUnaddressed           RuleID = "SCN-UNADDRESSED"
 	ruleSCNActorPathClient       RuleID = "SCN-ACTOR-PATH-CLIENT"
@@ -59,17 +64,19 @@ const (
 // ucPathRuleIDs is every rule this family (rules_uc_path.go, rules_uc_door.go) can
 // emit, for the emitters registry.
 var ucPathRuleIDs = []RuleID{
-	ruleUCPathOutcome, ruleUCPathOutcomeDistinct, ruleUCOutcomeAtAskingSurface, ruleUCStartNotAction,
+	ruleUCPathOutcome, ruleUCPathOutcomeDistinct, ruleUCOutcomeAtAskingSurface, ruleUCOutcomeToAsker, ruleUCStartNotAction,
 	ruleUCActorDoor, ruleUCActorUnserved, ruleUCLaneResolves,
 	ruleSCNUnaddressed, ruleSCNActorPathClient,
 }
 
-// ucPathFindings runs UC-OUTCOME-AT-ASKING-SURFACE over every derived scenario of
-// every use case that carries an activity diagram. It is the one path rule that
-// needs the System's dynamic views, so it runs at architecture; the others
-// (UC-ACTOR-DOOR, UC-PATH-OUTCOME, UC-START-NOT-ACTION) run when the coreUseCases
-// slot is validated (ucSlotPathFindings, rules_uc_door.go), which is also where a
-// derivation failure is reported, once.
+// ucPathFindings runs the SURFACE half of the asking-surface check,
+// UC-OUTCOME-AT-ASKING-SURFACE, over every derived scenario of every use case that
+// carries an activity diagram. It is the one path rule that needs the System's dynamic
+// views (which Client the asker used), so it runs at architecture; the ACTOR half
+// (UC-OUTCOME-TO-ASKER) and the others (UC-ACTOR-DOOR, UC-PATH-OUTCOME,
+// UC-START-NOT-ACTION) run when the coreUseCases slot is validated
+// (ucSlotPathFindings, rules_uc_door.go), which is also where a derivation failure is
+// reported, once.
 func ucPathFindings(c CoreUseCases, s System) []Finding {
 	rep, err := scenario.DeriveReport(pathScenarioInput(c, s))
 	if err != nil {
@@ -309,6 +316,79 @@ func outcomeIDs(kinds map[string]string, path []string) []string {
 	}
 	sort.Strings(ids)
 	return slices.Compact(ids)
+}
+
+// outcomeToAsker is UC-OUTCOME-TO-ASKER, the actor half of the asking-surface check.
+// The asker A is the first actor-classified node's linked actor when that is a declared
+// actor, else its decidedBy. The outcomes are the sendSignal / objectNode nodes after it
+// (none is UC-PATH-OUTCOME's finding). An outcome's addressee is its linked actor when
+// declared, else the declared actor whose role or id its lane names, else nobody. The
+// path passes when some outcome is addressed to A or to nobody, and fails when every
+// outcome is addressed to another declared actor.
+func (p pathWalk) outcomeToAsker() []Finding {
+	first, ok := p.firstActor()
+	if !ok {
+		return nil
+	}
+	askNode := p.sc.Path[first]
+	asker := p.askerOf(p.nodes[askNode])
+	rs, toAsker := p.receiversAfter(first, asker)
+	if toAsker || len(rs) == 0 {
+		return nil
+	}
+	return []Finding{{
+		RuleID: ruleUCOutcomeToAsker, Severity: SeverityError, Location: p.at,
+		Message: fmt.Sprintf("scenario %s of use case %s: actor %s asks at node %q but every outcome after it is addressed to another actor (%s), so this path replies to someone who did not ask; "+
+			"do not merge different actors' entries and then split by who asked (the derivation walks every entry into every branch); "+
+			"give each entry its own path to its own reply (duplicate the shared steps per actor, or split the actor into a variation)",
+			p.sc.ID, p.uc.ID, asker, askNode, strings.Join(rs, ", ")),
+	}}
+}
+
+// askerOf is the declared actor behind the actor-classified node n: its linked actor
+// when declared, else its decidedBy.
+func (p pathWalk) askerOf(n ActivityNode) string {
+	if p.actors[n.LinkedActorID] {
+		return n.LinkedActorID
+	}
+	return n.DecidedBy
+}
+
+// receiversAfter is the sorted, unique declared actors the outcomes after path index
+// first are addressed to, and whether any outcome is addressed to asker or to nobody.
+func (p pathWalk) receiversAfter(first int, asker string) (receivers []string, toAsker bool) {
+	for _, id := range p.sc.Path[first+1:] {
+		o := p.nodes[id]
+		if o.Kind != kindSendSignal && o.Kind != kindObjectNode {
+			continue
+		}
+		to := p.addressee(o)
+		if to == "" || to == asker {
+			return nil, true
+		}
+		receivers = append(receivers, to)
+	}
+	sort.Strings(receivers)
+	return slices.Compact(receivers), false
+}
+
+// addressee is the declared actor an outcome node is told to: its linked actor when
+// declared, else the declared actor whose role or id its lane names (scenario.Normalize),
+// else "".
+func (p pathWalk) addressee(n ActivityNode) string {
+	if p.actors[n.LinkedActorID] {
+		return n.LinkedActorID
+	}
+	if n.RoleName == "" {
+		return ""
+	}
+	lane := scenario.Normalize(n.RoleName)
+	for _, a := range p.uc.Actors {
+		if a.ID != "" && (lane == scenario.Normalize(a.ID) || (a.Role != "" && lane == scenario.Normalize(a.Role))) {
+			return a.ID
+		}
+	}
+	return ""
 }
 
 // outcomeAtAskingSurface is UC-OUTCOME-AT-ASKING-SURFACE: for each Client the first

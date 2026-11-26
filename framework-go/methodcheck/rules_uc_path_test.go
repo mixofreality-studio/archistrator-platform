@@ -482,3 +482,160 @@ func TestUC_PathOutcomeDistinct_FiresOnRUN026(t *testing.T) {
 		t.Fatalf("RUN-026's shared-outcome branches must fire UC-PATH-OUTCOME-DISTINCT: %s", dumpFindings(fs))
 	}
 }
+
+// ---- UC-OUTCOME-TO-ASKER (RUN-030, ISS-030-1) ----
+
+// askerUC is the RUN-030 shape: each actor's entry merges at "m", then an unlinked
+// decision splits into one reply per actor. outcome is the reply node kind.
+func askerUC(split bool, outcome string) CoreUseCases {
+	uc := UseCase{
+		ID: "shape", Name: "shape", Classification: classCore, Trigger: triggerClientAction,
+		Actors:   []Actor{{ID: "member", Role: "Team Member"}, {ID: "agent", Role: "Team Agent"}},
+		Activity: &ActivityDiagram{},
+	}
+	n := func(id, kind, lane, actor string) {
+		uc.Activity.Nodes = append(uc.Activity.Nodes, ActivityNode{ID: id, Kind: kind, RoleName: lane, LinkedActorID: actor})
+	}
+	e := func(from, to, guard string) {
+		uc.Activity.Edges = append(uc.Activity.Edges, ActivityEdge{From: from, To: to, Guard: guard})
+	}
+	n("s1", nodeStart, "", "")
+	n("s2", nodeStart, "", "")
+	n("ask-m", nodeAction, "Team Member", "member")
+	n("ask-a", nodeAction, "Team Agent", "agent")
+	n("end", nodeEnd, "", "")
+	if split {
+		n("m", nodeMerge, "", "")
+		n("which", nodeDecision, "", "")
+		n("tell-m", outcome, "Team Member", "member")
+		n("tell-a", outcome, "Team Agent", "agent")
+		e("s1", "ask-m", "")
+		e("s2", "ask-a", "")
+		e("ask-m", "m", "")
+		e("ask-a", "m", "")
+		e("m", "which", "")
+		e("which", "tell-m", "to member")
+		e("which", "tell-a", "to agent")
+		e("tell-m", "end", "")
+		e("tell-a", "end", "")
+	} else {
+		n("tell-m", outcome, "Team Member", "member")
+		n("tell-a", outcome, "Team Agent", "agent")
+		e("s1", "ask-m", "")
+		e("s2", "ask-a", "")
+		e("ask-m", "tell-m", "")
+		e("ask-a", "tell-a", "")
+		e("tell-m", "end", "")
+		e("tell-a", "end", "")
+	}
+	return CoreUseCases{Decisions: []UseCaseDecision{{UseCase: uc}}}
+}
+
+func TestUC_OutcomeToAsker_FiresOnMergeThenSplitByAsker(t *testing.T) {
+	m := messagesFor(ucSlotPathFindings(askerUC(true, kindSendSignal)), ruleUCOutcomeToAsker)
+	if len(m) != 2 {
+		t.Fatalf("2 actors merged then split: the 2 crossed paths fire, the 2 matched do not: %v", m)
+	}
+	if !anyContains(m, "actor member asks at node \"ask-m\"") || !anyContains(m, "(agent)") ||
+		!anyContains(m, "actor agent asks at node \"ask-a\"") || !anyContains(m, "(member)") {
+		t.Fatalf("each finding names asker, asking node and receiver: %v", m)
+	}
+	if !anyContains(m, "do not merge different actors' entries") {
+		t.Fatalf("the finding must carry the fix: %v", m)
+	}
+}
+
+func TestUC_OutcomeToAsker_PassesPerActorPaths(t *testing.T) {
+	if m := messagesFor(ucSlotPathFindings(askerUC(false, kindSendSignal)), ruleUCOutcomeToAsker); len(m) != 0 {
+		t.Fatalf("each entry has its own reply: %v", m)
+	}
+}
+
+func TestUC_OutcomeToAsker_ObjectNodeInAnotherActorsLaneFails(t *testing.T) {
+	m := messagesFor(ucSlotPathFindings(askerUC(true, kindObjectNode)), ruleUCOutcomeToAsker)
+	if len(m) != 2 {
+		t.Fatalf("an objectNode drawn in another actor's lane is addressed to that actor: %v", m)
+	}
+	c := askerUC(false, kindObjectNode)
+	for i := range c.Decisions[0].UseCase.Activity.Nodes {
+		nd := &c.Decisions[0].UseCase.Activity.Nodes[i]
+		if nd.Kind == kindObjectNode {
+			nd.LinkedActorID = "" // by role alone
+		}
+	}
+	if m := messagesFor(ucSlotPathFindings(c), ruleUCOutcomeToAsker); len(m) != 0 {
+		t.Fatalf("an objectNode in the asker's own lane passes: %v", m)
+	}
+	c = askerUC(true, kindObjectNode)
+	for i := range c.Decisions[0].UseCase.Activity.Nodes {
+		nd := &c.Decisions[0].UseCase.Activity.Nodes[i]
+		if nd.Kind == kindObjectNode {
+			nd.LinkedActorID = ""
+		}
+	}
+	if m := messagesFor(ucSlotPathFindings(c), ruleUCOutcomeToAsker); len(m) != 2 {
+		t.Fatalf("lane named by role resolves to the other declared actor: %v", m)
+	}
+}
+
+func TestUC_OutcomeToAsker_UnlinkedOutcomeInComponentLanePasses(t *testing.T) {
+	for _, kind := range []string{kindSendSignal, kindObjectNode} {
+		c := askerUC(true, kind)
+		for i := range c.Decisions[0].UseCase.Activity.Nodes {
+			nd := &c.Decisions[0].UseCase.Activity.Nodes[i]
+			if nd.Kind == kind {
+				nd.LinkedActorID, nd.RoleName = "", "Todo list"
+			}
+		}
+		if m := messagesFor(ucSlotPathFindings(c), ruleUCOutcomeToAsker); len(m) != 0 {
+			t.Fatalf("%s addressed to no declared actor passes: %v", kind, m)
+		}
+	}
+}
+
+func TestUC_OutcomeToAsker_DecidedByAskerIsTheFirstActorNode(t *testing.T) {
+	uc := UseCase{
+		ID: "dec", Name: "dec", Classification: classCore, Trigger: triggerClientAction,
+		Actors: []Actor{{ID: "member", Role: "Team Member"}, {ID: "agent", Role: "Team Agent"}},
+		Activity: &ActivityDiagram{
+			Nodes: []ActivityNode{
+				{ID: "s", Kind: nodeStart},
+				{ID: "d", Kind: nodeDecision, DecidedBy: "member"},
+				{ID: "tell-a", Kind: kindSendSignal, RoleName: "Team Agent", LinkedActorID: "agent"},
+				{ID: "tell-m", Kind: kindSendSignal, RoleName: "Team Member", LinkedActorID: "member"},
+				{ID: "end", Kind: nodeEnd},
+			},
+			Edges: []ActivityEdge{
+				{From: "s", To: "d"}, {From: "d", To: "tell-a", Guard: "a"}, {From: "d", To: "tell-m", Guard: "b"},
+				{From: "tell-a", To: "end"}, {From: "tell-m", To: "end"},
+			},
+		},
+	}
+	m := messagesFor(ucSlotPathFindings(CoreUseCases{Decisions: []UseCaseDecision{{UseCase: uc}}}), ruleUCOutcomeToAsker)
+	if len(m) != 1 || !anyContains(m, "actor member asks at node \"d\"") || !anyContains(m, "(agent)") {
+		t.Fatalf("the decision decided by member is the asking node; only the reply to agent fails: %v", m)
+	}
+}
+
+func TestUC_OutcomeToAsker_FiresOnRUN030(t *testing.T) {
+	fs, err := ValidateProjectJSON(readFixture(t, "run030_todomvc_through_core_use_cases.json"), ValidateOptions{})
+	if err != nil {
+		t.Fatalf("ValidateProjectJSON: %v", err)
+	}
+	per := map[string]int{}
+	for _, f := range fs {
+		if f.RuleID == ruleUCOutcomeToAsker && f.Severity == SeverityError {
+			for _, uc := range []string{"shape-the-list", "review-the-list"} {
+				if f.Location != nil && strings.Contains(f.Location.Section, "useCase "+uc+" ") {
+					per[uc]++
+				}
+			}
+		}
+	}
+	if per["shape-the-list"] < 6 {
+		t.Fatalf("shape-the-list must fail on >= 6 scenarios, got %v", per)
+	}
+	if per["review-the-list"] < 6 {
+		t.Fatalf("review-the-list has the same shape and must fail on >= 6 scenarios, got %v", per)
+	}
+}
