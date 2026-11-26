@@ -437,6 +437,57 @@ func TestTP_NullSatisfied_ClientChosenKey(t *testing.T) {
 	}
 }
 
+// The client's key arrives nested in an object parameter: Put(entry{key, done}). The key is chosen by
+// the client, not minted, and the arrange literal hands it out; a later read that differs shows the
+// effect, so the plan is a discriminating one.
+func TestTP_NullSatisfied_ClientChosenKeyNestedInObject(t *testing.T) {
+	raw := func(s string) json.RawMessage { return json.RawMessage(s) }
+	key := `{"$ref":"#/$defs/Key"}`
+	c := ServiceContract{
+		Component: "todosAccess",
+		Defs: map[string]json.RawMessage{
+			"Key":   raw(`{"type":"string"}`),
+			"Entry": raw(`{"type":"object","properties":{"key":` + key + `,"done":{"type":"boolean"}}}`),
+			"Page":  raw(`{"type":"object","properties":{"entries":{"type":"array","items":{"$ref":"#/$defs/Entry"}}}}`),
+		},
+		Interface: ContractInterface{Operations: []ContractOperation{
+			{Name: "Put", Params: []ContractParam{{Name: "entry", Schema: raw(`{"$ref":"#/$defs/Entry"}`)}}, Result: raw(`{"$ref":"#/$defs/Entry"}`)},
+			{Name: "Reopen", Params: []ContractParam{{Name: "key", Schema: raw(key)}}, Result: raw(`{"$ref":"#/$defs/Entry"}`)},
+			{Name: "List", ReadOnly: true, Result: raw(`{"$ref":"#/$defs/Page"}`)},
+		}},
+	}
+	if got := mintedDefs(c); got["Key"] {
+		t.Errorf("a def reachable through a parameter's schema is taken, not minted: %v", got)
+	}
+	list := func(seq int, want string) StepBinding {
+		return StepBinding{Seq: seq, Operation: "List", Expect: TestExpect{Result: want}}
+	}
+	arrange := []ArrangeCall{ContractCall{Component: "todosAccess", Operation: "Put",
+		Inputs: []TestArg{{Name: "entry", Value: lit(`{"key":"k1","done":true}`)}}, Expect: TestExpect{Result: `{"done":true}`}}}
+	reopen := StepBinding{Seq: 2, Operation: "Reopen", Inputs: []TestArg{{Name: "key", Value: lit(`"k1"`)}}, Expect: TestExpect{Result: `{"done":false}`}}
+	differs := ScenarioBinding{Arrange: arrange, Steps: []StepBinding{
+		list(1, `{"entries":[{"key":"k1","done":true}]}`), reopen, list(3, `{"entries":[{"key":"k1","done":false}]}`)}}
+	if fs := todosScope(c).nullSatisfiedFindings(differs); len(fs) != 0 {
+		t.Errorf("a discriminating plan must not fire: %+v", fs)
+	}
+	if got := handedOut(arrange, nil, "Reopen"); !got[`"k1"`] {
+		t.Errorf("a key inside an object literal is handed out: %v", got)
+	}
+}
+
+// c2 yields to observation: a literal minted id the plan never handed out, but a later read differs
+// from the read before the step, so the plan shows an effect.
+func TestTP_NullSatisfied_InertLiteralYieldsToDifferingRead(t *testing.T) {
+	obs := ScenarioBinding{Arrange: recordArrange(), Steps: []StepBinding{
+		recall(1, alphaList),
+		todosStep(2, "Discard", `{"discarded":false}`, TestArg{Name: "todoId", Value: lit(`"todo-not-in-list"`)}),
+		recall(3, `{"todos":[]}`),
+	}}
+	if fs := todosScope(todosContract()).nullSatisfiedFindings(obs); len(fs) != 0 {
+		t.Errorf("a later read that differs from the earlier one is evidence: %+v", fs)
+	}
+}
+
 func TestTP_NullSatisfied_MintedDefs(t *testing.T) {
 	got := mintedDefs(todosContract())
 	if !got["TodoID"] || got["OwnerID"] {

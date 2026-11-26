@@ -315,7 +315,7 @@ func (sc tpScope) nullSatisfiedOp(b ScenarioBinding, name string) (Finding, bool
 	if onlyRepeatsEarlier(sc, b.Steps, first, name) {
 		held = append(held, "c1: everything the plan observes at or after the first call repeats an observation made before it")
 	}
-	if !seedsAResource(b.Arrange) && sc.allInert(b.Arrange, b.Steps, name, op) {
+	if !seedsAResource(b.Arrange) && sc.allInert(b.Arrange, b.Steps, name, op) && sc.nothingObservedDiffers(b.Steps, first, name) {
 		held = append(held, "c2: every call addresses by a literal an id the contract mints, which no step handed out")
 	}
 	if len(held) == 0 {
@@ -356,6 +356,16 @@ func (sc tpScope) allInert(arrange []ArrangeCall, steps []StepBinding, name stri
 	return true
 }
 
+// nothingObservedDiffers is the observation half of c2: an inert call changes nothing, so what the plan
+// observes at or after it must be what it observed before it. When it observed nothing before it (it is the first step) there is no earlier state to compare with, and the arranged state is not an
+// observation, so the call stays inert; otherwise it is c1's comparison.
+func (sc tpScope) nothingObservedDiffers(steps []StepBinding, first int, name string) bool {
+	if first == 0 {
+		return true
+	}
+	return onlyRepeatsEarlier(sc, steps, first, name)
+}
+
 // handedOut are the literal values the plan itself passes to the component before a step: the inputs of
 // every arrange contract call and of every earlier step that does not call name. A value the plan hands
 // out is a key or an owner the plan chose, so a later call addressing it may find something.
@@ -385,12 +395,21 @@ func addLiterals(set map[string]bool, ins []TestArg) {
 	}
 }
 
-// literalElements is a literal's canonical JSON, or each element's when it is an array.
+// literalElements is a literal's canonical JSON, or each element's when it is an array, or each leaf's
+// when it is an object: a key chosen inside an object literal is a value the plan hands out.
 func literalElements(raw json.RawMessage) []string {
 	var arr []json.RawMessage
 	if json.Unmarshal(raw, &arr) == nil {
 		var out []string
 		for _, e := range arr {
+			out = append(out, literalElements(e)...)
+		}
+		return out
+	}
+	var obj map[string]json.RawMessage
+	if json.Unmarshal(raw, &obj) == nil {
+		var out []string
+		for _, e := range obj {
 			out = append(out, literalElements(e)...)
 		}
 		return out
@@ -554,7 +573,7 @@ func mintedDefs(c ServiceContract) map[string]bool {
 		}
 		taken := map[string]bool{}
 		for _, p := range op.Params {
-			taken[paramDef(p.Schema)] = true
+			collectDefs(p.Schema, c.Defs, 0, taken)
 		}
 		returned := map[string]bool{}
 		collectDefs(op.Result, c.Defs, 0, returned)
