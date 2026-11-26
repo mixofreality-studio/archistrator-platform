@@ -61,13 +61,24 @@ const (
 	ruleSCNActorPathClient       RuleID = "SCN-ACTOR-PATH-CLIENT"
 )
 
-// ucPathRuleIDs is every rule this family (rules_uc_path.go, rules_uc_door.go) can
-// emit, for the emitters registry.
-var ucPathRuleIDs = []RuleID{
+// coreUseCaseRuleIDs are the rules whose finding is a defect of the core use cases'
+// own shape, which no System or contract can discharge.
+var coreUseCaseRuleIDs = []RuleID{
 	ruleUCPathOutcome, ruleUCPathOutcomeDistinct, ruleUCOutcomeAtAskingSurface, ruleUCOutcomeToAsker, ruleUCStartNotAction,
 	ruleUCActorDoor, ruleUCActorUnserved, ruleUCLaneResolves,
-	ruleSCNUnaddressed, ruleSCNActorPathClient,
 }
+
+// ucPathRuleIDs is every rule this family (rules_uc_path.go, rules_uc_door.go) can
+// emit, for the emitters registry.
+var ucPathRuleIDs = append(slices.Clone(coreUseCaseRuleIDs), ruleSCNUnaddressed, ruleSCNActorPathClient)
+
+// CoreUseCaseRules returns (a copy of) the rules whose finding is a defect of the core
+// use cases' shape, which no System or contract can discharge, so a downstream draft
+// may report it upstream. The SCN-* rules are not among them.
+func CoreUseCaseRules() []RuleID { return slices.Clone(coreUseCaseRuleIDs) }
+
+// IsCoreUseCaseRule reports whether id is one of CoreUseCaseRules.
+func IsCoreUseCaseRule(id RuleID) bool { return slices.Contains(coreUseCaseRuleIDs, id) }
 
 // ucPathFindings runs the SURFACE half of the asking-surface check,
 // UC-OUTCOME-AT-ASKING-SURFACE, over every derived scenario of every use case that
@@ -136,7 +147,7 @@ func newPathWalk(uc UseCase, s System, sc scenario.Scenario, clients map[string]
 	p := pathWalk{
 		uc: uc, sc: sc, actors: actorIDs(uc), clients: clients, comps: map[string]bool{},
 		nodes: map[string]ActivityNode{}, steps: map[string]CallStep{},
-		at: loc(0, "useCase "+uc.ID+" scenario "+sc.ID),
+		at: ucLoc(0, "useCase "+uc.ID+" scenario "+sc.ID, uc.ID, sc.ID),
 	}
 	for _, comp := range s.Components {
 		p.comps[scenario.Normalize(comp.ID)] = true
@@ -245,7 +256,7 @@ func sharedOutcomeAfterDecision(uc UseCase, kinds map[string]string, a, b scenar
 	}
 	return Finding{
 		RuleID: ruleUCPathOutcomeDistinct, Severity: SeverityError,
-		Location: loc(0, "useCase "+uc.ID+" scenario "+a.ID),
+		Location: ucLoc(0, "useCase "+uc.ID+" scenario "+a.ID, uc.ID, a.ID),
 		Message: fmt.Sprintf("use case %s: scenarios %s and %s are separated by decision %q (they take %q and %q) but one of them has no outcome the other lacks (shared outcome node(s) %s), "+
 			"so a test derived from that branch passes when the other ran; give each guarded branch its own outcome "+
 			"(split a \"X, or Y\" sendSignal into one sendSignal per branch, drawn before the merge)",
@@ -519,7 +530,7 @@ func startNotActionFindings(c CoreUseCases) []Finding {
 			}
 			out = append(out, Finding{
 				RuleID: ruleUCStartNotAction, Severity: SeverityError,
-				Location: loc(i, "useCases["+uc.ID+"].activity"),
+				Location: ucLoc(i, "useCases["+uc.ID+"].activity", uc.ID, ""),
 				Message: fmt.Sprintf("start node %q of use case %s is in an actor's lane and carries the label %q; "+
 					"an actor's act is an action node (leave the start unlabelled and give the act its own action)", n.ID, uc.ID, n.Label),
 			})
@@ -559,7 +570,7 @@ func scenarioProblemFindings(r scenario.Report) []Finding {
 	for _, pr := range r.Problems {
 		out = append(out, Finding{
 			RuleID: problemRule(pr.Code), Severity: SeverityError,
-			Location: loc(0, "useCase "+pr.UseCase+" scenario "+pr.Scenario),
+			Location: ucLoc(0, "useCase "+pr.UseCase+" scenario "+pr.Scenario, pr.UseCase, pr.Scenario),
 			Message:  problemMessage(pr),
 		})
 	}

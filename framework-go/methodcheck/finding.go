@@ -48,6 +48,10 @@ type RuleID string
 type Location struct {
 	Ordinal int    `json:"ordinal"` // stable position used for deterministic finding ordering
 	Section string `json:"section"` // human-readable locus, e.g. "core use case 3", "Objective 4"
+	// UseCase and Scenario are the typed facts of a finding located at one core use case
+	// (and, for a path finding, one of its derived scenarios); empty elsewhere.
+	UseCase  string `json:"useCase,omitempty"`
+	Scenario string `json:"scenario,omitempty"`
 }
 
 // Finding is a single machine-checkable rule violation. Ported verbatim.
@@ -68,6 +72,14 @@ type ValidationResult struct {
 // loc is a small constructor for an optional Location.
 func loc(ordinal int, section string) *Location {
 	return &Location{Ordinal: ordinal, Section: section}
+}
+
+// ucLoc is loc for a finding located at one use case (and, when scenario is not
+// empty, one of its scenarios): Ordinal and Section are exactly loc's.
+func ucLoc(ordinal int, section, useCase, scenario string) *Location {
+	l := loc(ordinal, section)
+	l.UseCase, l.Scenario = useCase, scenario
+	return l
 }
 
 // severityLabel renders a severity for diagnostics.

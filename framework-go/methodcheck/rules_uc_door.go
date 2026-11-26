@@ -121,7 +121,7 @@ func useCaseDoorFindings(ordinal int, uc UseCase) []Finding {
 	}
 	return []Finding{{
 		RuleID: ruleUCActorDoor, Severity: SeverityError,
-		Location: loc(ordinal+1, "useCases["+uc.ID+"].activity"),
+		Location: ucLoc(ordinal+1, "useCases["+uc.ID+"].activity", uc.ID, ""),
 		Message: fmt.Sprintf("use case %s has no node linked to a declared actor, so no rule can tell what the actor does or sees; "+
 			"on the node where an actor acts, set linkedActorId to one of: %s (or set decidedBy on a decision the actor resolves), "+
 			"and draw that node in the actor's lane",
@@ -247,7 +247,7 @@ func actorServedFindings(ordinal int, uc UseCase) []Finding {
 		}
 		out = append(out, Finding{
 			RuleID: ruleUCActorUnserved, Severity: SeverityError,
-			Location: loc(ordinal+1, "useCases["+uc.ID+"].activity"), Message: msg,
+			Location: ucLoc(ordinal+1, "useCases["+uc.ID+"].activity", uc.ID, ""), Message: msg,
 		})
 	}
 	return out
@@ -272,7 +272,7 @@ func ucLaneFindings(c CoreUseCases, s System) []Finding {
 			seen[lane] = true
 			out = append(out, Finding{
 				RuleID: ruleUCLaneResolves, Severity: SeverityError,
-				Location: loc(i+1, "useCases["+uc.ID+"].activity"),
+				Location: ucLoc(i+1, "useCases["+uc.ID+"].activity", uc.ID, ""),
 				Message: fmt.Sprintf("use case %s draws node %q in lane %q, which names neither a declared actor (%s) nor a System component; "+
 					"rename the lane to an actor's role or a component's name, and on the actor's nodes set linkedActorId to one of: %s",
 					uc.ID, n.ID, n.RoleName, actorRoles(uc), strings.Join(declaredActorIDs(uc), ", ")),
