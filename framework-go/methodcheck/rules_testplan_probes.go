@@ -280,8 +280,10 @@ func zeroSatisfiesArray(w []any, zero any) bool {
 // operations are real. An operation O on the plan's own component is indistinguishable from that run
 // when (a) no arrange call calls O, (b) every step calling O expects a non-error result O's zero result
 // satisfies, and (c) either (c1) everything the plan observes at or after the first O step repeats an
-// observation made before it, or (c2) every O step is inert: it addresses, by a literal, an id the
-// contract mints, so the real operation addresses an id never handed out and does nothing. A
+// observation made since the last state-changing step before it, or (c2) every O step is inert: it
+// addresses, by a literal, an id the contract mints, so the real operation addresses an id never handed
+// out and does nothing; a binding that seeds a resource may hand that id out in its fixture, so c2 does
+// not apply to it. A
 // prediction the rule cannot compute (no zero result, an unknown operation) is no finding, and a
 // read-only operation has no effect for the null run to remove: a read is judged by TP-EXPECT-ZERO.
 func (sc tpScope) nullSatisfiedFindings(b ScenarioBinding) []Finding {
@@ -313,7 +315,7 @@ func (sc tpScope) nullSatisfiedOp(b ScenarioBinding, name string) (Finding, bool
 	if onlyRepeatsEarlier(sc, b.Steps, first, name) {
 		held = append(held, "c1: everything the plan observes at or after the first call repeats an observation made before it")
 	}
-	if sc.allInert(b.Steps, name, op) {
+	if !seedsAResource(b.Arrange) && sc.allInert(b.Steps, name, op) {
 		held = append(held, "c2: every call addresses by a literal an id the contract mints, which no step handed out")
 	}
 	if len(held) == 0 {
@@ -389,11 +391,13 @@ func (sc tpScope) stepObservations(st StepBinding) []observation {
 }
 
 // onlyRepeatsEarlier is c1: every step at or after index first that does not call op, and every probe
-// of any step at or after it, repeats an observation made before step first. Vacuously true when
-// nothing else follows.
+// of any step at or after it, repeats an observation of the state the first call found. That state is
+// what was observed since the last state-changing step before first (that step's own probes included),
+// or everything observed before first when no such step exists: an observation older than a
+// state-changing step describes a state that step replaced. Vacuously true when nothing else follows.
 func onlyRepeatsEarlier(sc tpScope, steps []StepBinding, first int, op string) bool {
 	var before []observation
-	for _, st := range steps[:first] {
+	for _, st := range steps[lastChangeBefore(sc, steps, first):first] {
 		before = append(before, sc.stepObservations(st)...)
 	}
 	for _, st := range steps[first:] {
@@ -408,6 +412,22 @@ func onlyRepeatsEarlier(sc tpScope, steps []StepBinding, first int, op string) b
 		}
 	}
 	return true
+}
+
+// lastChangeBefore is the index of the last step before first that is not a read-only call (an
+// unknown operation counts as a change), or 0 when every step before it only reads.
+func lastChangeBefore(sc tpScope, steps []StepBinding, first int) int {
+	for i := first - 1; i > 0; i-- {
+		if o, ok := sc.op(steps[i].Operation); !ok || !o.ReadOnly {
+			return i
+		}
+	}
+	return 0
+}
+
+// seedsAResource reports a seedResource arrange call.
+func seedsAResource(arrange []ArrangeCall) bool {
+	return slices.ContainsFunc(arrange, func(a ArrangeCall) bool { _, ok := a.(SeedResource); return ok })
 }
 
 // literalMintedInput is c2 for one step: an input whose parameter is a def the contract mints (or an

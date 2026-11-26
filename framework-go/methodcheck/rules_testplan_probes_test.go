@@ -327,7 +327,13 @@ func TestTP_NullSatisfied_Fires(t *testing.T) {
 }
 
 func TestTP_NullSatisfied_Silent(t *testing.T) {
-	sc := todosScope(todosContract())
+	c := todosContract()
+	for _, n := range []string{"Complete", "Reopen"} {
+		c.Interface.Operations = append(c.Interface.Operations, ContractOperation{Name: n,
+			Params: []ContractParam{{Name: "owner", Schema: json.RawMessage(`{"$ref":"#/$defs/OwnerID"}`)}, {Name: "todoId", Schema: json.RawMessage(`{"$ref":"#/$defs/TodoID"}`)}},
+			Result: json.RawMessage(`{"$ref":"#/$defs/Todo"}`)})
+	}
+	sc := todosScope(c)
 	recordStep := StepBinding{Seq: 1, Operation: "Record", Inputs: []TestArg{ownerArg, {Name: "wording", Value: lit(`"alpha"`)}}, Expect: TestExpect{Result: `{"wording":"alpha"}`}}
 	discardRef := todosStep(2, "Discard", `{"discarded":true}`, TestArg{Name: "todoId", Value: RefValue{Step: 1, Path: "id"}})
 	cases := map[string]ScenarioBinding{
@@ -352,6 +358,21 @@ func TestTP_NullSatisfied_Silent(t *testing.T) {
 			todosStep(1, "DiscardAll", `{"affected":0}`, TestArg{Name: "todoIds", Value: lit(`[]`)}),
 			recall(2, alphaList),
 		}},
+		"an undo whose state differs from the state after the last change, though it matches an older read": {Steps: []StepBinding{
+			recordStep,
+			recall(2, alphaList),
+			todosStep(3, "Complete", `{"done":true}`, TestArg{Name: "todoId", Value: RefValue{Step: 1, Path: "id"}}),
+			recall(4, `{"todos":[{"wording":"alpha","done":true}]}`),
+			todosStep(5, "Reopen", `{"done":false}`, TestArg{Name: "todoId", Value: RefValue{Step: 1, Path: "id"}}),
+			recall(6, `{"todos":[{"wording":"alpha","done":false}]}`),
+		}},
+		"a literal minted id that a seeded fixture hands out": {
+			Arrange: []ArrangeCall{SeedResource{Resource: "todos", Fixture: json.RawMessage(`{"todos":[{"id":"t1","wording":"alpha","done":true}]}`)}},
+			Steps: []StepBinding{
+				recall(1, `{"todos":[{"wording":"alpha","done":true}]}`),
+				todosStep(2, "Reopen", `{"done":false}`, TestArg{Name: "todoId", Value: lit(`"t1"`)}),
+				recall(3, `{"todos":[{"wording":"alpha","done":false}]}`),
+			}},
 		"an owner literal is not a minted id": {Steps: []StepBinding{
 			recall(1, `{"todos":[]}`),
 			todosStep(2, "SetAllDoneState", `{"affected":0}`, TestArg{Name: "done", Value: lit(`false`)}),
@@ -377,5 +398,74 @@ func TestTP_NullSatisfied_MintedDefs(t *testing.T) {
 func TestTP_NullSatisfied_IsRegistered(t *testing.T) {
 	if !emittedRuleIDs()[ruleTPNullSatisfied] {
 		t.Errorf("%s is emitted but not in emittedRuleIDs", ruleTPNullSatisfied)
+	}
+}
+
+// The rule is wired into plan validation: a binding a null subject satisfies is refused through
+// ValidateProjectJSON, as the RUN-031 remove-a-todo binding was admitted, and an acceptance plan's
+// binding is not held to it.
+func TestTP_NullSatisfied_WiredIntoValidation(t *testing.T) {
+	var doc map[string]any
+	if err := json.Unmarshal(readFixture(t, "tp_clean.json"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	contract := doc["serviceContracts"].(map[string]any)["orderManager"].(map[string]any)
+	iface := contract["interface"].(map[string]any)
+	iface["operations"] = append(iface["operations"].([]any), map[string]any{
+		"name": "CancelOrder", "error": true,
+		"result": map[string]any{"type": "object", "properties": map[string]any{"cancelled": map[string]any{"type": "boolean"}}},
+		"params": []any{map[string]any{"name": "orderId", "schema": map[string]any{"$ref": "#/$defs/OrderID"}}},
+	})
+	plan := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)["orderManager"].(map[string]any)
+	for _, b := range plan["bindings"].([]any) {
+		bm := b.(map[string]any)
+		if bm["scenario"] != "process-order-P2" {
+			continue
+		}
+		st := bm["steps"].([]any)[0].(map[string]any)
+		st["operation"] = "CancelOrder"
+		st["expect"] = map[string]any{"result": `{"cancelled":false}`, "errorExpected": false}
+		st["probes"] = []any{}
+		st["inputs"] = []any{map[string]any{"name": "orderId", "value": map[string]any{"kind": "literal", "model": map[string]any{"json": "order-not-in-list"}}}}
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, err := ValidateProjectJSON(raw, ValidateOptions{SupportedSurfaces: Surfaces()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var got *Finding
+	for i := range fs {
+		if fs[i].RuleID == ruleTPNullSatisfied {
+			got = &fs[i]
+		}
+	}
+	if got == nil || got.Severity != SeverityError || !strings.Contains(got.Message, "CancelOrder") {
+		t.Fatalf("a binding a null subject satisfies must be refused with a TP-NULL-SATISFIED Error:\n%s", dumpFindings(fs))
+	}
+
+	// the same binding as an acceptance binding is not held to the rule
+	p, ok, err := DecodeProject(raw)
+	if err != nil || !ok {
+		t.Fatalf("decode: %v", err)
+	}
+	all, err := DeriveScenarios(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := binding(t, p, "orderManager", "process-order-P2")
+	env := newTPEnv(p)
+	for _, s := range scenario.ForComponentAs(all, "orderManager", contractOf("orderManager", p.ServiceContracts["orderManager"]).Client) {
+		if s.ID != "process-order-P2" {
+			continue
+		}
+		if !hasRuleFindings(planBindingFindings(p, env, "orderManager", s, *b, loc(0, "x"), false), ruleTPNullSatisfied) {
+			t.Error("a component plan binding fires the rule")
+		}
+		if hasRuleFindings(planBindingFindings(p, env, "orderManager", s, *b, loc(0, "x"), true), ruleTPNullSatisfied) {
+			t.Error("an acceptance plan binding must not")
+		}
 	}
 }
