@@ -16,6 +16,8 @@ import (
 // constructors. The package is test support, not a Method component: it builds every
 // component from the real substrates a scenario test boots, so it imports across all
 // layers and sits outside them (the arch gate exempts exactly this generated package).
+// The `appgen scenariocompose` consumer writes it, with the generated tests that import it;
+// `appgen compose` does not.
 const ScenarioComposeFile = "internal/scenariocompose/compose.gen.go"
 
 // scenarioPackage is the package clause of ScenarioComposeFile.

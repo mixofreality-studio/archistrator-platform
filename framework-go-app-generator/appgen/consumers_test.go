@@ -11,6 +11,7 @@ import (
 	"testing"
 	"testing/fstest"
 
+	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/composegen"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/internal/testfixtures"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/plan"
 	"github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator/webgen"
@@ -69,7 +70,7 @@ func TestConsumers_EveryArtifactKindHasAtLeastOne(t *testing.T) {
 	}
 }
 
-func TestConsumers_NamesAreTheNineOfD2(t *testing.T) {
+func TestConsumers_NamesAreTheTenOfD2(t *testing.T) {
 	var got []string
 	for _, c := range AllConsumers() {
 		got = append(got, c.Name)
@@ -77,7 +78,7 @@ func TestConsumers_NamesAreTheNineOfD2(t *testing.T) {
 			t.Errorf("ConsumerNamed(%q) not found", c.Name)
 		}
 	}
-	want := []string{"modelgen", "nullgen", "appgen temporal", "appgen config", "appgen compose", "appgen clients", "testgen", "webgen bootstrap", "webgen generate"}
+	want := []string{"modelgen", "nullgen", "appgen temporal", "appgen config", "appgen compose", "appgen scenariocompose", "appgen clients", "testgen", "webgen bootstrap", "webgen generate"}
 	if !slices.Equal(got, want) {
 		t.Fatalf("consumers = %v, want %v", got, want)
 	}
@@ -413,16 +414,79 @@ func TestConsumers_KindTable(t *testing.T) {
 		return out
 	}
 	for kind, want := range map[ArtifactKind][]string{
-		KindServiceContract:     {"modelgen", "nullgen", "appgen temporal", "appgen compose", "appgen clients", "testgen", "webgen generate"},
+		KindServiceContract:     {"modelgen", "nullgen", "appgen temporal", "appgen compose", "appgen scenariocompose", "appgen clients", "testgen", "webgen generate"},
 		KindTestPlan:            {"testgen"},
 		KindUIDesign:            {"testgen"},
 		KindAcceptancePlan:      {"testgen"},
 		KindCoreUseCases:        {"testgen"},
-		KindSystem:              {"appgen config", "appgen compose", "appgen clients", "testgen", "webgen bootstrap"},
-		KindOperationalConcepts: {"appgen config", "appgen compose"},
+		KindSystem:              {"appgen config", "appgen compose", "appgen scenariocompose", "appgen clients", "testgen", "webgen bootstrap"},
+		KindOperationalConcepts: {"appgen config", "appgen compose", "appgen scenariocompose"},
 	} {
 		if got := names(kind); !slices.Equal(got, want) {
 			t.Errorf("Consumers(%s) = %v, want %v", kind, got, want)
+		}
+	}
+}
+
+// The generated test subject belongs to its own consumer, not to the composition root: an Engine
+// or ResourceAccess component's scenario tests need it without cmd/server being generated.
+func TestScenarioCompose_IsItsOwnConsumer(t *testing.T) {
+	for _, fx := range fixtures {
+		in := fixtureInput(t, fx, "server", false)
+		subject := "server/" + composegen.ScenarioComposeFile
+		if _, ok := rolesOf(t, "appgen compose", in)[subject]; ok {
+			t.Errorf("%s: appgen compose still plans %s", fx, subject)
+		}
+		got := rolesOf(t, "appgen scenariocompose", in)
+		if len(got) != 1 {
+			t.Errorf("%s: appgen scenariocompose plans %v, want exactly %s", fx, got, subject)
+		}
+		if r, ok := got[subject]; !ok || plan.RoleName(r) != "generated" {
+			t.Errorf("%s: %s = %v (planned %v), want Generated", fx, subject, r, ok)
+		}
+	}
+}
+
+// Over a tree holding only an Engine package's code, the test subject names no package that is
+// not built, so it compiles at whatever point construction has reached.
+func TestScenarioCompose_EngineOnlyTreeNamesNoUnbuiltPackage(t *testing.T) {
+	for _, fx := range fixtures {
+		in := fixtureInput(t, fx, "server", false)
+		in.Tree = builtTreeOf(t, in.Project, "Engine")
+		var doc struct {
+			ServiceContracts map[string]struct {
+				GoPackage string `json:"goPackage"`
+				Layer     string `json:"layer"`
+			} `json:"serviceContracts"`
+		}
+		if err := json.Unmarshal(in.Project, &doc); err != nil {
+			t.Fatal(err)
+		}
+		c, _ := ConsumerNamed("appgen scenariocompose")
+		files, err := c.Emit(in)
+		if err != nil {
+			t.Fatalf("%s: %v", fx, err)
+		}
+		if len(files) != 1 {
+			t.Fatalf("%s: emitted %d files, want 1", fx, len(files))
+		}
+		src := string(files[0].Content)
+		engines := 0
+		for key, sc := range doc.ServiceContracts {
+			if sc.GoPackage == "" {
+				continue
+			}
+			named := strings.Contains(src, `"example.com/app/`+sc.GoPackage+`"`)
+			isEngine := strings.EqualFold(sc.Layer, "engine")
+			if isEngine {
+				engines++
+			}
+			if named && !isEngine {
+				t.Errorf("%s: the test subject names %s (%s), which is not built", fx, sc.GoPackage, key)
+			}
+		}
+		if engines == 0 {
+			t.Logf("%s: no Engine contract; nothing to prove", fx)
 		}
 	}
 }

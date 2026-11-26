@@ -210,8 +210,7 @@ func genConfig(m *projectmodel.Model, cfg Config) (map[string][]byte, error) {
 
 // genCompose is the composition root's generated files, and the once-seeded hooks.go beside them.
 func genCompose(m *projectmodel.Model, in Input, cfg Config) (generated map[string][]byte, hooks []byte, err error) {
-	effective := withDeployment(m, cfg)
-	cc := composeConfig(m, effective, cfg, in.ModulePath)
+	effective, cc := composeInputs(m, in, cfg)
 	files, err := composegen.Generate(effective, cc)
 	if err != nil {
 		return nil, nil, fmt.Errorf("composegen: %w", err)
@@ -231,16 +230,28 @@ func genCompose(m *projectmodel.Model, in Input, cfg Config) (generated map[stri
 	for name, content := range launcher {
 		out[path.Join(rungen.Dir, name)] = content
 	}
-	// The generated test subject is module-relative, not under cmd/server: scenario tests of
-	// every component import it. It is emitted even for an app with no test plans, because
-	// Workflows() feeds the replay gate.
+	return out, hooks, nil
+}
+
+// composeInputs is the deployment-effective model and the composegen config both the composition
+// root and the generated test subject are built from.
+func composeInputs(m *projectmodel.Model, in Input, cfg Config) (*projectmodel.Model, composegen.Config) {
+	effective := withDeployment(m, cfg)
+	return effective, composeConfig(m, effective, cfg, in.ModulePath)
+}
+
+// genScenarioCompose is the generated test subject, keyed by its module-relative path. It is
+// not under cmd/server: scenario tests of every component import it, so it belongs with the
+// generated tests and not with the composition root. It is emitted even for an app with no
+// test plans, because Workflows() feeds the replay gate.
+func genScenarioCompose(m *projectmodel.Model, in Input, cfg Config) (map[string][]byte, error) {
+	effective, cc := composeInputs(m, in, cfg)
 	subject, refused, err := composegen.EmitScenarioCompose(effective, cc)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
-	out[composegen.ScenarioComposeFile] = subject
 	reportRefusals(in.Warn, refused)
-	return out, hooks, nil
+	return map[string][]byte{composegen.ScenarioComposeFile: subject}, nil
 }
 
 // reportRefusals tells the operator which Managers the generated test subject leaves unbuilt

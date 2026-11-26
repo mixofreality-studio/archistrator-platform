@@ -6,9 +6,9 @@
 //	go tool appgen compose  [-check]   cmd/server/main.gen.go, the generated authorization table
 //	                                   and its policy test, the browser surfaces' static handler,
 //	                                   hooks.go if absent, cmd/devstack/main.gen.go, the
-//	                                   app's local run contract (go run ./cmd/devstack), and
-//	                                   internal/scenariocompose/compose.gen.go, the components
-//	                                   the generated scenario tests drive
+//	                                   app's local run contract (go run ./cmd/devstack)
+//	go tool appgen scenariocompose [-check]   internal/scenariocompose/compose.gen.go, the components
+//	                                   the generated scenario tests drive (run by make gen-tests with the tests)
 //	go tool appgen clients  [-check]   internal/client/** and api/openapi.yaml
 //
 // A contract is wired only once its package holds code, so the generated composition
@@ -56,7 +56,7 @@ func main() {
 
 func run(args []string, out io.Writer) error {
 	if len(args) == 0 {
-		return errors.New("usage: appgen temporal|config|compose|clients [-check]")
+		return errors.New("usage: appgen temporal|config|compose|scenariocompose|clients [-check]")
 	}
 	sub, args := args[0], args[1:]
 	var o options

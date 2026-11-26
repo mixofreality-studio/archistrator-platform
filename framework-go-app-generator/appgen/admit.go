@@ -116,7 +116,7 @@ var absentID = regexp.MustCompile(`\bunknown (component|contract|operation)\b|\b
 // needs every contract and the deployment model, so over a design still being recorded their
 // findings name what is still to come.
 var compositionConsumers = map[string]bool{
-	"appgen compose": true, "appgen config": true, "appgen clients": true, "webgen bootstrap": true, "webgen generate": true,
+	"appgen compose": true, "appgen scenariocompose": true, "appgen config": true, "appgen clients": true, "webgen bootstrap": true, "webgen generate": true,
 }
 
 // scenariocomposeRef matches a finding that names a subject the composition's scenario package builds.

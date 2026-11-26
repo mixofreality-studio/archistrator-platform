@@ -133,7 +133,7 @@ func (c Consumer) Plan(in Input) ([]plan.Output, error) {
 	return plan.Outputs(files), nil
 }
 
-// AllConsumers is the nine of D2, in CLI order.
+// AllConsumers is the ten of D2, in CLI order.
 func AllConsumers() []Consumer {
 	return []Consumer{
 		{Name: "modelgen", Kinds: []ArtifactKind{KindServiceContract}, Emit: emitModels},
@@ -141,6 +141,7 @@ func AllConsumers() []Consumer {
 		{Name: "appgen temporal", Kinds: []ArtifactKind{KindServiceContract}, Emit: emitTemporal},
 		{Name: "appgen config", Kinds: []ArtifactKind{KindSystem, KindOperationalConcepts}, Emit: emitConfig},
 		{Name: "appgen compose", Kinds: []ArtifactKind{KindServiceContract, KindSystem, KindOperationalConcepts}, Emit: emitCompose},
+		{Name: "appgen scenariocompose", Kinds: []ArtifactKind{KindServiceContract, KindSystem, KindOperationalConcepts}, Emit: emitScenarioCompose},
 		{Name: "appgen clients", Kinds: []ArtifactKind{KindServiceContract, KindSystem}, Emit: emitClients},
 		{Name: "testgen", Kinds: []ArtifactKind{KindServiceContract, KindTestPlan, KindUIDesign, KindAcceptancePlan, KindCoreUseCases, KindSystem}, Emit: emitTests},
 		{Name: "webgen bootstrap", Kinds: []ArtifactKind{KindSystem}, Emit: emitWebBootstrap},
@@ -323,6 +324,21 @@ func emitCompose(in Input) ([]plan.File, error) {
 	files = append(files, repoFile(in.repoPath(path.Join(serverDir, composegen.HooksSeedFile)), plan.Seam{}, hooks))
 	plan.Sort(files)
 	return files, nil
+}
+
+// emitScenarioCompose is the generated test subject (internal/scenariocompose/compose.gen.go)
+// the generated scenario tests import. It is its own consumer so a component's tests have their
+// subject without the composition root being generated.
+func emitScenarioCompose(in Input) ([]plan.File, error) {
+	m, err := in.model(false)
+	if err != nil {
+		return nil, err
+	}
+	generated, err := genScenarioCompose(m, in, in.cfg())
+	if err != nil {
+		return nil, err
+	}
+	return in.generated(generated), nil
 }
 
 func emitClients(in Input) ([]plan.File, error) {
