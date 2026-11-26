@@ -109,12 +109,12 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 		cmd("service-test-plan"): {
 			"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-ARG-REF", "TP-ARRANGE", "TP-PROBE", "TP-STATE",
 			"TP-ACTOR-OBSERVED", "TP-PRINCIPAL", "vacuous",
-			"TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "onBehalfOf", "read-only",
+			"TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "onBehalfOf", "read-only",
 		},
 		cmd("frontend-test-plan"): {
 			"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-UI-TARGET", "TP-UI-ACTION", "UID-ROUTE", "TP-ARG-REF",
 			"TP-ARRANGE", "TP-ACTOR-OBSERVED", "TP-PRINCIPAL",
-			"TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "onBehalfOf",
+			"TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "onBehalfOf",
 		},
 		cmd("acceptance-test-plan"): {
 			"ATP-BOUND", "ATP-REF", "ATP-PROBE-AS", "ATP-BROWSER", "TP-PRINCIPAL", "TP-EXPECT-REQUIRED", "TP-STATE",
@@ -135,9 +135,9 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 		cmd("core-use-cases-draft"):                         {"UC-OUTCOME-TO-ASKER"},
 		".claude/skills/the-method-core-use-cases/SKILL.md": {"UC-OUTCOME-TO-ASKER"},
 		".claude/skills/the-method-architecture/SKILL.md":   {"UC-LANE-RESOLVES", "UC-OUTCOME-AT-ASKING-SURFACE"},
-		".claude/skills/the-method-testing/SKILL.md":        {"writes no test code", "ARCH-TEST-COMPOSE", "TP-DISCRIMINATE", "TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-STATE"},
+		".claude/skills/the-method-testing/SKILL.md":        {"writes no test code", "ARCH-TEST-COMPOSE", "TP-DISCRIMINATE", "TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "TP-STATE"},
 		".claude/skills/the-method-review-routing/SKILL.md": {"TP-HOOK", "vacuous"},
-		".claude/agents/test-engineer.md":                   {"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO"},
+		".claude/agents/test-engineer.md":                   {"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED"},
 	} {
 		body := string(files[path])
 		for _, want := range wants {
