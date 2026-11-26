@@ -24,7 +24,7 @@ const (
 	// analyzer-based `go fix -diff` gate; runners resolve it via the go.mod
 	// toolchain directive / setup-go.
 	GoVersion            = "1.26.0"
-	FrameworkGoVersion   = "v0.37.0"
+	FrameworkGoVersion   = "v0.41.0"
 	AppGeneratorVersion  = "v0.31.0"
 	HTTPGeneratorVersion = "v0.6.0"
 	MCPGeneratorVersion  = "v0.3.0"
