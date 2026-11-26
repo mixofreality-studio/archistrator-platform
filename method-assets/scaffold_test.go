@@ -211,6 +211,15 @@ func TestScaffoldMakefileScenariosInclude(t *testing.T) {
 			t.Errorf("Makefile.scenarios.mk missing %q", want)
 		}
 	}
+	// the scenario tests and the subject they import are written (and held current) together
+	for _, want := range []string{
+		"gen-tests:\n\tGOWORK=off go tool appgen scenariocompose -project .aiarch/state/project.json -root .\n\tGOWORK=off go tool testgen $(TESTGEN_ARGS)\n",
+		"gen-tests-check:\n\tGOWORK=off go tool appgen scenariocompose -project .aiarch/state/project.json -root . -check\n\tGOWORK=off go tool testgen $(TESTGEN_ARGS) -check\n",
+	} {
+		if !strings.Contains(m, want) {
+			t.Errorf("Makefile.scenarios.mk missing %q", want)
+		}
+	}
 	if strings.Contains(m, "../") || strings.Contains(m, "server/") {
 		t.Errorf("Makefile.scenarios.mk must be module-root-relative:\n%s", m)
 	}

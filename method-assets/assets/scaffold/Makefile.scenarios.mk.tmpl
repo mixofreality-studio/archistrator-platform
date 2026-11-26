@@ -6,8 +6,9 @@
 #
 # Deterministic component testing (spec §4.3): the scenario tests are GENERATED
 # from the committed per-component test plan in .aiarch/state/project.json by
-# the platform's testgen, subject and all (the generated scenariocompose package builds
-# every component a scenario drives). An agent writes no test code and no hooks file
+# the platform's testgen, and the subject they import (the generated scenariocompose
+# package, internal/scenariocompose/compose.gen.go, which builds every component a
+# scenario drives) is written by `appgen scenariocompose`, for every component kind. An agent writes no test code and no hooks file
 # (ARCH-TEST-COMPOSE, enforced by the arch gate's TestFileLayout).
 # Paths are module-root-relative — the app module lives at the repo root, and
 # -uitests is spelled explicitly because testgen's default resolves one level
@@ -24,10 +25,11 @@
 #                      the generated composition root, so a model with nothing built
 #                      compiles and boots. Refuses (exit 2) to replace a hooks.go it did
 #                      not write.
-#   gen-tests        — (re)write every generated test file: each package's
+#   gen-tests        — (re)write every generated test file AND the scenariocompose subject
+#                      they import (`go tool appgen scenariocompose`): each package's
 #                      <stereotype>_scenarios.gen_test.go and null.gen_test.go, and each browser
 #                      surface's *.spec.gen.ts with its element inventory and runtime
-#   gen-tests-check  — drift gate: fails on a stale generated file, an orphan generated
+#   gen-tests-check  — drift gate over both the scenariocompose subject and the tests: fails on a stale generated file, an orphan generated
 #                      file, or a hooks file left from an earlier generation (no hooks file
 #                      is current: nothing emits one)
 #   test-discriminate — the null-subject run (TP-DISCRIMINATE): re-run every Go scenario once per
@@ -53,7 +55,7 @@
 #   test-scenarios   — run every TestScenario_* as a `go test -json` stream into
 #                      test-results/go-test.jsonl (the venue uploads test-results/**)
 #   run-local        — the app's local run contract: an alias of `go run ./cmd/devstack`,
-#                      the launcher appgen compose generates from the deployment model. It
+#                      the launcher `appgen compose` generates from the deployment model. It
 #                      provisions the local profile's infrastructure, boots cmd/server and
 #                      prints {"devstack":"ready","url":...} once /readyz answers. All its
 #                      logic lives in the launcher, so there is exactly one run contract.
@@ -72,9 +74,11 @@ gen-null:
 	GOWORK=off go tool nullgen -project .aiarch/state/project.json -root .
 
 gen-tests:
+	GOWORK=off go tool appgen scenariocompose -project .aiarch/state/project.json -root .
 	GOWORK=off go tool testgen $(TESTGEN_ARGS)
 
 gen-tests-check:
+	GOWORK=off go tool appgen scenariocompose -project .aiarch/state/project.json -root . -check
 	GOWORK=off go tool testgen $(TESTGEN_ARGS) -check
 
 test-scenarios:
