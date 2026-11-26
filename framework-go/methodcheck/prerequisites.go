@@ -333,7 +333,7 @@ var rulePrerequisites = func() map[RuleID][]Prerequisite {
 		ruleSysNoUp, ruleSysNoSide, ruleSysNoSkip, ruleSysPubOrig, ruleSysPubDest, ruleSysDontMtoM, ruleSysDontCli,
 		ruleSysCardMgr, ruleSysCardRatio, ruleSysCardTotal, ruleArchChainCov, ruleSysNameUniq,
 		ruleUseCaseDynamicMissing, ruleSystemLayerDegenerate,
-		ruleSysRAOrphan, ruleSysEncapsulates, ruleSysRelDup, ruleSysClientSurface, ruleSysClientOpLabel, ruleSysClientMachineCall,
+		ruleSysRAOrphan, ruleSysResourceUnread, ruleSysEncapsulates, ruleSysRelDup, ruleSysClientSurface, ruleSysClientOpLabel, ruleSysClientMachineCall,
 		ruleDVEdgeEnds, ruleDVEdgeInModel, ruleDVSingleMgr, ruleDVMode, ruleDVKeyUnique,
 		ruleDVStaticCoverage, ruleDVRelCoverage, ruleDVPlannedSkipped, ruleDVRelUtilityExempt, ruleCCEdgeRealized,
 		ruleCCViewUseCase, ruleCCStepNode, ruleCCStepUnique, ruleCCCoverage, ruleCCStepNonempty,
@@ -368,7 +368,7 @@ var rulePrerequisites = func() map[RuleID][]Prerequisite {
 	// ---- service contracts (construction): the derived scenarios against the contract surface ----
 	add(onContracts,
 		ruleSCNUnaddressed, ruleSCNActorPathClient,
-		ruleTPOpReached, ruleTPClientContracted, ruleTPLabelOp, ruleTPClientOps, ruleClientMachineMirror)
+		ruleTPOpReached, ruleTPOpObservable, ruleTPClientContracted, ruleTPLabelOp, ruleTPClientOps, ruleClientMachineMirror)
 
 	// ---- UI designs ----
 	add(onUIDesign, ruleUIDRole, ruleUIDName, ruleUIDIDUnique, ruleUIDWithin, ruleUIDRoute)

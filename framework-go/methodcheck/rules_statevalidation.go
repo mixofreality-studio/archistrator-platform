@@ -33,6 +33,8 @@ const (
 	ruleSysRAOrphan     RuleID = "SYS-RA-ORPHAN"
 	ruleSysEncapsulates RuleID = "SYS-ENCAPSULATES"
 	ruleSysRelDup       RuleID = "SYS-REL-DUP"
+	// ruleSysResourceUnread requires every written Resource to have a drawn reader.
+	ruleSysResourceUnread RuleID = "SYS-RESOURCE-UNREAD"
 	// ruleSysClientSurface is not a twin: it requires every built Client to state its surface
 	// (web, rest, mcpTools or mcpApp), because that one field picks its lifecycle and what the
 	// generators emit for it.
@@ -83,6 +85,109 @@ func raOrphan(s System) []Finding {
 		})
 	}
 	return out
+}
+
+// resourceAccessesOf is the ResourceAccess components related to the Resource id by any
+// relationship, in either direction, in component order.
+func resourceAccessesOf(s System, idx map[string]Component, id string) []Component {
+	seen := map[string]bool{}
+	var out []Component
+	for _, r := range s.Relationships {
+		other := ""
+		switch id {
+		case r.To:
+			other = r.From
+		case r.From:
+			other = r.To
+		default:
+			continue
+		}
+		if c, ok := idx[other]; ok && c.Kind == kindResourceAccess && !seen[c.ID] {
+			seen[c.ID] = true
+			out = append(out, c)
+		}
+	}
+	return out
+}
+
+// labelReadsResult reports whether a call label names what the call returns: a "→" at
+// bracket depth zero followed by non-empty text ("recallList(owner) → todos"). A bare
+// trailing "→" does not count.
+func labelReadsResult(label string) bool {
+	depth := 0
+	for i, r := range label {
+		switch r {
+		case '(', '[', '{':
+			depth++
+		case ')', ']', '}':
+			if depth > 0 {
+				depth--
+			}
+		case '→':
+			if depth == 0 {
+				return strings.TrimSpace(label[i+len("→"):]) != ""
+			}
+		}
+	}
+	return false
+}
+
+// resourceRead reports whether the Resource id is read somewhere in the System: a
+// relationship leaves it (r1), a relationship into it comes from a non-ResourceAccess (r2),
+// or a dynamic-view call into a ResourceAccess related to it labels a result (r3).
+func resourceRead(s System, idx map[string]Component, id string) bool {
+	for _, r := range s.Relationships {
+		if r.From == id {
+			return true
+		}
+		if from, ok := idx[r.From]; r.To == id && ok && from.Kind != kindResourceAccess {
+			return true
+		}
+	}
+	ras := map[string]bool{}
+	for _, ra := range resourceAccessesOf(s, idx, id) {
+		ras[ra.ID] = true
+	}
+	return slices.ContainsFunc(allCalls(s), func(c TraceCall) bool { return ras[c.To] && labelReadsResult(c.Label) })
+}
+
+// resourceUnread — SYS-RESOURCE-UNREAD (error). A Resource that is written but never read
+// holds state nothing can observe, so no test can prove what a write changed. Silent when
+// the System has no dynamic views (USECASE-DYNAMIC-MISSING owns that). An encapsulates note
+// that defers the read does not discharge it: encapsulates is never read.
+func resourceUnread(s System) []Finding {
+	if len(s.DynamicViews) == 0 {
+		return nil
+	}
+	idx := componentIndex(s)
+	var out []Finding
+	for i, c := range s.Components {
+		if c.Kind != kindResource || !hasInbound(s, c.ID) || resourceRead(s, idx, c.ID) {
+			continue
+		}
+		label := componentName(c, i)
+		var writers []string
+		for _, ra := range resourceAccessesOf(s, idx, c.ID) {
+			writers = append(writers, ra.Name)
+		}
+		out = append(out, Finding{
+			RuleID:   ruleSysResourceUnread,
+			Severity: SeverityError,
+			Message: fmt.Sprintf("Resource %q is written (by %s) but nothing reads it: draw who reads it, either a read call \"op(args) → result\" into its ResourceAccess in a dynamic view, or a relationship from it to the consumer",
+				label, strings.Join(writers, ", ")),
+			Location: loc(i+1, "component "+label),
+		})
+	}
+	return out
+}
+
+func hasInbound(s System, id string) bool {
+	for _, r := range s.Relationships {
+		if r.To == id {
+			return true
+		}
+	}
+	return false
 }
 
 // clientSurfaceStated — SYS-CLIENT-SURFACE (error). A Client's surface decides what gets built:

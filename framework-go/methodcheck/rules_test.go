@@ -480,7 +480,7 @@ func passingSystem(t *testing.T, ucID string) System {
 		Steps: []CallStep{{Calls: []TraceCall{
 			{From: client.ID, To: mgr.ID, Mode: modeSync},
 			{From: mgr.ID, To: eng.ID, Mode: modeSync},
-			{From: mgr.ID, To: ra.ID, Mode: modeSync},
+			{From: mgr.ID, To: ra.ID, Mode: modeSync, Label: "recallState(owner) → state"},
 			{From: ra.ID, To: res.ID, Mode: modeSync},
 		}}},
 	}}

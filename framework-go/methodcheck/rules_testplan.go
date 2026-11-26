@@ -3,6 +3,7 @@ package methodcheck
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"slices"
 	"sort"
 	"strings"
@@ -36,7 +37,10 @@ const (
 	ruleTPProbe     RuleID = "TP-PROBE"
 	ruleTPState     RuleID = "TP-STATE"
 	ruleTPOpReached RuleID = "TP-OP-REACHED"
-	ruleTPSkip      RuleID = "TP-SKIP"
+	// ruleTPOpObservable is the design-time twin of TP-STATE: a ResourceAccess op whose
+	// scenario expects outputs, with no op anywhere that could prove them.
+	ruleTPOpObservable RuleID = "TP-OP-OBSERVABLE"
+	ruleTPSkip         RuleID = "TP-SKIP"
 	// ruleTPClientOps holds a browser surface's contract family to the ops its labels derive.
 	ruleTPClientOps RuleID = "TP-CLIENT-OPS"
 	// ruleTPLabelOp refuses a "|" alternative that names no op of a contracted callee.
@@ -54,6 +58,7 @@ type opLookup func(name string) (ContractOperation, bool)
 // derived scenario set (DeriveScenarios).
 func testPlanFindings(p Project, all []scenario.Scenario) []Finding {
 	out := opReachedFindings(p, all)
+	out = append(out, opObservableFindings(p, all)...)
 	out = append(out, clientContractFindings(p)...)
 	out = append(out, uiDesignRecordFindings(p)...)
 	if p.PhaseArtifacts == nil {
@@ -324,6 +329,165 @@ func opReachedFindings(p Project, all []scenario.Scenario) []Finding {
 			}
 			out = append(out, tpFinding(ruleTPOpReached, loc(0, "serviceContracts."+key),
 				"%s.%s is called by no use case's dynamic view (every API has a use case): add the op's call to a use case's dynamic view, or delete the op", key, op.Name))
+		}
+	}
+	return out
+}
+
+// opDeclaresResult reports whether the operation declares a result.
+func opDeclaresResult(op ContractOperation) bool {
+	r := strings.TrimSpace(string(op.Result))
+	return r != "" && r != "null"
+}
+
+// opObserves reports whether the operation can serve as a reader: it declares a result or
+// is readOnly.
+func opObserves(op ContractOperation) bool { return opDeclaresResult(op) || op.ReadOnly }
+
+// contractKeyOf is the serviceContracts key of component c: its contractKey, else the
+// key (or the contract's component) that names it.
+func contractKeyOf(p Project, c Component) (string, bool) {
+	if _, ok := p.ServiceContracts[c.ContractKey]; c.ContractKey != "" && ok {
+		return c.ContractKey, true
+	}
+	id := scenario.Normalize(c.ID)
+	keys := make([]string, 0, len(p.ServiceContracts))
+	for key := range p.ServiceContracts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		if scenario.Normalize(key) == id || scenario.Normalize(p.ServiceContracts[key].Component) == id {
+			return key, true
+		}
+	}
+	return "", false
+}
+
+// opObservableFindings is TP-OP-OBSERVABLE (Error), the design-time twin of TP-STATE, for
+// ResourceAccess contracts only. A scenario projected onto the RA whose stimulus resolves to
+// a void, non-readOnly op yet expects states or outputs can be proved only by reading the
+// Resource back through some op that declares a result or is readOnly: of this contract or
+// of any other ResourceAccess over the same Resource. With no such reader, and every such
+// other ResourceAccess contracted (else no prediction), no plan can prove the outputs.
+func opObservableFindings(p Project, all []scenario.Scenario) []Finding {
+	if !architectureCommitted(p) {
+		return nil
+	}
+	sys, ok, err := p.system()
+	if err != nil || !ok {
+		return nil
+	}
+	var out []Finding
+	for _, key := range slices.Sorted(maps.Keys(p.ServiceContracts)) {
+		out = append(out, contractObservableFindings(p, sys, all, key)...)
+	}
+	return out
+}
+
+// contractObservableFindings is TP-OP-OBSERVABLE for the one contract key.
+func contractObservableFindings(p Project, sys System, all []scenario.Scenario, key string) []Finding {
+	sc := p.ServiceContracts[key]
+	x, ok := raComponentOf(sys, key, sc)
+	if !ok {
+		return nil
+	}
+	resources, readers, known := raReaders(p, sys, componentIndex(sys), x, sc)
+	if !known || readers || len(resources) == 0 {
+		return nil
+	}
+	var out []Finding
+	unproved := unobservedOps(sc, scenario.ForComponentAs(all, key, false))
+	for _, name := range slices.Sorted(maps.Keys(unproved)) {
+		out = append(out, tpFinding(ruleTPOpObservable, loc(0, "serviceContracts."+key),
+			"%s.%s returns nothing and no op over %s reads back what it changes, so no test plan can prove the outputs scenario %s expects (TP-STATE): give a ResourceAccess over that Resource an op returning what %s changed that a dynamic view calls (TP-OP-REACHED), or amend the architecture so the Resource is read (SYS-RESOURCE-UNREAD)",
+			key, name, strings.Join(resources, ", "), strings.Join(unproved[name], ", "), name))
+	}
+	return out
+}
+
+// unobservedOps maps each void, non-readOnly op of sc that a projected scenario's stimulus
+// drives with expected states or outputs to the ids of those scenarios.
+func unobservedOps(sc ServiceContract, projected []scenario.Scenario) map[string][]string {
+	out := map[string][]string{}
+	for _, s := range projected {
+		for _, st := range s.Stimuli {
+			if len(st.ExpectedStates)+len(st.ExpectedOutputs) == 0 {
+				continue
+			}
+			op, found := findOp(sc, st.Input.Op)
+			if found && !opObserves(op) && !slices.Contains(out[op.Name], s.ID) {
+				out[op.Name] = append(out[op.Name], s.ID)
+			}
+		}
+	}
+	return out
+}
+
+// findOp resolves an operation of a contract by its exact name.
+func findOp(sc ServiceContract, name string) (ContractOperation, bool) {
+	for _, op := range sc.Interface.Operations {
+		if op.Name == name {
+			return op, true
+		}
+	}
+	return ContractOperation{}, false
+}
+
+// raComponentOf is the ResourceAccess component a contract belongs to, if it is one.
+func raComponentOf(sys System, key string, sc ServiceContract) (Component, bool) {
+	for _, c := range sys.Components {
+		if c.Kind != kindResourceAccess {
+			continue
+		}
+		if c.ContractKey == key || scenario.Normalize(c.ID) == scenario.Normalize(key) || (sc.Component != "" && scenario.Normalize(c.ID) == scenario.Normalize(sc.Component)) {
+			return c, true
+		}
+	}
+	return Component{}, false
+}
+
+// raReaders gathers the Resources x is related to and whether any op of x's contract or of
+// another ResourceAccess over those Resources can observe state. known is false when such
+// another ResourceAccess has no contract, because its ops cannot then be predicted.
+func raReaders(p Project, sys System, idx map[string]Component, x Component, sc ServiceContract) (resources []string, readers, known bool) {
+	known = true
+	readers = contractObserves(sc)
+	for _, res := range relatedResources(sys, idx, x.ID) {
+		resources = append(resources, res.Name)
+		for _, other := range resourceAccessesOf(sys, idx, res.ID) {
+			if other.ID == x.ID {
+				continue
+			}
+			k, ok := contractKeyOf(p, other)
+			known = known && ok
+			readers = readers || (ok && contractObserves(p.ServiceContracts[k]))
+		}
+	}
+	return resources, readers, known
+}
+
+// contractObserves reports whether any op of the contract can serve as a reader.
+func contractObserves(sc ServiceContract) bool {
+	return slices.ContainsFunc(sc.Interface.Operations, opObserves)
+}
+
+// relatedResources is the Resource components related to component id by any relationship,
+// in either direction.
+func relatedResources(sys System, idx map[string]Component, id string) []Component {
+	seen := map[string]bool{}
+	var out []Component
+	for _, r := range sys.Relationships {
+		other := ""
+		switch id {
+		case r.From:
+			other = r.To
+		case r.To:
+			other = r.From
+		}
+		if res, ok := idx[other]; ok && res.Kind == kindResource && !seen[res.ID] {
+			seen[res.ID] = true
+			out = append(out, res)
 		}
 	}
 	return out

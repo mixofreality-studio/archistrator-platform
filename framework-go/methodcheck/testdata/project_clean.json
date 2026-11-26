@@ -271,7 +271,7 @@
           "from": "designmanager",
           "to": "stateaccess",
           "mode": "sync",
-          "label": ""
+          "label": "recallState(owner) → state"
          },
          {
           "from": "stateaccess",

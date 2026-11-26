@@ -46,7 +46,7 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleSystemLayerDegenerate,
 
 		// ---- State-validation twins (rules_statevalidation.go) ----
-		ruleSysRAOrphan, ruleSysEncapsulates, ruleSysRelDup, ruleSysClientSurface,
+		ruleSysRAOrphan, ruleSysResourceUnread, ruleSysEncapsulates, ruleSysRelDup, ruleSysClientSurface,
 		ruleSysClientOpLabel, ruleSysClientMachineCall,
 		ruleUCActPresent, ruleUCGuardLabel, ruleUCVariationRef,
 		ruleVolAxisExplicit, ruleStdStatusExplicit, ruleStdFailOpen,
@@ -90,7 +90,7 @@ func emittedRuleIDs() map[RuleID]bool {
 
 		// ---- Per-component test plans (rules_testplan.go) ----
 		ruleTPKey, ruleTPBound, ruleTPStep, ruleTPStepOp, ruleTPArgName, ruleTPArgType,
-		ruleTPExpect, ruleTPProbe, ruleTPState, ruleTPOpReached, ruleTPSkip,
+		ruleTPExpect, ruleTPProbe, ruleTPState, ruleTPOpReached, ruleTPOpObservable, ruleTPSkip,
 		ruleTPHook, ruleTPExpectRequired, ruleTPArgRef, ruleTPArrange, ruleTPActorObserved, ruleTPPrincipal,
 		ruleTPClientOps, ruleTPLabelOp, ruleClientMachineMirror,
 		ruleTPProbeSelf, ruleTPProbePolling, ruleTPPrincipalDelegation, ruleTPExpectZero, ruleTPNullSatisfied,

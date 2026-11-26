@@ -101,6 +101,7 @@ func validateArchitecture(s System, c CoreUseCases) (ValidationResult, error) {
 	findings = append(findings, archChainCoverage(s, c)...)
 	findings = append(findings, usecaseDynamicCoverage(s, c)...)
 	findings = append(findings, raOrphan(s)...)
+	findings = append(findings, resourceUnread(s)...)
 	findings = append(findings, clientSurfaceStated(s)...)
 	findings = append(findings, clientOpLabels(s, allActorIDs(c))...)
 	findings = append(findings, clientMachineCalls(s)...)
