@@ -130,8 +130,10 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 		cmd("frontend-construction"):    {"ARCH-TEST-COMPOSE", "UID-NAME", "surface check"},
 		cmd("core-use-cases-critique"): {
 			"UC-START-NOT-ACTION", "UC-PATH-OUTCOME", "UC-OUTCOME-AT-ASKING-SURFACE", "CC-DECIDED-BY-ACTOR-STEP",
-			"SCN-UNADDRESSED", "SCN-ACTOR-PATH-CLIENT", "TP-CLIENT-CONTRACTED", "UC-ACTOR-DOOR", "UC-LANE-RESOLVES",
+			"SCN-UNADDRESSED", "SCN-ACTOR-PATH-CLIENT", "TP-CLIENT-CONTRACTED", "UC-ACTOR-DOOR", "UC-LANE-RESOLVES", "UC-OUTCOME-TO-ASKER",
 		},
+		cmd("core-use-cases-draft"):                         {"UC-OUTCOME-TO-ASKER"},
+		".claude/skills/the-method-core-use-cases/SKILL.md": {"UC-OUTCOME-TO-ASKER"},
 		".claude/skills/the-method-architecture/SKILL.md":   {"UC-LANE-RESOLVES", "UC-OUTCOME-AT-ASKING-SURFACE"},
 		".claude/skills/the-method-testing/SKILL.md":        {"writes no test code", "ARCH-TEST-COMPOSE", "TP-DISCRIMINATE", "TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-STATE"},
 		".claude/skills/the-method-review-routing/SKILL.md": {"TP-HOOK", "vacuous"},
