@@ -132,18 +132,12 @@ func labelReadsResult(label string) bool {
 	return false
 }
 
-// resourceRead reports whether the Resource id is read somewhere in the System: a
-// relationship leaves it (r1), a relationship into it comes from a non-ResourceAccess (r2),
-// or a dynamic-view call into a ResourceAccess related to it labels a result (r3).
+// resourceRead reports whether the Resource id is read somewhere in the System: some
+// dynamic-view call into a ResourceAccess related to it labels a result ("op(args) → result").
+// A relationship drawn out of a Resource, or from a Client into it, is not a read: the
+// architecture gate refuses both (SYS-NOUP, SYS-DONT-CLIENT-SKIP, SYS-NOSKIP), so counting
+// them would teach a fix the gate itself rejects.
 func resourceRead(s System, idx map[string]Component, id string) bool {
-	for _, r := range s.Relationships {
-		if r.From == id {
-			return true
-		}
-		if from, ok := idx[r.From]; r.To == id && ok && from.Kind != kindResourceAccess {
-			return true
-		}
-	}
 	ras := map[string]bool{}
 	for _, ra := range resourceAccessesOf(s, idx, id) {
 		ras[ra.ID] = true
@@ -173,7 +167,7 @@ func resourceUnread(s System) []Finding {
 		out = append(out, Finding{
 			RuleID:   ruleSysResourceUnread,
 			Severity: SeverityError,
-			Message: fmt.Sprintf("Resource %q is written (by %s) but nothing reads it: draw who reads it, either a read call \"op(args) → result\" into its ResourceAccess in a dynamic view, or a relationship from it to the consumer",
+			Message: fmt.Sprintf("Resource %q is written (by %s) but nothing reads it: draw the read as a dynamic-view call \"op(args) → result\" into its ResourceAccess (a relationship drawn into or out of a Resource is refused by the layer rules and does not count)",
 				label, strings.Join(writers, ", ")),
 			Location: loc(i+1, "component "+label),
 		})

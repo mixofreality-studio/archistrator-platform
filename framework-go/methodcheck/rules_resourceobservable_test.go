@@ -44,16 +44,16 @@ func TestSysResourceUnread(t *testing.T) {
 			s.DynamicViews[0].Steps[0].Calls = append(s.DynamicViews[0].Steps[0].Calls,
 				TraceCall{From: mgr.ID, To: ra.ID, Mode: modeSync, Label: "pendingNotices(owner) → notices"})
 		}, 0},
-		{"relationship out of the resource", "announceListChanged(owner)", func(s *System, mgr, ra, res Component) {
+		{"relationship out of the resource is not a read", "announceListChanged(owner)", func(s *System, mgr, ra, res Component) {
 			web := comp(t, "WebApp", kindClient)
 			s.Components = append(s.Components, web)
 			s.Relationships = append(s.Relationships, Relationship{From: res.ID, To: web.ID, Mode: modeEventPubSub})
-		}, 0},
-		{"client subscription into the resource", "announceListChanged(owner)", func(s *System, mgr, ra, res Component) {
+		}, 1},
+		{"client subscription into the resource is not a read", "announceListChanged(owner)", func(s *System, mgr, ra, res Component) {
 			web := comp(t, "WebApp", kindClient)
 			s.Components = append(s.Components, web)
 			s.Relationships = append(s.Relationships, Relationship{From: web.ID, To: res.ID, Mode: modeEventPubSub})
-		}, 0},
+		}, 1},
 		{"encapsulates note does not discharge", "announceListChanged(owner)", func(s *System, mgr, ra, res Component) {
 			s.Components[2].Encapsulates = "read later by the web app"
 		}, 1},
@@ -207,4 +207,36 @@ func TestTP_OpObservable(t *testing.T) {
 		uncommit(t, p, kindSystem)
 		wantRules(t, runTP(t, p), ruleTPOpObservable, 0)
 	})
+}
+
+// TestSysResourceUnreadTaughtFixesStayLegal pins that the two relationship shapes that once
+// counted as reads are refused by the architecture gate as a whole, with the layer-rule
+// Errors, and that SYS-RESOURCE-UNREAD still fires: no design that draws them is admitted.
+func TestSysResourceUnreadTaughtFixesStayLegal(t *testing.T) {
+	for _, mode := range []string{modeSync, modeEventPubSub} {
+		for _, intoResource := range []bool{true, false} {
+			s, _, _, res := unreadSystem(t, "announceListChanged(owner)")
+			web := comp(t, "WebApp", kindClient)
+			s.Components = append(s.Components, web)
+			rel := Relationship{From: res.ID, To: web.ID, Mode: mode}
+			if intoResource {
+				rel = Relationship{From: web.ID, To: res.ID, Mode: mode}
+			}
+			s.Relationships = append(s.Relationships, rel)
+			out, err := validateArchitecture(s, CoreUseCases{})
+			if err != nil {
+				t.Fatal(err)
+			}
+			wantRules(t, out.Findings, ruleSysResourceUnread, 1)
+			errs := 0
+			for _, f := range out.Findings {
+				if f.Severity == SeverityError && f.RuleID != ruleSysResourceUnread {
+					errs++
+				}
+			}
+			if errs == 0 {
+				t.Errorf("mode=%s intoResource=%v: the architecture gate admitted a Client/Resource edge", mode, intoResource)
+			}
+		}
+	}
 }
