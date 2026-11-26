@@ -379,7 +379,7 @@ var rulePrerequisites = func() map[RuleID][]Prerequisite {
 		ruleTPBound, ruleTPStep, ruleTPStepOp, ruleTPArgName, ruleTPArgType,
 		ruleTPExpect, ruleTPProbe, ruleTPState, ruleTPSkip,
 		ruleTPHook, ruleTPExpectRequired, ruleTPArgRef, ruleTPArrange, ruleTPActorObserved, ruleTPPrincipal,
-		ruleTPProbeSelf, ruleTPProbePolling, ruleTPPrincipalDelegation, ruleTPExpectZero,
+		ruleTPProbeSelf, ruleTPProbePolling, ruleTPPrincipalDelegation, ruleTPExpectZero, ruleTPNullSatisfied,
 		ruleTPUITarget, ruleTPUIAction,
 		ruleATPBound, ruleATPRef, ruleATPBrowser, ruleATPProbeAs)
 	// TP-KEY's defect is a plan filed under no contract key, including one filed before any

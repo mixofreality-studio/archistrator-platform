@@ -162,6 +162,9 @@ func planBindingFindings(p Project, env tpEnv, comp string, s scenario.Scenario,
 	for i, st := range b.Steps {
 		out = append(out, sc.forStimulus(s.Stimuli[i]).stepFindings(s.Stimuli[i], st)...)
 	}
+	if !acceptance {
+		out = append(out, sc.nullSatisfiedFindings(b)...)
+	}
 	return out
 }
 

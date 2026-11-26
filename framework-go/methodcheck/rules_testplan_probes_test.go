@@ -213,3 +213,169 @@ func TestTP_State_ReadOnlyStepObservesItself(t *testing.T) {
 		t.Errorf("a probe discharges the output: %v", fs)
 	}
 }
+
+// ---- TP-NULL-SATISFIED ----
+
+// todosContract is a todosAccess-shaped contract: Record mints TodoID; Recall returns a list that carries
+// its owner, which it also takes, so OwnerID is not minted.
+func todosContract() ServiceContract {
+	raw := func(s string) json.RawMessage { return json.RawMessage(s) }
+	ref := func(n string) string { return `{"$ref":"#/$defs/` + n + `"}` }
+	param := func(n, schema string) ContractParam { return ContractParam{Name: n, Schema: raw(schema)} }
+	return ServiceContract{
+		Component: "todosAccess",
+		Defs: map[string]json.RawMessage{
+			"OwnerID":        raw(`{"type":"string"}`),
+			"TodoID":         raw(`{"type":"string"}`),
+			"Todo":           raw(`{"type":"object","properties":{"id":` + ref("TodoID") + `,"wording":{"type":"string"},"done":{"type":"boolean"}}}`),
+			"TodoList":       raw(`{"type":"object","properties":{"owner":` + ref("OwnerID") + `,"todos":{"type":"array","items":` + ref("Todo") + `}}}`),
+			"DiscardOutcome": raw(`{"type":"object","properties":{"discarded":{"type":"boolean"}}}`),
+			"BulkOutcome":    raw(`{"type":"object","properties":{"affected":{"type":"integer"}}}`),
+		},
+		Interface: ContractInterface{Operations: []ContractOperation{
+			{Name: "Record", Params: []ContractParam{param("owner", ref("OwnerID")), param("wording", `{"type":"string"}`)}, Result: raw(ref("Todo"))},
+			{Name: "Discard", Params: []ContractParam{param("owner", ref("OwnerID")), param("todoId", ref("TodoID"))}, Result: raw(ref("DiscardOutcome"))},
+			{Name: "DiscardAll", Params: []ContractParam{param("owner", ref("OwnerID")), param("todoIds", `{"type":"array","items":`+ref("TodoID")+`}`)}, Result: raw(ref("BulkOutcome"))},
+			{Name: "SetAllDoneState", Params: []ContractParam{param("owner", ref("OwnerID")), param("done", `{"type":"boolean"}`)}, Result: raw(ref("BulkOutcome"))},
+			{Name: "Recall", ReadOnly: true, Params: []ContractParam{param("owner", ref("OwnerID"))}, Result: raw(ref("TodoList"))},
+		}},
+	}
+}
+
+func todosScope(c ServiceContract) tpScope {
+	look := func(name string) (ContractOperation, bool) {
+		for _, op := range c.Interface.Operations {
+			if op.Name == name {
+				return op, true
+			}
+		}
+		return ContractOperation{}, false
+	}
+	return tpScope{comp: "todosAccess", scenario: "s-P1", contract: c, op: look, l: loc(0, "x")}
+}
+
+var ownerArg = TestArg{Name: "owner", Value: lit(`"o"`)}
+
+func recall(seq int, want string, probes ...Probe) StepBinding {
+	return StepBinding{Seq: seq, Operation: "Recall", Inputs: []TestArg{ownerArg}, Expect: TestExpect{Result: want}, Probes: probes}
+}
+
+func recallProbe(want string) Probe {
+	return Probe{For: "n", Component: "todosAccess", Operation: "Recall", Inputs: []TestArg{ownerArg}, Expect: TestExpect{Result: want}}
+}
+
+func todosStep(seq int, op, result string, inputs ...TestArg) StepBinding {
+	return StepBinding{Seq: seq, Operation: op, Inputs: append([]TestArg{ownerArg}, inputs...), Expect: TestExpect{Result: result}}
+}
+
+func recordArrange() []ArrangeCall {
+	return []ArrangeCall{ContractCall{Component: "todosAccess", Operation: "Record",
+		Inputs: []TestArg{ownerArg, {Name: "wording", Value: lit(`"alpha"`)}}, Expect: TestExpect{Result: `{"wording":"alpha"}`}}}
+}
+
+const alphaList = `{"todos":[{"wording":"alpha"}]}`
+
+func TestTP_NullSatisfied_Fires(t *testing.T) {
+	sc := todosScope(todosContract())
+	cases := map[string]struct {
+		b    ScenarioBinding
+		op   string
+		want string // the criterion named
+	}{
+		"clear-completed: unknown ids, reads repeat (c1)": {ScenarioBinding{Arrange: recordArrange(), Steps: []StepBinding{
+			recall(1, alphaList),
+			todosStep(2, "DiscardAll", `{"affected":0}`, TestArg{Name: "todoIds", Value: lit(`["todo-already-gone"]`)}),
+			recall(3, alphaList),
+		}}, "DiscardAll", "c1"},
+		"complete-all-and-undo: empty list stays empty (c1)": {ScenarioBinding{Steps: []StepBinding{
+			recall(1, `{"todos":[]}`),
+			todosStep(2, "SetAllDoneState", `{"affected":0}`, TestArg{Name: "done", Value: lit(`false`)}),
+			recall(3, `{"todos":[]}`),
+		}}, "SetAllDoneState", "c1"},
+		"sweep-the-list: probes repeat the earlier read (c1)": {ScenarioBinding{Arrange: recordArrange(), Steps: []StepBinding{
+			recall(1, alphaList),
+			{Seq: 2, Operation: "SetAllDoneState", Inputs: []TestArg{ownerArg, {Name: "done", Value: lit(`false`)}},
+				Expect: TestExpect{Result: `{"affected":0}`}, Probes: []Probe{recallProbe(alphaList), recallProbe(alphaList)}},
+			recall(3, alphaList),
+		}}, "SetAllDoneState", "c1"},
+		"remove-a-todo: a literal minted id (c2)": {ScenarioBinding{Arrange: recordArrange(), Steps: []StepBinding{
+			todosStep(1, "Discard", `{"discarded":false}`, TestArg{Name: "todoId", Value: lit(`"todo-not-in-list"`)}),
+			recall(2, alphaList),
+		}}, "Discard", "c2"},
+		"unknown ids and no read (vacuous c1, c2)": {ScenarioBinding{Steps: []StepBinding{
+			todosStep(1, "DiscardAll", `{"affected":0}`, TestArg{Name: "todoIds", Value: lit(`["todo-already-gone"]`)}),
+		}}, "DiscardAll", "c1"},
+	}
+	for name, c := range cases {
+		t.Run(name, func(t *testing.T) {
+			fs := sc.nullSatisfiedFindings(c.b)
+			if len(fs) != 1 {
+				t.Fatalf("want one finding, got %+v", fs)
+			}
+			f := fs[0]
+			if f.RuleID != ruleTPNullSatisfied || f.Severity != SeverityError ||
+				!strings.Contains(f.Message, c.op) || !strings.Contains(f.Message, c.want+":") || !strings.Contains(f.Message, "s-P1") {
+				t.Errorf("TP-NULL-SATISFIED is an Error naming scenario, operation and criterion %s: %+v", c.want, f)
+			}
+		})
+	}
+	// c1 and c2 both hold on the vacuous literal case: the message names both
+	fs := sc.nullSatisfiedFindings(cases["unknown ids and no read (vacuous c1, c2)"].b)
+	if !strings.Contains(fs[0].Message, "c1:") || !strings.Contains(fs[0].Message, "c2:") {
+		t.Errorf("both criteria held: %s", fs[0].Message)
+	}
+}
+
+func TestTP_NullSatisfied_Silent(t *testing.T) {
+	sc := todosScope(todosContract())
+	recordStep := StepBinding{Seq: 1, Operation: "Record", Inputs: []TestArg{ownerArg, {Name: "wording", Value: lit(`"alpha"`)}}, Expect: TestExpect{Result: `{"wording":"alpha"}`}}
+	discardRef := todosStep(2, "Discard", `{"discarded":true}`, TestArg{Name: "todoId", Value: RefValue{Step: 1, Path: "id"}})
+	cases := map[string]ScenarioBinding{
+		"the target is created by an earlier step and discarded": {Steps: []StepBinding{recordStep, discardRef, recall(3, `{"todos":[]}`)}},
+		"a non-zero result": {Arrange: recordArrange(), Steps: []StepBinding{
+			recall(1, alphaList),
+			todosStep(2, "SetAllDoneState", `{"affected":1}`, TestArg{Name: "done", Value: lit(`true`)}),
+			recall(3, `{"todos":[{"wording":"alpha","done":true}]}`),
+		}},
+		"an arrange also calls the operation": {Arrange: append(recordArrange(), ContractCall{Component: "todosAccess", Operation: "Discard",
+			Inputs: []TestArg{ownerArg, {Name: "todoId", Value: lit(`"x"`)}}, Expect: TestExpect{Result: `{"discarded":true}`}}),
+			Steps: []StepBinding{todosStep(1, "Discard", `{"discarded":false}`, TestArg{Name: "todoId", Value: lit(`"todo-not-in-list"`)}), recall(2, alphaList)}},
+		"a later read with no earlier twin differs": {Steps: []StepBinding{
+			todosStep(1, "SetAllDoneState", `{"affected":0}`, TestArg{Name: "done", Value: lit(`false`)}),
+			recall(2, alphaList),
+		}},
+		"a literal minted id whose step expects an error": {Arrange: recordArrange(), Steps: []StepBinding{
+			{Seq: 1, Operation: "Discard", Inputs: []TestArg{ownerArg, {Name: "todoId", Value: lit(`"nope"`)}}, Expect: TestExpect{ErrorExpected: true, ErrorCode: "NotFound"}},
+			recall(2, alphaList),
+		}},
+		"an empty id list is not inert and a later read differs": {Steps: []StepBinding{
+			todosStep(1, "DiscardAll", `{"affected":0}`, TestArg{Name: "todoIds", Value: lit(`[]`)}),
+			recall(2, alphaList),
+		}},
+		"an owner literal is not a minted id": {Steps: []StepBinding{
+			recall(1, `{"todos":[]}`),
+			todosStep(2, "SetAllDoneState", `{"affected":0}`, TestArg{Name: "done", Value: lit(`false`)}),
+			recall(3, alphaList),
+		}},
+	}
+	for name, b := range cases {
+		t.Run(name, func(t *testing.T) {
+			if fs := sc.nullSatisfiedFindings(b); len(fs) != 0 {
+				t.Errorf("must not fire: %+v", fs)
+			}
+		})
+	}
+}
+
+func TestTP_NullSatisfied_MintedDefs(t *testing.T) {
+	got := mintedDefs(todosContract())
+	if !got["TodoID"] || got["OwnerID"] {
+		t.Errorf("TodoID is minted by Record and OwnerID is not: %v", got)
+	}
+}
+
+func TestTP_NullSatisfied_IsRegistered(t *testing.T) {
+	if !emittedRuleIDs()[ruleTPNullSatisfied] {
+		t.Errorf("%s is emitted but not in emittedRuleIDs", ruleTPNullSatisfied)
+	}
+}
