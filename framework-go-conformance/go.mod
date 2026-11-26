@@ -7,7 +7,7 @@ require (
 	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.31.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.9.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost v0.10.0
-	github.com/mixofreality-studio/archistrator-platform/method-assets v0.38.0
+	github.com/mixofreality-studio/archistrator-platform/method-assets v0.38.1
 )
 
 require (
