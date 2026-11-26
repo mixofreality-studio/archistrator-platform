@@ -85,7 +85,16 @@ func RunChain(ctx context.Context, fixture string, dir string, opts ...ChainOpti
 // ChainOption adjusts a chain run.
 type ChainOption func(*chainConfig)
 
-type chainConfig struct{ impl fs.FS }
+type chainConfig struct {
+	impl        fs.FS
+	noComposeOf bool
+}
+
+// WithoutServerComposition drops the composition-root generators (appgen temporal, clients,
+// config, compose) from the chain: the tree an Engine's or a ResourceAccess's integration works
+// in, whose pre-step is `make gen-tests` alone. The chain then proves the generated scenario
+// tests build with the subject gen-tests writes beside them and no cmd/server composition.
+func WithoutServerComposition() ChainOption { return func(c *chainConfig) { c.noComposeOf = true } }
 
 // WithImpl overlays impl, a module-relative tree of an app's hand-written files (the
 // component bodies and cmd/server/hooks.go), onto the generated scaffold before the first
@@ -123,7 +132,7 @@ func RunChainOn(ctx context.Context, fixture string, raw []byte, dir string, opt
 	}
 
 	run := &runner{ctx: ctx, dir: dir, rep: &rep}
-	for _, st := range chainSteps(model, cfg.impl) {
+	for _, st := range chainSteps(model, cfg.impl, cfg.noComposeOf) {
 		if err := run.step(st); err != nil {
 			return rep, err
 		}
@@ -146,18 +155,31 @@ type chainStep struct {
 // and appgen generate for a contract package only once it holds code (null.gen.go is
 // that code in a model with nothing built), and appgen compose seeds hooks.go only
 // when absent, which nullgen would then refuse to replace.
-func chainSteps(model *projectmodel.Model, impl fs.FS) []chainStep {
+func chainSteps(model *projectmodel.Model, impl fs.FS, noCompose bool) []chainStep {
 	steps := []chainStep{
 		{name: "go mod tidy", argv: []string{"go", "mod", "tidy"}},
 		{name: "make gen-null", argv: []string{"make", "gen-null"}},
 		{name: "make gen-models", argv: []string{"make", "gen-models"}},
 	}
+	if noCompose {
+		// gen-null seats the null composition root's hooks.go, which names every Client package:
+		// the tree an Engine or ResourceAccess integrates in has no composition root yet.
+		steps = append(steps, chainStep{name: "drop the null composition seat", do: func(dir string) error {
+			return os.RemoveAll(filepath.Join(dir, "cmd", "server"))
+		}})
+	}
 	for _, sub := range []string{"temporal", "clients", "config", "compose"} {
+		if noCompose && sub != "temporal" {
+			continue // a Manager's own construction generates temporal; the server composition is later
+		}
 		steps = append(steps, chainStep{name: "appgen " + sub,
 			argv: []string{"go", "tool", "appgen", sub, "-project", statePath, "-root", "."}})
 	}
 	steps = append(steps, chainStep{name: "make gen-tests", argv: []string{"make", "gen-tests"}})
 	surfaces := model.System.BuiltBrowserSurfaces()
+	if noCompose {
+		surfaces = nil // a browser surface reads the composed server's OAS; a layer below the Clients integrates without it
+	}
 	for _, s := range surfaces {
 		steps = append(steps, chainStep{name: "webgen bootstrap " + s.ID,
 			argv: []string{"go", "tool", "webgen", "bootstrap", "-C", webDir, "-surface", s.ID, "-kind", string(s.Surface)}})
