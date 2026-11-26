@@ -3,11 +3,11 @@ module github.com/mixofreality-studio/archistrator-platform/framework-go-conform
 go 1.25.4
 
 require (
-	github.com/mixofreality-studio/archistrator-platform/framework-go v0.41.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.42.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.31.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.9.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost v0.10.0
-	github.com/mixofreality-studio/archistrator-platform/method-assets v0.39.0
+	github.com/mixofreality-studio/archistrator-platform/method-assets v0.40.0
 )
 
 require (
