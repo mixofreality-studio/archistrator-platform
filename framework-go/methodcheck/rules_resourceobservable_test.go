@@ -78,6 +78,32 @@ func TestSysResourceUnread(t *testing.T) {
 	}
 }
 
+// TestSysResourceUnreadReachesArchitectureGate pins the wiring: the architecture gate
+// (validateArchitecture, which putDraftModel and the CI validate run) refuses the RUN-032
+// shape with exactly one SYS-RESOURCE-UNREAD Error, and admits the same design once
+// something reads the Resource.
+func TestSysResourceUnreadReachesArchitectureGate(t *testing.T) {
+	s, mgr, ra, _ := unreadSystem(t, "announceListChanged(owner)")
+	res, err := validateArchitecture(s, CoreUseCases{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRules(t, res.Findings, ruleSysResourceUnread, 1)
+	for _, f := range res.Findings {
+		if f.RuleID == ruleSysResourceUnread && f.Severity != SeverityError {
+			t.Errorf("severity = %v, want error", f.Severity)
+		}
+	}
+
+	s.DynamicViews[0].Steps[0].Calls = append(s.DynamicViews[0].Steps[0].Calls,
+		TraceCall{From: mgr.ID, To: ra.ID, Mode: modeSync, Label: "pendingNotices(owner) → notices"})
+	res2, err := validateArchitecture(s, CoreUseCases{})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantRules(t, res2.Findings, ruleSysResourceUnread, 0)
+}
+
 // observableProject adds to tp_clean a ResourceAccess "orderAccess" over a Resource, called
 // by orderManager in uc1's first step, so the stimulus into it carries the expected output.
 func observableProject(t *testing.T, ops []ContractOperation, other bool, otherContract bool) Project {
