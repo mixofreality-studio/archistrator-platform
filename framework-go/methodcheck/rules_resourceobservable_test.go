@@ -3,6 +3,8 @@ package methodcheck
 import (
 	"encoding/json"
 	"testing"
+
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/scenario"
 )
 
 // SYS-RESOURCE-UNREAD and TP-OP-OBSERVABLE: a Resource that is written and never read, and
@@ -56,6 +58,17 @@ func TestSysResourceUnread(t *testing.T) {
 		}, 1},
 		{"encapsulates note does not discharge", "announceListChanged(owner)", func(s *System, mgr, ra, res Component) {
 			s.Components[2].Encapsulates = "read later by the web app"
+		}, 1},
+		{"a read through a second RA over a different Resource does not discharge", "announceListChanged(owner)", func(s *System, mgr, ra, res Component) {
+			// RUN-032: list-manager recalls through list-access into todos while
+			// view-notice-channel is still never read.
+			la := comp(t, "ListAccess", kindResourceAccess)
+			todos := comp(t, "Todos", kindResource)
+			s.Components = append(s.Components, la, todos)
+			s.Relationships = append(s.Relationships, Relationship{From: mgr.ID, To: la.ID, Mode: modeSync, Label: "recallList(owner)"}, Relationship{From: la.ID, To: todos.ID, Mode: modeSync})
+			s.DynamicViews[0].Steps[0].Calls = append(s.DynamicViews[0].Steps[0].Calls,
+				TraceCall{From: mgr.ID, To: la.ID, Mode: modeSync, Label: "recallList(owner) → todos"},
+				TraceCall{From: la.ID, To: todos.ID, Mode: modeSync})
 		}, 1},
 		{"no dynamic views is silent", "announceListChanged(owner)", func(s *System, mgr, ra, res Component) {
 			s.DynamicViews = nil
@@ -238,5 +251,32 @@ func TestSysResourceUnreadTaughtFixesStayLegal(t *testing.T) {
 				t.Errorf("mode=%s intoResource=%v: the architecture gate admitted a Client/Resource edge", mode, intoResource)
 			}
 		}
+	}
+}
+
+// TestUnobservedOpsNeedsExpectation pins the precondition that limits TP-OP-OBSERVABLE to
+// the design-time twin of TP-STATE: a stimulus into a void op that expects no state and no
+// output proves nothing is owed, so the op is not flagged.
+func TestUnobservedOpsNeedsExpectation(t *testing.T) {
+	sc := ServiceContract{Interface: ContractInterface{Name: "OrderAccess", Operations: []ContractOperation{voidAnnounce}}}
+	stim := func(o scenario.Outcome) []scenario.Scenario {
+		return []scenario.Scenario{{ID: "S1", Stimuli: []scenario.Stimulus{{Seq: 1, Input: scenario.InputEv{Kind: "call", Op: "AnnounceOrder"}, Outcome: o}}}}
+	}
+	cases := []struct {
+		name string
+		o    scenario.Outcome
+		want int
+	}{
+		{"nothing expected is silent", scenario.Outcome{}, 0},
+		{"hints alone are silent", scenario.Outcome{Hints: []string{"h"}}, 0},
+		{"expected output fires", scenario.Outcome{ExpectedOutputs: []scenario.Output{{Kind: "sendSignal", Label: "x"}}}, 1},
+		{"expected state fires", scenario.Outcome{ExpectedStates: []scenario.State{{}}}, 1},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := len(unobservedOps(sc, stim(tc.o))); got != tc.want {
+				t.Errorf("unobservedOps = %d ops, want %d", got, tc.want)
+			}
+		})
 	}
 }
