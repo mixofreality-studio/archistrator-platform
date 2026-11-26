@@ -315,7 +315,7 @@ func (sc tpScope) nullSatisfiedOp(b ScenarioBinding, name string) (Finding, bool
 	if onlyRepeatsEarlier(sc, b.Steps, first, name) {
 		held = append(held, "c1: everything the plan observes at or after the first call repeats an observation made before it")
 	}
-	if !seedsAResource(b.Arrange) && sc.allInert(b.Steps, name, op) {
+	if !seedsAResource(b.Arrange) && sc.allInert(b.Arrange, b.Steps, name, op) {
 		held = append(held, "c2: every call addresses by a literal an id the contract mints, which no step handed out")
 	}
 	if len(held) == 0 {
@@ -346,14 +346,61 @@ func (sc tpScope) zeroCalls(steps []StepBinding, name string, op ContractOperati
 }
 
 // allInert is c2: every step calling name is inert.
-func (sc tpScope) allInert(steps []StepBinding, name string, op ContractOperation) bool {
+func (sc tpScope) allInert(arrange []ArrangeCall, steps []StepBinding, name string, op ContractOperation) bool {
 	minted := mintedDefs(sc.contract)
-	for _, st := range steps {
-		if st.Operation == name && !literalMintedInput(st, op, minted) {
+	for i, st := range steps {
+		if st.Operation == name && !literalMintedInput(st, op, minted, handedOut(arrange, steps[:i], name)) {
 			return false
 		}
 	}
 	return true
+}
+
+// handedOut are the literal values the plan itself passes to the component before a step: the inputs of
+// every arrange contract call and of every earlier step that does not call name. A value the plan hands
+// out is a key or an owner the plan chose, so a later call addressing it may find something.
+func handedOut(arrange []ArrangeCall, earlier []StepBinding, name string) map[string]bool {
+	out := map[string]bool{}
+	for _, a := range arrange {
+		if c, ok := a.(ContractCall); ok {
+			addLiterals(out, c.Inputs)
+		}
+	}
+	for _, st := range earlier {
+		if st.Operation != name {
+			addLiterals(out, st.Inputs)
+		}
+	}
+	return out
+}
+
+// addLiterals records the elements of every literal input into set.
+func addLiterals(set map[string]bool, ins []TestArg) {
+	for _, in := range ins {
+		if lit, ok := in.Value.(LiteralValue); ok {
+			for _, v := range literalElements(lit.JSON) {
+				set[v] = true
+			}
+		}
+	}
+}
+
+// literalElements is a literal's canonical JSON, or each element's when it is an array.
+func literalElements(raw json.RawMessage) []string {
+	var arr []json.RawMessage
+	if json.Unmarshal(raw, &arr) == nil {
+		var out []string
+		for _, e := range arr {
+			out = append(out, literalElements(e)...)
+		}
+		return out
+	}
+	var v any
+	if json.Unmarshal(raw, &v) != nil {
+		return nil
+	}
+	b, _ := json.Marshal(v)
+	return []string{string(b)}
 }
 
 // arrangeCalls reports an arrange call to the plan's own component operation name.
@@ -430,21 +477,41 @@ func seedsAResource(arrange []ArrangeCall) bool {
 	return slices.ContainsFunc(arrange, func(a ArrangeCall) bool { _, ok := a.(SeedResource); return ok })
 }
 
-// literalMintedInput is c2 for one step: an input whose parameter is a def the contract mints (or an
-// array of it) given as a non-empty literal.
-func literalMintedInput(st StepBinding, op ContractOperation, minted map[string]bool) bool {
-	for _, in := range st.Inputs {
-		lit, ok := in.Value.(LiteralValue)
-		if !ok {
+// literalMintedInput is c2 for one step: the step addresses, only through non-empty literals, an id the
+// contract mints. Every input whose parameter is a minted def (or an array of it) is the one addressing
+// the target: all of them must be non-empty literals the plan did not hand out, and there must be one.
+// Other inputs (an owner, a flag) say nothing about the target.
+func literalMintedInput(st StepBinding, op ContractOperation, minted map[string]bool, handed map[string]bool) bool {
+	found := false
+	for _, p := range op.Params {
+		in, ok := inputNamed(st.Inputs, p.Name)
+		if !ok || !minted[paramDef(p.Schema)] {
 			continue
 		}
-		for _, p := range op.Params {
-			if p.Name == in.Name && minted[paramDef(p.Schema)] && nonEmptyLiteral(lit.JSON) {
-				return true
-			}
+		if !inertLiteral(in, handed) {
+			return false
+		}
+		found = true
+	}
+	return found
+}
+
+// inertLiteral reports a non-empty literal none of whose elements the plan handed out.
+func inertLiteral(in TestArg, handed map[string]bool) bool {
+	lit, ok := in.Value.(LiteralValue)
+	if !ok || !nonEmptyLiteral(lit.JSON) {
+		return false
+	}
+	return !slices.ContainsFunc(literalElements(lit.JSON), func(v string) bool { return handed[v] })
+}
+
+func inputNamed(ins []TestArg, name string) (TestArg, bool) {
+	for _, in := range ins {
+		if in.Name == name {
+			return in, true
 		}
 	}
-	return false
+	return TestArg{}, false
 }
 
 // nonEmptyLiteral reports a non-empty string or a non-empty array.
@@ -475,12 +542,16 @@ func paramDef(schema json.RawMessage) string {
 	return tail
 }
 
-// mintedDefs are the $defs the contract hands out: some operation returns D somewhere in its result
-// and takes no parameter of D (or an array of it). Recall of a list that carries its owner mints no
+// mintedDefs are the $defs the contract hands out: some state-changing operation returns D somewhere in
+// its result and takes no parameter of D (or an array of it). A read only echoes what is stored, so it
+// mints nothing. Recall of a list that carries its owner mints no
 // OwnerID, since it takes one.
 func mintedDefs(c ServiceContract) map[string]bool {
 	minted := map[string]bool{}
 	for _, op := range c.Interface.Operations {
+		if op.ReadOnly {
+			continue
+		}
 		taken := map[string]bool{}
 		for _, p := range op.Params {
 			taken[paramDef(p.Schema)] = true

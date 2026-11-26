@@ -360,7 +360,7 @@ func TestTP_NullSatisfied_Silent(t *testing.T) {
 		}},
 		"an undo whose state differs from the state after the last change, though it matches an older read": {Steps: []StepBinding{
 			recordStep,
-			recall(2, alphaList),
+			recall(2, `{"todos":[{"wording":"alpha","done":false}]}`),
 			todosStep(3, "Complete", `{"done":true}`, TestArg{Name: "todoId", Value: RefValue{Step: 1, Path: "id"}}),
 			recall(4, `{"todos":[{"wording":"alpha","done":true}]}`),
 			todosStep(5, "Reopen", `{"done":false}`, TestArg{Name: "todoId", Value: RefValue{Step: 1, Path: "id"}}),
@@ -373,6 +373,18 @@ func TestTP_NullSatisfied_Silent(t *testing.T) {
 				todosStep(2, "Reopen", `{"done":false}`, TestArg{Name: "todoId", Value: lit(`"t1"`)}),
 				recall(3, `{"todos":[{"wording":"alpha","done":false}]}`),
 			}},
+		"a literal id on a step whose target is a ref, beside an owner literal": {Steps: []StepBinding{
+			recordStep,
+			todosStep(2, "Complete", `{"done":true}`, TestArg{Name: "todoId", Value: RefValue{Step: 1, Path: "id"}}),
+			recall(3, `{"todos":[{"wording":"alpha","done":true}]}`),
+			todosStep(4, "Reopen", `{"done":false}`, TestArg{Name: "todoId", Value: RefValue{Step: 1, Path: "id"}}),
+			recall(5, `{"todos":[{"wording":"alpha","done":false}]}`),
+		}},
+		"a literal id the plan handed out in an earlier step": {Steps: []StepBinding{
+			todosStep(1, "Discard", `{"discarded":true}`, TestArg{Name: "todoId", Value: lit(`"t9"`)}),
+			todosStep(2, "Reopen", `{"done":false}`, TestArg{Name: "todoId", Value: lit(`"t9"`)}),
+			recall(3, `{"todos":[]}`),
+		}},
 		"an owner literal is not a minted id": {Steps: []StepBinding{
 			recall(1, `{"todos":[]}`),
 			todosStep(2, "SetAllDoneState", `{"affected":0}`, TestArg{Name: "done", Value: lit(`false`)}),
@@ -385,6 +397,43 @@ func TestTP_NullSatisfied_Silent(t *testing.T) {
 				t.Errorf("must not fire: %+v", fs)
 			}
 		})
+	}
+}
+
+func TestTP_NullSatisfied_ClientChosenKey(t *testing.T) {
+	raw := func(s string) json.RawMessage { return json.RawMessage(s) }
+	key := `{"$ref":"#/$defs/Key"}`
+	c := ServiceContract{
+		Component: "todosAccess",
+		Defs: map[string]json.RawMessage{
+			"Key":   raw(`{"type":"string"}`),
+			"Entry": raw(`{"type":"object","properties":{"key":` + key + `,"done":{"type":"boolean"}}}`),
+			"Page":  raw(`{"type":"object","properties":{"entries":{"type":"array","items":{"$ref":"#/$defs/Entry"}}}}`),
+		},
+		Interface: ContractInterface{Operations: []ContractOperation{
+			{Name: "Put", Params: []ContractParam{{Name: "key", Schema: raw(key)}, {Name: "done", Schema: raw(`{"type":"boolean"}`)}}, Result: raw(`{"$ref":"#/$defs/Entry"}`)},
+			{Name: "Reopen", Params: []ContractParam{{Name: "key", Schema: raw(key)}}, Result: raw(`{"$ref":"#/$defs/Entry"}`)},
+			{Name: "List", ReadOnly: true, Result: raw(`{"$ref":"#/$defs/Page"}`)},
+		}},
+	}
+	if got := mintedDefs(c); got["Key"] {
+		t.Errorf("a client-chosen key is not minted by a read that echoes it: %v", got)
+	}
+	k1 := TestArg{Name: "key", Value: lit(`"k1"`)}
+	list := func(seq int, want string) StepBinding {
+		return StepBinding{Seq: seq, Operation: "List", Expect: TestExpect{Result: want}}
+	}
+	b := ScenarioBinding{
+		Arrange: []ArrangeCall{ContractCall{Component: "todosAccess", Operation: "Put",
+			Inputs: []TestArg{k1, {Name: "done", Value: lit(`true`)}}, Expect: TestExpect{Result: `{"done":true}`}}},
+		Steps: []StepBinding{
+			list(1, `{"entries":[{"key":"k1","done":true}]}`),
+			{Seq: 2, Operation: "Reopen", Inputs: []TestArg{k1}, Expect: TestExpect{Result: `{"done":false}`}},
+			list(3, `{"entries":[{"key":"k1","done":false}]}`),
+		},
+	}
+	if fs := todosScope(c).nullSatisfiedFindings(b); len(fs) != 0 {
+		t.Errorf("a plan whose final read differs from the null run must not fire: %+v", fs)
 	}
 }
 
