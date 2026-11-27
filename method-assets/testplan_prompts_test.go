@@ -109,13 +109,13 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 		cmd("service-test-plan"): {
 			"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-ARG-REF", "TP-ARRANGE", "TP-PROBE", "TP-STATE",
 			"TP-ACTOR-OBSERVED", "TP-PRINCIPAL", "vacuous",
-			"TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "onBehalfOf", "read-only",
+			"TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "TP-FALSIFIABLE", "onBehalfOf", "read-only",
 			`{"kind":"postgres","model":{"sql":"..."}}`, `{"kind":"github","model":{"owner"`, `{"kind":"gitRepo","model":{"branch"`, "never the domain's own JSON",
 		},
 		cmd("frontend-test-plan"): {
 			"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-UI-TARGET", "TP-UI-ACTION", "UID-ROUTE", "TP-ARG-REF",
 			"TP-ARRANGE", "TP-ACTOR-OBSERVED", "TP-PRINCIPAL",
-			"TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "onBehalfOf",
+			"TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "TP-FALSIFIABLE", "onBehalfOf",
 			`{"kind":"postgres","model":{"sql":"..."}}`, `{"kind":"github","model":{"owner"`, `{"kind":"gitRepo","model":{"branch"`, "never the domain's own JSON",
 		},
 		cmd("acceptance-test-plan"): {
@@ -142,7 +142,7 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 		".claude/skills/the-method-architecture/SKILL.md":   {"UC-LANE-RESOLVES", "UC-OUTCOME-AT-ASKING-SURFACE", "SYS-RESOURCE-UNREAD"},
 		".claude/skills/the-method-testing/SKILL.md":        {"writes no test code", "ARCH-TEST-COMPOSE", "TP-DISCRIMINATE", "TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "TP-STATE"},
 		".claude/skills/the-method-review-routing/SKILL.md": {"TP-HOOK", "vacuous"},
-		".claude/agents/test-engineer.md":                   {"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED"},
+		".claude/agents/test-engineer.md":                   {"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "TP-FALSIFIABLE"},
 	} {
 		body := string(files[path])
 		for _, want := range wants {

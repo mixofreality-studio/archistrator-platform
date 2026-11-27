@@ -444,7 +444,8 @@ func (sc tpScope) isResource(name string) bool {
 
 // actorObservedFindings is TP-ACTOR-OBSERVED: the outputs and states the actor sees after
 // a Client stimulus (its ActorOutcome) must each be observed. A browser surface observes
-// them through the step's UI observation; a machine client through a probe For the node.
+// them through the step's UI observation; a machine client through a probe For the node, or,
+// on a read-only operation, through the step's own asserted result (readOnlyObserves).
 func (sc tpScope) actorObservedFindings(stim scenario.Stimulus, st StepBinding, cop ContractOperation, section string) []Finding {
 	oc := stim.ActorOutcome
 	if len(oc.ExpectedOutputs) == 0 && len(oc.ExpectedStates) == 0 {
@@ -453,19 +454,32 @@ func (sc tpScope) actorObservedFindings(stim scenario.Stimulus, st StepBinding, 
 	if sc.web {
 		return sc.webObservedFindings(oc, st, cop, section)
 	}
+	return sc.machineObservedFindings(oc, st, cop, section)
+}
+
+// machineObservedFindings is the machine-client branch of TP-ACTOR-OBSERVED: each output and state the
+// actor sees has a probe For its node, unless a read-only step's own asserted result stands for them.
+func (sc tpScope) machineObservedFindings(oc scenario.Outcome, st StepBinding, cop ContractOperation, section string) []Finding {
+	if readOnlyObserves(cop, st) {
+		return nil
+	}
 	proved := map[string]bool{}
 	for _, pr := range st.Probes {
 		proved[pr.For] = true
 	}
+	hint := "no probe observes it"
+	if cop.ReadOnly {
+		hint = "the step asserts nothing: a read is its own observation, so assert the step's result"
+	}
 	var out []Finding
 	for _, eo := range oc.ExpectedOutputs {
 		if !proved[eo.Node] {
-			out = append(out, tpFinding(ruleTPActorObserved, sc.l, "%s: the actor sees output %q (node %s) but no probe observes it", section, eo.Label, eo.Node))
+			out = append(out, tpFinding(ruleTPActorObserved, sc.l, "%s: the actor sees output %q (node %s) but %s", section, eo.Label, eo.Node, hint))
 		}
 	}
 	for _, es := range oc.ExpectedStates {
 		if !proved[es.Node] {
-			out = append(out, tpFinding(ruleTPActorObserved, sc.l, "%s: the actor sees state %s %s (node %s) but no probe observes it", section, es.Object, es.InState, es.Node))
+			out = append(out, tpFinding(ruleTPActorObserved, sc.l, "%s: the actor sees state %s %s (node %s) but %s", section, es.Object, es.InState, es.Node, hint))
 		}
 	}
 	return out

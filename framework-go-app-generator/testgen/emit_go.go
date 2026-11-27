@@ -934,7 +934,7 @@ func differential(t *testing.T, scenario string, seq int, pre ...bool) {
 		}
 	}
 	if len(pre) > 0 {
-		t.Fatalf("%%s step %%d: vacuous: every probe expectation already held before the step ran, so the step proves nothing", scenario, seq)
+		t.Fatalf("%%s step %%d: vacuous: every probe expectation already held before the step ran, so the step proves nothing; probe an observation this step changes, or, where this outcome leaves the state unchanged, give the step a ` + "`before`" + ` equal to the probe's expectation", scenario, seq)
 	}
 }
 

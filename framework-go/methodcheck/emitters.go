@@ -93,7 +93,7 @@ func emittedRuleIDs() map[RuleID]bool {
 		ruleTPExpect, ruleTPProbe, ruleTPState, ruleTPOpReached, ruleTPOpObservable, ruleTPSkip,
 		ruleTPHook, ruleTPExpectRequired, ruleTPArgRef, ruleTPArrange, ruleTPActorObserved, ruleTPPrincipal,
 		ruleTPClientOps, ruleTPLabelOp, ruleClientMachineMirror,
-		ruleTPProbeSelf, ruleTPProbePolling, ruleTPPrincipalDelegation, ruleTPExpectZero, ruleTPNullSatisfied,
+		ruleTPProbeSelf, ruleTPProbePolling, ruleTPPrincipalDelegation, ruleTPExpectZero, ruleTPNullSatisfied, ruleTPFalsifiable,
 
 		// ---- Use-case I/O kinds (rules_usecase_io.go) ----
 		ruleUCIOKinds, ruleUCNoIO, ruleUCStartRedundant,

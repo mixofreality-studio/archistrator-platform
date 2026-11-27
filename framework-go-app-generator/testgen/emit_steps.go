@@ -21,8 +21,10 @@ type stepDialect interface {
 
 // emitStep emits one bound stimulus. Every probe is a closure, so the same code reads the world before the
 // step (the differential's pre-state) and after it (the assertion). A step that expects success and has
-// probes fails as vacuous when every probe's expectation already held before it ran (TP-FALSIFIABLE): an
-// assertion that was true already proves nothing about the step. A probe that reads this step's own result
+// probes fails as vacuous when every probe's expectation already held before it ran: an assertion that was
+// true already proves nothing about the step. A step on a read-only operation has no differential: a read
+// cannot change what a probe observes, so its pre-state could never differ (TP-FALSIFIABLE refuses such a
+// probe in the plan), and its falsifiability is the null-subject run's. A probe that reads this step's own result
 // cannot be read before it, and an explicit Before expectation on the step replaces the vacuity check for
 // the step's first probe with an assertion of the state the author says holds first.
 func (g *goEmit) emitStep(d stepDialect, plan componentPlan, bs boundScenario, st boundStep) {
@@ -36,7 +38,7 @@ func (g *goEmit) emitStep(d stepDialect, plan componentPlan, bs boundScenario, s
 	line("var out%d any", seq)
 	line("var err%d error", seq)
 	g.emitProbeClosures(d, plan, bs, st)
-	differential := !st.Bind.Expect.ErrorExpected
+	differential := !st.Bind.Expect.ErrorExpected && !st.Op.ReadOnly
 	pre := g.emitPreState(id, st, differential)
 	for _, l := range d.stepCall(plan, bs, st, fmt.Sprintf("out%d", seq), fmt.Sprintf("err%d", seq)) {
 		line("%s", l)

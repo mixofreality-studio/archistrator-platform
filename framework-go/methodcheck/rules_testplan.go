@@ -244,6 +244,9 @@ func (sc tpScope) stepFindings(stim scenario.Stimulus, st StepBinding) []Finding
 	out = append(out, sc.refFindings(st.Inputs, st.Seq, -1, section)...)
 	proved, pf := sc.probeFindings(section, st.Seq, st.Probes)
 	out = append(out, pf...)
+	if !sc.acceptance {
+		out = append(out, sc.falsifiableFindings(st, cop, section)...)
+	}
 	out = append(out, sc.actorObservedFindings(stim, st, cop, section)...)
 	return append(out, sc.stateFindings(section, stim, st, cop, proved)...)
 }
@@ -285,12 +288,13 @@ func (sc tpScope) probeFindings(section string, seq int, probes []Probe) (map[st
 // stimulus has a probe For its node. There is no unobservable escape (binding
 // model v2): an output no probe can observe is a design defect.
 //
-// A step on a read-only operation that asserts a result or an error is its own observation (a pure
-// Engine's every operation, a ResourceAccess read): the probe that could discharge its outputs would
-// re-read the same operation (TP-PROBE-SELF), so the step's expectation stands for them. Its
-// falsifiability is the null-subject run's.
+// A step on a read-only operation that asserts a result or an error is its own observation
+// (readOnlyObserves; a pure Engine's every operation, a ResourceAccess read): the probe that could
+// discharge its outputs would re-read the same operation (TP-PROBE-SELF) and could never differ
+// across a read (TP-FALSIFIABLE), so the step's expectation stands for them. Its falsifiability is
+// the null-subject run's.
 func (sc tpScope) stateFindings(section string, stim scenario.Stimulus, st StepBinding, op ContractOperation, proved map[string]bool) []Finding {
-	if op.ReadOnly && probeAsserts(Probe{Expect: st.Expect}) {
+	if readOnlyObserves(op, st) {
 		return nil
 	}
 	var out []Finding
@@ -305,6 +309,13 @@ func (sc tpScope) stateFindings(section string, stim scenario.Stimulus, st StepB
 		}
 	}
 	return out
+}
+
+// readOnlyObserves reports a step on a read-only operation whose expectation asserts a result or an
+// error: the step is its own observation, and that expectation discharges the outputs and states the
+// plan observes (TP-STATE; TP-ACTOR-OBSERVED for a machine client).
+func readOnlyObserves(op ContractOperation, st StepBinding) bool {
+	return op.ReadOnly && probeAsserts(Probe{Expect: st.Expect})
 }
 
 // opReachedFindings is TP-OP-REACHED (Error): every operation of every contract is

@@ -33,6 +33,10 @@ const (
 	// ruleTPNullSatisfied: a stimulus operation whose every step expects its zero result and whose
 	// effect the plan never observes is indistinguishable from a null subject. Error.
 	ruleTPNullSatisfied RuleID = "TP-NULL-SATISFIED"
+	// ruleTPFalsifiable: a success step on a read-only operation carries no probe. A read cannot change
+	// state, so a probe's observation is the same before and after it and can never pass the generated
+	// differential; the step asserts its own result instead. Error.
+	ruleTPFalsifiable RuleID = "TP-FALSIFIABLE"
 )
 
 // tpWarning builds a Warning finding of the family.
@@ -58,6 +62,20 @@ func isAgentActor(a Actor) bool {
 		}
 	}
 	return false
+}
+
+// ---- TP-FALSIFIABLE ----
+
+// falsifiableFindings is TP-FALSIFIABLE: a step that does not expect an error, on a read-only
+// operation, with any probe. The generated test runs a probe before and after the step and requires
+// the two observations to differ; a read changes nothing, so no probe can differ. The step asserts
+// its result, which discharges what the plan observes (TP-STATE, TP-ACTOR-OBSERVED).
+func (sc tpScope) falsifiableFindings(st StepBinding, op ContractOperation, section string) []Finding {
+	if !op.ReadOnly || st.Expect.ErrorExpected || len(st.Probes) == 0 {
+		return nil
+	}
+	return []Finding{tpFinding(ruleTPFalsifiable, sc.l,
+		"%s: %s is read-only and the step carries a probe; a read cannot change state, so the probe can never pass the generated differential: drop the probe and assert the step's result instead", section, op.Name)}
 }
 
 // ---- TP-PROBE-SELF ----

@@ -569,3 +569,81 @@ func TestTP_NullSatisfied_WiredIntoValidation(t *testing.T) {
 		}
 	}
 }
+
+// ---- TP-FALSIFIABLE / the read-only discharge of TP-ACTOR-OBSERVED ----
+
+func readWriteOps(t *testing.T) (tpScope, ContractOperation, ContractOperation) {
+	t.Helper()
+	p := loadProject(t, "tp2_clean.json")
+	contract, look := findContract(p, "billingManager")
+	read, _ := look("GetInvoice")
+	write, _ := look("RecordPayment")
+	if !read.ReadOnly || write.ReadOnly {
+		t.Fatal("fixture: GetInvoice reads, RecordPayment writes")
+	}
+	return tpScope{p: p, comp: "billingManager", scenario: "s", contract: contract, l: loc(0, "x")}, read, write
+}
+
+func probeOf() Probe {
+	return Probe{Component: "billingManager", Operation: "GetInvoice", For: "out-a", Expect: TestExpect{Result: `{"state":"paid"}`}}
+}
+
+func TestTPFalsifiable_ReadOnlyStepWithProbeIsRefused(t *testing.T) {
+	sc, read, write := readWriteOps(t)
+	asserts := TestExpect{Result: `{"state":"paid"}`}
+
+	fs := sc.falsifiableFindings(StepBinding{Operation: "GetInvoice", Expect: asserts, Probes: []Probe{probeOf()}}, read, "sec")
+	if len(fs) != 1 || fs[0].RuleID != ruleTPFalsifiable || fs[0].Severity != SeverityError {
+		t.Fatalf("a read-only success step with a probe is an Error of TP-FALSIFIABLE: %v", fs)
+	}
+	if !strings.Contains(fs[0].Message, "sec") || !strings.Contains(fs[0].Message, "GetInvoice") {
+		t.Errorf("the message names the section and the op: %s", fs[0].Message)
+	}
+	if fs := sc.falsifiableFindings(StepBinding{Expect: asserts}, read, "sec"); len(fs) != 0 {
+		t.Errorf("a read-only step with no probe is admitted: %v", fs)
+	}
+	if fs := sc.falsifiableFindings(StepBinding{Expect: asserts, Probes: []Probe{probeOf()}}, write, "sec"); len(fs) != 0 {
+		t.Errorf("a mutating step keeps its probes: %v", fs)
+	}
+	errExpect := TestExpect{ErrorExpected: true, ErrorCode: "NotFound"}
+	if fs := sc.falsifiableFindings(StepBinding{Expect: errExpect, Probes: []Probe{probeOf()}}, read, "sec"); len(fs) != 0 {
+		t.Errorf("an error-expected read step is untouched: %v", fs)
+	}
+}
+
+func TestTPFalsifiable_IsRegistered(t *testing.T) {
+	ids := emittedRuleIDs()
+	if !ids[ruleTPFalsifiable] {
+		t.Errorf("%s is emitted but not in emittedRuleIDs", ruleTPFalsifiable)
+	}
+}
+
+func TestTPActorObserved_ReadOnlyResultDischargesMachineClient(t *testing.T) {
+	sc, read, write := readWriteOps(t)
+	stim := scenario.Stimulus{ActorOutcome: scenario.Outcome{
+		ExpectedOutputs: []scenario.Output{{Node: "out-a", Label: "shown"}},
+		ExpectedStates:  []scenario.State{{Node: "st-a", Object: "Invoice", InState: "paid"}},
+	}}
+	if fs := sc.actorObservedFindings(stim, StepBinding{Expect: TestExpect{Result: `{"state":"paid"}`}}, read, "sec"); len(fs) != 0 {
+		t.Errorf("a read-only step asserting a result is admitted with no probe: %v", fs)
+	}
+	fs := sc.actorObservedFindings(stim, StepBinding{}, read, "sec")
+	if len(fs) != 2 {
+		t.Fatalf("a read-only step asserting nothing is refused for each outcome: %v", fs)
+	}
+	for _, f := range fs {
+		if f.RuleID != ruleTPActorObserved || !strings.Contains(f.Message, "assert the step's result") {
+			t.Errorf("TP-ACTOR-OBSERVED tells a read to assert its result: %+v", f)
+		}
+	}
+	if fs := sc.actorObservedFindings(stim, StepBinding{Expect: TestExpect{Result: `{"state":"paid"}`}}, write, "sec"); len(fs) != 2 {
+		t.Errorf("a mutating step still needs a probe per outcome: %v", fs)
+	}
+}
+
+func TestTPState_ReadOnlyExemptionIsShared(t *testing.T) {
+	_, read, write := readWriteOps(t)
+	if !readOnlyObserves(read, StepBinding{Expect: TestExpect{Result: `{"a":1}`}}) || readOnlyObserves(read, StepBinding{}) || readOnlyObserves(write, StepBinding{Expect: TestExpect{Result: `{"a":1}`}}) {
+		t.Error("readOnlyObserves is a read-only op whose expectation asserts")
+	}
+}

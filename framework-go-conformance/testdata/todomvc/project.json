@@ -16084,57 +16084,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-agent",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": [
@@ -16465,57 +16415,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-agent",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": [
@@ -22568,35 +22468,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true}]}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": [
@@ -24815,57 +24687,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-agent",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": [
@@ -25196,57 +25018,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  },
-                  {
-                    "for": "out-team-agent",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":false}]}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": [
@@ -25577,35 +25349,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":true}]}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": [
@@ -26400,35 +26144,7 @@
                   "errorExpected": false,
                   "errorCode": ""
                 },
-                "probes": [
-                  {
-                    "for": "out-team-member",
-                    "component": "todoListAccess",
-                    "operation": "RecallList",
-                    "inputs": [
-                      {
-                        "name": "owner",
-                        "value": {
-                          "kind": "literal",
-                          "model": {
-                            "json": "alice"
-                          }
-                        },
-                        "schemaRef": ""
-                      }
-                    ],
-                    "expect": {
-                      "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":false},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":true}]}",
-                      "errorExpected": false,
-                      "errorCode": ""
-                    }
-                  }
-                ],
-                "before": {
-                  "result": "{\"owner\":\"alice\",\"todos\":[{\"id\":\"t1\",\"title\":\"Walk dog\",\"completed\":false},{\"id\":\"t2\",\"title\":\"Pay rent\",\"completed\":false},{\"id\":\"t3\",\"title\":\"Call mum\",\"completed\":true}]}",
-                  "errorExpected": false,
-                  "errorCode": ""
-                }
+                "probes": []
               }
             ],
             "arrange": [

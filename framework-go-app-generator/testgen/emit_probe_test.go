@@ -146,3 +146,64 @@ func TestGo_PrincipalTableCarriesIntents(t *testing.T) {
 		t.Errorf("the principal table must carry the intents:\n%s", src)
 	}
 }
+
+// scenarioBody is the generated body of one scenario test function.
+func scenarioBody(t *testing.T, src, fn string) string {
+	t.Helper()
+	start := strings.Index(src, "func "+fn+"(")
+	if start < 0 {
+		t.Fatalf("no %s in\n%s", fn, src)
+	}
+	end := strings.Index(src[start:], "\n}\n")
+	if end < 0 {
+		t.Fatalf("unterminated %s", fn)
+	}
+	return src[start : start+end]
+}
+
+// A step on a read-only operation has no pre/post differential: a read cannot change what a probe
+// observes, so reading before the step could never differ. A mutating step keeps both.
+func TestEmitStep_ReadOnlyStepHasNoDifferential(t *testing.T) {
+	const fn = "TestScenario_process_order_P2"
+	mutating := scenarioBody(t, string(generate(t).Generated[billingGen]), fn)
+	for _, want := range []string{"differential(", "held("} {
+		if !strings.Contains(mutating, want) {
+			t.Fatalf("fixture: a mutating step with a probe carries %q:\n%s", want, mutating)
+		}
+	}
+	out := generateMutated(t, func(doc map[string]any) {
+		found := false
+		for _, c := range doc["serviceContracts"].(map[string]any) {
+			iface, _ := c.(map[string]any)["interface"].(map[string]any)
+			ops, _ := iface["operations"].([]any)
+			for _, o := range ops {
+				if o.(map[string]any)["name"] == "RecordPayment" {
+					o.(map[string]any)["readOnly"] = true
+					found = true
+				}
+			}
+		}
+		if !found {
+			t.Fatal("fixture: no RecordPayment operation")
+		}
+	})
+	read := scenarioBody(t, string(out.Generated[billingGen]), fn)
+	if !strings.Contains(read, "probe ") {
+		t.Fatalf("fixture: the read-only step still carries its probe:\n%s", read)
+	}
+	for _, bad := range []string{"differential(", "held("} {
+		if strings.Contains(read, bad) {
+			t.Errorf("a read-only step must not carry %q:\n%s", bad, read)
+		}
+	}
+}
+
+// The vacuity message names the way out: probe what the step changes, or state the unchanged start.
+func TestGo_VacuousMessageNamesBefore(t *testing.T) {
+	src := string(generate(t).Generated[billingGen])
+	for _, want := range []string{"vacuous", "`before`", "probe an observation this step changes"} {
+		if !strings.Contains(src, want) {
+			t.Errorf("the generated differential helper must say %q", want)
+		}
+	}
+}
