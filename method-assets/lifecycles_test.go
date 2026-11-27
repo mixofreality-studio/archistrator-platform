@@ -222,9 +222,9 @@ func TestLifecycles_ServiceAndFrontendForkPerFigureA1(t *testing.T) {
 		"designReview":   {"detailedDesign"},
 		"construction":   {"designReview"},
 		"codeReview":     {"construction"},
-		"integration":    {"codeReview"},
 		"stp":            {"designReview"},
 		"stpReview":      {"stp"},
+		"integration":    {"codeReview", "stpReview"},
 		"testing":        {"integration", "stpReview"},
 	}
 	for _, key := range []string{"service", "frontend"} {
@@ -242,18 +242,19 @@ func TestLifecycles_ServiceAndFrontendForkPerFigureA1(t *testing.T) {
 				t.Errorf("%s: %s dependsOn = %v, want %v", key, task.ID, task.DependsOn, deps)
 			}
 		}
-		// The trunk is authored first: the layout keeps the first-authored chain
-		// on lane 0, so Detailed Design → Construction → Integration is the trunk
-		// and the Test Plan branch is authored after it, ahead of the join.
-		if l.Tasks[2].ID != "detailedDesign" || l.Tasks[4].ID != "construction" || l.Tasks[7].ID != "stp" || l.Tasks[9].ID != "testing" {
-			t.Errorf("%s: the Construction trunk must be authored before the Test Plan branch, and the testing join last", key)
+		// Tasks may depend only on earlier-authored tasks, and integration waits on the
+		// reviewed plan, so the order is: the Construction trunk (construction, codeReview),
+		// then the Test Plan branch (stp, stpReview), then the joins (integration, testing).
+		if l.Tasks[2].ID != "detailedDesign" || l.Tasks[4].ID != "construction" || l.Tasks[6].ID != "stp" || l.Tasks[7].ID != "stpReview" || l.Tasks[8].ID != "integration" || l.Tasks[9].ID != "testing" {
+			t.Errorf("%s: the order must be construction, codeReview, stp, stpReview, then the integration and testing joins", key)
 		}
 	}
 }
 
 // Neither branch of the fork waits for the other: construction never depends,
 // even transitively, on the test plan, and the test plan never on construction.
-// Only the `testing` join has both upstream.
+// Only the joins, integration and testing, have both upstream: integration's scenario
+// checks are generated from the reviewed plan, so it cannot start before that review.
 func TestLifecycles_TestPlanAndConstructionAreParallel(t *testing.T) {
 	for _, key := range []string{"service", "frontend"} {
 		l, _ := LifecycleFor(key)
@@ -272,7 +273,7 @@ func TestLifecycles_TestPlanAndConstructionAreParallel(t *testing.T) {
 			return seen
 		}
 		for _, branch := range []struct{ task, mustNotWaitFor string }{
-			{"construction", "stp"}, {"codeReview", "stp"}, {"integration", "stpReview"},
+			{"construction", "stp"}, {"codeReview", "stp"},
 			{"stp", "construction"}, {"stpReview", "codeReview"},
 		} {
 			if upstream(branch.task, map[string]bool{})[branch.mustNotWaitFor] {
@@ -282,6 +283,10 @@ func TestLifecycles_TestPlanAndConstructionAreParallel(t *testing.T) {
 		join := upstream("testing", map[string]bool{})
 		if !join["integration"] || !join["stpReview"] {
 			t.Errorf("%s: testing must join the integration and the reviewed test plan, upstream = %v", key, join)
+		}
+		integ := upstream("integration", map[string]bool{})
+		if !integ["codeReview"] || !integ["stpReview"] {
+			t.Errorf("%s: integration must join the reviewed code and the reviewed test plan, upstream = %v", key, integ)
 		}
 	}
 }
@@ -510,7 +515,10 @@ func TestValidateLifecycle_ChecksSendBackRoutes(t *testing.T) {
 		"on a review":        {func(l *Lifecycle) { l.Tasks[3].SendsBackTo = "aReview" }, "only a dispatch task"},
 		"to no review":       {func(l *Lifecycle) { l.Tasks[2].SendsBackTo = "aDraft" }, "not a review with a reviews target"},
 		"to an unknown task": {func(l *Lifecycle) { l.Tasks[2].SendsBackTo = "ghost" }, "not a review with a reviews target"},
-		"to its own review":  {func(l *Lifecycle) { l.Tasks[2].SendsBackTo = "bReview" }, "which waits on it"},
+		"to a review it does not wait on": {func(l *Lifecycle) {
+			l.Tasks = append(l.Tasks, LifecycleTask{ID: "cDraft", Kind: LifecycleTaskDispatch, Title: "Draft C", Phase: "b", DependsOn: []string{"aDraft"}, Command: "glossary-draft", WorkerClass: "system-architect", ArtifactKind: "C", SendsBackTo: "aReview"})
+		}, "which it does not wait on"},
+		"to its own review": {func(l *Lifecycle) { l.Tasks[2].SendsBackTo = "bReview" }, "which waits on it"},
 		"leaving a stale pass": {func(l *Lifecycle) {
 			l.Tasks = append(l.Tasks, LifecycleTask{ID: "other", Kind: LifecycleTaskReview, Title: "Other", Phase: "b", DependsOn: []string{"aReview"}, Reviews: "aDraft"})
 		}, "passes behind that review"},
@@ -557,5 +565,34 @@ func TestValidateLifecycle_RejectsEachDefect(t *testing.T) {
 				t.Fatalf("problems = %v, want one containing %q", problems, c.want)
 			}
 		})
+	}
+}
+
+// planFixture is a lifecycle with an STP dispatch and its review and an Integration dispatch
+// whose dependencies are the argument: integration's scenario checks are generated from the
+// reviewed plan, so it must transitively wait on that review.
+func planFixture(integrationDependsOn ...string) Lifecycle {
+	return Lifecycle{
+		Type: "planFixture",
+		Phases: []LifecyclePhase{
+			{ID: "plan", Label: "Plan", Weight: 40, Gate: "stpReview", ExitCriterion: "The plan passes review"},
+			{ID: "run", Label: "Run", Weight: 60, Gate: "testing", ExitCriterion: "The run passes"},
+		},
+		Tasks: []LifecycleTask{
+			{ID: "stp", Kind: LifecycleTaskDispatch, Title: "Plan", Phase: "plan", DependsOn: []string{}, Command: "service-test-plan", WorkerClass: "test-engineer", ArtifactKind: artifactKindSTP},
+			{ID: "stpReview", Kind: LifecycleTaskReview, Title: "Plan Review", Phase: "plan", DependsOn: []string{"stp"}, Reviews: "stp"},
+			{ID: "integration", Kind: LifecycleTaskDispatch, Title: "Integration", Phase: "run", DependsOn: integrationDependsOn, Command: "service-integration", WorkerClass: "system-architect", ArtifactKind: artifactKindIntegration},
+			{ID: "testing", Kind: LifecycleTaskReview, Title: "Testing", Phase: "run", DependsOn: []string{"integration"}, Reviews: "integration"},
+		},
+	}
+}
+
+func TestValidateLifecycle_IntegrationWaitsOnTheTestPlanReview(t *testing.T) {
+	if got := ValidateLifecycle(planFixture("stpReview")); len(got) != 0 {
+		t.Errorf("integration waiting on the plan review was refused: %v", got)
+	}
+	got := strings.Join(ValidateLifecycle(planFixture("stp")), "; ")
+	if !strings.Contains(got, `task "integration" integrates before the test plan review "stpReview" has passed`) {
+		t.Errorf("got %q, want integration refused for not waiting on stpReview", got)
 	}
 }

@@ -36,6 +36,13 @@ const (
 	LifecycleTaskJob      = "job"
 )
 
+// The artifact kinds the lifecycle rules reason about: integration's scenario checks are
+// generated from the reviewed STP, so ValidateLifecycle ties the two together.
+const (
+	artifactKindSTP         = "STP"
+	artifactKindIntegration = "Integration"
+)
+
 // LifecyclePhase is a Figure A-2 grouping of tasks: the earned-value unit.
 type LifecyclePhase struct {
 	ID    string `json:"id"`
@@ -168,7 +175,10 @@ func (l Lifecycle) clone() Lifecycle {
 //   - phase ids are unique, weights are positive and sum to 100, and every
 //     phase's gate is a review task IN that phase which every other task of
 //     the phase is upstream of — so "gate passed" means "phase complete";
-//   - a dispatch's SendsBackTo is safe to re-open (checkSendBackRoutes).
+//   - a dispatch's SendsBackTo is safe to re-open (checkSendBackRoutes): it names a review
+//     the dispatch waits on, so the dispatch cannot run before that review has passed.
+//   - in a lifecycle with an STP dispatch, every Integration dispatch waits on that plan's
+//     review (checkIntegrationWaitsOnPlanReview): its scenario checks are generated from it.
 //   - only a dispatch carries SendsUpstreamTo, and each entry names another type and a
 //     gate (what those name is checked against the whole catalog: ValidateLifecycles).
 //   - a review names (Reviews) a dispatch task it transitively depends on. Only
@@ -181,6 +191,7 @@ func ValidateLifecycle(l Lifecycle) []string {
 	v.checkPhases()
 	v.checkReviews()
 	v.checkSendBackRoutes()
+	v.checkIntegrationWaitsOnPlanReview()
 	v.checkUpstreamRouteShapes()
 	return v.problems
 }
@@ -421,13 +432,50 @@ func (v *lifecycleValidator) checkSendBackRoute(t LifecycleTask) {
 		v.addf("task %q sends back to %q, which is not a review with a reviews target", t.ID, t.SendsBackTo)
 		return
 	}
-	if v.ancestors[t.SendsBackTo][t.ID] {
-		v.addf("task %q sends back to %q, which waits on it", t.ID, t.SendsBackTo)
-	}
+	v.checkSendBackOrder(t)
 	for _, other := range v.l.Tasks {
 		if other.ID != t.ID && v.ancestors[other.ID][t.SendsBackTo] && !v.ancestors[other.ID][t.ID] {
 			v.addf("task %q sends back to %q, but %q passes behind that review without waiting on %q", t.ID, t.SendsBackTo, other.ID, t.ID)
 		}
+	}
+}
+
+// checkIntegrationWaitsOnPlanReview holds every Integration dispatch of a lifecycle that has an
+// STP dispatch to waiting, transitively, on that plan's review: integration's scenario checks
+// are generated from the reviewed plan, so running earlier leaves them with nothing to read.
+func (v *lifecycleValidator) checkIntegrationWaitsOnPlanReview() {
+	for _, plan := range v.l.Tasks {
+		if plan.Kind == LifecycleTaskDispatch && plan.ArtifactKind == artifactKindSTP {
+			v.checkIntegrationsWaitOnReviewsOf(plan)
+		}
+	}
+}
+
+// checkIntegrationsWaitOnReviewsOf: every Integration dispatch waits on each review of the plan.
+func (v *lifecycleValidator) checkIntegrationsWaitOnReviewsOf(plan LifecycleTask) {
+	for _, review := range v.l.Tasks {
+		if review.Kind != LifecycleTaskReview || review.Reviews != plan.ID {
+			continue
+		}
+		for _, integ := range v.l.Tasks {
+			if isIntegrationDispatch(integ) && !v.ancestors[integ.ID][review.ID] {
+				v.addf("task %q integrates before the test plan review %q has passed; its scenario checks are generated from that plan", integ.ID, review.ID)
+			}
+		}
+	}
+}
+
+func isIntegrationDispatch(t LifecycleTask) bool {
+	return t.Kind == LifecycleTaskDispatch && t.ArtifactKind == artifactKindIntegration
+}
+
+// checkSendBackOrder: the source runs after the review it sends back to, and the review does not wait on it.
+func (v *lifecycleValidator) checkSendBackOrder(t LifecycleTask) {
+	if v.ancestors[t.SendsBackTo][t.ID] {
+		v.addf("task %q sends back to %q, which waits on it", t.ID, t.SendsBackTo)
+	}
+	if !v.ancestors[t.ID][t.SendsBackTo] {
+		v.addf("task %q sends back to %q, which it does not wait on, so it can run before that review has passed", t.ID, t.SendsBackTo)
 	}
 }
 
