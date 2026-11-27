@@ -101,12 +101,12 @@ func TestFailNext_RefusesIncomplete(t *testing.T) {
 
 func TestSeedResource_UnknownKindFatal(t *testing.T) {
 	if os.Getenv("AIARCH_SUBPROCESS") == "seed-unknown" {
-		(&Host{}).SeedResource(t, "redis", json.RawMessage(`{}`))
+		(&Host{}).SeedResource(t, "ListStore", json.RawMessage(`{"kind":"redis","model":{}}`))
 		return
 	}
 	out := runSubprocess(t, "TestSeedResource_UnknownKindFatal", "seed-unknown")
-	if !strings.Contains(out, `unknown resource kind "redis"`) {
-		t.Errorf("an unknown kind must fail the test naming it, got:\n%s", out)
+	if !strings.Contains(out, `unknown kind "redis"`) || !strings.Contains(out, `SeedResource "ListStore"`) {
+		t.Errorf("an unknown kind must fail the test naming the resource and the kind, got:\n%s", out)
 	}
 }
 
@@ -115,17 +115,20 @@ func TestSeedResource_KindsAndFixtureErrors(t *testing.T) {
 	cases := []struct {
 		name, resource, fixture, want string
 	}{
-		{"unknown kind", "redis", `{}`, `unknown resource kind "redis"`},
-		{"empty kind", "", `{}`, `unknown resource kind ""`},
-		{"postgres without a database", "postgres", `{"sql":"select 1"}`, "no Postgres"},
-		{"postgres without sql", "postgres", `{}`, "sql"},
-		{"postgres unknown field", "postgres", `{"sql":"select 1","extra":1}`, "extra"},
-		{"github without the double", "github", `{"owner":"acme","name":"widget"}`, "no GitHub"},
-		{"gitRepo without the repo", "gitRepo", `{"files":{"a.txt":"x"}}`, "no local repo"},
+		{"unknown kind", "ListStore", `{"kind":"redis","model":{}}`, `unknown kind "redis"`},
+		{"domain json", "ListStore", `{"owner":"o","todos":[]}`, "resource seed"},
+		{"bare model", "postgres", `{"sql":"select 1"}`, "resource seed"},
+		{"postgres without a database", "OrderDB", `{"kind":"postgres","model":{"sql":"select 1"}}`, "no Postgres"},
+		{"postgres without sql", "OrderDB", `{"kind":"postgres","model":{}}`, "sql"},
+		{"postgres unknown field", "OrderDB", `{"kind":"postgres","model":{"sql":"select 1","extra":1}}`, "extra"},
+		{"github without the double", "Repos", `{"kind":"github","model":{"owner":"acme","name":"widget"}}`, "no GitHub"},
+		{"github without a name", "Repos", `{"kind":"github","model":{"owner":"acme"}}`, "owner and name"},
+		{"gitRepo without the repo", "Repo", `{"kind":"gitRepo","model":{"files":{"a.txt":"x"}}}`, "no local repo"},
+		{"gitRepo without files", "Repo", `{"kind":"gitRepo","model":{}}`, "files"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			err := h.seedResource(context.Background(), tc.resource, json.RawMessage(tc.fixture))
+			err := h.seedResource(context.Background(), json.RawMessage(tc.fixture))
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("seedResource(%q, %s) = %v, want an error containing %q", tc.resource, tc.fixture, err, tc.want)
 			}
@@ -138,7 +141,7 @@ func TestSeedResource_PostgresExecsFixtureSQL(t *testing.T) {
 		t.Skip("needs the Postgres container")
 	}
 	h := Start(t)
-	h.SeedResource(t, "postgres", json.RawMessage(`{"sql":"create table if not exists arrange_seed (id int primary key, v text); insert into arrange_seed values (1, 'one') on conflict do nothing"}`))
+	h.SeedResource(t, "OrderDB", json.RawMessage(`{"kind":"postgres","model":{"sql":"create table if not exists arrange_seed (id int primary key, v text); insert into arrange_seed values (1, 'one') on conflict do nothing"}}`))
 
 	conn, err := pgx.Connect(t.Context(), h.PostgresURL)
 	if err != nil {
@@ -153,7 +156,7 @@ func TestSeedResource_PostgresExecsFixtureSQL(t *testing.T) {
 
 func TestSeedResource_GitHubSeedsTheFake(t *testing.T) {
 	h := Start(t)
-	h.SeedResource(t, "github", json.RawMessage(`{"owner":"acme","name":"widget","description":"d","topics":["t"],"private":true,"files":{"README.md":"# hi"}}`))
+	h.SeedResource(t, "Repos", json.RawMessage(`{"kind":"github","model":{"owner":"acme","name":"widget","description":"d","topics":["t"],"private":true,"files":{"README.md":"# hi"}}}`))
 
 	b, ok := h.GitHub.RepoFile("acme", "widget", "README.md")
 	if !ok || string(b) != "# hi" {
@@ -185,7 +188,7 @@ func TestSeedResource_GitRepoCommitsFiles(t *testing.T) {
 	// The host (and its repository) is shared by every run of the test in this process, so the
 	// content is unique to the run: a second -count run seeding identical bytes has nothing to commit.
 	want := uniqueID("hello")
-	h.SeedResource(t, "gitRepo", json.RawMessage(`{"branch":"main","message":"arrange","files":{"docs/a.txt":"`+want+`"}}`))
+	h.SeedResource(t, "Repo", json.RawMessage(`{"kind":"gitRepo","model":{"branch":"main","message":"arrange","files":{"docs/a.txt":"`+want+`"}}}`))
 
 	out, err := exec.Command("git", "-C", h.Repo.Dir, "show", "main:docs/a.txt").CombinedOutput()
 	if err != nil || string(out) != want {

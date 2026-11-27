@@ -182,7 +182,7 @@ func arrangeAllKinds(doc map[string]any) {
 			"expect": map[string]any{"result": `{"id":"o-2"}`, "errorExpected": false}}},
 		map[string]any{"kind": "advanceClock", "model": map[string]any{"duration": "1h"}},
 		map[string]any{"kind": "failNext", "model": map[string]any{"component": "orderManager", "operation": "PlaceOrder", "errorCode": "Down"}},
-		map[string]any{"kind": "seedResource", "model": map[string]any{"resource": "postgres", "fixture": map[string]any{"sql": "insert into t values (1)"}}},
+		map[string]any{"kind": "seedResource", "model": map[string]any{"resource": "orderDB", "fixture": map[string]any{"kind": "postgres", "model": map[string]any{"sql": "insert into t values (1)"}}}},
 	}
 }
 
@@ -204,7 +204,7 @@ func TestGo_ArrangeExhaustive(t *testing.T) {
 		"expect(t, \"process-order-P2 arrange 1\", 0, aout, aerr,",
 		"h.AdvanceClock(t, time.Duration(3600000000000))",
 		"h.FailNext(t, \"orderManager\", \"PlaceOrder\", \"Down\")",
-		"h.SeedResource(t, \"postgres\", json.RawMessage(`{\"sql\":\"insert into t values (1)\"}`))",
+		"h.SeedResource(t, \"orderDB\", json.RawMessage(`{\"kind\":\"postgres\",\"model\":{\"sql\":\"insert into t values (1)\"}}`))",
 		"\"time\"",
 	}
 	last := -1
@@ -540,5 +540,15 @@ func TestGo_TypeChecksAgainstTheRealHost(t *testing.T) {
 	}, moduleOpts{realHost: true})
 	if msg, err := goIn(root, nil, "vet", "./..."); err != nil {
 		t.Fatalf("the generated files do not type-check against the real host: %v\n%s", err, msg)
+	}
+}
+
+// A seedResource fixture the scenario host would refuse at setup fails generation instead.
+func TestGo_RefusedSeedFixtureFailsGeneration(t *testing.T) {
+	doc := fixtureDoc(t)
+	b := planBinding(t, doc, "billingManager", "process-order-P2")
+	b["arrange"] = []any{map[string]any{"kind": "seedResource", "model": map[string]any{"resource": "orderDB", "fixture": map[string]any{"rows": 2}}}}
+	if _, err := generateDoc(t, doc); err == nil || !strings.Contains(err.Error(), "seedResource") {
+		t.Fatalf("a fixture that is not a resource seed must fail generation: %v", err)
 	}
 }

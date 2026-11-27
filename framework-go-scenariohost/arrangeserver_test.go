@@ -92,8 +92,8 @@ func TestArrangeServer_RoundTrip(t *testing.T) {
 	})
 
 	t.Run("a failing arrange is a 500 carrying its text", func(t *testing.T) {
-		code, text := post("seedResource", `{"resource":"nonesuch","fixture":{}}`)
-		if code != http.StatusInternalServerError || !strings.Contains(text, "unknown resource kind") {
+		code, text := post("seedResource", `{"resource":"nonesuch","fixture":{"kind":"redis","model":{}}}`)
+		if code != http.StatusInternalServerError || !strings.Contains(text, "unknown kind") {
 			t.Errorf("seedResource of an unknown kind: %d %q, want 500 naming the kind", code, text)
 		}
 	})
@@ -129,7 +129,7 @@ func TestArrangeServer_SeedsPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Cleanup(srv.Close)
-	res, err := http.Post(srv.URL+"/seedResource", "application/json", strings.NewReader(`{"resource":"postgres","fixture":{"sql":"select 1"}}`))
+	res, err := http.Post(srv.URL+"/seedResource", "application/json", strings.NewReader(`{"resource":"OrderDB","fixture":{"kind":"postgres","model":{"sql":"select 1"}}}`))
 	if err != nil {
 		t.Fatal(err)
 	}

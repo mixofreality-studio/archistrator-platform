@@ -62,7 +62,10 @@ or a Phase-1/2 slot. A perf *rig* still goes through `recordTestingState`
    an earlier result, the `expect`ed result or error, `probes` (read-only
    operations) proving each expected state and observable output, an `arrange`
    from the four typed kinds (`contractCall`, `advanceClock`, `failNext`,
-   `seedResource`), and a `principal` per actor that originates a stimulus. Every
+   `seedResource`, whose fixture is a typed postgres, github or gitRepo seed over
+   the tables the Resource's ResourceAccess creates, not domain JSON `[TP-ARRANGE]`;
+   prefer a `contractCall` where a designed operation builds the state), and a
+   `principal` per actor that originates a stimulus. Every
    projected scenario is bound; the TP-* rules decide completeness, not you. The
    rules do not decide correctness, so hold yourself to these: a value the
    component mints at run time (an id an earlier step returned) is a `ref`

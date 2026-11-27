@@ -12,7 +12,7 @@ import (
 func TestRunScenario_ResetsGitReposToSeed(t *testing.T) {
 	h := Start(t)
 	h.RunScenario(t, probeComponent, "reset-dirty-P1", func(t *testing.T) {
-		h.SeedResource(t, "gitRepo", json.RawMessage(`{"branch":"main","message":"dirty","files":{"leak.txt":"x"}}`))
+		h.SeedResource(t, "Repo", json.RawMessage(`{"kind":"gitRepo","model":{"branch":"main","message":"dirty","files":{"leak.txt":"x"}}}`))
 		if out, err := exec.Command("git", "-C", h.Repo.Dir, "branch", "side", "main").CombinedOutput(); err != nil {
 			t.Fatalf("branch side: %v: %s", err, out)
 		}

@@ -367,7 +367,7 @@ func TestTP_NullSatisfied_Silent(t *testing.T) {
 			recall(6, `{"todos":[{"wording":"alpha","done":false}]}`),
 		}},
 		"a literal minted id that a seeded fixture hands out": {
-			Arrange: []ArrangeCall{SeedResource{Resource: "todos", Fixture: json.RawMessage(`{"todos":[{"id":"t1","wording":"alpha","done":true}]}`)}},
+			Arrange: []ArrangeCall{SeedResource{Resource: "todos", Fixture: json.RawMessage(`{"kind":"postgres","model":{"sql":"INSERT INTO todos (id, wording, done) VALUES ('t1', 'alpha', true)"}}`)}},
 			Steps: []StepBinding{
 				recall(1, `{"todos":[{"wording":"alpha","done":true}]}`),
 				todosStep(2, "Reopen", `{"done":false}`, TestArg{Name: "todoId", Value: lit(`"t1"`)}),

@@ -164,7 +164,7 @@ func (a *arrangeHandler) seedResource(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, "bad body: "+err.Error(), http.StatusBadRequest)
 		return
 	}
-	if err := a.h.seedResource(r.Context(), body.Resource, body.Fixture); err != nil {
+	if err := a.h.seedResource(r.Context(), body.Fixture); err != nil {
 		http.Error(w, fmt.Sprintf("seedResource %q: %v", body.Resource, err), http.StatusInternalServerError)
 		return
 	}

@@ -207,6 +207,9 @@ func (FailNext) Kind() ArrangeKind { return ArrangeFailNext }
 // Kind implements ArrangeCall.
 func (SeedResource) Kind() ArrangeKind { return ArrangeSeedResource }
 
+// Seed decodes Fixture into its typed ResourceSeed (see DecodeResourceSeed).
+func (v SeedResource) Seed() (ResourceSeed, error) { return DecodeResourceSeed(v.Fixture) }
+
 func (ContractCall) isArrangeCall() {}
 func (AdvanceClock) isArrangeCall() {}
 func (FailNext) isArrangeCall()     {}

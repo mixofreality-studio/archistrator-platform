@@ -263,7 +263,7 @@ func TestPlaywright_ArrangeOverRESTAndProbes(t *testing.T) {
 			"expect": map[string]any{"result": `{"id":"o-1"}`, "errorExpected": false},
 		}},
 		map[string]any{"kind": "failNext", "model": map[string]any{"component": "billingManager", "operation": "GetInvoice", "errorCode": "NotFound"}},
-		map[string]any{"kind": "seedResource", "model": map[string]any{"resource": "ordersDB", "fixture": map[string]any{"rows": 2}}},
+		map[string]any{"kind": "seedResource", "model": map[string]any{"resource": "ordersDB", "fixture": map[string]any{"kind": "postgres", "model": map[string]any{"sql": "insert into t values (1)"}}}},
 	}
 	shopStepOf(doc)["probes"] = []any{map[string]any{
 		"for": "inv-req", "component": "billingManager", "operation": "GetInvoice",
@@ -278,7 +278,7 @@ func TestPlaywright_ArrangeOverRESTAndProbes(t *testing.T) {
 		"inv-o-1",
 		// the host's kinds are performed through the local profile's /__scenariohost endpoint
 		"await arrange(testInfo, { kind: 'failNext', component: 'billingManager', operation: 'GetInvoice', errorCode: 'NotFound' });",
-		"await arrange(testInfo, { kind: 'seedResource', resource: 'ordersDB', fixture: {\"rows\":2} });",
+		"await arrange(testInfo, { kind: 'seedResource', resource: 'ordersDB', fixture: {\"kind\":\"postgres\",\"model\":{\"sql\":\"insert into t values (1)\"}} });",
 	)
 	requireAbsent(t, "spec", spec, "test.skip(true", "skipped until")
 	// arrange precedes the first action, probes follow it, and the arrange calls keep the plan's order
@@ -391,5 +391,14 @@ func TestPlaywright_RuntimeIsTheEmbeddedSource(t *testing.T) {
 	out := generate(t)
 	if got := string(out.Generated[shopRuntime]); got != genHeader+"\n"+tsRuntimeSource {
 		t.Errorf("runtime.gen.ts must be the embedded tsruntime/runtime.ts under the generated header:\n%s", got)
+	}
+}
+
+// A seedResource fixture the scenario host would refuse at setup fails generation instead.
+func TestPlaywright_RefusedSeedFixtureFailsGeneration(t *testing.T) {
+	doc := shopDoc(t)
+	shopBinding(doc)["arrange"] = []any{map[string]any{"kind": "seedResource", "model": map[string]any{"resource": "ordersDB", "fixture": map[string]any{"rows": 2}}}}
+	if _, err := generateDoc(t, doc); err == nil || !strings.Contains(err.Error(), "seedResource") {
+		t.Fatalf("a fixture that is not a resource seed must fail generation: %v", err)
 	}
 }

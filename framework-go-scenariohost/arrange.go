@@ -1,7 +1,6 @@
 package scenariohost
 
 import (
-	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -18,6 +17,7 @@ import (
 	"github.com/go-git/go-git/v5/plumbing/object"
 
 	fwpg "github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres"
+	"github.com/mixofreality-studio/archistrator-platform/framework-go/methodcheck"
 )
 
 // The arrange primitives (first-pass-correctness design W2, ruling 10): the
@@ -137,14 +137,8 @@ func (h *Host) TakeFault(component, op string) (errorCode string, ok bool) {
 	return errorCode, true
 }
 
-// The resource kinds SeedResource dispatches on.
-const (
-	resourcePostgres = "postgres"
-	resourceGitHub   = "github"
-	resourceGitRepo  = "gitRepo"
-)
-
-// SeedResource loads fixture into the resource of the given kind:
+// SeedResource loads fixture into the host's world. The fixture is one methodcheck.ResourceSeed,
+// the {"kind","model"} envelope the test plan's seedResource carries and TP-ARRANGE admits:
 //
 //	postgres  {"sql": "<statements>"}  executed on the host's database
 //	github    {"owner","name","description","topics","private","files":{path:content}}
@@ -152,52 +146,33 @@ const (
 //	gitRepo   {"branch","message","files":{path:content}}
 //	          one commit adding the files on top of the local repo's branch
 //
-// An unknown kind, a fixture that does not decode strictly, or a resource the
-// host did not boot fails t: a fixture that silently seeded nothing would let a
-// scenario assert against an empty world.
+// resource only names the seed in errors; the fixture's kind picks the substrate. A fixture
+// that does not decode strictly, or a substrate the host did not boot, fails t: a fixture
+// that silently seeded nothing would let a scenario assert against an empty world.
 func (h *Host) SeedResource(t *testing.T, resource string, fixture json.RawMessage) {
 	t.Helper()
-	if err := h.seedResource(t.Context(), resource, fixture); err != nil {
+	if err := h.seedResource(t.Context(), fixture); err != nil {
 		t.Fatalf("scenariohost: SeedResource %q: %v", resource, err)
 	}
 }
 
-func (h *Host) seedResource(ctx context.Context, resource string, fixture json.RawMessage) error {
-	switch resource {
-	case resourcePostgres:
-		return h.seedPostgres(ctx, fixture)
-	case resourceGitHub:
-		return h.seedGitHub(fixture)
-	case resourceGitRepo:
-		return h.seedGitRepo(fixture)
-	default:
-		return fmt.Errorf("unknown resource kind %q (want %s, %s or %s)", resource, resourcePostgres, resourceGitHub, resourceGitRepo)
-	}
-}
-
-// decodeFixture decodes fixture into v, refusing unknown fields and trailing data.
-func decodeFixture(fixture json.RawMessage, v any) error {
-	dec := json.NewDecoder(bytes.NewReader(fixture))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(v); err != nil {
-		return fmt.Errorf("fixture: %w", err)
-	}
-	if dec.More() {
-		return fmt.Errorf("fixture: trailing data after the JSON value")
-	}
-	return nil
-}
-
-func (h *Host) seedPostgres(ctx context.Context, fixture json.RawMessage) error {
-	var f struct {
-		SQL string `json:"sql"`
-	}
-	if err := decodeFixture(fixture, &f); err != nil {
+func (h *Host) seedResource(ctx context.Context, fixture json.RawMessage) error {
+	seed, err := methodcheck.DecodeResourceSeed(fixture)
+	if err != nil {
 		return err
 	}
-	if f.SQL == "" {
-		return fmt.Errorf("fixture: sql is empty")
+	switch s := seed.(type) {
+	case methodcheck.PostgresSeed:
+		return h.seedPostgres(ctx, s)
+	case methodcheck.GitHubSeed:
+		return h.seedGitHub(s)
+	case methodcheck.GitRepoSeed:
+		return h.seedGitRepo(s)
 	}
+	return fmt.Errorf("unhandled resource seed %T", seed)
+}
+
+func (h *Host) seedPostgres(ctx context.Context, s methodcheck.PostgresSeed) error {
 	if h.PostgresURL == "" {
 		return fmt.Errorf("the host has no Postgres (booted with -short)")
 	}
@@ -206,65 +181,24 @@ func (h *Host) seedPostgres(ctx context.Context, fixture json.RawMessage) error 
 		return fmt.Errorf("open pool: %w", err)
 	}
 	defer pool.Close()
-	if _, err := pool.Exec(ctx, f.SQL); err != nil {
+	if _, err := pool.Exec(ctx, s.SQL); err != nil {
 		return fmt.Errorf("exec fixture sql: %w", err)
 	}
 	return nil
 }
 
-func (h *Host) seedGitHub(fixture json.RawMessage) error {
-	var f struct {
-		Owner       string            `json:"owner"`
-		Name        string            `json:"name"`
-		Description string            `json:"description"`
-		Topics      []string          `json:"topics"`
-		Private     bool              `json:"private"`
-		Files       map[string]string `json:"files"`
-	}
-	if err := decodeFixture(fixture, &f); err != nil {
-		return err
-	}
-	if f.Owner == "" || f.Name == "" {
-		return fmt.Errorf("fixture: owner and name are required")
-	}
+func (h *Host) seedGitHub(s methodcheck.GitHubSeed) error {
 	if h.GitHub == nil {
 		return fmt.Errorf("the host has no GitHub double")
 	}
-	h.GitHub.SeedRepo(f.Owner, f.Name, f.Description, f.Topics, f.Private)
-	for _, p := range sortedKeys(f.Files) {
-		h.GitHub.SeedRepoFile(f.Owner, f.Name, p, []byte(f.Files[p]))
+	h.GitHub.SeedRepo(s.Owner, s.Name, s.Description, s.Topics, s.Private)
+	for _, p := range sortedKeys(s.Files) {
+		h.GitHub.SeedRepoFile(s.Owner, s.Name, p, []byte(s.Files[p]))
 	}
 	return nil
 }
 
-type gitRepoFixture struct {
-	Branch  string            `json:"branch"`
-	Message string            `json:"message"`
-	Files   map[string]string `json:"files"`
-}
-
-func decodeGitRepoFixture(fixture json.RawMessage) (gitRepoFixture, error) {
-	var f gitRepoFixture
-	if err := decodeFixture(fixture, &f); err != nil {
-		return f, err
-	}
-	if len(f.Files) == 0 {
-		return f, fmt.Errorf("fixture: files is empty")
-	}
-	if f.Branch == "" {
-		f.Branch = "main"
-	}
-	if f.Message == "" {
-		f.Message = "arrange"
-	}
-	return f, nil
-}
-
-func (h *Host) seedGitRepo(fixture json.RawMessage) error {
-	f, err := decodeGitRepoFixture(fixture)
-	if err != nil {
-		return err
-	}
+func (h *Host) seedGitRepo(f methodcheck.GitRepoSeed) error {
 	if h.Repo.URL == "" {
 		return fmt.Errorf("the host has no local repo")
 	}

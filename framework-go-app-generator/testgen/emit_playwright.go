@@ -210,6 +210,9 @@ func (w *specWriter) arrangeLiteral(a methodcheck.ArrangeCall) (string, error) {
 	case methodcheck.FailNext:
 		return "{ kind: 'failNext', component: " + tsStr(v.Component) + ", operation: " + tsStr(v.Operation) + ", errorCode: " + tsStr(v.ErrorCode) + " }", nil
 	case methodcheck.SeedResource:
+		if _, err := v.Seed(); err != nil {
+			return "", fmt.Errorf("seedResource %q fixture is refused: %w", v.Resource, err)
+		}
 		var fixture bytes.Buffer
 		if err := json.Compact(&fixture, v.Fixture); err != nil {
 			return "", fmt.Errorf("seedResource %q fixture is not JSON: %w", v.Resource, err)

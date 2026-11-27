@@ -359,7 +359,8 @@ func schemaItems(node json.RawMessage, defs map[string]json.RawMessage) (json.Ra
 
 // arrangeFindings is TP-ARRANGE over a binding's setup: a contract call names a designed
 // operation with well-typed arguments and refs, a failNext names a designed operation, a
-// clock advance is a Go duration, a seed names a Resource component. A contract call that
+// clock advance is a Go duration, a seed names a Resource component and carries a fixture
+// DecodeResourceSeed admits (a postgres, github or gitRepo seed). A contract call that
 // performs one of the scenario's own stimuli on the plan's component is TP-HOOK: the test
 // would set up by doing the very thing it is meant to observe.
 func (sc tpScope) arrangeFindings(arrange []ArrangeCall) []Finding {
@@ -386,6 +387,9 @@ func (sc tpScope) arrangeOne(a ArrangeCall, section string) []Finding {
 	case SeedResource:
 		if !sc.isResource(v.Resource) {
 			return []Finding{tpFinding(ruleTPArrange, sc.l, "%s: seedResource %q names no Resource component of the system", section, v.Resource)}
+		}
+		if _, err := v.Seed(); err != nil {
+			return []Finding{tpFinding(ruleTPArrange, sc.l, "%s: seedResource %q fixture is refused: %v; the fixture is exactly one of %s", section, v.Resource, err, ResourceSeedShapes)}
 		}
 	}
 	return nil

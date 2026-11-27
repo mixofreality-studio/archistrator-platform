@@ -91,8 +91,14 @@ func (g *goEmit) arrangeAdvanceClock(label string, v methodcheck.AdvanceClock) {
 	fmt.Fprintf(&g.body, "\t\th.AdvanceClock(t, time.Duration(%d)) // %s\n", int64(d), v.Duration)
 }
 
-// arrangeSeedResource loads the fixture into the resource the host boots.
+// arrangeSeedResource loads the fixture into the resource the host boots. The fixture must decode
+// as a methodcheck.ResourceSeed, the same decode the host does at run time; one it refuses fails
+// generation rather than a scenario at setup.
 func (g *goEmit) arrangeSeedResource(label string, v methodcheck.SeedResource) {
+	if _, err := v.Seed(); err != nil {
+		g.fail(fmt.Errorf("testgen: %s: seedResource %q fixture is refused: %w", label, v.Resource, err))
+		return
+	}
 	var compact bytes.Buffer
 	if err := json.Compact(&compact, v.Fixture); err != nil {
 		g.fail(fmt.Errorf("testgen: %s: seedResource %q fixture is not JSON: %w", label, v.Resource, err))

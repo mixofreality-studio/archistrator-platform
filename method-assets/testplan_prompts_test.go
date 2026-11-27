@@ -110,11 +110,13 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 			"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-ARG-REF", "TP-ARRANGE", "TP-PROBE", "TP-STATE",
 			"TP-ACTOR-OBSERVED", "TP-PRINCIPAL", "vacuous",
 			"TP-PROBE-SELF", "TP-PROBE-POLLING", "TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "onBehalfOf", "read-only",
+			`{"kind":"postgres","model":{"sql":"..."}}`, `{"kind":"github","model":{"owner"`, `{"kind":"gitRepo","model":{"branch"`, "never the domain's own JSON",
 		},
 		cmd("frontend-test-plan"): {
 			"TP-HOOK", "TP-EXPECT-REQUIRED", "TP-UI-TARGET", "TP-UI-ACTION", "UID-ROUTE", "TP-ARG-REF",
 			"TP-ARRANGE", "TP-ACTOR-OBSERVED", "TP-PRINCIPAL",
 			"TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "onBehalfOf",
+			`{"kind":"postgres","model":{"sql":"..."}}`, `{"kind":"github","model":{"owner"`, `{"kind":"gitRepo","model":{"branch"`, "never the domain's own JSON",
 		},
 		cmd("acceptance-test-plan"): {
 			"ATP-BOUND", "ATP-REF", "ATP-PROBE-AS", "ATP-BROWSER", "TP-PRINCIPAL", "TP-EXPECT-REQUIRED", "TP-STATE",

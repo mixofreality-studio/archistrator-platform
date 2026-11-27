@@ -159,25 +159,57 @@ func TestTP_Arrange_Rules(t *testing.T) {
 		ContractCall{Component: "orderManager", Operation: "GetOrder", Inputs: []TestArg{{Name: "orderId", Value: lit("o-2")}}},
 		AdvanceClock{Duration: "90s"},
 		FailNext{Component: "orderManager", Operation: "PlaceOrder", ErrorCode: "Boom"},
-		SeedResource{Resource: "OrderDB", Fixture: json.RawMessage(`{"rows":[]}`)},
+		SeedResource{Resource: "OrderDB", Fixture: json.RawMessage(`{"kind":"postgres","model":{"sql":"INSERT INTO orders (id) VALUES ('o-2')"}}`)},
+		SeedResource{Resource: "OrderDB", Fixture: json.RawMessage(`{"kind":"github","model":{"owner":"acme","name":"shop","files":{"README.md":"hi"}}}`)},
+		SeedResource{Resource: "OrderDB", Fixture: json.RawMessage(`{"kind":"gitRepo","model":{"files":{"a.txt":"x"}}}`)},
 	}
 	b.Arrange = good
 	wantRules(t, runTP(t, p), ruleTPArrange, 0)
 
 	cases := map[string]ArrangeCall{
-		"unknown op":        ContractCall{Component: "orderManager", Operation: "Nope"},
-		"unknown component": ContractCall{Component: "ledgerManager", Operation: "GetOrder"},
-		"bad arg name":      ContractCall{Component: "orderManager", Operation: "GetOrder", Inputs: []TestArg{{Name: "id", Value: lit("o-2")}}},
-		"bad arg type":      ContractCall{Component: "billingManager", Operation: "GetInvoice", Inputs: []TestArg{{Name: "invoiceId", Value: lit(`{"a":1}`)}}},
-		"bad duration":      AdvanceClock{Duration: "soon"},
-		"failNext no op":    FailNext{Component: "orderManager", Operation: "Nope", ErrorCode: "Boom"},
-		"seed no resource":  SeedResource{Resource: "ghost", Fixture: json.RawMessage(`{}`)},
-		"seed a manager":    SeedResource{Resource: "orderManager", Fixture: json.RawMessage(`{}`)},
+		"unknown op":         ContractCall{Component: "orderManager", Operation: "Nope"},
+		"unknown component":  ContractCall{Component: "ledgerManager", Operation: "GetOrder"},
+		"bad arg name":       ContractCall{Component: "orderManager", Operation: "GetOrder", Inputs: []TestArg{{Name: "id", Value: lit("o-2")}}},
+		"bad arg type":       ContractCall{Component: "billingManager", Operation: "GetInvoice", Inputs: []TestArg{{Name: "invoiceId", Value: lit(`{"a":1}`)}}},
+		"bad duration":       AdvanceClock{Duration: "soon"},
+		"failNext no op":     FailNext{Component: "orderManager", Operation: "Nope", ErrorCode: "Boom"},
+		"seed no resource":   SeedResource{Resource: "ghost", Fixture: json.RawMessage(goodSeed)},
+		"seed a manager":     SeedResource{Resource: "orderManager", Fixture: json.RawMessage(goodSeed)},
+		"seed domain json":   SeedResource{Resource: "OrderDB", Fixture: json.RawMessage(`{"owner":"o-1","orders":[{"id":"o-2"}]}`)},
+		"seed unknown kind":  SeedResource{Resource: "OrderDB", Fixture: json.RawMessage(`{"kind":"redis","model":{"sql":"x"}}`)},
+		"seed empty sql":     SeedResource{Resource: "OrderDB", Fixture: json.RawMessage(`{"kind":"postgres","model":{"sql":""}}`)},
+		"seed unknown field": SeedResource{Resource: "OrderDB", Fixture: json.RawMessage(`{"kind":"postgres","model":{"sql":"x","rows":2}}`)},
 	}
 	for name, c := range cases {
 		b.Arrange = []ArrangeCall{c}
 		if n := countRule(runTP(t, p), ruleTPArrange); n < 1 {
 			t.Errorf("%s: TP-ARRANGE did not fire", name)
+		}
+	}
+}
+
+const goodSeed = `{"kind":"postgres","model":{"sql":"SELECT 1"}}`
+
+// A refused fixture's finding names the resource, the decode error and the three seed shapes.
+func TestTP2_ArrangeSeedFindingNamesShapes(t *testing.T) {
+	p := loadProject(t, "tp2_clean.json")
+	sys, _, err := p.system()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sys.Components = append(sys.Components, Component{ID: "order-db", Name: "OrderDB", Kind: kindResource, Layer: layerResource})
+	p = withSystem(t, p, sys)
+	b := binding(t, p, "billingManager", "process-order-P2")
+	b.Arrange = []ArrangeCall{SeedResource{Resource: "OrderDB", Fixture: json.RawMessage(`{"rows":2}`)}}
+	var got string
+	for _, f := range runTP(t, p) {
+		if f.RuleID == ruleTPArrange {
+			got = f.Message
+		}
+	}
+	for _, want := range []string{`"OrderDB"`, "resource seed", `"kind":"postgres"`, `"kind":"github"`, `"kind":"gitRepo"`} {
+		if !strings.Contains(got, want) {
+			t.Errorf("finding %q lacks %q", got, want)
 		}
 	}
 }
