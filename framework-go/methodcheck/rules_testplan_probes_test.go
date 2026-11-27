@@ -647,3 +647,85 @@ func TestTPState_ReadOnlyExemptionIsShared(t *testing.T) {
 		t.Error("readOnlyObserves is a read-only op whose expectation asserts")
 	}
 }
+
+// falsifiableFinding returns the TP-FALSIFIABLE finding in fs, or nil.
+func falsifiableFinding(fs []Finding) *Finding {
+	for i := range fs {
+		if fs[i].RuleID == ruleTPFalsifiable {
+			return &fs[i]
+		}
+	}
+	return nil
+}
+
+// A probe on a read-only success step is refused through the real validation path: the service
+// plan's track-order-P1 step reads GetOrder, so a probe on it can never pass the generated
+// differential.
+func TestTPFalsifiable_WiredIntoValidation(t *testing.T) {
+	var doc map[string]any
+	if err := json.Unmarshal(readFixture(t, "tp_clean.json"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	plan := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)["orderManager"].(map[string]any)
+	for _, b := range plan["bindings"].([]any) {
+		bm := b.(map[string]any)
+		if bm["scenario"] != "track-order-P1" {
+			continue
+		}
+		st := bm["steps"].([]any)[0].(map[string]any)
+		st["probes"] = []any{map[string]any{
+			"for": "inv-req", "component": "billingManager", "operation": "GetInvoice",
+			"inputs": []any{map[string]any{"name": "invoiceId", "value": map[string]any{"kind": "literal", "model": map[string]any{"json": "inv-o-2"}}}},
+			"expect": map[string]any{"result": `{"id":"inv-o-2","state":"requested"}`, "errorExpected": false},
+		}}
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, err := ValidateProjectJSON(raw, ValidateOptions{SupportedSurfaces: Surfaces()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := falsifiableFinding(fs)
+	if got == nil || got.Severity != SeverityError || !strings.Contains(got.Message, "GetOrder") {
+		t.Fatalf("a probe on a read-only success step must be refused with a TP-FALSIFIABLE Error:\n%s", dumpFindings(fs))
+	}
+}
+
+// An acceptance plan is exempt: its steps address several components and its probes are the
+// cross-actor observation, so the same shape does not draw TP-FALSIFIABLE there.
+func TestTPFalsifiable_AcceptancePlanIsExempt(t *testing.T) {
+	var doc map[string]any
+	if err := json.Unmarshal(readFixture(t, "atp_clean.json"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	// orderManager.PlaceOrder is read-only here, so the acceptance step 2 that calls it (with the
+	// fixture's own probes) is the shape the service-plan rule refuses.
+	ops := doc["serviceContracts"].(map[string]any)["orderManager"].(map[string]any)["interface"].(map[string]any)["operations"].([]any)
+	for _, o := range ops {
+		if om := o.(map[string]any); om["name"] == "PlaceOrder" {
+			om["readOnly"] = true
+		}
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, ok, err := DecodeProject(raw)
+	if err != nil || !ok {
+		t.Fatalf("decode: ok=%v err=%v", ok, err)
+	}
+	b := acceptanceBinding(t, p, "process-order-P2@shopClient")
+	st := &b.Steps[1]
+	if st.Operation != "PlaceOrder" || len(st.Probes) == 0 {
+		t.Fatalf("fixture step 2 is not a PlaceOrder step with probes: %s %d", st.Operation, len(st.Probes))
+	}
+	// The service plan's own read-only step (same fixture) is refused; only the acceptance
+	// plan's findings (the @shopClient variant) are under test.
+	for _, f := range runATP(t, p) {
+		if f.RuleID == ruleTPFalsifiable && strings.Contains(f.Message, "process-order-P2@shopClient") {
+			t.Fatalf("an acceptance plan must not draw TP-FALSIFIABLE: %s", f.Message)
+		}
+	}
+}
