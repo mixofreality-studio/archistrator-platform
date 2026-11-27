@@ -427,13 +427,10 @@ func (sc tpScope) contractCallFindings(v ContractCall, section string) []Finding
 // into any other layer it reads no principal, so `as` has nothing to set. The called
 // component's layer is the design's (the System component), else its contract's.
 func (sc tpScope) callPrincipalFindings(v ContractCall, contract ServiceContract, section string) []Finding {
-	layer := contract.Layer
-	if c, ok := sc.env.component(v.Component); ok && c.Layer != "" {
-		layer = c.Layer
-	}
+	layer, servesPrincipal := sc.calleeLayer(v.Component, contract)
 	callee := v.Component + "." + v.Operation
-	switch layer {
-	case layerManager, layerClient:
+	switch servesPrincipal {
+	case true:
 		switch _, known := sc.principals[v.As]; {
 		case v.As == "":
 			return []Finding{tpFinding(ruleTPArrange, sc.l,
@@ -452,6 +449,29 @@ func (sc tpScope) callPrincipalFindings(v ContractCall, contract ServiceContract
 		}
 	}
 	return nil
+}
+
+// calleeLayer is the Method layer of the component a contract call targets, and whether that
+// layer is served behind the principal edge (Manager or Client). The design's System component
+// decides, found by the call's name and then by the contract's parent component (a facet
+// contract's key is no System component); a contract's own layer is the last resort. System
+// layers are lowercase wire names and contract layers are capitalized, so they compare
+// case-insensitively.
+func (sc tpScope) calleeLayer(comp string, contract ServiceContract) (string, bool) {
+	layer := ""
+	for _, name := range []string{comp, contract.Component} {
+		if c, ok := sc.env.component(name); ok && c.Layer != "" {
+			layer = c.Layer
+			break
+		}
+	}
+	if layer == "" {
+		layer = contract.Layer
+	}
+	if layer == "" {
+		layer = contract.Interface.Layer
+	}
+	return layer, strings.EqualFold(layer, layerManager) || strings.EqualFold(layer, layerClient)
 }
 
 // principalKeys lists a plan's principal names, sorted, for a finding's message.

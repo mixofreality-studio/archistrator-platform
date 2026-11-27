@@ -443,6 +443,33 @@ func TestTPArrange_ClientCallNeedsAs(t *testing.T) {
 	}
 }
 
+// A facet contract's key is no System component and its layer is capitalized: the callee's
+// layer still resolves through the facet's parent component, so the call needs `as`.
+func TestTPArrange_FacetContractCallNeedsAs(t *testing.T) {
+	p := loadProject(t, "tp2_clean.json")
+	base := p.ServiceContracts["orderManager"]
+	p.ServiceContracts["orderManagerFacet"] = ServiceContract{Component: "orderManager", Layer: "Manager", Interface: base.Interface}
+	in := []TestArg{{Name: "orderId", Value: lit("o-2")}}
+	fs := arrangeFindingsOf(t, p, ContractCall{Component: "orderManagerFacet", Operation: "GetOrder", Inputs: in})
+	if len(fs) != 1 || !strings.Contains(fs[0].Message, "no `as`") {
+		t.Fatalf("a facet Manager call with no as is refused: %v", fs)
+	}
+	if fs := arrangeFindingsOf(t, p, ContractCall{Component: "orderManagerFacet", Operation: "GetOrder", As: "customer", Inputs: in}); len(fs) != 0 {
+		t.Fatalf("a facet Manager call as a plan principal is admitted: %v", fs)
+	}
+}
+
+// A contract whose component is no System component falls back to its own capitalized layer.
+func TestTPArrange_OrphanFacetUsesItsOwnLayer(t *testing.T) {
+	p := loadProject(t, "tp2_clean.json")
+	base := p.ServiceContracts["orderManager"]
+	p.ServiceContracts["orphanFacet"] = ServiceContract{Component: "noSuchParent", Layer: "Client", Interface: base.Interface}
+	fs := arrangeFindingsOf(t, p, ContractCall{Component: "orphanFacet", Operation: "GetOrder", Inputs: []TestArg{{Name: "orderId", Value: lit("o-2")}}})
+	if len(fs) != 1 || !strings.Contains(fs[0].Message, "no `as`") {
+		t.Fatalf("a capitalized Client layer is read as a Client: %v", fs)
+	}
+}
+
 func TestTPArrange_ResourceAccessCallTakesNoAs(t *testing.T) {
 	p := ledgerAccessProject(t)
 	fs := arrangeFindingsOf(t, p, ContractCall{Component: "ledgerAccess", Operation: "Get", As: "customer"})
