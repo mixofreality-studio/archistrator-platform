@@ -561,10 +561,10 @@ func TestTP_NullSatisfied_WiredIntoValidation(t *testing.T) {
 		if s.ID != "process-order-P2" {
 			continue
 		}
-		if !hasRuleFindings(planBindingFindings(p, env, "orderManager", s, *b, loc(0, "x"), false), ruleTPNullSatisfied) {
+		if !hasRuleFindings(planBindingFindings(p, env, "orderManager", s, *b, nil, loc(0, "x"), false), ruleTPNullSatisfied) {
 			t.Error("a component plan binding fires the rule")
 		}
-		if hasRuleFindings(planBindingFindings(p, env, "orderManager", s, *b, loc(0, "x"), true), ruleTPNullSatisfied) {
+		if hasRuleFindings(planBindingFindings(p, env, "orderManager", s, *b, nil, loc(0, "x"), true), ruleTPNullSatisfied) {
 			t.Error("an acceptance plan binding must not")
 		}
 	}

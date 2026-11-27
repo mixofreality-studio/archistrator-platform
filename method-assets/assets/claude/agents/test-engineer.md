@@ -64,7 +64,10 @@ or a Phase-1/2 slot. A perf *rig* still goes through `recordTestingState`
    from the four typed kinds (`contractCall`, `advanceClock`, `failNext`,
    `seedResource`, whose fixture is a typed postgres, github or gitRepo seed over
    the tables the Resource's ResourceAccess creates, not domain JSON `[TP-ARRANGE]`;
-   prefer a `contractCall` where a designed operation builds the state), and a
+   prefer a `contractCall` where a designed operation builds the state; into a
+   Manager or a Client it carries `as`, one of the plan's principals, since those
+   layers authorize their caller, and into an Engine or a ResourceAccess it
+   carries none `[TP-ARRANGE]`; where no principal may do it, use `seedResource`), and a
    `principal` per actor that originates a stimulus. Every
    projected scenario is bound; the TP-* rules decide completeness, not you. The
    rules do not decide correctness, so hold yourself to these: a value the

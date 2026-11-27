@@ -358,7 +358,8 @@ func schemaItems(node json.RawMessage, defs map[string]json.RawMessage) (json.Ra
 // ---- TP-ARRANGE and TP-HOOK (arrange form) ----
 
 // arrangeFindings is TP-ARRANGE over a binding's setup: a contract call names a designed
-// operation with well-typed arguments and refs, a failNext names a designed operation, a
+// operation with well-typed arguments and refs and, into a Manager or a Client, the plan
+// principal it runs as (an `as`; any other layer carries none), a failNext names a designed operation, a
 // clock advance is a Go duration, a seed names a Resource component and carries a fixture
 // DecodeResourceSeed admits (a postgres, github or gitRepo seed). A contract call that
 // performs one of the scenario's own stimuli on the plan's component is TP-HOOK: the test
@@ -401,14 +402,16 @@ func opExists(look opLookup, name string) bool {
 	return ok
 }
 
-// contractCallFindings checks one arrange contract call.
+// contractCallFindings checks one arrange contract call: the operation is designed, its
+// arguments and expectation are well typed, and the principal it runs as fits the called
+// component's layer (callPrincipalFindings).
 func (sc tpScope) contractCallFindings(v ContractCall, section string) []Finding {
 	contract, look := findContract(sc.p, v.Component)
 	cop, ok := look(v.Operation)
 	if !ok {
 		return []Finding{tpFinding(ruleTPArrange, sc.l, "%s: contractCall %s.%s is not a designed operation", section, v.Component, v.Operation)}
 	}
-	var out []Finding
+	out := sc.callPrincipalFindings(v, contract, section)
 	if sc.performsOwnStimulus(v) {
 		out = append(out, tpFinding(ruleTPHook, sc.l,
 			"%s: the setup calls %s.%s, which is a stimulus of this scenario; arranging by performing the action under test proves nothing about it", section, v.Component, v.Operation))
@@ -416,6 +419,52 @@ func (sc tpScope) contractCallFindings(v ContractCall, section string) []Finding
 	out = append(out, argFindings(v.Inputs, cop, contract, ruleTPArrange, ruleTPArrange, section, sc.l)...)
 	out = append(out, expectFindings(v.Expect, cop, contract, ruleTPArrange, section, sc.l)...)
 	return append(out, sc.refFindings(v.Inputs, 0, -1, section)...)
+}
+
+// callPrincipalFindings is the TP-ARRANGE rule on who an arrange contract call runs as. A call
+// always runs somewhere: into a Manager or a Client it runs as the plan principal `as` names,
+// because those layers authorize their caller and an anonymous call is refused at run time;
+// into any other layer it reads no principal, so `as` has nothing to set. The called
+// component's layer is the design's (the System component), else its contract's.
+func (sc tpScope) callPrincipalFindings(v ContractCall, contract ServiceContract, section string) []Finding {
+	layer := contract.Layer
+	if c, ok := sc.env.component(v.Component); ok && c.Layer != "" {
+		layer = c.Layer
+	}
+	callee := v.Component + "." + v.Operation
+	switch layer {
+	case layerManager, layerClient:
+		switch _, known := sc.principals[v.As]; {
+		case v.As == "":
+			return []Finding{tpFinding(ruleTPArrange, sc.l,
+				"%s: contractCall %s has no `as`: a %s authorizes its caller, so the call is refused when it runs anonymously; set `as` to one of the plan's principals (%s), or build the state with seedResource",
+				section, callee, layer, principalKeys(sc.principals))}
+		case !known:
+			return []Finding{tpFinding(ruleTPArrange, sc.l,
+				"%s: contractCall %s runs as %q, which is none of the plan's principals (%s); record who the call runs as",
+				section, callee, v.As, principalKeys(sc.principals))}
+		}
+	default:
+		if v.As != "" {
+			return []Finding{tpFinding(ruleTPArrange, sc.l,
+				"%s: contractCall %s sets as %q, but a %s reads no principal: drop `as`",
+				section, callee, v.As, layer)}
+		}
+	}
+	return nil
+}
+
+// principalKeys lists a plan's principal names, sorted, for a finding's message.
+func principalKeys(principals map[string]TestPrincipal) string {
+	if len(principals) == 0 {
+		return "none recorded"
+	}
+	keys := make([]string, 0, len(principals))
+	for k := range principals {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return strings.Join(keys, ", ")
 }
 
 // performsOwnStimulus reports an arrange call to the plan's own component and one of the

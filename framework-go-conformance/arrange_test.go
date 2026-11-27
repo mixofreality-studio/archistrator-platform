@@ -97,10 +97,11 @@ func literal(name string, v any) map[string]any {
 	return map[string]any{"name": name, "schemaRef": "", "value": map[string]any{"kind": "literal", "model": map[string]any{"json": v}}}
 }
 
-// addTodoCall is the arrange contract call of listManager.AddTodo, expecting want.
+// addTodoCall is the arrange contract call of listManager.AddTodo, made as the plan's team-member and
+// expecting want: a Manager authorizes its caller, so the call names the principal it runs as (TP-ARRANGE).
 func addTodoCall(want map[string]any) map[string]any {
 	return map[string]any{"kind": "contractCall", "model": map[string]any{
-		"component": "listManager", "operation": "AddTodo",
+		"component": "listManager", "operation": "AddTodo", "as": "team-member",
 		"inputs": []any{literal("owner", "alice"), literal("wording", "Buy milk"), literal("requestId", "arrange-1")},
 		"expect": want,
 	}}

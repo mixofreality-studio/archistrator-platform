@@ -42,6 +42,16 @@ func TestTestPlanAndContractPromptsCarryTheirRules(t *testing.T) {
 		{frontendConstruction, "reflects the user's change in the same interaction (optimistic)"},
 		{frontendConstruction, "roll it back and show the user a notice"},
 		{frontendConstruction, "A call in flight does not block unrelated input"},
+		// Who an arrange contract call runs as: a Manager or a Client authorizes its caller, so the
+		// call carries `as`; an Engine or a ResourceAccess reads no principal (ISS-033-3).
+		{serviceTestPlan, "it carries `as`, one of the plan's principals"},
+		{frontendTestPlan, "it carries `as`, one of the plan's principals"},
+		{testEngineer, "it carries `as`, one of the plan's principals"},
+		{serviceTestPlan, "into an Engine or a ResourceAccess it carries none"},
+		{frontendTestPlan, "into an Engine or a ResourceAccess it carries none"},
+		{testEngineer, "carries none `[TP-ARRANGE]`"},
+		{serviceTestPlan, "build the state with `seedResource`"},
+		{frontendTestPlan, "build the state with `seedResource`"},
 		// The contract's layer rules: FIX-019.
 		{contractSkill, `never reason "total, so no error"`},
 		{detailedDesign, "declares `error: true`"},

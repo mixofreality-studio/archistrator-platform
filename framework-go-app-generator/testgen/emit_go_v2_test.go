@@ -177,7 +177,7 @@ func arrangeAllKinds(doc map[string]any) {
 	b := planBindingNoT(doc, "billingManager", "process-order-P2")
 	b["arrange"] = []any{
 		map[string]any{"kind": "contractCall", "model": map[string]any{
-			"component": "orderManager", "operation": "GetOrder",
+			"component": "orderManager", "operation": "GetOrder", "as": "customer",
 			"inputs": []any{map[string]any{"name": "orderId", "value": lit("o-2")}},
 			"expect": map[string]any{"result": `{"id":"o-2"}`, "errorExpected": false}}},
 		map[string]any{"kind": "advanceClock", "model": map[string]any{"duration": "1h"}},
@@ -200,7 +200,7 @@ func TestGo_ArrangeExhaustive(t *testing.T) {
 	out := generateMutated(t, arrangeAllKinds)
 	src := string(out.Generated[billingGen])
 	want := []string{
-		"scenariocompose.NewOrderManager(t, h).GetOrder(h.ManagerContext(t), in.OrderId)",
+		"scenariocompose.NewOrderManager(t, h).GetOrder(h.ManagerContextAs(t, principal(\"customer\")), in.OrderId)",
 		"expect(t, \"process-order-P2 arrange 1\", 0, aout, aerr,",
 		"h.AdvanceClock(t, time.Duration(3600000000000))",
 		"h.FailNext(t, \"orderManager\", \"PlaceOrder\", \"Down\")",

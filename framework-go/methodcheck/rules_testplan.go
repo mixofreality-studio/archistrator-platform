@@ -127,7 +127,7 @@ func componentPlanFindings(p Project, env tpEnv, comp string, rec TestPlanRecord
 		if b.Skip == nil {
 			live = append(live, s)
 		}
-		out = append(out, bindingFindings(p, env, comp, s, b, l)...)
+		out = append(out, bindingFindings(p, env, comp, s, b, rec.Principals, l)...)
 	}
 	out = append(out, unboundFindings(comp, projected, bound, l)...)
 	return append(out, principalFindings(env, comp, rec, live, l)...)
@@ -146,15 +146,15 @@ func unboundFindings(comp string, projected []scenario.Scenario, bound map[strin
 
 // bindingFindings checks one binding: a skip (TP-SKIP) or the step list (TP-STEP
 // cardinality, then every step).
-func bindingFindings(p Project, env tpEnv, comp string, s scenario.Scenario, b ScenarioBinding, l *Location) []Finding {
-	return planBindingFindings(p, env, comp, s, b, l, false)
+func bindingFindings(p Project, env tpEnv, comp string, s scenario.Scenario, b ScenarioBinding, principals map[string]TestPrincipal, l *Location) []Finding {
+	return planBindingFindings(p, env, comp, s, b, principals, l, false)
 }
 
 // planBindingFindings is bindingFindings for either kind of plan. A client plan's steps all
 // address the plan's own component. An acceptance plan's (acceptance true; comp is only the
 // label of the plan) address whatever component each stimulus targets, so each step is held
 // to the contract of the component its stimulus's Input.To names (tpScope.forStimulus).
-func planBindingFindings(p Project, env tpEnv, comp string, s scenario.Scenario, b ScenarioBinding, l *Location, acceptance bool) []Finding {
+func planBindingFindings(p Project, env tpEnv, comp string, s scenario.Scenario, b ScenarioBinding, principals map[string]TestPrincipal, l *Location, acceptance bool) []Finding {
 	if b.Skip != nil {
 		return skipFindings(p, comp, b, l)
 	}
@@ -162,7 +162,7 @@ func planBindingFindings(p Project, env tpEnv, comp string, s scenario.Scenario,
 		return []Finding{tpFinding(ruleTPStep, l, "%s %s: %d steps bound, %d stimuli projected", comp, s.ID, len(b.Steps), len(s.Stimuli))}
 	}
 	contract, op := findContract(p, comp)
-	sc := tpScope{p: p, env: env, comp: comp, scenario: s.ID, scn: s, steps: b.Steps, contract: contract, op: op, web: env.isWeb(comp, contract), l: l, acceptance: acceptance}
+	sc := tpScope{p: p, env: env, comp: comp, scenario: s.ID, scn: s, steps: b.Steps, contract: contract, op: op, web: env.isWeb(comp, contract), l: l, acceptance: acceptance, principals: principals}
 	out := sc.arrangeFindings(b.Arrange)
 	for i, st := range b.Steps {
 		out = append(out, sc.forStimulus(s.Stimuli[i]).stepFindings(s.Stimuli[i], st)...)
@@ -183,10 +183,11 @@ type tpScope struct {
 	op       opLookup
 	l        *Location
 
-	env   tpEnv
-	scn   scenario.Scenario // the projected scenario under test
-	steps []StepBinding     // the binding's steps, for refs
-	web   bool              // the component is a browser surface
+	env        tpEnv
+	principals map[string]TestPrincipal // the plan's principals, the keys an arrange contractCall's as may name
+	scn        scenario.Scenario        // the projected scenario under test
+	steps      []StepBinding            // the binding's steps, for refs
+	web        bool                     // the component is a browser surface
 
 	// acceptance marks an acceptance plan's binding: its steps address several components, so
 	// comp, contract, op and web are per stimulus (forStimulus) and not the plan's.

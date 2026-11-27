@@ -73,6 +73,7 @@ func acceptanceSpec(p methodcheck.Project, web webEnv, routes map[string]restRou
 		w.byID[e.ID] = e
 	}
 	a := &accSpec{specWriter: w, ab: ab, routes: routes, rec: *p.PhaseArtifacts.AcceptancePlan}
+	w.asProp = a.as // an arrange call is made as the actor the same way a step or probe is
 	bs := ab.boundScenario
 	id := bs.Scenario.ID
 	annotation := fmt.Sprintf("{ type: 'scenario', description: %s }", tsStr(id))

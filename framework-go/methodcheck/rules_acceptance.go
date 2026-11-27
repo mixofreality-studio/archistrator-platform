@@ -107,7 +107,7 @@ func newAcceptanceScope(p Project, env tpEnv, all []scenario.Scenario) (acceptan
 // bindingFindings is the TP-* v2 rules over one admitted binding and, unless it is skipped, its
 // ATP-REF and ATP-PROBE-AS findings.
 func (sc acceptanceScope) bindingFindings(v scenario.Scenario, b ScenarioBinding) []Finding {
-	out := planBindingFindings(sc.p, sc.env, acceptanceLabel, v, b, sc.l, true)
+	out := planBindingFindings(sc.p, sc.env, acceptanceLabel, v, b, sc.rec.Principals, sc.l, true)
 	if b.Skip != nil {
 		return out
 	}

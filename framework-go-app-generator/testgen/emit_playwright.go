@@ -102,6 +102,10 @@ type specWriter struct {
 	byID   map[string]methodcheck.UIElement
 	web    webEnv
 	uses   map[string]bool // names the body used: runtime names, plus "expect" and "locate"
+	// asProp spells the `as` property of a call made as a plan principal (", as: ..."), or "" for none.
+	// A spec that declares the principals' subjects (an acceptance spec) supplies its own; the default
+	// is the principal's subject as a literal.
+	asProp func(principal string) string
 	// warnings are conditions the emitter tolerates but names (see immediateWarnings).
 	warnings []string
 }
@@ -204,7 +208,7 @@ func (w *specWriter) arrangeLiteral(a methodcheck.ArrangeCall) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return "{ kind: 'contractCall', " + call + " }", nil
+		return "{ kind: 'contractCall', " + call + w.callAs(v.As) + " }", nil
 	case methodcheck.AdvanceClock:
 		return "", fmt.Errorf("advanceClock (%s) is refused for a web scenario (E17)", v.Duration)
 	case methodcheck.FailNext:
@@ -246,6 +250,18 @@ func (w *specWriter) contractCall(component, operation string, inputs []methodch
 		return "", fmt.Errorf("argument %q of %s.%s reads the result of step %d: a browser call is made without an earlier result", refs[0].param, component, operation, refs[0].ref.Step)
 	}
 	return fmt.Sprintf("verb: %s, path: %s, args: %s, expect: %s", tsStr(route.Verb), tsStr(route.Path), args, tsExpect(want)), nil
+}
+
+// callAs is the `as` property of a call made as the plan principal (X-Dev-Principal: its subject, which
+// the launch allowlists); "" makes the call as the run's process principal.
+func (w *specWriter) callAs(principal string) string {
+	switch {
+	case principal == "":
+		return ""
+	case w.asProp != nil:
+		return w.asProp(principal)
+	}
+	return ", as: " + tsStr(w.plan.Principals[principal].Subject)
 }
 
 // tsExpect is a call's expectation as the runtime's Expectation literal.

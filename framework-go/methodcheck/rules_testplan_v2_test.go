@@ -124,7 +124,7 @@ func TestTP_Arrange_FiresOnSelfStimulus(t *testing.T) {
 	}
 	// arranging through a different operation of the same component is fine
 	b.Arrange = []ArrangeCall{ContractCall{
-		Component: "billingManager", Operation: "GetInvoice",
+		Component: "billingManager", Operation: "GetInvoice", As: "customer",
 		Inputs: []TestArg{{Name: "invoiceId", Value: lit("inv-o-2")}},
 	}}
 	fs = runTP(t, p)
@@ -156,7 +156,7 @@ func TestTP_Arrange_Rules(t *testing.T) {
 	p = withSystem(t, p, sys)
 	b := binding(t, p, "billingManager", "process-order-P2")
 	good := []ArrangeCall{
-		ContractCall{Component: "orderManager", Operation: "GetOrder", Inputs: []TestArg{{Name: "orderId", Value: lit("o-2")}}},
+		ContractCall{Component: "orderManager", Operation: "GetOrder", As: "customer", Inputs: []TestArg{{Name: "orderId", Value: lit("o-2")}}},
 		AdvanceClock{Duration: "90s"},
 		FailNext{Component: "orderManager", Operation: "PlaceOrder", ErrorCode: "Boom"},
 		SeedResource{Resource: "OrderDB", Fixture: json.RawMessage(`{"kind":"postgres","model":{"sql":"INSERT INTO orders (id) VALUES ('o-2')"}}`)},
@@ -169,8 +169,8 @@ func TestTP_Arrange_Rules(t *testing.T) {
 	cases := map[string]ArrangeCall{
 		"unknown op":         ContractCall{Component: "orderManager", Operation: "Nope"},
 		"unknown component":  ContractCall{Component: "ledgerManager", Operation: "GetOrder"},
-		"bad arg name":       ContractCall{Component: "orderManager", Operation: "GetOrder", Inputs: []TestArg{{Name: "id", Value: lit("o-2")}}},
-		"bad arg type":       ContractCall{Component: "billingManager", Operation: "GetInvoice", Inputs: []TestArg{{Name: "invoiceId", Value: lit(`{"a":1}`)}}},
+		"bad arg name":       ContractCall{Component: "orderManager", Operation: "GetOrder", As: "customer", Inputs: []TestArg{{Name: "id", Value: lit("o-2")}}},
+		"bad arg type":       ContractCall{Component: "billingManager", Operation: "GetInvoice", As: "customer", Inputs: []TestArg{{Name: "invoiceId", Value: lit(`{"a":1}`)}}},
 		"bad duration":       AdvanceClock{Duration: "soon"},
 		"failNext no op":     FailNext{Component: "orderManager", Operation: "Nope", ErrorCode: "Boom"},
 		"seed no resource":   SeedResource{Resource: "ghost", Fixture: json.RawMessage(goodSeed)},
@@ -368,5 +368,118 @@ func TestTP_V2RulesAreRegistered(t *testing.T) {
 		if !ids[id] {
 			t.Errorf("%s is emitted but not in emittedRuleIDs", id)
 		}
+	}
+}
+
+// ---- TP-ARRANGE: who a contract call runs as ----
+
+// ledgerAccessProject is tp2_clean plus a ResourceAccess, ledgerAccess, with one operation Get: the
+// callee of an arrange that reads no principal.
+func ledgerAccessProject(t *testing.T) Project {
+	t.Helper()
+	p := loadProject(t, "tp2_clean.json")
+	sys, _, err := p.system()
+	if err != nil {
+		t.Fatal(err)
+	}
+	sys.Components = append(sys.Components, Component{ID: "ledger-access", Name: "LedgerAccess", Kind: kindResourceAccess, Layer: layerResourceAccess})
+	p = withSystem(t, p, sys)
+	p.ServiceContracts["ledgerAccess"] = ServiceContract{
+		Component: "ledgerAccess", Layer: layerResourceAccess,
+		Interface: ContractInterface{Name: "LedgerAccess", Layer: layerResourceAccess, Operations: []ContractOperation{{Name: "Get", ReadOnly: true}}},
+	}
+	return p
+}
+
+func arrangeFindingsOf(t *testing.T, p Project, c ContractCall) []Finding {
+	t.Helper()
+	binding(t, p, "billingManager", "process-order-P2").Arrange = []ArrangeCall{c}
+	var out []Finding
+	for _, f := range runTP(t, p) {
+		if f.RuleID == ruleTPArrange {
+			out = append(out, f)
+		}
+	}
+	return out
+}
+
+func TestTPArrange_ManagerCallWithoutAsIsRefused(t *testing.T) {
+	p := loadProject(t, "tp2_clean.json")
+	fs := arrangeFindingsOf(t, p, ContractCall{Component: "orderManager", Operation: "GetOrder", Inputs: []TestArg{{Name: "orderId", Value: lit("o-2")}}})
+	if len(fs) != 1 || fs[0].Severity != SeverityError {
+		t.Fatalf("a Manager call with no as is one TP-ARRANGE Error: %v", fs)
+	}
+	for _, want := range []string{"billingManager process-order-P2 arrange 0", "orderManager.GetOrder", "customer", "seedResource"} {
+		if !strings.Contains(fs[0].Message, want) {
+			t.Errorf("the message names %q: %s", want, fs[0].Message)
+		}
+	}
+}
+
+func TestTPArrange_UnknownAsIsRefused(t *testing.T) {
+	p := loadProject(t, "tp2_clean.json")
+	fs := arrangeFindingsOf(t, p, ContractCall{Component: "orderManager", Operation: "GetOrder", As: "stranger", Inputs: []TestArg{{Name: "orderId", Value: lit("o-2")}}})
+	if len(fs) != 1 || !strings.Contains(fs[0].Message, `"stranger"`) || !strings.Contains(fs[0].Message, "customer") {
+		t.Fatalf("an as that is none of the plan's principals is refused, naming it and the principals: %v", fs)
+	}
+}
+
+func TestTPArrange_PlanPrincipalIsAdmitted(t *testing.T) {
+	p := loadProject(t, "tp2_clean.json")
+	if fs := arrangeFindingsOf(t, p, ContractCall{Component: "orderManager", Operation: "GetOrder", As: "customer", Inputs: []TestArg{{Name: "orderId", Value: lit("o-2")}}}); len(fs) != 0 {
+		t.Fatalf("a plan principal is admitted: %v", fs)
+	}
+}
+
+func TestTPArrange_ClientCallNeedsAs(t *testing.T) {
+	p := loadProject(t, "tp2_clean.json")
+	ops := p.ServiceContracts["shopClient"].Interface.Operations
+	if len(ops) == 0 {
+		t.Skip("fixture client has no operation")
+	}
+	fs := arrangeFindingsOf(t, p, ContractCall{Component: "shopClient", Operation: ops[0].Name})
+	if countRule(fs, ruleTPArrange) < 1 || !strings.Contains(fs[0].Message, "no `as`") {
+		t.Fatalf("a Client call with no as is refused: %v", fs)
+	}
+}
+
+func TestTPArrange_ResourceAccessCallTakesNoAs(t *testing.T) {
+	p := ledgerAccessProject(t)
+	fs := arrangeFindingsOf(t, p, ContractCall{Component: "ledgerAccess", Operation: "Get", As: "customer"})
+	if len(fs) != 1 || !strings.Contains(fs[0].Message, "drop `as`") || !strings.Contains(fs[0].Message, "ledgerAccess.Get") {
+		t.Fatalf("a ResourceAccess call with as is refused: %v", fs)
+	}
+	if fs := arrangeFindingsOf(t, p, ContractCall{Component: "ledgerAccess", Operation: "Get"}); len(fs) != 0 {
+		t.Fatalf("a ResourceAccess call without as is admitted: %v", fs)
+	}
+}
+
+// The rule is reached through the document validation a write goes through.
+func TestTPArrange_ReachedThroughValidateProjectJSON(t *testing.T) {
+	var doc map[string]any
+	if err := json.Unmarshal(readFixture(t, "tp2_clean.json"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	plan := doc["phaseArtifacts"].(map[string]any)["testPlan"].(map[string]any)["billingManager"].(map[string]any)
+	for _, b := range plan["bindings"].([]any) {
+		bm := b.(map[string]any)
+		if bm["scenario"] == "process-order-P2" {
+			bm["arrange"] = []any{map[string]any{"kind": "contractCall", "model": map[string]any{
+				"component": "orderManager", "operation": "GetOrder",
+				"inputs": []any{map[string]any{"name": "orderId", "value": map[string]any{"kind": "literal", "model": map[string]any{"json": "o-2"}}}},
+				"expect": map[string]any{"errorExpected": false},
+			}}}
+		}
+	}
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, err := ValidateProjectJSON(raw, ValidateOptions{SupportedSurfaces: Surfaces()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if n := countRule(fs, ruleTPArrange); n != 1 {
+		t.Fatalf("a Manager arrange with no as is one TP-ARRANGE finding through ValidateProjectJSON, got %d:\n%s", n, dumpFindings(fs))
 	}
 }

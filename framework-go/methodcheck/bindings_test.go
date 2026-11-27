@@ -203,3 +203,28 @@ func TestTP_PrincipalDelegation_IntentsNeedOnBehalfOf(t *testing.T) {
 		}
 	}
 }
+
+func TestContractCall_AsRoundTrips(t *testing.T) {
+	raw := `{"kind":"contractCall","model":{"component":"billingManager","operation":"Open","as":"alice","inputs":[],"expect":{"errorExpected":false}}}`
+	a, err := UnmarshalArrangeCall([]byte(raw))
+	if err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if c := a.(ContractCall); c.As != "alice" {
+		t.Fatalf("as decoded as %q", c.As)
+	}
+	out, err := json.Marshal(a)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(out), `"as":"alice"`) {
+		t.Fatalf("as lost on marshal: %s", out)
+	}
+	none, _ := json.Marshal(ContractCall{Component: "c", Operation: "o"})
+	if strings.Contains(string(none), `"as"`) {
+		t.Fatalf("an empty as is omitted: %s", none)
+	}
+	if _, err := UnmarshalArrangeCall([]byte(`{"kind":"contractCall","model":{"component":"c","operation":"o","by":"x","inputs":[],"expect":{"errorExpected":false}}}`)); err == nil {
+		t.Fatal("strict decoding still refuses an unknown field")
+	}
+}

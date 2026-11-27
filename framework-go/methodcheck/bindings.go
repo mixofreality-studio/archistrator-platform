@@ -169,10 +169,14 @@ type ArrangeCall interface {
 	isArrangeCall()
 }
 
-// ContractCall calls a contract operation to build up state (kind "contractCall").
+// ContractCall calls a contract operation to build up state (kind "contractCall"). As is the
+// plan principal the call is made as, a key of the plan's principals: a Manager or a Client
+// authorizes its caller, so a call into one carries it; a call into any other layer reads no
+// principal and carries none [TP-ARRANGE].
 type ContractCall struct {
 	Component string     `json:"component"`
 	Operation string     `json:"operation"`
+	As        string     `json:"as,omitempty"`
 	Inputs    []TestArg  `json:"inputs"`
 	Expect    TestExpect `json:"expect"`
 }

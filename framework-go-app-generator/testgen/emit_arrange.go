@@ -33,9 +33,11 @@ func (g *goEmit) emitArrange(plan componentPlan, bs boundScenario) {
 	}
 }
 
-// arrangeContractCall calls a contract operation to build up state, as an anonymous caller: the call
-// is made on the component the plan names (built by scenariocompose, sharing the subject's collaborators)
-// and its outcome is asserted like a step's.
+// arrangeContractCall calls a contract operation to build up state, as the plan principal the call
+// names (`as`): the call is made on the component the plan names (built by scenariocompose, sharing
+// the subject's collaborators) with that principal's call context, and its outcome is asserted like a
+// step's. A Manager authorizes its caller, so a call into one carries its `as` (TP-ARRANGE); a call
+// with none, into a layer that reads no principal, runs anonymously.
 func (g *goEmit) arrangeContractCall(plan componentPlan, label string, n int, v methodcheck.ContractCall) {
 	var tgt target
 	recv := "subject"
@@ -69,7 +71,7 @@ func (g *goEmit) arrangeContractCall(plan componentPlan, label string, n int, v 
 	}
 	call := directCall{
 		recv: recv, alias: tgt.alias, sc: tgt.sc, op: op, inputs: v.Inputs,
-		ctx:   g.ctxExpr(hostRecv, tgt.layer, "", "arrange-"+strconv.Itoa(n)),
+		ctx:   g.ctxExpr(hostRecv, tgt.layer, v.As, "arrange-"+strconv.Itoa(n)),
 		inVar: "in", scenario: label,
 	}
 	g.body.WriteString("\t\t{\n\t\t\tvar aout any\n\t\t\tvar aerr error\n")
