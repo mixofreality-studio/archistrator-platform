@@ -29342,6 +29342,24 @@
                       }
                     },
                     "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "key": "Enter"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
                   }
                 ],
                 "expect": {
@@ -29373,6 +29391,24 @@
                               "element": "new-todo-input"
                             },
                             "value": "   "
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "key": "Enter"
                           }
                         }
                       }
@@ -30401,12 +30437,47 @@
                       "kind": "literal",
                       "model": {
                         "json": {
+                          "kind": "dblclick",
+                          "model": {
+                            "target": {
+                              "element": "todo-title"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
                           "kind": "fill",
                           "model": {
                             "target": {
                               "element": "todo-edit-input"
                             },
                             "value": "Buy oat milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "key": "Enter"
                           }
                         }
                       }
@@ -30542,12 +30613,47 @@
                       "kind": "literal",
                       "model": {
                         "json": {
+                          "kind": "dblclick",
+                          "model": {
+                            "target": {
+                              "element": "todo-title"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
                           "kind": "fill",
                           "model": {
                             "target": {
                               "element": "todo-edit-input"
                             },
                             "value": ""
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "key": "Enter"
                           }
                         }
                       }
@@ -30884,6 +30990,24 @@
                       }
                     },
                     "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "key": "Enter"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
                   }
                 ],
                 "expect": {
@@ -30903,12 +31027,47 @@
                       "kind": "literal",
                       "model": {
                         "json": {
+                          "kind": "dblclick",
+                          "model": {
+                            "target": {
+                              "element": "todo-title"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
                           "kind": "fill",
                           "model": {
                             "target": {
                               "element": "todo-edit-input"
                             },
                             "value": "Buy oat milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "key": "Enter"
                           }
                         }
                       }
@@ -31066,6 +31225,24 @@
                       }
                     },
                     "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "key": "Enter"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
                   }
                 ],
                 "expect": {
@@ -31085,12 +31262,47 @@
                       "kind": "literal",
                       "model": {
                         "json": {
+                          "kind": "dblclick",
+                          "model": {
+                            "target": {
+                              "element": "todo-title"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
                           "kind": "fill",
                           "model": {
                             "target": {
                               "element": "todo-edit-input"
                             },
                             "value": "Buy oat milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "key": "Enter"
                           }
                         }
                       }
@@ -31248,6 +31460,24 @@
                       }
                     },
                     "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "key": "Enter"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
                   }
                 ],
                 "expect": {
@@ -31267,12 +31497,47 @@
                       "kind": "literal",
                       "model": {
                         "json": {
+                          "kind": "dblclick",
+                          "model": {
+                            "target": {
+                              "element": "todo-title"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
                           "kind": "fill",
                           "model": {
                             "target": {
                               "element": "todo-edit-input"
                             },
                             "value": "Buy oat milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "key": "Enter"
                           }
                         }
                       }
@@ -31443,6 +31708,24 @@
                       }
                     },
                     "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "key": "Enter"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
                   }
                 ],
                 "expect": {
@@ -31474,6 +31757,24 @@
                               "element": "new-todo-input"
                             },
                             "value": "   "
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "key": "Enter"
                           }
                         }
                       }
@@ -32560,6 +32861,24 @@
                       }
                     },
                     "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "key": "Enter"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
                   }
                 ],
                 "expect": {
@@ -32579,12 +32898,47 @@
                       "kind": "literal",
                       "model": {
                         "json": {
+                          "kind": "dblclick",
+                          "model": {
+                            "target": {
+                              "element": "todo-title"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
                           "kind": "fill",
                           "model": {
                             "target": {
                               "element": "todo-edit-input"
                             },
                             "value": "Buy oat milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "key": "Enter"
                           }
                         }
                       }
@@ -32742,6 +33096,24 @@
                       }
                     },
                     "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "key": "Enter"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
                   }
                 ],
                 "expect": {
@@ -32761,12 +33133,47 @@
                       "kind": "literal",
                       "model": {
                         "json": {
+                          "kind": "dblclick",
+                          "model": {
+                            "target": {
+                              "element": "todo-title"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
                           "kind": "fill",
                           "model": {
                             "target": {
                               "element": "todo-edit-input"
                             },
                             "value": "Buy oat milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "key": "Enter"
                           }
                         }
                       }
@@ -32924,6 +33331,24 @@
                       }
                     },
                     "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "new-todo-input"
+                            },
+                            "key": "Enter"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
                   }
                 ],
                 "expect": {
@@ -32943,12 +33368,47 @@
                       "kind": "literal",
                       "model": {
                         "json": {
+                          "kind": "dblclick",
+                          "model": {
+                            "target": {
+                              "element": "todo-title"
+                            }
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
                           "kind": "fill",
                           "model": {
                             "target": {
                               "element": "todo-edit-input"
                             },
                             "value": "Buy oat milk"
+                          }
+                        }
+                      }
+                    },
+                    "schemaRef": ""
+                  },
+                  {
+                    "name": "action",
+                    "value": {
+                      "kind": "literal",
+                      "model": {
+                        "json": {
+                          "kind": "press",
+                          "model": {
+                            "target": {
+                              "element": "todo-edit-input"
+                            },
+                            "key": "Enter"
                           }
                         }
                       }

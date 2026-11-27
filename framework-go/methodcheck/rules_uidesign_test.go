@@ -92,23 +92,103 @@ func TestTP_UITarget_CountNeedsRepeats(t *testing.T) {
 	wantRules(t, runTP(t, p), ruleTPUITarget, 1)
 }
 
-// A browser step needs exactly one action input: a step with none does nothing and
-// asserts a state that already holds.
-func TestTP_UIAction_ExactlyOne(t *testing.T) {
+// A browser step needs at least one action input: a step with none does nothing and
+// asserts a state that already holds. Several are one ordered gesture.
+func TestTP_UIAction_AtLeastOne(t *testing.T) {
+	obs := `[` + act("visible", tgt("todo-list")) + `]`
+
 	p := loadProject(t, "tp_clean.json")
-	asBrowserStep(t, p, act("click", tgt("todo-add")), `[`+act("visible", tgt("todo-list"))+`]`)
+	asBrowserStep(t, p, act("click", tgt("todo-add")), obs)
 	wantRules(t, runTP(t, p), ruleTPUIAction, 0)
 
 	p = loadProject(t, "tp_clean.json")
-	asBrowserStep(t, p, act("click", tgt("todo-add")), `[`+act("visible", tgt("todo-list"))+`]`)
+	asBrowserStep(t, p, act("click", tgt("todo-add")), obs)
 	binding(t, p, "billingManager", "process-order-P2").Steps[0].Inputs = nil
 	wantRules(t, runTP(t, p), ruleTPUIAction, 1)
+}
 
-	p = loadProject(t, "tp_clean.json")
-	asBrowserStep(t, p, act("click", tgt("todo-add")), `[`+act("visible", tgt("todo-list"))+`]`)
+// browserGesture binds the whole gesture to process-order-P2's one step, in order.
+func browserGesture(t *testing.T, p Project, obs string, actions ...string) {
+	t.Helper()
+	asBrowserStep(t, p, actions[0], obs)
 	st := &binding(t, p, "billingManager", "process-order-P2").Steps[0]
-	st.Inputs = append(st.Inputs, st.Inputs[0])
-	wantRules(t, runTP(t, p), ruleTPUIAction, 1)
+	st.Inputs = nil
+	for _, a := range actions {
+		st.Inputs = append(st.Inputs, TestArg{Name: "action", Value: lit(a)})
+	}
+}
+
+func pressEnter(el string) string {
+	return act("press", `{"target":{"element":"`+el+`"},"key":"Enter"}`)
+}
+
+func fillText(el, v string) string {
+	return act("fill", `{"target":{"element":"`+el+`"},"value":"`+v+`"}`)
+}
+
+// A stimulus is one gesture: fill then press Enter, or dblclick, fill, press Enter, is
+// one step, not two.
+func TestTP_UIAction_OrderedGesture(t *testing.T) {
+	obs := `[` + act("visible", tgt("todo-list")) + `]`
+	for name, gesture := range map[string][]string{
+		"fill+enter":          {fillText("todo-new", "milk"), pressEnter("todo-new")},
+		"dblclick+fill+enter": {act("dblclick", tgt("todo-row")), fillText("todo-new", "milk"), pressEnter("todo-new")},
+	} {
+		p := loadProject(t, "tp_clean.json")
+		browserGesture(t, p, obs, gesture...)
+		fs := runTP(t, p)
+		t.Log(name)
+		for _, r := range []RuleID{ruleTPUIAction, ruleTPStep, ruleTPArgType, ruleTPUITarget} {
+			wantRules(t, fs, r, 0)
+		}
+	}
+}
+
+// Each action of the gesture is resolved through the design, not only the first.
+func TestTP_UIAction_EachActionResolved(t *testing.T) {
+	obs := `[` + act("visible", tgt("todo-list")) + `]`
+
+	p := loadProject(t, "tp_clean.json")
+	browserGesture(t, p, obs, fillText("todo-new", "milk"), pressEnter("todo-missing"))
+	wantRules(t, runTP(t, p), ruleTPUITarget, 1)
+
+	// fill needs a textbox or combobox; todo-add is a button.
+	p = loadProject(t, "tp_clean.json")
+	browserGesture(t, p, obs, act("click", tgt("todo-add")), fillText("todo-add", "milk"))
+	wantRules(t, runTP(t, p), ruleTPUITarget, 1)
+
+	// a malformed later action is TP-ARG-TYPE.
+	p = loadProject(t, "tp_clean.json")
+	browserGesture(t, p, obs, fillText("todo-new", "milk"), act("tap", tgt("todo-new")))
+	wantRules(t, runTP(t, p), ruleTPArgType, 1)
+}
+
+// Two steps for one stimulus is still TP-STEP.
+func TestTP_UIAction_SplitStimulusIsTPStep(t *testing.T) {
+	p := loadProject(t, "tp_clean.json")
+	browserGesture(t, p, `[`+act("visible", tgt("todo-list"))+`]`, fillText("todo-new", "milk"))
+	b := binding(t, p, "billingManager", "process-order-P2")
+	second := b.Steps[0]
+	second.Inputs = []TestArg{{Name: "action", Value: lit(pressEnter("todo-new"))}}
+	b.Steps = append(b.Steps, second)
+	wantRules(t, runTP(t, p), ruleTPStep, 1)
+}
+
+// A multi-action step is admitted through the real validation path.
+func TestTP_UIAction_OrderedGestureThroughValidateProjectJSON(t *testing.T) {
+	p := loadProject(t, "tp_clean.json")
+	browserGesture(t, p, `[`+act("visible", tgt("todo-list"))+`]`, fillText("todo-new", "milk"), pressEnter("todo-new"))
+	raw, err := json.Marshal(p)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fs, err := ValidateProjectJSON(raw, ValidateOptions{SupportedSurfaces: Surfaces()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, r := range []RuleID{ruleTPUIAction, ruleTPStep, ruleTPArgType, ruleTPUITarget} {
+		wantRules(t, fs, r, 0)
+	}
 }
 
 // uidProject is tp_clean with billingManager as a browser surface and its design

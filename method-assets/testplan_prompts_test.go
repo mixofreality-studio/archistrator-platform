@@ -127,6 +127,8 @@ func TestPrompts_CiteTheRulesThatEnforceThem(t *testing.T) {
 			"TP-ARRANGE", "TP-ACTOR-OBSERVED", "TP-PRINCIPAL",
 			"TP-PRINCIPAL-DELEGATION", "TP-EXPECT-ZERO", "TP-NULL-SATISFIED", "TP-FALSIFIABLE", "onBehalfOf",
 			`{"kind":"postgres","model":{"sql":"..."}}`, `{"kind":"github","model":{"owner"`, `{"kind":"gitRepo","model":{"branch"`, "never the domain's own JSON",
+			// a step carries the stimulus's whole gesture: one or more actions, in order
+			"whole gesture", "one or more inputs named `action`", "`fill` then `press` Enter", "`dblclick` the label", "TP-STEP", "after the last action",
 		},
 		cmd("acceptance-test-plan"): {
 			"ATP-BOUND", "ATP-REF", "ATP-PROBE-AS", "ATP-BROWSER", "TP-PRINCIPAL", "TP-EXPECT-REQUIRED", "TP-STATE",

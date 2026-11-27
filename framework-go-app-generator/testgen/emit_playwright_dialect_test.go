@@ -151,3 +151,47 @@ func TestPlaywrightDialect_UnknownKindFailsGeneration(t *testing.T) {
 		}
 	}
 }
+
+// A step's gesture is its action inputs, in order: each followed only by its Layer A
+// observables, the step's own observation asserted once after the last.
+func TestPlaywrightDialect_FillThenEnterIsOneGesture(t *testing.T) {
+	out, err := generateShopStep(t, []string{
+		act("fill", `{"target":{"element":"order-edit"},"value":"milk"}`),
+		act("press", `{"target":{"element":"order-edit"},"key":"Enter"}`),
+	}, `[`+act("visible", tgt("order-row"))+`]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden := `  await locate(page, 'order-edit').fill('milk');
+  await expect(locate(page, 'order-edit')).toHaveValue('milk', immediate);
+  await locate(page, 'order-edit').press('Enter');
+  await expect(locate(page, 'order-row')).toBeVisible();
+`
+	spec := string(out.Generated[shopSpec])
+	if !strings.Contains(spec, golden) {
+		t.Errorf("spec does not carry the golden gesture:\n%s\nwant:\n%s", spec, golden)
+	}
+	if n := strings.Count(spec, "toBeVisible()"); n != 1 {
+		t.Errorf("the observation is asserted once, after the last action; got %d", n)
+	}
+}
+
+func TestPlaywrightDialect_DblclickFillEnterIsOneGestureInOrder(t *testing.T) {
+	out, err := generateShopStep(t, []string{
+		act("dblclick", tgt("order-title")),
+		act("fill", `{"target":{"element":"order-edit"},"value":"rename"}`),
+		act("press", `{"target":{"element":"order-edit"},"key":"Enter"}`),
+	}, `[`+act("text", `{"target":{"element":"order-title"},"text":"rename"}`)+`]`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	golden := `  await locate(page, 'order-title').dblclick();
+  await locate(page, 'order-edit').fill('rename');
+  await expect(locate(page, 'order-edit')).toHaveValue('rename', immediate);
+  await locate(page, 'order-edit').press('Enter');
+  await expect(locate(page, 'order-title')).toHaveText('rename');
+`
+	if spec := string(out.Generated[shopSpec]); !strings.Contains(spec, golden) {
+		t.Errorf("spec does not carry the golden gesture:\n%s\nwant:\n%s", spec, golden)
+	}
+}

@@ -1089,7 +1089,7 @@ func (sc tpScope) uiDialectFindings(st StepBinding, op ContractOperation, sectio
 }
 
 // uiActionInputs decodes the step's action inputs (TP-ARG-TYPE) and holds a browser step
-// to exactly one (TP-UI-ACTION).
+// to at least one (TP-UI-ACTION); several are one ordered gesture, each decoded here.
 func (sc tpScope) uiActionInputs(st StepBinding, op ContractOperation, section string) ([]UIAction, []Finding) {
 	actionParams := refParams(op, "UIAction")
 	var out []Finding
@@ -1108,7 +1108,7 @@ func (sc tpScope) uiActionInputs(st StepBinding, op ContractOperation, section s
 		}
 	}
 	if len(actionParams) > 0 || sc.web {
-		out = append(out, sc.exactlyOneAction(n, section)...)
+		out = append(out, sc.atLeastOneAction(n, section)...)
 	}
 	return actions, out
 }
@@ -1129,12 +1129,14 @@ func decodeActionInput(in TestArg) (UIAction, error) {
 	return ParseUIAction(string(lv.JSON))
 }
 
-// exactlyOneAction is TP-UI-ACTION over a browser step with n action inputs.
-func (sc tpScope) exactlyOneAction(n int, section string) []Finding {
-	if n == 1 {
+// atLeastOneAction is TP-UI-ACTION over a browser step with n action inputs: a stimulus is
+// one actor gesture, which may be an ordered sequence (fill then press Enter), so a step
+// carries one or more; none does nothing.
+func (sc tpScope) atLeastOneAction(n int, section string) []Finding {
+	if n >= 1 {
 		return nil
 	}
-	return []Finding{tpFinding(ruleTPUIAction, sc.l, "%s: a browser step carries exactly one action input (named %q), found %d: a step with no action does nothing and asserts a state that already holds", section, webActionParam, n)}
+	return []Finding{tpFinding(ruleTPUIAction, sc.l, "%s: a browser step carries at least one action input (named %q), found none: a step with no action does nothing and asserts a state that already holds; bind the stimulus's whole gesture as one or more actions, in order", section, webActionParam)}
 }
 
 // uiObservations decodes the step's expected observation and its before-state (TP-EXPECT).

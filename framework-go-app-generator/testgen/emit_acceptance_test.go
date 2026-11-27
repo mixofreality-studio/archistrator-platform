@@ -347,3 +347,50 @@ func TestAcceptance_GeneratedGoCompiles(t *testing.T) {
 		t.Fatalf("the generated acceptance file does not type-check: %v\n%s", err, msg)
 	}
 }
+
+// A browser step is one actor gesture: several action inputs are performed in order, the page
+// is opened once before the first, and what the user sees is asserted once after the last.
+func TestAcceptance_MultiActionBrowserStepIsOneOrderedGesture(t *testing.T) {
+	var doc map[string]any
+	if err := json.Unmarshal(testfixtures.Fixture(t, "todomvc"), &doc); err != nil {
+		t.Fatal(err)
+	}
+	plan := doc["phaseArtifacts"].(map[string]any)["acceptancePlan"].(map[string]any)
+	var step map[string]any
+	for _, b := range plan["bindings"].([]any) {
+		bm := b.(map[string]any)
+		if bm["scenario"] == "reword-a-todo-P2@todoMcpServer" {
+			step = bm["steps"].([]any)[0].(map[string]any)
+		}
+	}
+	if step == nil {
+		t.Fatal("fixture has no reword-a-todo-P2@todoMcpServer binding")
+	}
+	edit := func(kind, model string) map[string]any {
+		return map[string]any{"name": "action", "value": accLit(map[string]any{"kind": kind, "model": json.RawMessage(model)})}
+	}
+	step["inputs"] = append(step["inputs"].([]any),
+		edit("fill", `{"target":{"element":"todo-edit-input"},"value":"Buy oat milk"}`),
+		edit("press", `{"target":{"element":"todo-edit-input"},"key":"Enter"}`))
+	raw, err := json.Marshal(doc)
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := Generate(raw, Config{ModulePath: accModulePath})
+	if err != nil {
+		t.Fatalf("Generate: %v", err)
+	}
+	spec := string(out.Generated["uitests/generated/acceptance/reword-a-todo-P2@todoMcpServer.spec.gen.ts"])
+	if strings.Count(spec, "await page.goto('#/');") != 1 {
+		t.Errorf("the page is opened once:\n%s", spec)
+	}
+	first := "await locate(page, 'todo-title').dblclick();\n" +
+		"  await locate(page, 'todo-edit-input').fill('Buy oat milk');\n" +
+		"  await expect(locate(page, 'todo-edit-input')).toHaveValue('Buy oat milk', immediate);\n" +
+		"  await locate(page, 'todo-edit-input').press('Enter');\n" +
+		"  await expect(locate(page, 'todo-edit-input')).toBeVisible();\n" +
+		"  // step 2"
+	if !strings.Contains(spec, first) {
+		t.Errorf("step 1 must perform dblclick, fill, press in order, then observe once:\n%s", spec)
+	}
+}

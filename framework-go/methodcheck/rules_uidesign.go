@@ -25,7 +25,7 @@ const (
 	// ruleTPUITarget: a step's targets resolve in the design, agree with the action's role,
 	// and a count is of a repeating element.
 	ruleTPUITarget RuleID = "TP-UI-TARGET"
-	// ruleTPUIAction: a browser step carries exactly one action input.
+	// ruleTPUIAction: a browser step carries at least one action input (several are one ordered gesture).
 	ruleTPUIAction RuleID = "TP-UI-ACTION"
 )
 

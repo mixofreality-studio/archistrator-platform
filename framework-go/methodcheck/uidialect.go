@@ -94,7 +94,7 @@ const (
 	UIActionSelect   UIActionKind = "select"
 )
 
-// UIAction is the one browser action a step performs.
+// UIAction is one browser action of a step's gesture; a step performs one or more, in order.
 //
 //sumtype:decl
 type UIAction interface {

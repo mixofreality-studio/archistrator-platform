@@ -42,8 +42,8 @@ the network), ch12 (quality multiplication), ch13 (TradeMe staffing), ch14
 > for GitHub, …); **Playwright** flows for
 > any SPA/UI surface (browser-driven, hence inherently out-of-process even
 > though TS). Every Client has a contract with ops, derived rather than authored, and its ops say how it is
-> driven: a **web** client has one op per user action, each taking the one
-> param `action`, a typed UI action `{kind, model}` whose target is an element id
+> driven: a **web** client has one op per user action, each taking the
+> param `action`, a typed UI action `{kind, model}` (a step binds one or more, in order, as one gesture) whose target is an element id
 > of the surface's typed UI design, found by the role and accessible name that
 > design gives it, never by test id (Playwright); an
 > **MCP** client has one op per generated MCP tool (op = the tool's Go method
