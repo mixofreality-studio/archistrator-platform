@@ -3,11 +3,11 @@ module github.com/mixofreality-studio/archistrator-platform/framework-go-conform
 go 1.25.4
 
 require (
-	github.com/mixofreality-studio/archistrator-platform/framework-go v0.43.0
-	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.32.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go v0.44.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-app-generator v0.33.0
 	github.com/mixofreality-studio/archistrator-platform/framework-go-projectmodel v0.9.0
-	github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost v0.11.0
-	github.com/mixofreality-studio/archistrator-platform/method-assets v0.41.0
+	github.com/mixofreality-studio/archistrator-platform/framework-go-scenariohost v0.12.0
+	github.com/mixofreality-studio/archistrator-platform/method-assets v0.42.0
 )
 
 require (
@@ -55,7 +55,7 @@ require (
 	github.com/lufia/plan9stats v0.0.0-20211012122336-39d0f177ccd0 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-github v0.1.6 // indirect
-	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres v0.1.0 // indirect
+	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-postgres v0.1.1 // indirect
 	github.com/mixofreality-studio/archistrator-platform/framework-go-infrastructure-temporal v0.2.0 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/go-archive v0.2.0 // indirect
